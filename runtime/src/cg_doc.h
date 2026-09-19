@@ -1,7 +1,8 @@
-/* cg_doc.h -- .cgui 文档模型
- *
- * .cgui 的物理格式就是一个 JSON 文件，结构见 docs/CGUI-FORMAT.md。
- * 这里负责 JSON -> 控件树，以及控件树 -> stdout 的可读打印。
+/**
+ * @file    cg_doc.h
+ * @brief   .cgui 文档模型
+ * @details .cgui 的物理格式就是一个 JSON 文件，结构见 docs/CGUI-FORMAT.md。
+ *          这里负责 JSON -> 控件树，以及控件树 -> stdout 的可读打印。
  */
 #ifndef CG_DOC_H
 #define CG_DOC_H

@@ -1,4 +1,9 @@
-/* cg_json.c -- 极简 JSON DOM 解析器实现 */
+/**
+ * @file    cg_json.c
+ * @brief   极简 JSON DOM 解析器实现（接口见 cg_json.h）
+ * @details .cgui 是我们自己生成的，只需要一个不报行号、不占坑位的只读解析器；
+ *          值节点用数组存 children，对象额外存一份 keys 与 items 一一对应
+ */
 #include "cg_json.h"
 
 #include <stdlib.h>

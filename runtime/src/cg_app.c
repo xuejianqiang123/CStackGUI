@@ -1,4 +1,7 @@
-/* cg_app.c -- 应用骨架：控件树、绑定解析、事件派发、公共 API、自检 */
+/**
+ * @file    cg_app.c
+ * @brief   应用骨架：控件树构建、事件绑定解析与派发、公共 API、--selftest 自检
+ */
 #include "cg_internal.h"
 
 #include <stdarg.h>
@@ -473,23 +476,38 @@ int cg_dispatch_menu_cmd(cg_app_t *app, int cmd)
     return 0;
 }
 
-/* ------------------------------------------------------------ 公共读取 */
+/* ------------------------------------------------------------ 公共读取
+ * 这些读取函数的完整语义见 cstackgui.h；NULL 控件统一兜底，不会崩。
+ */
 
+/** @brief 从控件拿到它所属的应用；NULL 返回 NULL */
 cg_app_t   *cg_app_of(const cg_widget_t *w)      { return w ? w->app : NULL; }
+/** @brief 控件 id；NULL 返回 NULL */
 const char *cg_widget_id(const cg_widget_t *w)   { return w ? w->id : NULL; }
+/** @brief 控件类型名；NULL 返回 NULL */
 const char *cg_widget_type(const cg_widget_t *w) { return w ? w->type : NULL; }
+/** @brief 控件当前文字；NULL 控件返回 NULL，文字为空返回空串 */
 const char *cg_widget_text(const cg_widget_t *w) { return w ? (w->text ? w->text : "") : NULL; }
+/** @brief 控件位置 x（逻辑像素，相对父容器）；NULL 返回 0 */
 int cg_widget_x(const cg_widget_t *w) { return w ? w->x : 0; }
+/** @brief 控件位置 y；NULL 返回 0 */
 int cg_widget_y(const cg_widget_t *w) { return w ? w->y : 0; }
+/** @brief 控件宽度；NULL 返回 0 */
 int cg_widget_w(const cg_widget_t *w) { return w ? w->w : 0; }
+/** @brief 控件高度；NULL 返回 0 */
 int cg_widget_h(const cg_widget_t *w) { return w ? w->h : 0; }
+/** @brief 是否可见；NULL 返回 0 */
 int cg_widget_visible(const cg_widget_t *w) { return w ? w->visible : 0; }
+/** @brief 是否可用；NULL 返回 0 */
 int cg_widget_enabled(const cg_widget_t *w) { return w ? w->enabled : 0; }
+/** @brief 是否勾选；NULL 返回 0 */
 int cg_widget_checked(const cg_widget_t *w) { return w ? w->checked : 0; }
+/** @brief 当前值（滑块位置 / 列表选中下标等）；NULL 返回 0 */
 int cg_widget_value(const cg_widget_t *w)   { return w ? w->value : 0; }
 
 /* ------------------------------------------------------------ 公共修改 */
 
+/** @brief 改控件文字（同步到界面与文档节点） */
 void cg_widget_set_text(cg_widget_t *w, const char *text)
 {
     if (!w) return;
@@ -499,6 +517,7 @@ void cg_widget_set_text(cg_widget_t *w, const char *text)
     sync(w);
 }
 
+/** @brief 一次改位置和尺寸（逻辑像素，相对父容器） */
 void cg_widget_set_rect(cg_widget_t *w, int x, int y, int ww, int hh)
 {
     if (!w) return;
@@ -510,6 +529,7 @@ void cg_widget_set_rect(cg_widget_t *w, int x, int y, int ww, int hh)
 void cg_widget_set_pos(cg_widget_t *w, int x, int y)  { if (w) cg_widget_set_rect(w, x, y, w->w, w->h); }
 void cg_widget_set_size(cg_widget_t *w, int ww, int hh) { if (w) cg_widget_set_rect(w, w->x, w->y, ww, hh); }
 
+/** @brief 显示 / 隐藏控件 */
 void cg_widget_set_visible(cg_widget_t *w, int visible)
 {
     if (!w) return;
@@ -518,6 +538,7 @@ void cg_widget_set_visible(cg_widget_t *w, int visible)
     sync(w);
 }
 
+/** @brief 启用 / 禁用控件（禁用后事件不再派发） */
 void cg_widget_set_enabled(cg_widget_t *w, int enabled)
 {
     if (!w) return;
@@ -526,6 +547,7 @@ void cg_widget_set_enabled(cg_widget_t *w, int enabled)
     sync(w);
 }
 
+/** @brief 设置勾选状态（checkbox / radio / switch） */
 void cg_widget_set_checked(cg_widget_t *w, int on)
 {
     if (!w) return;
@@ -534,6 +556,7 @@ void cg_widget_set_checked(cg_widget_t *w, int on)
     sync(w);
 }
 
+/** @brief 设置当前值，自动夹到 [vmin, vmax] */
 void cg_widget_set_value(cg_widget_t *w, int value)
 {
     if (!w) return;
@@ -544,6 +567,7 @@ void cg_widget_set_value(cg_widget_t *w, int value)
     sync(w);
 }
 
+/** @brief 设置取值范围；vmax <= vmin 时自动抬到 vmin+1 */
 void cg_widget_set_value_range(cg_widget_t *w, int vmin, int vmax)
 {
     if (!w) return;
@@ -553,6 +577,7 @@ void cg_widget_set_value_range(cg_widget_t *w, int vmin, int vmax)
     sync(w);
 }
 
+/** @brief 设置前景 / 背景色（0xRRGGBB） */
 void cg_widget_set_colors(cg_widget_t *w, unsigned fg, unsigned bg)
 {
     if (!w) return;
@@ -561,6 +586,7 @@ void cg_widget_set_colors(cg_widget_t *w, unsigned fg, unsigned bg)
     sync(w);
 }
 
+/** @brief 设置字体（family 为 NULL 表示回系统 UI 字体） */
 void cg_widget_set_font(cg_widget_t *w, const char *family, int size_pt, int bold)
 {
     if (!w) return;

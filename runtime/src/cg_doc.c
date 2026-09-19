@@ -1,4 +1,7 @@
-/* cg_doc.c -- .cgui 解析与打印 */
+/**
+ * @file    cg_doc.c
+ * @brief   .cgui 解析与打印：JSON -> 控件树，控件类型表（k_kinds）也在这里
+ */
 #include "cg_doc.h"
 #include "cg_json.h"
 
@@ -374,7 +377,7 @@ static void node_add_child(cg_node_t *parent, cg_node_t *child)
     child->parent = parent;
 }
 
-static int g_auto_id = 0;
+static int s_auto_id = 0;
 
 static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
 {
@@ -404,7 +407,7 @@ static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
     if (v && v->type == CJ_STR && v->str && *v->str) {
         n->id = dup_str(v->str);
     } else {
-        snprintf(auto_id, sizeof(auto_id), "%s_%d", ki->name, ++g_auto_id);
+        snprintf(auto_id, sizeof(auto_id), "%s_%d", ki->name, ++s_auto_id);
         n->id = dup_str(auto_id);
     }
     n->text = dup_str(cj_str(cj_get(o, "text"), ki->def_text));

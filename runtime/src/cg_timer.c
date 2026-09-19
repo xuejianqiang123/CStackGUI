@@ -1,7 +1,7 @@
-/* cg_timer.c -- 一次性定时器
- *
- * 用途：在事件回调里推迟一件事做（例如先让界面重绘，再销毁控件 / 弹提示）。
- * 实现：后端跑一个 50ms 心跳，这里按累计毫秒数触发，精度约 50ms。
+/**
+ * @file    cg_timer.c
+ * @brief   一次性定时器：事件回调里推迟一件事做（先让界面重绘，再销毁控件 / 弹提示），
+ *          后端跑 50ms 心跳，按累计毫秒数触发，精度约 50ms
  */
 #include "cg_internal.h"
 
@@ -18,8 +18,16 @@ struct cg_timer {
     struct cg_timer *next;
 };
 
-static struct cg_timer *g_timers = NULL;
+static struct cg_timer *s_timers = NULL;
 
+/**
+ * @brief 建一个一次性定时器，delay_ms 毫秒后在消息循环里调 fn(user)
+ * @param app 所属应用（tick 时只触发同一 app 的定时器）
+ * @param delay_ms 延迟毫秒数，负数按 0 处理
+ * @param fn 到点要执行的函数；置 NULL 等价于取消
+ * @param user 传给 fn 的业务数据
+ * @return cg_timer_t* 定时器句柄（可传给 cg_kill_timer），失败返回 NULL
+ */
 cg_timer_t *cg_set_timer(cg_app_t *app, int delay_ms, void (*fn)(void *), void *user)
 {
     cg_timer_t *t;
@@ -33,22 +41,30 @@ cg_timer_t *cg_set_timer(cg_app_t *app, int delay_ms, void (*fn)(void *), void *
     t->delay_ms = delay_ms;
     t->fn = fn;
     t->user = user;
-    t->next = g_timers;
-    g_timers = t;
+    t->next = s_timers;
+    s_timers = t;
     return t;
 }
 
+/**
+ * @brief 取消一个定时器（真正摘链交给 tick / clear，避免遍历时改表）
+ * @param t cg_set_timer 返回的句柄，NULL 安全
+ * @return void 无返回值
+ */
 void cg_kill_timer(cg_timer_t *t)
 {
     if (!t) return;
     t->fn = NULL;
-    /* 真正摘链交给 tick / clear，避免遍历时改表 */
 }
 
-/** 后端心跳调用 */
+/**
+ * @brief 后端心跳调用：推进同 app 的所有定时器，到点的摘链并执行
+ * @param app 当前应用
+ * @return void 无返回值
+ */
 void cg_timers_tick(cg_app_t *app)
 {
-    cg_timer_t **pp = &g_timers;
+    cg_timer_t **pp = &s_timers;
 
     while (*pp) {
         cg_timer_t *t = *pp;
@@ -71,10 +87,14 @@ void cg_timers_tick(cg_app_t *app)
     }
 }
 
-/** 应用关闭时清理（cg_app.c 调） */
+/**
+ * @brief 应用关闭时清理该 app 的全部定时器（cg_app.c 调）
+ * @param app 正在关闭的应用
+ * @return void 无返回值
+ */
 void cg_timers_clear(cg_app_t *app)
 {
-    cg_timer_t **pp = &g_timers;
+    cg_timer_t **pp = &s_timers;
     while (*pp) {
         cg_timer_t *t = *pp;
         if (t->app == app) {

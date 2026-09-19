@@ -1,7 +1,8 @@
-/* cstackgui.h -- CStackGUI 运行时公共 API
- *
- * 约定：业务代码只 include 本文件，不依赖任何 GUI 框架细节。
- * 一个业务程序 = 运行时库 + 你自己的 .c 文件 = 单个 exe。
+/**
+ * @file    cstackgui.h
+ * @brief   CStackGUI 运行时公共 API
+ * @details 约定：业务代码只 include 本文件，不依赖任何 GUI 框架细节。
+ *          一个业务程序 = 运行时库 + 你自己的 .c 文件 = 单个 exe。
  *
  * 典型用法：
  *
@@ -124,8 +125,11 @@ int cg_app_selftest(const cg_app_desc_t *desc);
 
 /* ------------------------------------------------------------ 应用级操作 */
 
+/** 从控件拿到它所属的应用（回调里最常用的第一步） */
 cg_app_t   *cg_app_of(const cg_widget_t *w);
+/** 按 id 找控件（id 在画布「属性」里定，就是 .cgui 里的 id 字段） */
 cg_widget_t *cg_find(cg_app_t *app, const char *id);
+/** 退出消息循环，进程随后结束（退出码 0） */
 void        cg_quit(cg_app_t *app);
 /** 在窗口的 close 回调里调用：这次不关了（比如"还有没保存的内容"）。
  *  只有 close 回调里调才有意义。 */
@@ -140,17 +144,24 @@ void cg_dump_doc(cg_app_t *app);
 
 /* ------------------------------------------------------------ 控件读取 */
 
+/** 控件 id；w 为 NULL 返回 NULL */
 const char *cg_widget_id(const cg_widget_t *w);
+/** 控件类型名（"button"/"edit"...） */
 const char *cg_widget_type(const cg_widget_t *w);
+/** 控件当前文字；w 为 NULL 返回 NULL */
 const char *cg_widget_text(const cg_widget_t *w);
+/** 控件位置与尺寸（逻辑像素，相对父容器） */
 int         cg_widget_x(const cg_widget_t *w);
 int         cg_widget_y(const cg_widget_t *w);
 int         cg_widget_w(const cg_widget_t *w);
 int         cg_widget_h(const cg_widget_t *w);
+/** 当前状态；w 为 NULL 时 visible/enabled 返回 0，其余返回 0 */
 int         cg_widget_visible(const cg_widget_t *w);
 int         cg_widget_enabled(const cg_widget_t *w);
 int         cg_widget_checked(const cg_widget_t *w);
+/** 当前值（滑块位置 / 列表选中下标 / 标签页页码等） */
 int         cg_widget_value(const cg_widget_t *w);
+/** 当前控件总数（不含窗口伪控件），调试用 */
 int         cg_widget_count(const cg_app_t *app);
 
 /* ------------------------------------------------------------ 控件修改

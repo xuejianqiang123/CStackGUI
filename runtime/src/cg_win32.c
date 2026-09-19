@@ -1,10 +1,11 @@
-/* cg_win32.c -- Win32 原生后端
- *
- * 设计取舍：v1 直接把 .cgui 的每个控件映射成一个标准 Win32 控件。
- * 好处是零依赖、真单文件 exe、无障碍与输入法全部白送；
- * 代价是原生控件不支持圆角/自定义配色（style.radius 目前只在自绘后端生效）。
- * 后续要 M3 那种外观时，只需再加一个 backend（owner-draw / D2D），
- * cg_doc / cg_app 与业务代码都不用动。
+/**
+ * @file    cg_win32.c
+ * @brief   Win32 原生后端：窗口、原生控件、消息映射、自绘控件、通用对话框
+ * @details 设计取舍：v1 直接把 .cgui 的每个控件映射成一个标准 Win32 控件。
+ *          好处是零依赖、真单文件 exe、无障碍与输入法全部白送；
+ *          代价是原生控件不支持圆角/自定义配色（style.radius 只在自绘控件生效）。
+ *          后续要 M3 那种外观时，只需再加一个 backend（owner-draw / D2D），
+ *          cg_doc / cg_app 与业务代码都不用动。
  */
 /* 明确走 W 系列 API */
 #define UNICODE
@@ -108,11 +109,11 @@ static HFONT font_for(cg_app_t *app, const char *family, int size_pt, int bold, 
 
 /** 富文本控件类：Msftedit.dll 起来后用 RICHEDIT50W，否则退回旧版甚至普通 EDIT。
  *  富文本不是系统的必备组件，所以这里做降级而不是直接失败。 */
-static const wchar_t *g_richedit_class = NULL;
+static const wchar_t *s_richedit_class = NULL;
 
 /** browser 控件用 atl.dll 的 AtlAxWin 宿主系统 WebBrowser 控件；
  *  起不来（理论上看不到）就退回静态占位文本。 */
-static int g_atl_ok = 0;
+static int s_atl_ok = 0;
 
 static const wchar_t *class_of(const cg_widget_t *w)
 {
@@ -123,7 +124,7 @@ static const wchar_t *class_of(const cg_widget_t *w)
     if (!strcmp(w->type, "link"))      return L"STATIC";      /* SS_NOTIFY 才有 STN_CLICKED */
     if (!strcmp(w->type, "edit"))      return L"EDIT";
     if (!strcmp(w->type, "multiedit")) return L"EDIT";
-    if (!strcmp(w->type, "richtext"))  return g_richedit_class ? g_richedit_class : L"EDIT";
+    if (!strcmp(w->type, "richtext"))  return s_richedit_class ? s_richedit_class : L"EDIT";
     if (!strcmp(w->type, "checkbox"))  return L"BUTTON";
     if (!strcmp(w->type, "radio"))     return L"BUTTON";
     if (!strcmp(w->type, "switch"))    return L"BUTTON";      /* BS_OWNERDRAW 自绘 */
@@ -148,7 +149,7 @@ static const wchar_t *class_of(const cg_widget_t *w)
     if (!strcmp(w->type, "tag"))       return L"BUTTON";          /* BS_OWNERDRAW 标签片 */
     if (!strcmp(w->type, "rate"))      return L"BUTTON";          /* BS_OWNERDRAW 五角星 */
     if (!strcmp(w->type, "pagination"))return L"BUTTON";          /* BS_OWNERDRAW 分页 */
-    if (!strcmp(w->type, "browser"))   return g_atl_ok ? L"AtlAxWin" : L"STATIC";
+    if (!strcmp(w->type, "browser"))   return s_atl_ok ? L"AtlAxWin" : L"STATIC";
     if (!strcmp(w->type, "timer"))     return L"STATIC";          /* 无窗口，create_native 会跳过 */
     if (!strcmp(w->type, "card") || !strcmp(w->type, "shape")) return CG_PANEL_CLASS;
     return CG_PANEL_CLASS;   /* group / box */
@@ -205,7 +206,7 @@ static DWORD style_of(const cg_widget_t *w)
     if (!strcmp(w->type, "tag"))       return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;
     if (!strcmp(w->type, "rate"))      return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;
     if (!strcmp(w->type, "pagination"))return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;
-    if (!strcmp(w->type, "browser"))   return g_atl_ok ? (WS_CHILD | WS_VISIBLE | WS_TABSTOP)
+    if (!strcmp(w->type, "browser"))   return s_atl_ok ? (WS_CHILD | WS_VISIBLE | WS_TABSTOP)
                                                        : (WS_CHILD | WS_VISIBLE | SS_CENTER | SS_CENTERIMAGE);
     if (!strcmp(w->type, "statusbar")) return WS_CHILD | WS_VISIBLE;
     if (!strcmp(w->type, "spinner"))   return WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_NUMBER | ES_RIGHT | ES_AUTOHSCROLL;
@@ -321,7 +322,7 @@ static void datetime_pull_text(cg_widget_t *w, HWND date_hwnd, HWND time_hwnd)
 
 /* 防重入开关：定义提前到这里，因为下面几个辅助函数要用到它。
  * 含义见「事件映射」那一节。 */
-static int g_in_notify = 0;
+static int s_in_notify = 0;
 
 /**
  * @brief 有控制台时把控制台输入/输出代码页切到 UTF-8
@@ -350,7 +351,7 @@ static void popup_menu_for(cg_app_t *app, cg_widget_t *w, HWND hwnd)
     HMENU hm;
     RECT  r;
     int   cmd;
-    int   saved = g_in_notify;
+    int   saved = s_in_notify;
 
     hm = menu_build(w);
     if (!hm || w->nmenu == 0) {
@@ -361,12 +362,12 @@ static void popup_menu_for(cg_app_t *app, cg_widget_t *w, HWND hwnd)
 
     /* TrackPopupMenu 自己会跑消息循环：这段时间放开防重入，
      * 否则弹出菜单期间其它控件的事件会被吞掉。 */
-    g_in_notify = 0;
+    s_in_notify = 0;
     if (app->hwnd) SetForegroundWindow((HWND)app->hwnd);
     cmd = (int)TrackPopupMenu(hm, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN,
                               r.left, r.bottom, 0, (HWND)app->hwnd, NULL);
     if (app->hwnd) PostMessageW((HWND)app->hwnd, WM_NULL, 0, 0);
-    g_in_notify = saved;
+    s_in_notify = saved;
 
     DestroyMenu(hm);
     if (cmd) cg_dispatch_menu_cmd(app, cmd);
@@ -388,7 +389,7 @@ static cg_widget_t *widget_by_hwnd(cg_app_t *app, HWND h)
  * 在这里统一转成 gotfocus / lostfocus 事件。
  * 顺手干两件"必须知道鼠标坐标"的活：评分点第几颗星、分页点左半边还是右半边。
  */
-static cg_app_t *g_app = NULL;
+static cg_app_t *s_app = NULL;
 
 static void rate_or_pag_click(cg_widget_t *w, HWND hwnd, int x)
 {
@@ -404,10 +405,10 @@ static void rate_or_pag_click(cg_widget_t *w, HWND hwnd, int x)
         if (v < w->vmin) v = w->vmin;
         if (v > w->vmax) v = w->vmax;
         if (v != w->value) {
-            g_in_notify = 1;
+            s_in_notify = 1;
             cg_widget_set_value(w, v);
             cg_dispatch(w, CG_EVENT_CHANGE);
-            g_in_notify = 0;
+            s_in_notify = 0;
         }
         return;
     }
@@ -417,10 +418,10 @@ static void rate_or_pag_click(cg_widget_t *w, HWND hwnd, int x)
     else if (x > width * 2 / 3) v = w->value + 1;
     else return;
     if (v < w->vmin || v > w->vmax) return;   /* 越界的一下当没点着 */
-    g_in_notify = 1;
+    s_in_notify = 1;
     cg_widget_set_value(w, v);
     cg_dispatch(w, CG_EVENT_CHANGE);
-    g_in_notify = 0;
+    s_in_notify = 0;
 }
 
 static LRESULT CALLBACK FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
@@ -438,23 +439,23 @@ static LRESULT CALLBACK FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     case WM_DRAWITEM:
     case WM_HSCROLL:
     case WM_VSCROLL:
-        if (g_app && g_app->hwnd && (HWND)g_app->hwnd != hwnd) {
-            return SendMessageW((HWND)g_app->hwnd, msg, wp, lp);
+        if (s_app && s_app->hwnd && (HWND)s_app->hwnd != hwnd) {
+            return SendMessageW((HWND)s_app->hwnd, msg, wp, lp);
         }
         break;
     default:
         break;
     }
 
-    if (!g_in_notify && g_app) {
-        cg_widget_t *w = widget_by_hwnd(g_app, hwnd);
+    if (!s_in_notify && s_app) {
+        cg_widget_t *w = widget_by_hwnd(s_app, hwnd);
         if (w) {
             if (msg == WM_SETFOCUS || msg == WM_KILLFOCUS) {
                 cg_event_t ev = (msg == WM_SETFOCUS) ? CG_EVENT_GOTFOCUS : CG_EVENT_LOSTFOCUS;
                 if (cg_kind_supports_event(w->type, ev)) {
-                    g_in_notify = 1;
+                    s_in_notify = 1;
                     cg_dispatch(w, ev);
-                    g_in_notify = 0;
+                    s_in_notify = 0;
                 }
             } else if (msg == WM_LBUTTONUP &&
                        (is_t(w, "rate") || is_t(w, "pagination"))) {
@@ -489,8 +490,8 @@ static void tooltip_add_for(HWND tooltip, HWND forw)
 
 void cg_win_set_hint(cg_widget_t *w)
 {
-    if (!w || !w->native || !g_app) return;
-    cg_win_state_t *st = (cg_win_state_t *)g_app->natives;
+    if (!w || !w->native || !s_app) return;
+    cg_win_state_t *st = (cg_win_state_t *)s_app->natives;
     if (!st || !st->tooltip) return;
 
     TOOLINFOW ti;
@@ -542,7 +543,7 @@ __declspec(dllimport) GpStatus WINAPI GdipDisposeImage(void *image);
 
 #define CG_IMAGE_CLASS L"CStackGUIImage"
 
-static ULONG_PTR g_gdip_token = 0;   /* GDI+ 的启动令牌，0 表示没起来 */
+static ULONG_PTR s_gdip_token = 0;   /* GDI+ 的启动令牌，0 表示没起来 */
 
 /* 本文件里几处互相调用（切页要同步子控件、建控件后要同步），先声明 */
 static void sync_widget(cg_widget_t *w);
@@ -913,10 +914,10 @@ static LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     }
     case WM_LBUTTONUP: {
         cg_widget_t *w = widget_by_hwnd(app, hwnd);
-        if (w && !g_in_notify) {
-            g_in_notify = 1;
+        if (w && !s_in_notify) {
+            s_in_notify = 1;
             cg_dispatch(w, CG_EVENT_CLICK);   /* 双击由运行时按系统间隔合成 */
-            g_in_notify = 0;
+            s_in_notify = 0;
         }
         break;
     }
@@ -1188,8 +1189,8 @@ static void notify_common(cg_app_t *app, const NMHDR *hdr)
     cg_widget_t *w = widget_by_hwnd(app, hdr->hwndFrom);
 
     if (!w) return;
-    if (g_in_notify) return;
-    g_in_notify = 1;
+    if (s_in_notify) return;
+    s_in_notify = 1;
 
     switch (hdr->code) {
     case TCN_SELCHANGE: {
@@ -1277,7 +1278,7 @@ static void notify_common(cg_app_t *app, const NMHDR *hdr)
     default:
         break;
     }
-    g_in_notify = 0;
+    s_in_notify = 0;
 }
 
 /** 图标按钮：把 src 图片按比例居中画在按钮里（没有图就画个占位框） */
@@ -1539,10 +1540,10 @@ static void notify_from(cg_app_t *app, HWND hwnd, int code, int cmd_id)
     cg_widget_t *w = widget_by_hwnd(app, hwnd);
     if (!w) w = cg_widget_by_ctrl_id(app, GetDlgCtrlID(hwnd));
 
-    if (!w || g_in_notify) return;
-    g_in_notify = 1;
+    if (!w || s_in_notify) return;
+    s_in_notify = 1;
     notify_body(app, w, hwnd, code, cmd_id);
-    g_in_notify = 0;
+    s_in_notify = 0;
 }
 
 /* ------------------------------------------------------------ 主窗口 */
@@ -1596,13 +1597,13 @@ static LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             }
             if (w && !strcmp(w->type, "spinner")) {
                 HWND up = (HWND)w->native2;
-                if (up && !g_in_notify) {
+                if (up && !s_in_notify) {
                     DWORD pos = (DWORD)SendMessageW(up, UDM_GETPOS32, 0, 0);
-                    g_in_notify = 1;
+                    s_in_notify = 1;
                     w->value = (int)pos;
                     if (w->node) w->node->value = (int)pos;
                     cg_dispatch(w, CG_EVENT_CHANGE);
-                    g_in_notify = 0;
+                    s_in_notify = 0;
                 }
                 return 0;
             }
@@ -1694,10 +1695,10 @@ static LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             /* 时钟控件：定时器 id 复用 ctrl_id */
             cg_widget_t *tw = cg_widget_by_ctrl_id(app, (int)wp);
             if (tw && is_t(tw, "timer") && tw->period > 0) {
-                if (!g_in_notify) {
-                    g_in_notify = 1;
+                if (!s_in_notify) {
+                    s_in_notify = 1;
                     cg_dispatch(tw, CG_EVENT_TICK);
-                    g_in_notify = 0;
+                    s_in_notify = 0;
                 }
                 return 0;
             }
@@ -2240,7 +2241,7 @@ static void browser_recreate(cg_widget_t *w)
         DestroyWindow((HWND)w->native);
         w->native = NULL;
     }
-    if (!g_atl_ok || !app) return;
+    if (!s_atl_ok || !app) return;
 
     wurl = wc_from_utf8(w->src && *w->src ? w->src : "about:blank");
     h = CreateWindowExW(0, L"AtlAxWin", wurl ? wurl : L"about:blank",
@@ -2429,10 +2430,10 @@ static void sync_widget_body(cg_widget_t *w)
  *  不能让它们再跑回回调里，否则「回调改控件」会自己套自己。 */
 static void sync_widget(cg_widget_t *w)
 {
-    int saved = g_in_notify;
-    g_in_notify = 1;
+    int saved = s_in_notify;
+    s_in_notify = 1;
     sync_widget_body(w);
-    g_in_notify = saved;
+    s_in_notify = saved;
 }
 
 /* ------------------------------------------------------------ 后端入口 */
@@ -2465,7 +2466,7 @@ static int win_init(cg_app_t *app)
     st->dpi = dpi;
     app->natives = st;
     app->scale = 100;
-    g_app = app;    /* 焦点子类 / tooltip 反查用（单窗口应用，全局一份） */
+    s_app = app;    /* 焦点子类 / tooltip 反查用（单窗口应用，全局一份） */
 
     register_panel_class();
     {
@@ -2479,12 +2480,12 @@ static int win_init(cg_app_t *app)
 
     /* 富文本不是系统必备组件：优先新版，退旧版，再退普通 EDIT */
     if (LoadLibraryW(L"Msftedit.dll")) {
-        g_richedit_class = L"RICHEDIT50W";
+        s_richedit_class = L"RICHEDIT50W";
     } else if (LoadLibraryW(L"Riched20.dll")) {
-        g_richedit_class = L"RichEdit20W";
+        s_richedit_class = L"RichEdit20W";
         fprintf(stderr, "[cstackgui] 没找到 Msftedit.dll，richtext 退回 RichEdit20W\n");
     } else {
-        g_richedit_class = L"EDIT";
+        s_richedit_class = L"EDIT";
         fprintf(stderr, "[cstackgui] 没有可用的富文本控件，richtext 退回普通多行输入\n");
     }
 
@@ -2493,8 +2494,8 @@ static int win_init(cg_app_t *app)
         HMODULE atl = LoadLibraryW(L"atl.dll");
         typedef BOOL (WINAPI *axinit_t)(void);
         axinit_t axinit = atl ? (axinit_t)(void *)GetProcAddress(atl, "AtlAxWinInit") : NULL;
-        g_atl_ok = (axinit && axinit()) ? 1 : 0;
-        if (!g_atl_ok) {
+        s_atl_ok = (axinit && axinit()) ? 1 : 0;
+        if (!s_atl_ok) {
             fprintf(stderr, "[cstackgui] atl.dll 不可用，browser 控件会显示占位文本\n");
         }
     }
@@ -2504,8 +2505,8 @@ static int win_init(cg_app_t *app)
         cg_gdip_input_t in;
         memset(&in, 0, sizeof(in));
         in.GdiplusVersion = 1;
-        if (GdiplusStartup(&g_gdip_token, &in, NULL) != 0) {
-            g_gdip_token = 0;
+        if (GdiplusStartup(&s_gdip_token, &in, NULL) != 0) {
+            s_gdip_token = 0;
             fprintf(stderr, "[cstackgui] GDI+ 启动失败，image 控件只会显示占位框\n");
         }
     }
@@ -2637,16 +2638,16 @@ static void win_shutdown(cg_app_t *app)
         if (is_t(w, "timer")) KillTimer((HWND)app->hwnd, (UINT_PTR)w->ctrl_id);
     }
     if (app->hwnd) DestroyWindow((HWND)app->hwnd);
-    g_app = NULL;
+    s_app = NULL;
     for (cg_widget_t *w = app->widgets; w; w = w->next) {
         if (w->bitmap) {
             DeleteObject((HGDIOBJ)w->bitmap);
             w->bitmap = NULL;
         }
     }
-    if (g_gdip_token) {
-        GdiplusShutdown(g_gdip_token);
-        g_gdip_token = 0;
+    if (s_gdip_token) {
+        GdiplusShutdown(s_gdip_token);
+        s_gdip_token = 0;
     }
     while (st->fonts) {
         cg_font_node_t *n = st->fonts->next;

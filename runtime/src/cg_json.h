@@ -1,7 +1,8 @@
-/* cg_json.h -- 极简 JSON DOM 解析器（只读），专为 .cgui 设计。
- *
- * 支持：对象 / 数组 / 字符串（含 \uXXXX 与代理对）/ 数字 / true / false / null
- * 不支持：注释、尾随逗号（严格按 JSON 规范，方便用编辑器/工具生成）
+/**
+ * @file    cg_json.h
+ * @brief   极简 JSON DOM 解析器（只读），专为 .cgui 设计
+ * @details 支持：对象 / 数组 / 字符串（含 \uXXXX 与代理对）/ 数字 / true / false / null
+ *          不支持：注释、尾随逗号（严格按 JSON 规范，方便用编辑器/工具生成）
  */
 #ifndef CG_JSON_H
 #define CG_JSON_H

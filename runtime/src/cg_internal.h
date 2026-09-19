@@ -1,4 +1,7 @@
-/* cg_internal.h -- 运行时内部结构，业务代码不应 include */
+/**
+ * @file    cg_internal.h
+ * @brief   运行时内部结构（控件/应用/后端接口），业务代码不应 include
+ */
 #ifndef CG_INTERNAL_H
 #define CG_INTERNAL_H
 
@@ -174,12 +177,12 @@ int cg_dispatch(cg_widget_t *w, cg_event_t ev);
  *  menu 走 WM_COMMAND（lParam 为 0），menubutton 走 TrackPopupMenu 的返回值。 */
 int cg_dispatch_menu_cmd(cg_app_t *app, int cmd);
 
-/** 按 id 找到运行时控件 */
+/** 按 id 找到运行时控件；找不到返回 NULL */
 cg_widget_t *cg_widget_by_id(cg_app_t *app, const char *id);
-/** 按 Win32 控件 ID 找控件 */
+/** 按 Win32 控件 ID 找控件；找不到返回 NULL */
 cg_widget_t *cg_widget_by_ctrl_id(cg_app_t *app, int ctrl_id);
 
-/** 由文档树构建运行时控件树（不含原生句柄） */
+/** 由文档树构建运行时控件树（不含原生句柄），失败返回 NULL */
 cg_widget_t *cg_build_widgets(cg_app_t *app);
 
 /* -------------------------------------------------- 后端接口 */
@@ -201,7 +204,7 @@ extern const cg_backend_t *cg_backend_active;
 /** 后端子控件注册回调：原生事件 -> cg_dispatch */
 void cg_backend_notify(cg_widget_t *w, cg_event_t ev);
 
-/** 分配控件 ID（后端建控件时用） */
+/** 分配控件 ID（后端建控件时用），从 1001 起递增 */
 int cg_alloc_ctrl_id(cg_app_t *app);
 
 /** 分配菜单命令 ID。菜单走 WM_COMMAND 的 LOWORD，必须和控件 ID 分开，

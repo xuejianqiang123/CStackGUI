@@ -157,7 +157,7 @@ npm install / npm run dev / npm run build / npm run dist
 | 技能 | 干什么 | 什么时候自动触发 |
 | --- | --- | --- |
 | `designer-modify` | 改画布（designer/）的完整说明书：文件地图、`.cgui` 契约、新增控件要动的 7~8 处、验证门禁 | 只要改 `designer\` 下的代码 |
-| `c-function-comment` | C 函数的 Doxygen 注释格式（`@brief/@param/@return`） | 写/改 C 函数时 |
+| `firmware_code_style` | C 代码规范（含函数 Doxygen 注释格式 `@brief/@param/@return`） | 写/改 `.c`/`.h` 时 |
 | `git-commit-style` | 提交信息格式：`[类型][模块] 一句话说清` | 要求提交时 |
 | `plan-create-prd` / `plan-architecture` / `piv-slice-epic` | 需求 → PRD / 架构 → SDD / 大需求拆切片 | 提出新功能、说"先做计划" |
 | `piv-plan-implementation` → `piv-implement` → `piv-validate` → `piv-review-changes` → `git-commit-style` | 计划 → 实现 → 验证 → 审查 → 提交 的内层循环 | 开发任务的标准流程 |

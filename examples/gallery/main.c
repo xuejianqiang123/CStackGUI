@@ -1,6 +1,7 @@
-/* main.c -- 控件陈列室（三合一）
- *
- * 一个示例讲完所有东西，窗口顶部的大标签页分三页：
+/**
+ * @file    main.c
+ * @brief   控件陈列室（三合一）：全部控件与事件的业务逻辑示例
+ * @details 一个示例讲完所有东西，窗口顶部的大标签页分三页：
  *   页 0「基础闭环」：分组框 / 输入 / 勾选 / 滑块 / 进度条 / 列表框 / 按钮（单击+双击），
  *                     演示业务状态结构、cg_set_timer、控件间联动。
  *   页 1「控件陈列」：菜单栏 / 工具栏 / 菜单按钮 / 开关 / 微调 / 日期时间 / 树 / 表格 /
@@ -36,7 +37,7 @@ typedef struct {
     int   close_tried;  /* 已经拦过一次关闭 */
 } biz_t;
 
-static biz_t g_biz;
+static biz_t s_biz;
 
 static void set_status(cg_app_t *app, const char *text)
 {
@@ -66,9 +67,9 @@ static void refresh_level(cg_app_t *app)
     cg_widget_t *prg = cg_find(app, "prg_level");
     char buf[64];
 
-    snprintf(buf, sizeof(buf), "等级 %d", g_biz.level);
+    snprintf(buf, sizeof(buf), "等级 %d", s_biz.level);
     if (lab) cg_widget_set_text(lab, buf);
-    if (prg) cg_widget_set_value(prg, g_biz.level);
+    if (prg) cg_widget_set_value(prg, s_biz.level);
 }
 
 /* ============================================================ 页 1 陈列室 */
@@ -119,8 +120,8 @@ static void reset_level_later(void *user)
     cg_app_t *app = (cg_app_t *)user;
     cg_widget_t *sld = cg_find(app, "sld_level");
 
-    g_biz.level = 40;
-    if (sld) cg_widget_set_value(sld, g_biz.level);
+    s_biz.level = 40;
+    if (sld) cg_widget_set_value(sld, s_biz.level);
     refresh_level(app);
     log_line(app, "2 秒后自动回落到等级 40");
 }
@@ -132,7 +133,7 @@ static void on_ok_click(cg_widget_t *self, cg_event_t ev, void *user)
     char buf[160];
 
     (void)ev;
-    if (!biz) biz = &g_biz;
+    if (!biz) biz = &s_biz;
 
     biz->click_count++;
     snprintf(buf, sizeof(buf), "单击：%s，VIP=%s，等级 %d（第 %d 次单击）",
@@ -149,12 +150,12 @@ static void on_ok_dblclick(cg_widget_t *self, cg_event_t ev, void *user)
 
     (void)ev;
     /* 双击时顺手把等级拉满，演示「事件驱动改状态」 */
-    g_biz.level = 100;
+    s_biz.level = 100;
     {
         cg_widget_t *sld = cg_find(app, "sld_level");
-        if (sld) cg_widget_set_value(sld, g_biz.level);   /* 会触发 on_level_change */
+        if (sld) cg_widget_set_value(sld, s_biz.level);   /* 会触发 on_level_change */
     }
-    snprintf(buf, sizeof(buf), "双击：等级已拉满到 %d", g_biz.level);
+    snprintf(buf, sizeof(buf), "双击：等级已拉满到 %d", s_biz.level);
     set_status(app, buf);
     log_line(app, "BTN 双击");
 
@@ -171,12 +172,12 @@ static void on_reset_click(cg_widget_t *self, cg_event_t ev, void *user)
 
     (void)ev;
     (void)user;
-    memset(&g_biz, 0, sizeof(g_biz));
-    g_biz.level = 40;
+    memset(&s_biz, 0, sizeof(s_biz));
+    s_biz.level = 40;
 
     if (edt) cg_widget_set_text(edt, "");     /* 界面 -> 会自动回灌 CHANGE，但值一样 */
     if (chk) cg_widget_set_checked(chk, 0);
-    if (sld) cg_widget_set_value(sld, g_biz.level);
+    if (sld) cg_widget_set_value(sld, s_biz.level);
     refresh_level(app);
     set_status(app, "已重置");
     log_line(app, "重置完成");
@@ -189,7 +190,7 @@ static void on_quit_click(cg_widget_t *self, cg_event_t ev, void *user)
     (void)user;
     log_line(app, "退出");
     printf("business summary: clicks=%d vip=%d level=%d name=%s\n",
-           g_biz.click_count, g_biz.vip, g_biz.level, g_biz.name);
+           s_biz.click_count, s_biz.vip, s_biz.level, s_biz.name);
     cg_quit(app);
 }
 
@@ -200,8 +201,8 @@ static void on_name_change(cg_widget_t *self, cg_event_t ev, void *user)
 
     (void)ev;
     (void)user;
-    snprintf(g_biz.name, sizeof(g_biz.name), "%s", text ? text : "");
-    set_status(app, g_biz.name[0] ? "姓名已记录" : "姓名已清空");
+    snprintf(s_biz.name, sizeof(s_biz.name), "%s", text ? text : "");
+    set_status(app, s_biz.name[0] ? "姓名已记录" : "姓名已清空");
 }
 
 static void on_name_submit(cg_widget_t *self, cg_event_t ev, void *user)
@@ -218,9 +219,9 @@ static void on_vip_change(cg_widget_t *self, cg_event_t ev, void *user)
     cg_app_t *app = cg_app_of(self);
     (void)ev;
     (void)user;
-    g_biz.vip = cg_widget_checked(self);
-    log_line(app, "VIP = %s", g_biz.vip ? "开" : "关");
-    set_status(app, g_biz.vip ? "VIP 已开启" : "VIP 已关闭");
+    s_biz.vip = cg_widget_checked(self);
+    log_line(app, "VIP = %s", s_biz.vip ? "开" : "关");
+    set_status(app, s_biz.vip ? "VIP 已开启" : "VIP 已关闭");
 }
 
 static void on_level_change(cg_widget_t *self, cg_event_t ev, void *user)
@@ -228,9 +229,9 @@ static void on_level_change(cg_widget_t *self, cg_event_t ev, void *user)
     cg_app_t *app = cg_app_of(self);
     (void)ev;
     (void)user;
-    g_biz.level = cg_widget_value(self);
+    s_biz.level = cg_widget_value(self);
     refresh_level(app);
-    log_line(app, "等级 -> %d", g_biz.level);
+    log_line(app, "等级 -> %d", s_biz.level);
 }
 
 /* ============================================================ 页 1 回调 */
@@ -831,7 +832,7 @@ int main(int argc, char **argv)
     desc.dblclick_suppress_click = 0;   /* 双击时先给 click 再给 dblclick */
     desc.auto_locate_cgui = 1;          /* 双击 exe 也能跑：自动去 exe 附近找 .cgui */
     desc.on_ready = on_ready;
-    desc.ready_user = &g_biz;
+    desc.ready_user = &s_biz;
 
     /* --selftest 走命令行自检：解析 + 打印控件树 + 合成事件，不开窗口 */
     if (argc > 1 && strcmp(argv[1], "--selftest") == 0) {
