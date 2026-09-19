@@ -1,117 +1,121 @@
 @echo off
 rem ============================================================
-rem  ´òÒ»¸ö¿ÉÒÔÖ±½Ó·¢¸øÓÃ»§µÄ·¢²¼°ü -> release\
+rem  æ‰“ä¸€ä¸ªå¯ä»¥ç›´æ¥å‘ç»™ç”¨æˆ·çš„å‘å¸ƒåŒ… -> release\
 rem
-rem  ÓÃ·¨£¨ÔÚÏîÄ¿¸ùÖ´ĞĞ£©£º
+rem  ç”¨æ³•ï¼ˆåœ¨é¡¹ç›®æ ¹æ‰§è¡Œï¼‰ï¼š
 rem    make-release.bat
 rem
-rem  ×öËÄ¼şÊÂ£º
-rem    1) È«Á¿¹¹½¨ÔËĞĞÊ±¿âºÍÊ¾Àı£¨±£Ö¤Ê¾ÀıµÄ exe ÊÇ×îĞÂµÄ£©
-rem    2) ´ò°ü»­²¼£¨designer -> designer\release\CStackGUI.exe£©
-rem    3) ×é×° release\£º»­²¼ + Ê¾Àı + Ô¤±àÒëµÄÔËĞĞÊ±¿â + ±àÒë½Å±¾ + Ê¹ÓÃËµÃ÷
-rem    4) ×Ô¼ì£º´Ó release\ ÀïÕæµÄ±àÒë²¢ÔËĞĞÒ»´ÎÊ¾Àı£¬È·ÈÏ·¢²¼°üÄÜÓÃ
+rem  åšå››ä»¶äº‹ï¼š
+rem    1) å…¨é‡æ„å»ºè¿è¡Œæ—¶åº“å’Œç¤ºä¾‹ï¼ˆä¿è¯ç¤ºä¾‹çš„ exe æ˜¯æœ€æ–°çš„ï¼‰
+rem    2) æ‰“åŒ…ç”»å¸ƒï¼ˆdesigner -> designer\release\CStackGUI.exeï¼‰
+rem    3) ç»„è£… release\ï¼šç”»å¸ƒ + ç¤ºä¾‹ + é¢„ç¼–è¯‘çš„è¿è¡Œæ—¶åº“ + ç¼–è¯‘è„šæœ¬ + ä½¿ç”¨è¯´æ˜
+rem    4) è‡ªæ£€ï¼šä» release\ é‡ŒçœŸçš„ç¼–è¯‘å¹¶è¿è¡Œä¸€æ¬¡ç¤ºä¾‹ï¼Œç¡®è®¤å‘å¸ƒåŒ…èƒ½ç”¨
 rem
-rem  release\ ÊÇ´¿²úÎï£¬¿ÉÒÔËæÊ±É¾µôÖØ´ò¡£
+rem  release\ æ˜¯çº¯äº§ç‰©ï¼Œå¯ä»¥éšæ—¶åˆ æ‰é‡æ‰“ã€‚
 rem ============================================================
 setlocal
 cd /d "%~dp0"
 
-echo == 1/4 ¹¹½¨ÔËĞĞÊ±ÓëÊ¾Àı ==
+echo == 1/4 æ„å»ºè¿è¡Œæ—¶ä¸ç¤ºä¾‹ ==
 call build-all.bat --release
 if errorlevel 1 exit /b 1
 
 echo.
-echo == 2/4 ´ò°ü»­²¼£¨electron-builder£©==
+echo == 2/4 æ‰“åŒ…ç”»å¸ƒï¼ˆelectron-builderï¼‰==
 pushd designer
+rem å›½å†…ç½‘ç»œç›´è¿ GitHub ä¸‹è½½äºŒè¿›åˆ¶ï¼ˆelectron zip / winCodeSign ç­‰ï¼‰ç»å¸¸è¶…æ—¶ï¼Œ
+rem èµ° npmmirror é•œåƒï¼›ç¼“å­˜å·²é½å…¨æ—¶è¿™äº›å˜é‡ä¸èµ·ä½œç”¨ã€‚
+set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+set ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
 call npx electron-builder --win portable
 if errorlevel 1 (
     popd
-    echo [fail] »­²¼´ò°üÊ§°Ü
+    echo [fail] ç”»å¸ƒæ‰“åŒ…å¤±è´¥
     exit /b 1
 )
 popd
 if not exist "designer\release\CStackGUI.exe" (
-    echo [fail] Ã»ÕÒµ½ designer\release\CStackGUI.exe
+    echo [fail] æ²¡æ‰¾åˆ° designer\release\CStackGUI.exe
     exit /b 1
 )
 
 echo.
-echo == 3/4 ×é×° release\ ==
+echo == 3/4 ç»„è£… release\ ==
 if exist release rmdir /s /q release
 mkdir release\runtime\include
 mkdir release\runtime\lib
 copy /y runtime\include\cstackgui.h release\runtime\include\ >nul
 copy /y build\lib\libcstackgui.a release\runtime\lib\ >nul
 if errorlevel 1 (
-    echo [fail] ¸´ÖÆÔËĞĞÊ±¿âÊ§°Ü
+    echo [fail] å¤åˆ¶è¿è¡Œæ—¶åº“å¤±è´¥
     exit /b 1
 )
 xcopy /e /i /q /y examples release\examples >nul
 if errorlevel 1 (
-    echo [fail] ¸´ÖÆ examples Ê§°Ü
+    echo [fail] å¤åˆ¶ examples å¤±è´¥
     exit /b 1
 )
-rem Ê¾ÀıÄ¿Â¼ÀïÄÇ·İ lib ÊÇÓÃÏµÍ³Â·¾¶Á´½ÓµÄ£¬·¢²¼°üÀïÍ³Ò»ÓÃ runtime\lib£¬É¾µô±ÜÃâ»ìÏı
+rem ç¤ºä¾‹ç›®å½•é‡Œé‚£ä»½ lib æ˜¯ç”¨ç³»ç»Ÿè·¯å¾„é“¾æ¥çš„ï¼Œå‘å¸ƒåŒ…é‡Œç»Ÿä¸€ç”¨ runtime\libï¼Œåˆ æ‰é¿å…æ··æ·†
 for /d %%a in (release\examples\*) do rmdir /s /q "%%a\lib" 2>nul
 copy /y packaging\build-app.bat release\build-app.bat >nul
 copy /y packaging\README.release.md release\README.md >nul
 copy /y designer\release\CStackGUI.exe release\CStackGUI.exe >nul
 if errorlevel 1 (
-    echo [fail] ¸´ÖÆ»­²¼Ê§°Ü
+    echo [fail] å¤åˆ¶ç”»å¸ƒå¤±è´¥
     exit /b 1
 )
 
-rem ¿ª·¢¹¤¾ß£ºclangd ÅäÖÃÉú³ÉÆ÷ + ¸ñÊ½ÆõÔ¼»Ø¹é + ½ØÍ¼
+rem å¼€å‘å·¥å…·ï¼šclangd é…ç½®ç”Ÿæˆå™¨ + æ ¼å¼å¥‘çº¦å›å½’ + æˆªå›¾
 if not exist release\tools mkdir release\tools
 copy /y packaging\check-format.bat release\tools\check-format.bat >nul
 copy /y tools\gen-cc.mjs release\tools\ >nul
 copy /y tools\format-roundtrip.mjs release\tools\ >nul
 copy /y tools\shot.ps1 release\tools\ >nul
 
-rem AI ±à³ÌÖúÊÖ£¨CodeBuddy µÈ£©µÄÏîÄ¿¼¶¼¼ÄÜ£ºÓÃ»§ÓÃ AI Ğ´ C »Øµ÷ / ÊÖ¸Ä .cgui Ê±×Ô¶¯¼ÓÔØ
+rem AI ç¼–ç¨‹åŠ©æ‰‹ï¼ˆCodeBuddy ç­‰ï¼‰çš„é¡¹ç›®çº§æŠ€èƒ½ï¼šç”¨æˆ·ç”¨ AI å†™ C å›è°ƒ / æ‰‹æ”¹ .cgui æ—¶è‡ªåŠ¨åŠ è½½
 xcopy /e /i /q /y packaging\codebuddy release\.codebuddy >nul
 
-rem Ô¤±àÒë»­²¼Ä£ĞÍ£¨·¢²¼°æ check-format ÓÃ£»·¢²¼»úÉÏÃ»ÓĞ designer Ô´Âë£©
-echo -- Ô¤±àÒë»­²¼Ä£ĞÍµ½ release\build\modeljs --
+rem é¢„ç¼–è¯‘ç”»å¸ƒæ¨¡å‹ï¼ˆå‘å¸ƒç‰ˆ check-format ç”¨ï¼›å‘å¸ƒæœºä¸Šæ²¡æœ‰ designer æºç ï¼‰
+echo -- é¢„ç¼–è¯‘ç”»å¸ƒæ¨¡å‹åˆ° release\build\modeljs --
 call npx --prefix designer tsc designer\src\model.ts --outDir release\build\modeljs --target es2022 --module es2022 --moduleResolution node --skipLibCheck --strict
 if errorlevel 1 (
-    echo [fail] Ô¤±àÒë»­²¼Ä£ĞÍÊ§°Ü
+    echo [fail] é¢„ç¼–è¯‘ç”»å¸ƒæ¨¡å‹å¤±è´¥
     exit /b 1
 )
 
-rem Éú³É clangd µÄÓïÑÔ·şÎñÅäÖÃ£¨Ïà¶ÔÂ·¾¶£¬»úÆ÷ÎŞ¹Ø£»ÓÃ»§±àÒëºóÒ²»á×Ô¶¯Ë¢ĞÂ£©
-echo -- Éú³É release\compile_commands.json --
+rem ç”Ÿæˆ clangd çš„è¯­è¨€æœåŠ¡é…ç½®ï¼ˆç›¸å¯¹è·¯å¾„ï¼Œæœºå™¨æ— å…³ï¼›ç”¨æˆ·ç¼–è¯‘åä¹Ÿä¼šè‡ªåŠ¨åˆ·æ–°ï¼‰
+echo -- ç”Ÿæˆ release\compile_commands.json --
 pushd release
 node tools\gen-cc.mjs
 popd
 if errorlevel 1 (
-    echo [fail] Éú³É compile_commands.json Ê§°Ü
+    echo [fail] ç”Ÿæˆ compile_commands.json å¤±è´¥
     exit /b 1
 )
 
 echo.
-echo == 4/4 ×Ô¼ì£ºÔÚ release\ Àï±àÒë²¢Ğ£ÑéÒ»¸öÊ¾Àı ==
+echo == 4/4 è‡ªæ£€ï¼šåœ¨ release\ é‡Œç¼–è¯‘å¹¶æ ¡éªŒä¸€ä¸ªç¤ºä¾‹ ==
 pushd release
 call build-app.bat hello
 if errorlevel 1 (
     popd
-    echo [fail] ·¢²¼°üÀïµÄ±àÒë½Å±¾ÓÃ²»ÁË
+    echo [fail] å‘å¸ƒåŒ…é‡Œçš„ç¼–è¯‘è„šæœ¬ç”¨ä¸äº†
     exit /b 1
 )
 examples\hello\hello.exe --selftest examples\hello\hello.cgui
 if errorlevel 1 (
     popd
-    echo [fail] ·¢²¼°üÀï±àÒë³öÀ´µÄÊ¾Àı×Ô¼ìÃ»¹ı
+    echo [fail] å‘å¸ƒåŒ…é‡Œç¼–è¯‘å‡ºæ¥çš„ç¤ºä¾‹è‡ªæ£€æ²¡è¿‡
     exit /b 1
 )
 call tools\check-format.bat
 if errorlevel 1 (
     popd
-    echo [fail] ·¢²¼°üÀïµÄ¸ñÊ½ÆõÔ¼¼ì²éÃ»¹ı
+    echo [fail] å‘å¸ƒåŒ…é‡Œçš„æ ¼å¼å¥‘çº¦æ£€æŸ¥æ²¡è¿‡
     exit /b 1
 )
 popd
 
 echo.
-echo [ok] release\ ÒÑÉú³É£¬¿ÉÒÔÖ±½Ó´ò°ü·¢¸øÓÃ»§
+echo [ok] release\ å·²ç”Ÿæˆï¼Œå¯ä»¥ç›´æ¥æ‰“åŒ…å‘ç»™ç”¨æˆ·
 dir /b release

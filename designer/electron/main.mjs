@@ -325,7 +325,16 @@ ipcMain.handle("run:buildAndLaunch", async (_e, { filePath }) => {
     return fail("还没找到 CStackGUI 项目根。点工具条上的「定位项目根」，\n选含 runtime\\、apps\\ 的那一层目录。");
   }
 
-  const name = safeName(path.basename(filePath).replace(/\.cgui$/i, ""));
+  /* build-app.bat 的参数是「工程目录名」，不是界面文件名：
+   * main.cgui 放在 examples\test\ 里时，要编译的是 examples\test，
+   * 按「main」找工程会错编 apps\main（同名文件不同目录的工程会互相串）。 */
+  const name = safeName(path.basename(path.dirname(path.resolve(filePath))));
+  if (!name) {
+    return fail(
+      `工程目录名要只用英文/数字/下划线（当前目录名无法用作编译参数）。\n` +
+        `当前文件在：${appDir}`,
+    );
+  }
   const under = [path.join(root, "apps"), path.join(root, "examples")]
     .some((base) => appDir.toLowerCase().startsWith(base.toLowerCase() + path.sep));
   if (!under) {
@@ -367,6 +376,13 @@ ipcMain.handle("run:buildAndLaunch", async (_e, { filePath }) => {
   }
 
   const exePath = path.join(appDir, `${name}.exe`);
+  /* 编译退出码为 0 不代表产物一定在（比如工程目录里没有 main.c 时链接的
+   * 是别的目录）。spawn 一个不存在的 exe 会抛未捕获异常弹窗，先拦下来。 */
+  if (!existsSync(exePath)) {
+    const msg = `编译没有生成 ${exePath}。\n请确认工程目录里有 main.c（点「导出 C 骨架」生成），目录里没有多余的旧产物。`;
+    send("run:output", { kind: "fail", code: exitCode });
+    return fail(msg);
+  }
   /* detached：画布退出后程序照跑 */
   spawn(exePath, [], { detached: true, stdio: "ignore", cwd: appDir }).unref();
   send("run:output", { kind: "done", text: exePath });

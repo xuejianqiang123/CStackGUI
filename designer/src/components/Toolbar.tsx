@@ -5,6 +5,8 @@ type Props = {
   doc: CgDoc;
   filePath: string;
   dirty: boolean;
+  /** 保存可用 = 有工程（导出过 C 骨架）或打开过文件；否则禁用并提示先导出 */
+  canSave: boolean;
   zoom: number;
   showGrid: boolean;
   snapOn: boolean;
@@ -41,7 +43,12 @@ export default function Toolbar(p: Props) {
       <div className="tool-group">
         <button onClick={p.onNew}>新建</button>
         <button onClick={p.onOpen}>打开</button>
-        <button className="primary" onClick={p.onSave}>
+        <button
+          className="primary"
+          onClick={p.onSave}
+          disabled={!p.canSave}
+          title={p.canSave ? "Ctrl+S：保存到工程的 .cgui" : "先导出 C 骨架，保存位置会自动跟随工程目录"}
+        >
           保存
         </button>
         <button onClick={p.onSaveAs}>另存为</button>

@@ -3,7 +3,7 @@
  * 目标：画布上填了哪些事件名，就生成对应的空函数 + 绑定表，
  * 让业务同学打开就能填逻辑，不用手抄一遍事件名（抄错就是运行时不报错的空绑定）。
  */
-import { CG_EVENTS, KIND_MAP, walk, type CgDoc, type CgEvent, type CgNode } from "./model";
+import { CG_EVENTS, KIND_MAP, serializeDoc, walk, type CgDoc, type CgEvent, type CgNode } from "./model";
 
 export type CallbackUse = {
   name: string;
@@ -133,10 +133,10 @@ int main(int argc, char **argv)
 
   const buildBat = `@echo off
 rem Build this UI project into a standalone exe.
-rem Standard setup: put this folder under CStackGUI\\apps\\, then run
-rem   build-app.bat ${base}
-rem from the CStackGUI root. If this folder lives elsewhere, set the
-rem CSTACKGUI_HOME env var to the CStackGUI project root first.
+rem Standard setup: put this folder under CStackGUI\\apps\\, then just run this
+rem script (or run build-app.bat <this-folder-name> from the CStackGUI root).
+rem If this folder lives elsewhere, set the CSTACKGUI_HOME env var to the
+rem CStackGUI project root first.
 rem NOTE: keep this file ASCII-only (cmd mis-parses non-ASCII after chcp 65001).
 setlocal
 if "%CSTACKGUI_HOME%"=="" set CSTACKGUI_HOME=%~dp0..\\..
@@ -146,14 +146,18 @@ if not exist "%CSTACKGUI_HOME%\\build-app.bat" (
     echo        folder into CStackGUI\\apps\\.
     exit /b 1
 )
-call "%CSTACKGUI_HOME%\\build-app.bat" ${base}
+rem build-app.bat takes the PROJECT FOLDER name, not the file base name,
+rem so this folder can be renamed or moved and still builds itself.
+for %%%%I in ("%~dp0.") do set CG_APP=%%%%~nI
+call "%CSTACKGUI_HOME%\\build-app.bat" %%CG_APP%%
 `;
 
   return [
     { name: `${base}_ui_events.h`, content: header },
     { name: `${base}_ui_events.c`, content: stubs },
     { name: "main.c", content: mainC },
-    { name: cguiFile, content: `${JSON.stringify(doc, null, 2)}\n` },
+    /* 与画布「保存」同一套序列化（cleanNode 去默认值字段），保证导出即保存、两者字节一致 */
+    { name: cguiFile, content: serializeDoc(doc) },
     { name: "build.bat", content: buildBat.replace(/\n/g, "\r\n") },
   ];
 }

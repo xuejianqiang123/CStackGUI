@@ -197,6 +197,8 @@ export default function App() {
     setFilePath("");
     setDirty(false);
     setSelectedId(null);
+    /* 不清 lastExport 的话，Ctrl+S 会把新画布内容静默覆盖进上一个工程的 .cgui */
+    setLastExport(null);
     setHistVersion((v) => v + 1);
   }, [bridge, dirty]);
 
@@ -215,24 +217,49 @@ export default function App() {
     setFilePath(res.path ?? "");
     setDirty(false);
     setSelectedId(null);
+    /* 同 doNew：打开别的文件后，保存必须写它自己，而不是上一次导出的工程 */
+    setLastExport(null);
     setHistVersion((v) => v + 1);
     say(`已打开 ${res.path ?? ""}`.trim());
   }, [bridge, dirty, say]);
 
+  /* 保存目标：导出过 C 骨架 -> 固定写工程里的 .cgui（禁止再弹框选位置）；
+   * 没导出过但打开过文件 -> 写原路径；两者都没有 -> 保存不可用。 */
+  const cguiTarget = lastExport ? `${lastExport.dir}\\${lastExport.appName}.cgui` : filePath;
+  const canSave = !!cguiTarget;
+
   const doSave = useCallback(
     async (forceDialog = false) => {
+      const target = lastExport ? `${lastExport.dir}\\${lastExport.appName}.cgui` : filePath;
+      if (!target) {
+        say("先点「导出 C 骨架」：保存位置跟随工程目录，不用自己选");
+        return { canceled: true as const };
+      }
+      if (forceDialog) {
+        /* 「另存为」是逃生门，仍允许选位置 */
+        const res = await bridge.saveFile({
+          filePath: "",
+          text: serializeDoc(docRef.current),
+          suggestName: suggestedBaseName(docRef.current.app.title),
+        });
+        if (res.canceled) return { canceled: true as const };
+        if (res.path) setFilePath(res.path);
+        setDirty(false);
+        say(`已保存 ${res.path ?? ""}`.trim());
+        return { canceled: false as const, path: res.path };
+      }
       const res = await bridge.saveFile({
-        filePath: forceDialog ? "" : filePath,
+        filePath: target,
         text: serializeDoc(docRef.current),
         suggestName: suggestedBaseName(docRef.current.app.title),
       });
       if (res.canceled) return { canceled: true as const };
-      if (res.path) setFilePath(res.path);
+      setFilePath(res.path ?? target);
       setDirty(false);
-      say(`已保存 ${res.path ?? ""}`.trim());
-      return { canceled: false as const, path: res.path };
+      say(`已保存 ${res.path ?? target}`);
+      return { canceled: false as const, path: res.path ?? target };
     },
-    [bridge, filePath, say],
+    [bridge, filePath, lastExport, say],
   );
 
   const doExportC = useCallback(async () => {
@@ -243,6 +270,12 @@ export default function App() {
     if (res.canceled) return;
     if (res.projectRoot) setProjectRoot(res.projectRoot);
     setLastExport({ dir: res.dir ?? "", appName: baseName });
+    /* 导出时 .cgui 已经写进工程目录了：把「当前文件」指向它并清掉未保存标记，
+     * 否则紧接着点保存又会弹框让你再选一次位置（导出即保存）。 */
+    if (res.dir) {
+      setFilePath(`${res.dir}\\${baseName}.cgui`);
+      setDirty(false);
+    }
     const skipped = res.skipped?.length ? `（跳过已存在的 ${res.skipped.join("、")}）` : "";
     say(`已导出到 ${res.dir}${skipped}，接着去填 ${baseName}_ui_events.c`);
   }, [bridge, docRef, projectRoot, say, filePath]);
@@ -424,6 +457,7 @@ export default function App() {
       setFilePath(file.name);
       setDirty(false);
       setSelectedId(null);
+      setLastExport(null);
     };
     const prevent = (e: DragEvent) => e.preventDefault();
     window.addEventListener("dragover", prevent);
@@ -452,6 +486,7 @@ export default function App() {
         doc={doc}
         filePath={filePath}
         dirty={dirty}
+        canSave={canSave}
         zoom={zoom}
         showGrid={showGrid}
         snapOn={snapOn}
