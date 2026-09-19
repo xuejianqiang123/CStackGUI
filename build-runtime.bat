@@ -1,12 +1,15 @@
 @echo off
 rem ============================================================
-rem  编译 CStackGUI 运行时库 -> build\lib\libcstackgui.a
+rem  Build the CStackGUI runtime library -> build\lib\libcstackgui.a
 rem
-rem  只在「改了 runtime\ 下的东西」或第一次用时才需要跑；
-rem  平时改业务代码只跑 build-app.bat 就行。
+rem  Only needed after editing runtime\ or on first use; normal app
+rem  builds go through build-app.bat (which refreshes it anyway).
 rem
-rem  可选环境变量：
-rem    MINGW   MinGW-w64 的 bin 目录（默认 C:\mingw64\bin）
+rem  Optional env var:
+rem    MINGW   MinGW-w64 bin dir (default C:\mingw64\bin)
+rem
+rem  NOTE: keep this file ASCII-only. cmd mis-parses non-ASCII comments
+rem  after `chcp 65001` (the designer's F5 run uses it).
 rem ============================================================
 setlocal
 if "%MINGW%"=="" set MINGW=C:\mingw64\bin
@@ -15,8 +18,8 @@ cd /d "%~dp0"
 
 where gcc >nul 2>nul
 if errorlevel 1 (
-    echo [fail] 找不到 gcc。装个 MinGW-w64，或设置 MINGW 环境变量指向它的 bin 目录：
-    echo        set MINGW=D:\your\mingw64\bin
+    echo [fail] gcc not found. Install MinGW-w64, or set the MINGW env var
+    echo        to its bin dir, e.g.:  set MINGW=D:\mingw64\bin
     exit /b 1
 )
 
@@ -41,11 +44,11 @@ if errorlevel 1 goto :fail
 
 echo [ok] build\lib\libcstackgui.a
 
-rem 顺手刷新 clangd 的语言服务配置（参数与本脚本同源，由 tools\gen-cc.mjs 镜像生成）。
-rem 没装 node 或不在源码根（如 release\）就静默跳过，不影响编译。
+rem Refresh the clangd language-service config (mirrors the flags above).
+rem Silently skipped when node is missing or not at repo root.
 where node >nul 2>nul && if exist tools\gen-cc.mjs node tools\gen-cc.mjs >nul 2>nul
 exit /b 0
 
 :fail
-echo [fail] 运行时编译失败
+echo [fail] runtime build failed
 exit /b 1

@@ -1,15 +1,18 @@
 @echo off
 rem ============================================================
-rem  编译一个界面工程 -> exe（**发布包里的版本**）
+rem  Build a UI project into an exe (**release-package version**)
 rem
-rem  和开发仓库里那个 build-app.bat 的区别：这个不编译运行时源码，
-rem  直接用 runtime\lib\libcstackgui.a 这份预编译库。所以整个发布包
-rem  自包含，不需要 CStackGUI 源码也能改界面、写业务、出 exe。
+rem  Difference from the source-repo build-app.bat: this one never
+rem  compiles runtime sources, it links the prebuilt runtime\lib\libcstackgui.a.
+rem  The whole package is self-contained: no CStackGUI sources needed.
 rem
-rem  用法：
-rem    build-app.bat hello              编译 examples\hello\
-rem    build-app.bat myapp              编译 apps\myapp\（你自己导出的工程）
-rem    build-app.bat myapp --release    无控制台版本
+rem  Usage:
+rem    build-app.bat hello              build examples\hello\
+rem    build-app.bat myapp              build apps\myapp\ (your project)
+rem    build-app.bat myapp --release    no console
+rem
+rem  NOTE: keep this file ASCII-only. cmd mis-parses non-ASCII comments
+rem  after `chcp 65001` (the designer's F5 run uses it).
 rem ============================================================
 setlocal
 if "%MINGW%"=="" set MINGW=C:\mingw64\bin
@@ -24,25 +27,24 @@ set APPDIR=
 if exist "apps\%APP%\"     set APPDIR=apps\%APP%
 if not defined APPDIR if exist "examples\%APP%\" set APPDIR=examples\%APP%
 if not defined APPDIR (
-    echo [fail] 找不到工程 "%APP%"
+    echo [fail] project "%APP%" not found
     echo.
-    echo        你自己的工程（画布导出的默认位置）：
+    echo        your projects - default export dir of the designer:
     dir /b /ad apps 2>nul
-    echo        自带的示例：
+    echo        bundled examples:
     dir /b /ad examples 2>nul
     exit /b 1
 )
 
 where gcc >nul 2>nul
 if errorlevel 1 (
-    echo [fail] 找不到 gcc。装个 MinGW-w64（http://winlibs.com 或 MSYS2），
-    echo        或设置环境变量 MINGW 指向它的 bin 目录，例如：
-    echo        set MINGW=D:\mingw64\bin
+    echo [fail] gcc not found. Install MinGW-w64 from winlibs.com or MSYS2, or set
+    echo        the MINGW env var to its bin dir, e.g.:  set MINGW=D:\mingw64\bin
     exit /b 1
 )
 
 if not exist "runtime\lib\libcstackgui.a" (
-    echo [fail] 缺少 runtime\lib\libcstackgui.a，发布包不完整，请重新获取。
+    echo [fail] runtime\lib\libcstackgui.a missing, package incomplete. Get it again.
     exit /b 1
 )
 
@@ -51,19 +53,24 @@ set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include
 
 set OUT=%APPDIR%\%APP%.exe
 if "%MODE%"=="--release" (
-    echo   LD %OUT% ^(release, 无控制台^)
+    echo   LD %OUT% ^(release, no console^)
     gcc %CFLAGS% -mwindows -o "%OUT%" "%APPDIR%\*.c" "runtime\lib\libcstackgui.a" %LDFLAGS%
 ) else (
-    echo   LD %OUT% ^(debug, 带控制台^)
+    echo   LD %OUT% ^(debug, with console^)
     gcc %CFLAGS% -o "%OUT%" "%APPDIR%\*.c" "runtime\lib\libcstackgui.a" %LDFLAGS%
 )
 if errorlevel 1 (
-    echo [fail] %APP% 编译失败
+    echo [fail] build of %APP% failed
     exit /b 1
 )
 
 echo [ok] %OUT%
 echo.
-echo     直接跑（双击也行）:   %OUT%
-echo     只校验不开窗:         %OUT% --selftest
+echo     run it (double-click works):   %OUT%
+echo     self-check without window:     %OUT% --selftest
+
+rem Refresh the clangd language-service config (compile_commands.json, generated
+rem by tools\gen-cc.mjs; used by the clangd plugin in CodeBuddy/VSCode).
+rem Silently skipped when node is missing; does not affect the build.
+where node >nul 2>nul && if exist tools\gen-cc.mjs node tools\gen-cc.mjs >nul 2>nul
 exit /b 0

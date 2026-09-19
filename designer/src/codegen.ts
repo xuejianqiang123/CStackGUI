@@ -132,14 +132,18 @@ int main(int argc, char **argv)
 `;
 
   const buildBat = `@echo off
-rem 编译本界面为独立 exe。
-rem 标准做法：把本目录放在 CStackGUI\\apps\\ 下，然后在 CStackGUI 根目录跑 build-app.bat ${base}。
-rem 这个脚本是给「目录不在 apps\\ 下」的情况用的：用 CSTACKGUI_HOME 指到项目根即可。
+rem Build this UI project into a standalone exe.
+rem Standard setup: put this folder under CStackGUI\\apps\\, then run
+rem   build-app.bat ${base}
+rem from the CStackGUI root. If this folder lives elsewhere, set the
+rem CSTACKGUI_HOME env var to the CStackGUI project root first.
+rem NOTE: keep this file ASCII-only (cmd mis-parses non-ASCII after chcp 65001).
 setlocal
 if "%CSTACKGUI_HOME%"=="" set CSTACKGUI_HOME=%~dp0..\\..
 if not exist "%CSTACKGUI_HOME%\\build-app.bat" (
-    echo [fail] 在 "%CSTACKGUI_HOME%" 下找不到 build-app.bat
-    echo        请设置 CSTACKGUI_HOME 指向 CStackGUI 项目根目录，或把本目录放进 CStackGUI\\apps\\ 下
+    echo [fail] build-app.bat not found in "%CSTACKGUI_HOME%"
+    echo        Set CSTACKGUI_HOME to the CStackGUI project root, or move this
+    echo        folder into CStackGUI\\apps\\.
     exit /b 1
 )
 call "%CSTACKGUI_HOME%\\build-app.bat" ${base}
