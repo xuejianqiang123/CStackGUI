@@ -52,10 +52,10 @@ argument-hint: [lite|full|ultra|wenyan-lite|wenyan|wenyan-ultra|off | review | c
 - 与本项目 14 个审查 skill 配合：审查逻辑仍用专项 skill，caveman 只压缩**评论文字表达**。
 
 ### 场景 2：极简 Commit 信息（commit）
-- 遵循 Conventional Commits：`type(scope): 主题`，主题 ≤ 50 字符。
+- 遵循本项目的 `[类型][模块] 描述` 格式（git-commit-style），一行说清。
 - 正文重"为什么改"，轻"改了什么"（diff 已说明改了什么）。
-- 示例：`fix(uart): 修复 DMA 半满中断丢字节。缓冲区改双buffer。`
-- 注意：commit 走 `piv-commit` 流程时，本 skill 只影响文案精简度，不替代提交流程。
+- 示例：`[修复][运行时] DMA 半满中断丢字节，缓冲区改双 buffer`
+- 注意：commit 走 `git-commit-style` 流程时，本 skill 只影响文案精简度，不替代提交流程。
 
 ### 场景 3：压缩记忆/文档文件（compress）
 - 输入：`caveman compress <filepath>`

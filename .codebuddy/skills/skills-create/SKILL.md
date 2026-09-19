@@ -59,7 +59,7 @@ argument-hint: [<参数>]
 ## 两类技能定位（本项目）
 
 - **审查类**（已有 14 个）：嵌入式专项质量检查，如 `buffer_overflow_check`、`interrupt_check` —— 被 `piv-review-changes` 按领域调用
-- **流程类**（PIV 系列）：开发工作流，如 `piv-validate`、`piv-commit` —— 定义"怎么做"的环节
+- **流程类**（PIV 系列）：开发工作流，如 `piv-validate`、`git-commit-style` —— 定义"怎么做"的环节
 
 ## 创建流程
 

@@ -1,6 +1,6 @@
 ---
 name: piv-create-pr
-description: 基于已提交的改动创建 Pull Request / Merge Request，包含清晰的描述与关联信息。触发条件：piv-commit 完成后、用户说"创建PR"、"发起MR"、"提交评审"、"push 并创建 PR"时自动触发。
+description: 基于已提交的改动创建 Pull Request / Merge Request，包含清晰的描述与关联信息。触发条件：git-commit-style 提交完成后、用户说"创建PR"、"发起MR"、"提交评审"、"push 并创建 PR"时自动触发。
 auto_invoke: true
 argument-hint: [optional-pr-title]
 ---
@@ -14,7 +14,7 @@ argument-hint: [optional-pr-title]
 ## 流程
 
 ### 1. 前置检查
-- [ ] 改动已提交（`piv-commit` 已完成）
+- [ ] 改动已提交（`git-commit-style` 流程已完成）
 - [ ] 当前分支命名符合项目规范（如 `dev_*` / `feature_*` / `fix_*`）
 - [ ] 已确认目标分支（如 `dev_v1.2.0.2` 或主开发分支）
 - [ ] 本地分支已推送到远端

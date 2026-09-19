@@ -160,7 +160,7 @@ npm install / npm run dev / npm run build / npm run dist
 | `c-function-comment` | C 函数的 Doxygen 注释格式（`@brief/@param/@return`） | 写/改 C 函数时 |
 | `git-commit-style` | 提交信息格式：`[类型][模块] 一句话说清` | 要求提交时 |
 | `plan-create-prd` / `plan-architecture` / `piv-slice-epic` | 需求 → PRD / 架构 → SDD / 大需求拆切片 | 提出新功能、说"先做计划" |
-| `piv-plan-implementation` → `piv-implement` → `piv-validate` → `piv-review-changes` → `piv-commit` | 计划 → 实现 → 验证 → 审查 → 提交 的内层循环 | 开发任务的标准流程 |
+| `piv-plan-implementation` → `piv-implement` → `piv-validate` → `piv-review-changes` → `git-commit-style` | 计划 → 实现 → 验证 → 审查 → 提交 的内层循环 | 开发任务的标准流程 |
 | `piv-run-full-loop` | 上面整条链一次跑完 | 提出明确的小功能需求时 |
 
 此外还有 14 个嵌入式审查技能（内存/中断/协议……）会在提交前审查时按改动领域自动调用。

@@ -72,8 +72,8 @@
     │   ├── piv-implement/            # 严格按计划实现（不做计划外改动）
     │   ├── piv-validate/             # 编译+静态+行为验证（门禁 1）
     │   ├── piv-review-changes/       # 提交前审查（调用 14 个审查技能，门禁 2）
-    │   ├── piv-commit/               # 原子化提交（conventional-commit）
     │   ├── piv-create-pr/            # 创建 PR/MR（含验证情况与关联文档）
+    │   │   （提交规范在根级 git-commit-style/：[类型][模块] 格式，2026-09-20 合并原 piv-commit）
     │   ├── piv-run-full-loop/        # 端到端全循环（描述→提交自动化）
     │   ├── skills-create/            # 创建/更新技能（元技能）
     │   ├── first-principles-thinking/ # 第一性原理思维准则（全局生效：需求澄清/最短路径/追根因/精简输出）
@@ -202,7 +202,7 @@
 │  prime-codebase → piv-plan-implementation → piv-implement          │
 │  加载上下文        Validation-First 计划        按计划实现            │
 │       ↓                                                           │
-│  piv-validate → piv-review-changes → piv-commit → piv-create-pr    │
+│  piv-validate→piv-review-changes→git-commit-style→piv-create-pr    │
 │  编译+行为验证     审查(调14个技能)     原子提交       创建 PR/MR    │
 └────────────────────────────────────────────────────────────────────┘
 ```
@@ -219,7 +219,7 @@
 | 内层 | `piv-implement` | 严格按计划实现，计划外改动需确认 | 代码改动 |
 | 内层 | `piv-validate` | 编译（idf.py build）+ 静态检查 + 行为验证 | 验证结果清单 |
 | 内层 | `piv-review-changes` | 提交前审查，按领域调用 14 个审查技能 | `.codebuddy/code-reviews/*.md` |
-| 内层 | `piv-commit` | 原子化提交（conventional-commit） | git commit |
+| 内层 | `git-commit-style` | `[类型][模块] 描述` 格式、分批原子化提交 | git commit |
 | 内层 | `piv-create-pr` | 创建 PR/MR（含验证情况与关联文档） | PR/MR |
 | 全流程 | `piv-run-full-loop` | 从描述到提交的端到端自动化 | 完整交付 |
 | 元技能 | `skills-create` | 创建/更新 skill 的规范 | 新 SKILL.md |
@@ -281,7 +281,7 @@ PIV 内层循环包含 **3 个质量门禁**，必须通过才能进入下一阶
 - ✅ 产出审查报告到 `.codebuddy/code-reviews/`
 - ❌ 不通过 → 回到 `piv-implement` / `piv-validate`
 
-**规则**：门禁不通过 → 不能提交（`piv-commit`）
+**规则**：门禁不通过 → 不能提交（`git-commit-style`）
 
 ### 审查 Skills 自动触发映射表
 
@@ -361,7 +361,7 @@ AI 自动执行：
   3. piv-implement             → 按计划实现
   4. piv-validate              → idf.py build + 行为验证
   5. piv-review-changes        → 调用通信协议/DMA 等审查技能
-  6. piv-commit                → 原子化提交
+  6. git-commit-style          → 按 [类型][模块] 分批提交
 ```
 
 大需求先走外层循环：

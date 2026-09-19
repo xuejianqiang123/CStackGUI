@@ -71,9 +71,9 @@ argument-hint: [feature-description]
 
 ## 步骤 6：提交
 
-执行 `piv-commit` skill 的工作流：
+执行 `git-commit-style` skill 的流程（本项目唯一提交规范）：
 
-- 原子化提交，conventional-commit 风格
+- `[类型][模块] 描述` 格式，按逻辑分批原子化提交
 - 输出变更摘要 +（如有）.codebuddy/ 层改动说明
 
 ---

@@ -61,7 +61,7 @@
 | 2. 实现 | `piv-implement` | 计划确认后 | 代码改动 |
 | 3. 验证 | `piv-validate` | 实现完成后**强制触发**（进入审查前门禁） | 验证结果清单 |
 | 4. 审查 | `piv-review-changes` | 验证通过后**强制触发**（提交前门禁） | `.codebuddy/code-reviews/*.md` |
-| 5. 提交 | `piv-commit` | 审查通过后 | git commit |
+| 5. 提交 | `git-commit-style` | 审查通过后 | git commit |
 | 6. PR | `piv-create-pr` | 提交完成、用户要求创建 PR 时 | PR/MR |
 
 #### 快捷全流程

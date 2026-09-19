@@ -1,6 +1,6 @@
 ---
 name: piv-review-changes
-description: 提交前对全部改动做技术审查（质量门禁），产出审查报告到 .codebuddy/code-reviews/。触发条件：piv-validate 通过后、用户说"审查代码"、"code review"、"检查质量"，或准备 piv-commit 前强制触发。会自动调用本项目的 14 个嵌入式审查 skills。
+description: 提交前对全部改动做技术审查（质量门禁），产出审查报告到 .codebuddy/code-reviews/。触发条件：piv-validate 通过后、用户说"审查代码"、"code review"、"检查质量"，或准备提交（git-commit-style）前强制触发。会自动调用本项目的 14 个嵌入式审查 skills。
 auto_invoke: true
 ---
 
