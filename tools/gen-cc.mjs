@@ -8,7 +8,7 @@
  * 运行：node tools\gen-cc.mjs（在项目根；build-runtime.bat / build-app.bat 成功后也会自动刷）
  * 产物：compile_commands.json（相对路径，内容机器无关；是否入库随项目定，当前 gitignore）
  */
-import { readdirSync, writeFileSync } from "node:fs";
+import { readdirSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -44,12 +44,18 @@ function extraFlags(file) {
   return flags;
 }
 
-const list = (base) =>
-  readdirSync(path.join(root, base), { withFileTypes: true })
+/** 枚举目录下所有子目录；发布包里 runtime\src、apps\ 可能不存在，缺了就跳过 */
+const list = (base) => {
+  const dir = path.join(root, base);
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir, { withFileTypes: true })
     .filter((d) => d.isDirectory())
-    .map((d) => path.join(root, base, d.name));
-/* apps\ 也要：用户自己的工程同样享受 clangd */
-const dirs = [path.join(root, "runtime", "src"), ...list("apps"), ...list("examples")];
+    .map((d) => path.join(dir, d.name));
+};
+/* apps\ 也要：用户自己的工程同样享受 clangd；
+ * runtime\src 发布包里没有（只有预编译库），缺了跳过 */
+const runtimeSrc = path.join(root, "runtime", "src");
+const dirs = [...(existsSync(runtimeSrc) ? [runtimeSrc] : []), ...list("apps"), ...list("examples")];
 
 const entries = [];
 for (const dir of dirs) {

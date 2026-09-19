@@ -1,3 +1,13 @@
+# shot.ps1 -- 跑一个界面并截图，调 GUI 外观用
+# 用法（在项目根或发布包根）：
+#   powershell -ExecutionPolicy Bypass -File tools\shot.ps1                          # 默认截 gallery
+#   powershell -ExecutionPolicy Bypass -File tools\shot.ps1 apps\main\main.exe      # 截自己的工程
+param(
+  [string]$Exe = "",
+  [string]$Cgui = "",
+  [string]$Out = ""
+)
+$ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Windows.Forms,System.Drawing
 Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
 using System;
@@ -9,9 +19,12 @@ public class Win32Cap {
 }
 '@
 
-$exe = 'd:\CPro\CStackGUI\examples\gallery\gallery.exe'
-$cgui = 'd:\CPro\CStackGUI\examples\gallery\gallery.cgui'
-$p = Start-Process -FilePath $exe -ArgumentList $cgui -PassThru
+$root = Split-Path -Parent $PSScriptRoot
+if (-not $Exe)  { $Exe  = Join-Path $root "examples\gallery\gallery.exe" }
+if (-not $Cgui) { $Cgui = (Join-Path (Split-Path -Parent $Exe) ((Split-Path -Leaf $Exe) -replace '\.exe$', '.cgui')) }
+if (-not $Out)  { $Out  = Join-Path $root "build\shot.png" }
+
+$p = Start-Process -FilePath $Exe -ArgumentList $Cgui -PassThru
 Start-Sleep -Seconds 4
 $p.Refresh()
 if ($p.HasExited) { Write-Output "HAS_EXITED code=$($p.ExitCode)"; exit 1 }
@@ -26,7 +39,9 @@ $bmp = New-Object System.Drawing.Bitmap $w, $h
 $g = [System.Drawing.Graphics]::FromImage($bmp)
 $g.CopyFromScreen($r.L, $r.T, 0, 0, $bmp.Size)
 $g.Dispose()
-$bmp.Save('d:\CPro\CStackGUI\build\shot_new.png')
+$dir = Split-Path -Parent $Out
+if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
+$bmp.Save($Out)
 $bmp.Dispose()
-Write-Output "saved ${w}x${h}"
+Write-Output "saved $Out ${w}x${h}"
 Stop-Process -Id $p.Id -Force

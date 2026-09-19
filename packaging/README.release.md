@@ -11,8 +11,14 @@
 
 ```
 CStackGUI.exe          画布：拖拽设计界面、导出 C 骨架
-build-app.bat          编译某个工程 -> exe
+build-app.bat          编译某个工程 -> exe（成功后自动刷新 clangd 配置）
+compile_commands.json  clangd 语言服务配置（编译一次后自动生成，给编辑器用）
 README.md              本文件
+tools\
+  gen-cc.mjs           生成 compile_commands.json（build-app.bat 会自动调，也可手动跑）
+  check-format.bat     格式契约回归：画布写出的 .cgui 运行时一定能读
+  format-roundtrip.mjs 上一条的实际测试脚本（用预编译的画布模型改写 .cgui 再让运行时读）
+  shot.ps1             跑一个界面并截图（调外观时肉眼验证用）
 runtime\
   include\cstackgui.h  业务代码唯一需要 include 的头
   lib\libcstackgui.a   编译好的运行时库（不用自己编）
@@ -20,6 +26,10 @@ examples\
   hello\               示例：基础控件（13 个控件、8 个回调）
   gallery\             示例：控件陈列室（29 个控件，把每种控件都用上了）
 apps\                  你自己导出的工程会放在这里（现在还没有）
+build\                 本包的中间产物（预编译的画布模型、回归测试输出，可随时删）
+.codebuddy\
+  skills\              AI 编程助手（CodeBuddy）的项目级技能：cstackgui-dev（写 C 回调）、
+                       cgui-edit（手改 .cgui），用 CodeBuddy 打开本目录时会自动加载
 ```
 
 需要什么：
@@ -28,6 +38,7 @@ apps\                  你自己导出的工程会放在这里（现在还没有
 | --- | --- |
 | 只画界面、导出 `.cgui` | **什么都不用装**，双击 `CStackGUI.exe` |
 | 写出能跑的 exe | MinGW-w64 的 gcc（见下面第二步）|
+| 写 C 时要补全 / 跳转 / 实时报错 | Node.js + clangd（见第五节）|
 
 ---
 
@@ -149,7 +160,83 @@ apps\<名字>\<名字>.exe --selftest
 
 ---
 
-## 五、常见问题
+## 五、进阶：在 CodeBuddy / VSCode 里用 clangd 写 C
+
+配置好之后，写业务代码就有**补全、跳转、括号里实时报错**（比如 `cg_find` 拼错了立刻标红），
+不用等编译才发现。
+
+### 第 1 步：装 clangd 插件
+
+用 CodeBuddy（或 VSCode）**打开本目录**（就是有 `build-app.bat` 的这一层），打开扩展面板
+（`Ctrl+Shift+X`），搜索 **clangd**，安装 `clangd` 插件（作者 llvm-vscode-extensions，
+VSCode 插件市场与 CodeBuddy 通用）。
+
+### 第 2 步：装 clangd 本体
+
+插件**不自带** clangd 程序，装完插件它会弹提示"clangd executable was not found"，点 **Install**
+让它自动下载即可。也可以手动装，任选其一：
+
+- 去官方发布页 <https://github.com/clangd/clangd/releases> 下载 `clangd-windows-x64.zip`，解压备用；
+- 或装完整 LLVM（<https://llvm.org>，里面带 `clangd.exe`）；
+- 或 `scoop install clangd`。
+
+验证：命令行里 `clangd --version` 有输出就 OK。记住 `clangd.exe` 的完整路径，下一步要用。
+
+### 第 3 步：生成 compile_commands.json
+
+clangd 靠 `compile_commands.json` 知道每个 `.c` 文件用什么参数编译（本项目它在根目录，
+相对路径、换机器不用改）。生成方式二选一：
+
+```bat
+build-app.bat hello     :: 编译成功后自动生成（推荐，顺便验证环境）
+node tools\gen-cc.mjs   :: 或者只生成不编译
+```
+
+Node.js 去 <https://nodejs.org> 装（LTS 即可，tools\check-format.bat 那条回归测试需要 **22+**）。
+
+### 第 4 步：告诉插件 clangd 在哪、怎么找系统头文件
+
+打开设置（`Ctrl+,`），搜 `clangd`，点"在 settings.json 中编辑"，填（路径按本机改）：
+
+```json
+{
+  "clangd.path": "C:\\clangd_19\\bin\\clangd.exe",
+  "clangd.arguments": [
+    "--query-driver=C:/mingw64/bin/gcc.exe",
+    "--compile-commands-dir=."
+  ]
+}
+```
+
+两个参数的作用：
+
+- `--query-driver`：`cstackgui.h` 会包含 `windows.h`，clangd 默认按 MSVC 找系统头，
+  在 MinGW 环境会一片标红。这个参数让它去**问 gcc 系统头文件在哪**，路径填你装 MinGW 的
+  `bin\gcc.exe`。
+- `--compile-commands-dir=.`：配置文件就在根目录（默认也会找到，写上保险）。
+
+改完保存，**重启窗口**（`Ctrl+Shift+P` → Reload Window）生效。
+
+### 第 5 步：验证
+
+打开 `examples\hello\main.c`：
+
+- `#include "cstackgui.h"` 不标红；
+- 在函数体里输入 `cg_` 出现 API 补全列表；
+- `Ctrl+点击` `cg_app_run` 能跳进 `cstackgui.h` 的注释文档。
+
+三个都过了就配置好了，写 `apps\<名字>\` 里的代码同样享受。
+
+**让 AI 帮你写**：本包自带 AI 项目技能（`.codebuddy\skills\`）—— 用 CodeBuddy 打开本目录，
+说"给确认按钮加个点击逻辑"，AI 会自动按 `cstackgui-dev` 技能里的 API 与验证流程写代码；
+要手改或批量生成 `.cgui`，它会按 `cgui-edit` 技能里的字段契约来。
+
+**Q：`windows.h` 还是标红？** `--query-driver` 路径不对，或 clangd 没重启。
+**Q：提示 compile_commands.json not found？** 先跑一次 `build-app.bat hello`。
+
+---
+
+## 六、常见问题
 
 **Q：改完界面，exe 里没变化？**
 `.cgui` 是运行时读的，确认程序读的是你改的那个文件（启动时 stderr 会打印 `[cstackgui] 界面文件: ...`）。
@@ -172,7 +259,7 @@ v1 用的是 Win32 原生控件，系统控件不给画圆角。开关、圆环�
 
 ---
 
-## 六、示例
+## 七、示例
 
 ```bat
 build-app.bat hello
