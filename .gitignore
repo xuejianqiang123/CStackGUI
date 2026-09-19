@@ -2,10 +2,11 @@
 build/
 # 发布包（由 make-release.bat 生成）
 release/
+publish
 # 每个工程里由编译脚本生成的东西（exe、运行时库副本、编译入口）
-examples/*/lib/
-examples/*/*.exe
-examples/*/build-app.bat
+# examples/*/lib/
+# examples/*/*.exe
+# examples/*/build-app.bat
 # apps\ 是用户自己的工程目录，只保留说明文件
 apps/*
 !apps/README.md
