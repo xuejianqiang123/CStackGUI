@@ -23,8 +23,7 @@ runtime\
   include\cstackgui.h  业务代码唯一需要 include 的头
   lib\libcstackgui.a   编译好的运行时库（不用自己编）
 examples\
-  hello\               示例：基础控件（13 个控件、8 个回调）
-  gallery\             示例：控件陈列室（29 个控件，把每种控件都用上了）
+  gallery\             示例：控件陈列室·三合一（67 个控件，全部控件+事件都用上了）
 apps\                  你自己导出的工程会放在这里（现在还没有）
 build\                 本包的中间产物（预编译的画布模型、回归测试输出，可随时删）
 .codebuddy\
@@ -111,7 +110,7 @@ void on_ok_click(cg_widget_t *self, cg_event_t ev, void *user)
 build-app.bat <名字>
 ```
 
-例如 `build-app.bat hello`。产物就是 `apps\<名字>\<名字>.exe`。
+例如 `build-app.bat gallery`。产物就是 `apps\<名字>\<名字>.exe`。
 
 ### 第五步：运行
 
@@ -188,7 +187,7 @@ clangd 靠 `compile_commands.json` 知道每个 `.c` 文件用什么参数编译
 相对路径、换机器不用改）。生成方式二选一：
 
 ```bat
-build-app.bat hello     :: 编译成功后自动生成（推荐，顺便验证环境）
+build-app.bat gallery   :: 编译成功后自动生成（推荐，顺便验证环境）
 node tools\gen-cc.mjs   :: 或者只生成不编译
 ```
 
@@ -219,7 +218,7 @@ Node.js 去 <https://nodejs.org> 装（LTS 即可，tools\check-format.bat 那�
 
 ### 第 5 步：验证
 
-打开 `examples\hello\main.c`：
+打开 `examples\gallery\main.c`：
 
 - `#include "cstackgui.h"` 不标红；
 - 在函数体里输入 `cg_` 出现 API 补全列表；
@@ -232,7 +231,7 @@ Node.js 去 <https://nodejs.org> 装（LTS 即可，tools\check-format.bat 那�
 要手改或批量生成 `.cgui`，它会按 `cgui-edit` 技能里的字段契约来。
 
 **Q：`windows.h` 还是标红？** `--query-driver` 路径不对，或 clangd 没重启。
-**Q：提示 compile_commands.json not found？** 先跑一次 `build-app.bat hello`。
+**Q：提示 compile_commands.json not found？** 先跑一次 `build-app.bat gallery`。
 
 ---
 
@@ -262,11 +261,11 @@ v1 用的是 Win32 原生控件，系统控件不给画圆角。开关、圆环�
 ## 七、示例
 
 ```bat
-build-app.bat hello
-examples\hello\hello.exe
+build-app.bat gallery
+examples\gallery\gallery.exe
 ```
 
-`examples\hello\` 是最小闭环（分组框、按钮、输入、勾选、滑块、进度条、列表框）。
-`examples\gallery\` 把每种控件都用了一遍，想找"某个控件怎么用"看它最快。
+`examples\gallery\` 是控件陈列室·三合一：顶层标签页分「基础闭环 / 控件陈列 / 新特性」
+三页，全部控件和事件都在里面，想找"某个控件怎么用"看它最快。
 
-两个示例的 `main.c` / `main.c` 里都有注释说明每个回调在演示什么。
+`main.c` 里按页分节，注释说明每个回调在演示什么。

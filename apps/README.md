@@ -19,6 +19,6 @@ apps\<名字>\
 build-app.bat <名字>
 ```
 
-**注意**：仓库自带的两个示例不在这个目录，它们在 `examples\` 下
-（`examples\hello` 是基础控件，`examples\gallery` 是控件陈列室）。
+**注意**：仓库自带的示例不在这个目录，它在 `examples\` 下
+（`examples\gallery` 是控件陈列室·三合一）。
 这个目录是留给你的，别把它当成示例目录。

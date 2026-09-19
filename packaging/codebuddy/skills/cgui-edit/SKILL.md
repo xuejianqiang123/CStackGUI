@@ -60,6 +60,6 @@ description: 手工编辑 .cgui 界面文件（JSON）。触发条件：用户�
 ## 验证命令
 
 ```bat
-examples\hello\hello.exe --selftest 某文件.cgui   :: 单文件校验（不开窗）
+examples\gallery\gallery.exe --selftest 某文件.cgui  :: 单文件校验（不开窗）
 tools\check-format.bat                            :: 整体格式契约回归
 ```

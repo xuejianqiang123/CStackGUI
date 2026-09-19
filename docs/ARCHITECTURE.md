@@ -285,8 +285,8 @@ typedef struct cg_backend {
 
 ```bat
 build-all.bat                        :: 运行时 + examples\ 下所有示例
-build-app.bat hello                  :: 刷新运行时库 + 链接 examples\hello\ -> examples\hello\hello.exe
-build-app.bat hello --release        :: -mwindows，无控制台，交付用
+build-app.bat gallery                :: 刷新运行时库 + 链接 examples\gallery\ -> examples\gallery\gallery.exe
+build-app.bat gallery --release      :: -mwindows，无控制台，交付用
 build-app.bat myapp                  :: 你自己的工程 apps\myapp\（画布导出的默认位置）
 build-runtime.bat                    :: 只编译运行时库（平时由 build-app 代劳）
 ```
@@ -295,11 +295,11 @@ build-runtime.bat                    :: 只编译运行时库（平时由 build-
 
 ```
 build\               纯构建目录（各 .o + 运行时库源头，可随时删）
-examples\hello\
-  hello.exe            双击即跑：界面文件就在旁边
+examples\gallery\
+  gallery.exe          双击即跑：界面文件就在旁边
   lib\libcstackgui.a   运行时库副本，整个目录搬走也能重编译
   build-app.bat        本工程的编译入口（生成物，双击即可重编译这一个）
-  hello.cgui / main.c / assets\...
+  gallery.cgui / main.c / assets\...
 ```
 
 两个约定值得说明：
@@ -350,8 +350,8 @@ make-release.bat     :: 全量构建 -> 打包画布 -> 组装 release\ -> 在 r
 ### 6.4 三道验证
 
 ```bat
-examples\hello\hello.exe --selftest examples\hello\hello.cgui  :: 解析 + 控件树 + 合成事件，不开窗
-examples\hello\hello.exe --trace    examples\hello\hello.cgui  :: 开窗前打印一遍文档树
+examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui  :: 解析 + 控件树 + 合成事件，不开窗
+examples\gallery\gallery.exe --trace    examples\gallery\gallery.cgui  :: 开窗前打印一遍文档树
 tools\check-format.bat                                          :: 画布写的 .cgui 必须能被 C 侧读进来自检通过
 ```
 
@@ -375,8 +375,7 @@ CStackGUI/
   make-release.bat            一键打发布包 -> release\（可随时删掉重打）
   runtime/                    C 运行时库（画布不依赖它，业务 exe 依赖它）
   examples/                   仓库自带的示例
-    hello/                    最小闭环（8 个回调）
-    gallery/                  29 种控件的陈列室（每种控件+事件都用到）
+    gallery/                  控件陈列室·三合一（39 种控件+13 种事件都用到了）
   apps/                       用户自己的工程（画布「导出 C 骨架」默认导到这里）
     README.md                 说明这个目录是干嘛的
   designer/                   画布（Electron + React + TS）
@@ -398,7 +397,7 @@ release/
   build-app.bat               编译脚本：用 runtime\lib 预编译库，不需要源码
   README.md                   使用者说明（从双击 exe 到出 exe 的完整流程）
   runtime/include/ lib/       头文件 + 预编译运行时库
-  examples/hello/ gallery/    可运行的示例（exe 都在里面）
+  examples/gallery/           可运行的示例（exe 都在里面）
   apps/                       用户导出的工程落这里
 ```
 

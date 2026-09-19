@@ -7,7 +7,7 @@ rem  compiles runtime sources, it links the prebuilt runtime\lib\libcstackgui.a.
 rem  The whole package is self-contained: no CStackGUI sources needed.
 rem
 rem  Usage:
-rem    build-app.bat hello              build examples\hello\
+rem    build-app.bat gallery            build examples\gallery\
 rem    build-app.bat myapp              build apps\myapp\ (your project)
 rem    build-app.bat myapp --release    no console
 rem
