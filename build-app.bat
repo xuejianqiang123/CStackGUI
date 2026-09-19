@@ -59,7 +59,8 @@ if errorlevel 1 (
 )
 
 rem gdiplus is only used to load images (png/jpg/bmp/gif), shipped with Windows
-set LDFLAGS=-lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus
+rem comdlg32 is used by the common dialogs (open/save file, choose color)
+set LDFLAGS=-lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32
 rem Callbacks have fixed signatures; unused self/ev/user args must not warn
 set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include
 
