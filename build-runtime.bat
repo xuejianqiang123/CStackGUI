@@ -40,6 +40,10 @@ ar rcs build\lib\libcstackgui.a build\obj\cg_json.o build\obj\cg_doc.o build\obj
 if errorlevel 1 goto :fail
 
 echo [ok] build\lib\libcstackgui.a
+
+rem 顺手刷新 clangd 的语言服务配置（参数与本脚本同源，由 tools\gen-cc.mjs 镜像生成）。
+rem 没装 node 或不在源码根（如 release\）就静默跳过，不影响编译。
+where node >nul 2>nul && if exist tools\gen-cc.mjs node tools\gen-cc.mjs >nul 2>nul
 exit /b 0
 
 :fail

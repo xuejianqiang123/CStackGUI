@@ -94,6 +94,10 @@ echo.
 echo     直接跑（双击也行）:   %OUT%
 echo     只校验不开窗:         %OUT% --selftest
 echo     重编译本工程:         %APPDIR%\build-app.bat
+
+rem 顺手刷新 clangd 的语言服务配置（含本工程目录；参数与构建脚本同源）。
+rem 没装 node 或不在源码根（如 release\）就静默跳过，不影响编译。
+where node >nul 2>nul && if exist tools\gen-cc.mjs node tools\gen-cc.mjs >nul 2>nul
 exit /b 0
 
 :make_launcher
