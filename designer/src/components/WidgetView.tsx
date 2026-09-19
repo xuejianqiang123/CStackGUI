@@ -1,0 +1,356 @@
+/* WidgetView.tsx -- 把一个 .cgui 节点画成「接近 Win32 原生控件」的样子
+ *
+ * 画布的职责是让用户在编译前就能看出运行时大概长什么样，
+ * 所以这里刻意用平实的原生风格，而不是网页风格。
+ */
+import type { CSSProperties } from "react";
+import { EVENT_LABEL, CG_EVENTS, type CgNode } from "../model";
+
+const fontOf = (node: CgNode): CSSProperties => {
+  const style = node.style ?? {};
+  const px = style.size ? `${style.size}pt` : "12px";
+  return {
+    fontFamily: style.font ? `"${style.font}", "Microsoft YaHei UI", sans-serif` : '"Microsoft YaHei UI", sans-serif',
+    fontSize: px,
+    fontWeight: style.bold ? 700 : 400,
+    color: style.fg ?? "#1D1B20",
+  };
+};
+
+function inner(node: CgNode) {
+  const value = node.value ?? 40;
+  const min = node.min ?? 0;
+  const max = node.max ?? 100;
+  const pct = max > min ? Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100)) : 0;
+
+  switch (node.type) {
+    case "button":
+      return <div className="ctl-button">{node.text || ""}</div>;
+
+    case "label":
+      return <div className="ctl-label">{node.text || ""}</div>;
+
+    case "edit":
+      return <div className="ctl-edit">{(node.text || "").replace(/\n/g, " ")}</div>;
+
+    case "multiedit":
+      return <div className="ctl-edit ctl-edit-multi">{node.text || ""}</div>;
+
+    case "checkbox":
+      return (
+        <div className="ctl-check">
+          <span className={`ctl-box${node.checked ? " on" : ""}`}>{node.checked ? "✓" : ""}</span>
+          <span>{node.text || ""}</span>
+        </div>
+      );
+
+    case "radio":
+      return (
+        <div className="ctl-check">
+          <span className={`ctl-radio${node.checked ? " on" : ""}`}>{node.checked ? "" : ""}</span>
+          <span>{node.text || ""}</span>
+        </div>
+      );
+
+    case "listbox":
+      return <div className="ctl-list" />;
+
+    case "combo":
+      return (
+        <div className="ctl-combo">
+          <span>{node.text || ""}</span>
+          <span className="ctl-arrow">▾</span>
+        </div>
+      );
+
+    case "slider":
+      return (
+        <div className="ctl-slider">
+          <div className="ctl-track" />
+          <div className="ctl-thumb" style={{ left: `${pct}%` }} />
+        </div>
+      );
+
+    case "progress":
+      return (
+        <div className="ctl-progress">
+          <div className="ctl-fill" style={{ width: `${pct}%` }} />
+        </div>
+      );
+
+    case "separator":
+      return <div className="ctl-sep" />;
+
+    case "image":
+      return <div className="ctl-image">{node.src ? node.src.split(/[\\/]/).pop() : "未设置图片"}</div>;
+
+    case "switch":
+      return (
+        <div className="ctl-switch">
+          {node.text ? <span className="ctl-switch-label">{node.text}</span> : null}
+          <span className={`ctl-switch-track${node.checked ? " on" : ""}`}>
+            <span className="ctl-switch-knob" />
+          </span>
+        </div>
+      );
+
+    case "spinner":
+      return (
+        <div className="ctl-spinner">
+          <span className="ctl-spinner-text">{node.value ?? 0}</span>
+          <span className="ctl-spinner-arrows">
+            <span>▲</span>
+            <span>▼</span>
+          </span>
+        </div>
+      );
+
+    case "tabs": {
+      const labels = node.items ?? [];
+      const cur = node.value ?? 0;
+      return (
+        <div className="ctl-tabs">
+          {labels.map((t, i) => (
+            <span key={i} className={`ctl-tab${i === cur ? " on" : ""}`}>
+              {t || `页面 ${i + 1}`}
+            </span>
+          ))}
+        </div>
+      );
+    }
+
+    case "tree": {
+      const lines: { text: string; depth: number }[] = [];
+      const push = (items: typeof node.nodes, depth: number) => {
+        for (const it of items ?? []) {
+          if (lines.length >= 14) return;
+          lines.push({ text: it.text, depth });
+          push(it.children, depth + 1);
+        }
+      };
+      push(node.nodes, 0);
+      return (
+        <div className="ctl-tree">
+          {lines.map((l, i) => (
+            <div key={i} className="ctl-tree-row" style={{ paddingLeft: 4 + l.depth * 14 }}>
+              {l.depth > 0 ? <span className="ctl-tree-elbow">└</span> : null}
+              {l.text || "(空)"}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    case "table": {
+      const cols = node.columns ?? [];
+      const rows = (node.rows ?? []).slice(0, 8);
+      return (
+        <div className="ctl-table">
+          <div className="ctl-table-head">
+            {cols.map((c, i) => (
+              <span key={i} className="ctl-table-cell" style={c.w ? { width: c.w, flex: "0 0 auto" } : undefined}>
+                {c.title}
+              </span>
+            ))}
+          </div>
+          {rows.map((r, i) => (
+            <div key={i} className="ctl-table-row">
+              {cols.map((_, c) => (
+                <span key={c} className="ctl-table-cell">
+                  {r[c] ?? ""}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    case "link":
+      return <div className="ctl-link">{node.text || "链接"}</div>;
+
+    case "iconbutton":
+      return <div className="ctl-iconbtn">{[node.src ? "图标" : "图标"]}</div>;
+
+    case "monthcal":
+      return (
+        <div className="ctl-monthcal">
+          <div className="ctl-monthcal-head">{node.text || "2026-09"}</div>
+          <div className="ctl-monthcal-grid">
+            {["一", "二", "三", "四", "五", "六", "日"].map((d) => (
+              <span key={d} className="ctl-monthcal-wd">
+                {d}
+              </span>
+            ))}
+            {Array.from({ length: 35 }).map((_, i) => (
+              <span key={i} className="ctl-monthcal-day">
+                {i + 1 <= 30 ? i + 1 : ""}
+              </span>
+            ))}
+          </div>
+        </div>
+      );
+
+    case "progressring": {
+      const lo = node.min ?? 0;
+      const hi = node.max ?? 100;
+      const span = hi - lo || 1;
+      const pct = Math.max(0, Math.min(1, ((node.value ?? 0) - lo) / span));
+      const r = 42;
+      const circumference = 2 * Math.PI * r;
+      return (
+        <svg className="ctl-ring" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+          <circle cx="50" cy="50" r={r} fill="none" stroke="#E0DAE6" strokeWidth="8" />
+          <circle
+            cx="50"
+            cy="50"
+            r={r}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="8"
+            strokeDasharray={`${circumference * pct} ${circumference}`}
+            transform="rotate(-90 50 50)"
+          />
+          <text x="50" y="56" textAnchor="middle" fontSize="20" fill="#1D1B20">
+            {Math.round(pct * 100)}%
+          </text>
+        </svg>
+      );
+    }
+
+    case "menubutton":
+      return (
+        <div className="ctl-button">
+          {node.text || "菜单"}
+          <span className="ctl-menu-caret">▾</span>
+        </div>
+      );
+
+    case "richtext":
+      return <div className="ctl-richtext">{(node.text || "").replace(/\n/g, " ")}</div>;
+
+    case "datepicker":
+      return (
+        <div className="ctl-date">
+          <span>{node.text || (node.format === "time" ? "14:30" : "2026-09-19")}</span>
+          <span className="ctl-date-btn">{node.format === "time" ? "▲" : "▾"}</span>
+        </div>
+      );
+
+    case "toolbar": {
+      const labels = node.items ?? [];
+      const cur = node.value ?? -1;
+      return (
+        <div className="ctl-toolbar">
+          {labels.map((t, i) => (
+            <span key={i} className={`ctl-toolbtn${i === cur ? " on" : ""}`}>
+              {t || `按钮 ${i + 1}`}
+            </span>
+          ))}
+        </div>
+      );
+    }
+
+    case "statusbar": {
+      const parts = node.items?.length ? node.items : [""];
+      return (
+        <div className="ctl-status">
+          {parts.map((t, i) => (
+            <span key={i} className="ctl-status-part">
+              {t}
+            </span>
+          ))}
+        </div>
+      );
+    }
+
+    case "group":
+      return <div className="ctl-group-title">{node.text || ""}</div>;
+
+    default:
+      return null;
+  }
+}
+
+type Props = {
+  node: CgNode;
+  depth: number;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onPointerDown: (e: React.PointerEvent, node: CgNode) => void;
+};
+
+export default function WidgetView({ node, depth, selectedId, onSelect, onPointerDown }: Props) {
+  const style: CSSProperties = {
+    position: "absolute",
+    left: node.rect.x,
+    top: node.rect.y,
+    width: node.rect.w,
+    height: node.rect.h,
+    ...fontOf(node),
+  };
+  if (node.style?.bg) style.background = node.style.bg;
+  if (node.style?.radius) style.borderRadius = node.style.radius;
+
+  const bound = CG_EVENTS.filter((e) => node.events?.[e]);
+  const isGroup = node.type === "group" || node.type === "box" || node.type === "tabs";
+
+  /* 菜单栏没有矩形：它画在窗口框架上，由 Canvas 负责，这里不画 */
+  if (node.type === "menu") return null;
+
+  /* 标签页只画当前页的子控件，和运行时的表现一致 */
+  const kids =
+    node.type === "tabs"
+      ? (node.children ?? []).filter((c) => (c.page ?? 0) === (node.value ?? 0))
+      : (node.children ?? []);
+
+  return (
+    <div
+      className={[
+        "widget",
+        `widget-${node.type}`,
+        selectedId === node.id ? "selected" : "",
+        node.visible === false ? "hidden-widget" : "",
+        node.enabled === false ? "disabled-widget" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      style={style}
+      onPointerDown={(e) => onPointerDown(e, node)}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect(node.id);
+      }}
+      title={`${node.type} #${node.id}`}
+    >
+      {inner(node)}
+
+      {isGroup && kids.length ? (
+        <div className="group-body">
+          {kids.map((c) => (
+            <WidgetView
+              key={c.id}
+              node={c}
+              depth={depth + 1}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              onPointerDown={onPointerDown}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {node.type === "tabs" && (node.children?.length ?? 0) > kids.length ? (
+        <span className="tabs-more" title="其他页的控件在运行时切页后才显示">
+          +{(node.children?.length ?? 0) - kids.length}
+        </span>
+      ) : null}
+
+      {bound.length > 0 && (
+        <span className="event-badge" title={bound.map((b) => `${EVENT_LABEL[b]}: ${node.events?.[b]}`).join("\n")}>
+          {bound.length}
+        </span>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,55 @@
+{
+  "name": "cstackgui-designer",
+  "productName": "CStackGUI",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CStackGUI 画布：拖拽拼装界面，存成 .cgui，导出 C 事件骨架",
+  "main": "electron/main.mjs",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "start": "electron .",
+    "dist": "vite build && electron-builder"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0"
+  },
+  "build": {
+    "appId": "com.cstackgui.designer",
+    "productName": "CStackGUI",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "CStackGUI.exe"
+    },
+    "portable": {
+      "artifactName": "CStackGUI.exe"
+    }
+  }
+}
