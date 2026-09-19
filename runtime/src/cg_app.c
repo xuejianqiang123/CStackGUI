@@ -28,11 +28,15 @@ static const char *const k_ev_names[CG_EVENT_COUNT] = {
     [CG_EVENT_LOSTFOCUS] = "lostfocus",
 };
 
+/** @brief 事件名的规范写法，也是 .cgui 中 events 对象的键名 */
+/** @brief 事件枚举转规范名（"click"...）；越界返回 "?" */
 const char *cg_event_name(cg_event_t ev)
 {
     return (ev >= 0 && ev < CG_EVENT_COUNT) ? k_ev_names[ev] : "?";
 }
 
+/** @brief 名字反查事件 */
+/** @brief 事件名反查枚举；不认识返回 -1 */
 int cg_event_from_name(const char *name)
 {
     if (!name) return -1;
@@ -44,6 +48,7 @@ int cg_event_from_name(const char *name)
 
 /* ------------------------------------------------------------ 控件生命周期 */
 
+/** @brief 复制字符串到堆内存（调用方负责 free）；失败返回 NULL */
 static char *dup_str(const char *s)
 {
     if (!s) return NULL;
@@ -53,11 +58,15 @@ static char *dup_str(const char *s)
     return p;
 }
 
+/** @brief 分配控件 ID（后端建控件时用），从 1001 起递增 */
+/** @brief 分配一个控件 ID（1001 起递增，后端建控件用） */
 int cg_alloc_ctrl_id(cg_app_t *app)
 {
     return ++app->next_ctrl_id + 1000;
 }
 
+/** @brief 分配菜单命令 ID */
+/** @brief 分配一个菜单命令 ID（0x8000 起，与控件 ID 分开发号）；超限返回 0 */
 int cg_alloc_menu_cmd(cg_app_t *app)
 {
     if (app->next_menu_cmd == 0) app->next_menu_cmd = 0x8000;
@@ -69,6 +78,12 @@ int cg_alloc_menu_cmd(cg_app_t *app)
     return app->next_menu_cmd++;
 }
 
+/**
+ * @brief 新建一个运行时控件（进全局链表，不建原生窗口）
+ * @param app 所属应用；type 控件类型名；id 唯一标识
+ * @param x,y,w,h 初始矩形；text 初始文字
+ * @return cg_widget_t* 控件；失败返回 NULL
+ */
 cg_widget_t *cg_widget_new(cg_app_t *app, const char *type, const char *id,
                            int x, int y, int width, int height, const char *text)
 {
@@ -95,6 +110,7 @@ cg_widget_t *cg_widget_new(cg_app_t *app, const char *type, const char *id,
     return w;
 }
 
+/** @brief 释放控件的全部资源（结构化内容、画板记录、行级数组、文字等） */
 void cg_widget_free(cg_widget_t *w)
 {
     if (!w) return;
@@ -145,6 +161,7 @@ void cg_widget_free(cg_widget_t *w)
     free(w);
 }
 
+/** @brief 给运行时控件挂子控件（尾插，child->parent 回填；分配失败静默丢弃） */
 static void widget_add_child(cg_widget_t *parent, cg_widget_t *child)
 {
     cg_widget_t **nc = (cg_widget_t **)realloc(parent->children, (parent->nchildren + 1) * sizeof(cg_widget_t *));
@@ -192,6 +209,7 @@ static int tree_push(cg_widget_t *w, int parent, const char *text, int expanded)
     return idx;
 }
 
+/** @brief 把文档里的嵌套树节点摊平进运行时行表（递归，父下标先于子） */
 static void tree_push_doc(cg_widget_t *w, cg_item_t *const *items, size_t n, int parent)
 {
     for (size_t i = 0; i < n; i++) {
@@ -230,6 +248,11 @@ static void menu_push_doc(cg_app_t *app, cg_widget_t *w, cg_item_t *const *items
     }
 }
 
+/**
+ * @brief 把文档节点转成运行时控件（拷贝状态/内容/回调，递归建子）
+ * @param app 所属应用；parent 挂靠的父控件；n 文档节点
+ * @return cg_widget_t* 控件；失败返回 NULL
+ */
 static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node_t *n)
 {
     cg_widget_t *w = cg_widget_new(app, n->type, n->id, n->x, n->y, n->w, n->h, n->text);
@@ -315,6 +338,8 @@ static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node
     return w;
 }
 
+/** @brief 由文档树构建运行时控件树（不含原生句柄），失败返回 NULL */
+/** @brief 由文档树构建整棵运行时控件树（窗口伪控件 + 递归），失败返回 NULL */
 cg_widget_t *cg_build_widgets(cg_app_t *app)
 {
     app->window = cg_widget_new(app, "window", "__window", 0, 0,
@@ -337,6 +362,7 @@ cg_widget_t *cg_build_widgets(cg_app_t *app)
 
 /* ------------------------------------------------------------ 查找 */
 
+/** @brief 按 id 在全局链表里找控件；找不到返回 NULL */
 cg_widget_t *cg_widget_by_id(cg_app_t *app, const char *id)
 {
     if (!app || !id) return NULL;
@@ -346,6 +372,8 @@ cg_widget_t *cg_widget_by_id(cg_app_t *app, const char *id)
     return NULL;
 }
 
+/** @brief 按 Win32 控件 ID 找控件 */
+/** @brief 按 Win32 控件 ID 找控件（WM_COMMAND 反查用）；找不到返回 NULL */
 cg_widget_t *cg_widget_by_ctrl_id(cg_app_t *app, int ctrl_id)
 {
     if (!app) return NULL;
@@ -355,6 +383,7 @@ cg_widget_t *cg_widget_by_ctrl_id(cg_app_t *app, int ctrl_id)
     return NULL;
 }
 
+/** @brief 按 id 找控件（cg_widget_by_id 的对外别名） */
 cg_widget_t *cg_find(cg_app_t *app, const char *id) { return cg_widget_by_id(app, id); }
 
 /** 控件个数：不含代表窗口自身的那个伪控件 */
@@ -370,6 +399,11 @@ int cg_widget_count(const cg_app_t *app)
 
 /* ------------------------------------------------------------ 绑定 */
 
+/**
+ * @brief 依名字在绑定表里找函数指针
+ * @param app 所属应用；name .cgui 里写的事件回调名
+ * @return cg_event_fn 函数指针；找不到打印一次警告并返回 NULL
+ */
 cg_event_fn cg_resolve_binding(cg_app_t *app, const char *name)
 {
     if (!name || !*name) return NULL;
@@ -384,6 +418,8 @@ cg_event_fn cg_resolve_binding(cg_app_t *app, const char *name)
     return NULL;
 }
 
+/** @brief 直接在 C 里给控件绑回调（覆盖 .cgui 里的名字绑定） */
+/** @brief 直接给控件绑回调（覆盖 .cgui 里的名字绑定）；参数不对返回 -1 */
 int cg_on(cg_widget_t *w, cg_event_t ev, cg_event_fn fn)
 {
     if (!w || ev < 0 || ev >= CG_EVENT_COUNT) return -1;
@@ -391,6 +427,8 @@ int cg_on(cg_widget_t *w, cg_event_t ev, cg_event_fn fn)
     return 0;
 }
 
+/** @brief 按 .cgui 里的名字绑定 */
+/** @brief 按名字给控件绑回调（名字必须在绑定表里登记过）；失败返回 -1 */
 int cg_on_named(cg_widget_t *w, cg_event_t ev, const char *callback_name)
 {
     if (!w || !w->app || ev < 0 || ev >= CG_EVENT_COUNT) return -1;
@@ -400,6 +438,7 @@ int cg_on_named(cg_widget_t *w, cg_event_t ev, const char *callback_name)
 
 /* ------------------------------------------------------------ 状态同步 */
 
+/** @brief 把控件逻辑状态推给后端（无原生句柄时是空操作） */
 static void sync(cg_widget_t *w)
 {
     if (cg_backend_active && cg_backend_active->sync && w && w->native) {
@@ -409,6 +448,11 @@ static void sync(cg_widget_t *w)
 
 /* ------------------------------------------------------------ 事件派发 */
 
+/**
+ * @brief 事件派发中枢：校验事件支持、合成双击，再调注册的回调
+ * @param w 触发控件；ev 事件类型
+ * @return int 1 = 有回调处理了，0 = 没处理（不支持/未绑定/禁用）
+ */
 int cg_dispatch(cg_widget_t *w, cg_event_t ev)
 {
     int handled = 0;
@@ -452,11 +496,19 @@ int cg_dispatch(cg_widget_t *w, cg_event_t ev)
     return handled;
 }
 
+/** @brief 后端子控件注册回调：原生事件 -> cg_dispatch */
+/** @brief 后端子控件注册回调的入口（等同 cg_dispatch，供后端通知用） */
 void cg_backend_notify(cg_widget_t *w, cg_event_t ev)
 {
     cg_dispatch(w, ev);
 }
 
+/** @brief 菜单项被点中：记下是哪一项，再给对应控件派发 click */
+/**
+ * @brief 菜单命令 ID 反查控件，记下菜单项再派发 click
+ * @param app 所属应用；cmd WM_COMMAND 里的菜单命令 ID
+ * @return int 1 = 命中并派发，0 = 没找到（会打警告）
+ */
 int cg_dispatch_menu_cmd(cg_app_t *app, int cmd)
 {
     if (!app || cmd == 0) return 0;
@@ -526,7 +578,9 @@ void cg_widget_set_rect(cg_widget_t *w, int x, int y, int ww, int hh)
     sync(w);
 }
 
+/** @brief 只改位置 */
 void cg_widget_set_pos(cg_widget_t *w, int x, int y)  { if (w) cg_widget_set_rect(w, x, y, w->w, w->h); }
+/** @brief 只改尺寸 */
 void cg_widget_set_size(cg_widget_t *w, int ww, int hh) { if (w) cg_widget_set_rect(w, w->x, w->y, ww, hh); }
 
 /** @brief 显示 / 隐藏控件 */
@@ -597,11 +651,18 @@ void cg_widget_set_font(cg_widget_t *w, const char *family, int size_pt, int bol
     sync(w);
 }
 
+/** @brief 取挂在控件上的业务数据；NULL 返回 NULL */
 void  *cg_widget_get_user(const cg_widget_t *w) { return w ? w->user : NULL; }
+/** @brief 挂业务数据到控件（回调里的 user 参数就是它） */
 void   cg_widget_set_user(cg_widget_t *w, void *user) { if (w) w->user = user; }
 
 /* ------------------------------------------------------------ 列表类控件 */
 
+/**
+ * @brief 给列表类控件追加一个条目（listbox/combo/tabs/statusbar/toolbar）
+ * @param w 目标控件；item 条目文字
+ * @return int 新条目下标；失败返回 -1
+ */
 int cg_widget_list_add(cg_widget_t *w, const char *item)
 {
     char **ni;
@@ -619,6 +680,7 @@ int cg_widget_list_add(cg_widget_t *w, const char *item)
     return w->nitems - 1;
 }
 
+/** @brief cg_widget_list_add 的 printf 版本 */
 int cg_widget_list_addf(cg_widget_t *w, const char *fmt, ...)
 {
     char    stackbuf[512];
@@ -646,6 +708,7 @@ int cg_widget_list_addf(cg_widget_t *w, const char *fmt, ...)
     return rc;
 }
 
+/** @brief 清空列表类控件的全部条目 */
 void cg_widget_list_clear(cg_widget_t *w)
 {
     if (!w) return;
@@ -657,14 +720,18 @@ void cg_widget_list_clear(cg_widget_t *w)
     sync(w);
 }
 
+/** @brief 列表条目数；NULL 返回 0 */
 int cg_widget_list_count(const cg_widget_t *w) { return w ? w->nitems : 0; }
 
+/** @brief 取第 index 个条目文字；越界返回 NULL */
 const char *cg_widget_list_item(const cg_widget_t *w, int index)
 {
     if (!w || index < 0 || index >= w->nitems) return NULL;
     return w->items[index];
 }
 
+/** @brief 让列表滚到最后一项（日志类控件常用） */
+/** @brief 让列表滚到最后一项（日志类控件常用） */
 void cg_widget_list_scroll_bottom(cg_widget_t *w)
 {
     if (!w) return;
@@ -683,6 +750,12 @@ static int want_type(const cg_widget_t *w, const char *type, const char *who)
     return 0;
 }
 
+/** @brief 加一个树节点 */
+/**
+ * @brief 给树加一个节点（运行时追加，父下标必须已存在）
+ * @param w tree 控件；parent 父节点下标，-1 加在根上；text 节点文字
+ * @return int 节点下标；失败返回 -1
+ */
 int cg_tree_add(cg_widget_t *w, int parent, const char *text)
 {
     if (!w || !want_type(w, "tree", "cg_tree_add")) return -1;
@@ -699,6 +772,7 @@ int cg_tree_add(cg_widget_t *w, int parent, const char *text)
     }
 }
 
+/** @brief cg_tree_add 的 printf 版本 */
 int cg_tree_addf(cg_widget_t *w, int parent, const char *fmt, ...)
 {
     char    stackbuf[512];
@@ -723,6 +797,7 @@ int cg_tree_addf(cg_widget_t *w, int parent, const char *fmt, ...)
     return rc;
 }
 
+/** @brief 清空树的全部节点（整树重建实现，选中态复位） */
 void cg_tree_clear(cg_widget_t *w)
 {
     if (!w || !want_type(w, "tree", "cg_tree_clear")) return;
@@ -735,28 +810,34 @@ void cg_tree_clear(cg_widget_t *w)
     sync(w);
 }
 
+/** @brief 树节点总数；非 tree 控件返回 0 */
 int cg_tree_count(const cg_widget_t *w)
 {
     return (w && w->type && strcmp(w->type, "tree") == 0) ? w->ntree : 0;
 }
 
+/** @brief 取第 item 个节点的文字；越界返回 NULL */
 const char *cg_tree_item_text(const cg_widget_t *w, int item)
 {
     if (!w || item < 0 || item >= w->ntree) return NULL;
     return w->tree[item].text;
 }
 
+/** @brief 当前选中的节点下标，没选中返回 -1 */
+/** @brief 当前选中节点下标；没选中返回 -1 */
 int cg_tree_selected(const cg_widget_t *w)
 {
     return w ? w->tree_sel : -1;
 }
 
+/** @brief 当前选中节点的文字；没选中返回 NULL */
 const char *cg_tree_selected_text(const cg_widget_t *w)
 {
     if (!w || w->tree_sel < 0 || w->tree_sel >= w->ntree) return NULL;
     return w->tree[w->tree_sel].text;
 }
 
+/** @brief 展开/折叠某个节点（整树重建实现，够用且简单） */
 void cg_tree_expand(cg_widget_t *w, int item, int expand)
 {
     if (!w || item < 0 || item >= w->ntree) return;
@@ -767,6 +848,7 @@ void cg_tree_expand(cg_widget_t *w, int item, int expand)
 
 /* ------------------------------------------------------------ 表格 */
 
+/** @brief 表格行数变多时把行级附加数组（勾选/数值/图标）一起补长到 want */
 void cg_table_rows_grow(cg_widget_t *w, int want)
 {
     if (want > w->row_cap) {
@@ -792,6 +874,12 @@ void cg_table_rows_grow(cg_widget_t *w, int want)
     }
 }
 
+/** @brief 加一列 */
+/**
+ * @brief 给表格加一列
+ * @param w table 控件；title 列标题；width 列宽（0 = 按控件宽度均分）
+ * @return int 列号；失败返回 -1
+ */
 int cg_table_add_column(cg_widget_t *w, const char *title, int width)
 {
     cg_col_t *nc;
@@ -808,6 +896,12 @@ int cg_table_add_column(cg_widget_t *w, const char *title, int width)
     return w->ncols - 1;
 }
 
+/** @brief 加一行 */
+/**
+ * @brief 给表格加一行（不足的列按空串处理）
+ * @param w table 控件；cells 列数个字符串；ncells 个数
+ * @return int 行号；失败返回 -1
+ */
 int cg_table_add_row(cg_widget_t *w, const char *const *cells, int ncells)
 {
     char ***nr;
@@ -837,6 +931,7 @@ int cg_table_add_row(cg_widget_t *w, const char *const *cells, int ncells)
     return w->nrows - 1;
 }
 
+/** @brief 清空表格全部行（列保留） */
 void cg_table_clear(cg_widget_t *w)
 {
     if (!w || !want_type(w, "table", "cg_table_clear")) return;
@@ -855,17 +950,21 @@ void cg_table_clear(cg_widget_t *w)
     sync(w);
 }
 
+/** @brief 表格行数；非 table 控件返回 0 */
 int cg_table_row_count(const cg_widget_t *w)
 {
     return (w && w->type && strcmp(w->type, "table") == 0) ? w->nrows : 0;
 }
 
+/** @brief 取某行某列的文字；越界返回 NULL */
 const char *cg_table_cell(const cg_widget_t *w, int row, int col)
 {
     if (!w || row < 0 || row >= w->nrows || col < 0 || col >= w->row_cells) return NULL;
     return w->rows[row][col];
 }
 
+/** @brief 当前选中行，没选中返回 -1 */
+/** @brief 当前选中行（最后一次点击的行）；没选中返回 -1 */
 int cg_table_selected(const cg_widget_t *w)
 {
     return w ? w->table_sel : -1;
@@ -873,6 +972,11 @@ int cg_table_selected(const cg_widget_t *w)
 
 /* ------------------------------------------------------------ 状态栏 */
 
+/**
+ * @brief 改状态栏第 part 段的文字（段不够且正好差一段时相当于追加）
+ * @param w statusbar 控件；part 段号（0 起）；text 文字
+ * @return void 无返回值
+ */
 void cg_status_set(cg_widget_t *w, int part, const char *text)
 {
     if (!w || !want_type(w, "statusbar", "cg_status_set")) return;
@@ -886,6 +990,7 @@ void cg_status_set(cg_widget_t *w, int part, const char *text)
     sync(w);
 }
 
+/** @brief cg_status_set 的 printf 版本 */
 void cg_status_setf(cg_widget_t *w, int part, const char *fmt, ...)
 {
     char    stackbuf[512];
@@ -911,11 +1016,13 @@ void cg_status_setf(cg_widget_t *w, int part, const char *fmt, ...)
 
 /* ------------------------------------------------------------ 标签页 */
 
+/** @brief 标签页页数；非 tabs 控件返回 0 */
 int cg_tabs_count(const cg_widget_t *w)
 {
     return (w && w->type && strcmp(w->type, "tabs") == 0) ? w->nitems : 0;
 }
 
+/** @brief 切到第 index 页（子控件按 page 自动显隐）；越界忽略 */
 void cg_tabs_select(cg_widget_t *w, int index)
 {
     if (!w || !want_type(w, "tabs", "cg_tabs_select")) return;
@@ -926,6 +1033,7 @@ void cg_tabs_select(cg_widget_t *w, int index)
     sync(w);
 }
 
+/** @brief 当前页下标（0 起） */
 int cg_tabs_selected(const cg_widget_t *w)
 {
     return w ? w->value : 0;
@@ -933,6 +1041,7 @@ int cg_tabs_selected(const cg_widget_t *w)
 
 /* ------------------------------------------------------------ 图片 */
 
+/** @brief 换图片文件（png/jpg/bmp/gif）；路径不存在时显示占位框 */
 void cg_widget_set_image(cg_widget_t *w, const char *path)
 {
     if (!w) return;
@@ -942,6 +1051,7 @@ void cg_widget_set_image(cg_widget_t *w, const char *path)
     sync(w);                 /* 后端的 sync 发现路径变了会先释放旧位图 */
 }
 
+/** @brief 当前图片路径；未设置返回 NULL */
 const char *cg_widget_image(const cg_widget_t *w)
 {
     return w ? w->src : NULL;
@@ -949,16 +1059,20 @@ const char *cg_widget_image(const cg_widget_t *w)
 
 /* ------------------------------------------------------------ 菜单 */
 
+/** @brief 最近点中的菜单项 id（.cgui 里写的）；没写 id 返回 NULL */
 const char *cg_menu_last_id(const cg_widget_t *w)
 {
     return w ? w->menu_last_id : NULL;
 }
 
+/** @brief 最近点中的菜单项文字 */
 const char *cg_menu_last_text(const cg_widget_t *w)
 {
     return w ? w->menu_last_text : NULL;
 }
 
+/** @brief 菜单里有多少个可点的项（不含分隔线和顶级弹出项），调试用 */
+/** @brief 菜单里可点的项数（不含分隔线和下拉项），调试用 */
 int cg_menu_count(const cg_widget_t *w)
 {
     int n = 0;
@@ -969,6 +1083,7 @@ int cg_menu_count(const cg_widget_t *w)
     return n;
 }
 
+/** @brief 改窗口标题（同步后端与文档） */
 void cg_set_title(cg_app_t *app, const char *title)
 {
     if (!app || !title) return;
@@ -978,15 +1093,21 @@ void cg_set_title(cg_app_t *app, const char *title)
     if (app->window) cg_widget_set_text(app->window, title);
 }
 
+/** @brief 请求退出消息循环（进程随后结束，退出码 0） */
 void cg_quit(cg_app_t *app) { if (app) app->quit = 1; }
 
+/** @brief 当前有没有真正的窗口（--selftest 不开窗）：回调里想弹对话框之前先问一句， 免得自检/CI 被弹窗卡住 */
+/** @brief 当前有没有真正的窗口（--selftest 不开窗）；弹对话框前先问一句 */
 int cg_app_has_window(const cg_app_t *app)
 {
     return (app && app->hwnd) ? 1 : 0;
 }
 
+/** @brief 在 close 回调里调用：这次不关了（"还有没保存的内容"那种） */
 void cg_cancel_close(cg_app_t *app) { if (app) app->close_cancel = 1; }
 
+/** @brief 把 .cgui 文档树打印到 stdout（调试/自检用） */
+/** @brief 把 .cgui 文档树打印到 stdout（调试/自检用） */
 void cg_dump_doc(cg_app_t *app)
 {
     if (!app) return;
@@ -995,6 +1116,7 @@ void cg_dump_doc(cg_app_t *app)
 
 /* ------------------------------------------------------------ 悬停提示 / 时钟 */
 
+/** @brief 改控件悬停提示（空串清除），立即生效 */
 void cg_widget_set_hint(cg_widget_t *w, const char *text)
 {
     if (!w) return;
@@ -1007,11 +1129,14 @@ void cg_widget_set_hint(cg_widget_t *w, const char *text)
     cg_win_set_hint(w);
 }
 
+/** @brief 读控件悬停提示；NULL 控件返回 NULL，未设置返回空串 */
 const char *cg_widget_hint(const cg_widget_t *w)
 {
     return w ? (w->hint ? w->hint : "") : NULL;
 }
 
+/** @brief 时钟（timer 控件）的触发周期，毫秒 */
+/** @brief 改时钟（timer）触发周期：0 停止，>0 立即按新周期重新计时 */
 void cg_widget_set_period(cg_widget_t *w, int period_ms)
 {
     if (!w) return;
@@ -1021,6 +1146,7 @@ void cg_widget_set_period(cg_widget_t *w, int period_ms)
     cg_win_restart_timer(w);
 }
 
+/** @brief 读时钟当前周期（毫秒，0 = 停） */
 int cg_widget_period(const cg_widget_t *w)
 {
     return w ? w->period : 0;
@@ -1028,6 +1154,12 @@ int cg_widget_period(const cg_widget_t *w)
 
 /* ------------------------------------------------------------ 动态追加控件 */
 
+/**
+ * @brief 运行时用代码追加控件（不进 .cgui），新控件的 id 也参与事件名查找
+ * @param app 所属应用；parent 父容器（NULL 挂窗口）；type 类型名；id 唯一标识
+ * @param x,y 位置；aw,ah 尺寸（0 用类型默认）；text 初始文字
+ * @return cg_widget_t* 新控件；类型未知/id 冲突/父不是容器返回 NULL
+ */
 cg_widget_t *cg_widget_add(cg_app_t *app, cg_widget_t *parent,
                            const char *type, const char *id,
                            int x, int y, int aw, int ah, const char *text)
@@ -1079,6 +1211,7 @@ cg_widget_t *cg_widget_add(cg_app_t *app, cg_widget_t *parent,
  *   3) 标准布局但名字不同  build\..\apps\hello\<原文件名>
  */
 
+/** @brief 取路径的文件名部分（兼容 \\ 和 /） */
 static const char *path_base(const char *path)
 {
     const char *s1 = strrchr(path, '\\');
@@ -1087,6 +1220,7 @@ static const char *path_base(const char *path)
     return s1 ? s1 + 1 : path;
 }
 
+/** @brief 取路径的目录部分（无目录时写 "."） */
 static void path_dir(const char *path, char *out, size_t size)
 {
     const char *b = path_base(path);
@@ -1101,6 +1235,11 @@ static void path_dir(const char *path, char *out, size_t size)
     out[n] = '\0';
 }
 
+/**
+ * @brief 按约定位置找界面文件并读入（内嵌文本 > 显式路径 > exe 旁 > apps/examples）
+ * @param desc 启动参数；found 输出实际用到的路径；found_size 容量
+ * @return char* JSON 原文（调用方 free）；找不到返回 NULL 并打印试过的位置
+ */
 static char *open_cgui_text(const cg_app_desc_t *desc, char *found, size_t found_size)
 {
     char  exe[512], dir[512], stem[512], cand[2048];
@@ -1166,6 +1305,11 @@ static char *open_cgui_text(const cg_app_desc_t *desc, char *found, size_t found
     return NULL;
 }
 
+/**
+ * @brief 打开应用：读界面文件、解析、构建控件树（不开窗）
+ * @param app 应用结构（先清零）；desc 启动参数；allow_ui 预留
+ * @return int 0 成功；2 找不到界面文件；3 解析失败
+ */
 static int app_open(cg_app_t *app, const cg_app_desc_t *desc, int allow_ui)
 {
     char  err[256] = { 0 };
@@ -1220,6 +1364,7 @@ static int app_open(cg_app_t *app, const cg_app_desc_t *desc, int allow_ui)
     return 0;
 }
 
+/** @brief 关闭应用：清定时器、关后端、断开文档、释放全部控件 */
 static void app_close(cg_app_t *app)
 {
     cg_timers_clear(app);
@@ -1241,6 +1386,12 @@ static void app_close(cg_app_t *app)
     app->widgets = NULL;
 }
 
+/** @brief 建窗口 + 消息循环，返回进程退出码 */
+/**
+ * @brief 建窗口 + 跑消息循环，结束后释放全部资源
+ * @param desc 启动参数
+ * @return int 进程退出码（0 正常，2/3/4 见各失败点）
+ */
 int cg_app_run(const cg_app_desc_t *desc)
 {
     cg_app_t app;
@@ -1275,6 +1426,7 @@ typedef struct {
     int unresolved;
 } selftest_stat_t;
 
+/** @brief 递归走控件树，对每个绑了回调的事件做一次合成触发并统计 */
 static void selftest_walk(cg_app_t *app, cg_widget_t *w, selftest_stat_t *st, int depth)
 {
     (void)app;
@@ -1306,6 +1458,12 @@ static void selftest_walk(cg_app_t *app, cg_widget_t *w, selftest_stat_t *st, in
     for (size_t i = 0; i < w->nchildren; i++) selftest_walk(app, w->children[i], st, depth);
 }
 
+/** @brief 不开窗的自检：解析 .cgui、打印控件树、对每个绑定了回调的控件合成一次事件 */
+/**
+ * @brief 不开窗的自检：解析 .cgui、打印控件树、合成触发全部回调
+ * @param desc 启动参数（同 cg_app_run）
+ * @return int 0 全部通过；5 有未登记/不支持的事件；2/3 同 app_open
+ */
 int cg_app_selftest(const cg_app_desc_t *desc)
 {
     cg_app_t app;

@@ -63,6 +63,13 @@ static const cg_kind_info_t k_kinds[] = {
 
 #define K_KIND_COUNT (sizeof(k_kinds) / sizeof(k_kinds[0]))
 
+/** @brief 某个控件类型支不支持这个事件 */
+/**
+ * @brief 某个控件类型支不支持这个事件
+ * @param type 控件类型名（"button"/"edit"...）
+ * @param ev 事件枚举
+ * @return int 1 = 支持，0 = 不支持或参数不对
+ */
 int cg_kind_supports_event(const char *type, cg_event_t ev)
 {
     const cg_kind_info_t *ki = cg_kind_lookup(type);
@@ -70,6 +77,12 @@ int cg_kind_supports_event(const char *type, cg_event_t ev)
     return (ki->events & CG_EV_BIT(ev)) != 0;
 }
 
+/** @brief 某个控件类型支持的事件名列表，写成 "click/dblclick" 便于报错时提示 */
+/**
+ * @brief 列出某控件类型支持的事件名（"click/dblclick" 形式），报错时提示用
+ * @param kind 控件类型枚举
+ * @return const char* 事件名列表（内部静态缓冲）；类型未知返回"(该控件没有事件)"
+ */
 const char *cg_kind_event_list(cg_kind_t kind)
 {
     static char buf[192];
@@ -89,6 +102,11 @@ const char *cg_kind_event_list(cg_kind_t kind)
     return buf;
 }
 
+/**
+ * @brief 按类型名查类型表
+ * @param type .cgui 里的 type 字段写法
+ * @return const cg_kind_info_t* 表项；没找到返回 NULL
+ */
 const cg_kind_info_t *cg_kind_lookup(const char *type)
 {
     if (!type) return NULL;
@@ -101,6 +119,11 @@ const cg_kind_info_t *cg_kind_lookup(const char *type)
 /* 按 kind 字段找，**不要**用数组下标当枚举值：
  * 表是按控件逻辑分组排的，和枚举声明顺序故意解耦，
  * 省得以后插一个控件就把所有下标全带歪（事件名表就踩过这个坑）。 */
+/**
+ * @brief 按枚举查类型表（按 kind 字段线性查找，别用数组下标）
+ * @param kind 控件类型枚举
+ * @return const cg_kind_info_t* 表项；没找到返回 NULL
+ */
 const cg_kind_info_t *cg_kind_info(cg_kind_t kind)
 {
     for (size_t i = 0; i < K_KIND_COUNT; i++) {
@@ -109,6 +132,11 @@ const cg_kind_info_t *cg_kind_info(cg_kind_t kind)
     return NULL;
 }
 
+/**
+ * @brief 枚举转类型名
+ * @param kind 控件类型枚举
+ * @return const char* 类型名；未知返回 "unknown"
+ */
 const char *cg_kind_name(cg_kind_t kind)
 {
     const cg_kind_info_t *k = cg_kind_info(kind);
@@ -117,6 +145,11 @@ const char *cg_kind_name(cg_kind_t kind)
 
 /* ------------------------------------------------------------ 小工具 */
 
+/**
+ * @brief 复制字符串到堆内存（调用方负责 free）
+ * @param s 源字符串
+ * @return char* 堆副本；失败返回 NULL
+ */
 static char *dup_str(const char *s)
 {
     if (!s) return NULL;
@@ -126,12 +159,23 @@ static char *dup_str(const char *s)
     return p;
 }
 
+/**
+ * @brief 同 dup_str，但 NULL / 空串一律返回 NULL（可选字段的惯例）
+ * @param s 源字符串
+ * @return char* 堆副本；空输入返回 NULL
+ */
 static char *dup_or_null(const char *s)
 {
     if (!s || !*s) return NULL;
     return dup_str(s);
 }
 
+/** @brief 读文件到堆内存（UTF-8 原文），失败返回 NULL */
+/**
+ * @brief 读一个文件到堆内存
+ * @param path 文件路径
+ * @return char* UTF-8 原文，失败返回 NULL（调用方负责 free）
+ */
 char *cg_read_file(const char *path)
 {
     FILE *f;
@@ -161,6 +205,12 @@ char *cg_read_file(const char *path)
 
 static const char *const k_align_names[] = { "left", "center", "right" };
 
+/**
+ * @brief 解析 style 对象（font/size/bold/fg/bg/radius/align），缺省给默认值
+ * @param o JSON 里的 style 对象，可为 NULL
+ * @param st 输出：样式（调用方先清零）
+ * @return void 无返回值
+ */
 static void parse_style(const cj_val_t *o, cg_style_t *st)
 {
     const cj_val_t *v;
@@ -193,6 +243,11 @@ static void parse_style(const cj_val_t *o, cg_style_t *st)
     }
 }
 
+/**
+ * @brief 释放 style 里的堆字段（font）
+ * @param st 目标样式
+ * @return void 无返回值
+ */
 static void style_free(cg_style_t *st)
 {
     free(st->font);
@@ -201,6 +256,12 @@ static void style_free(cg_style_t *st)
 
 /* --------------------------------------------------- 结构化内容的解析 */
 
+/**
+ * @brief 解析字符串数组（listbox/combo 等的 items）
+ * @param arr JSON 数组
+ * @param count 输出：元素个数
+ * @return char** 字符串数组（调用方 free）；空/类型不对返回 NULL
+ */
 static char **parse_str_array(const cj_val_t *arr, size_t *count)
 {
     char **out;
@@ -219,6 +280,11 @@ static char **parse_str_array(const cj_val_t *arr, size_t *count)
     return out;
 }
 
+/**
+ * @brief 释放字符串数组
+ * @param arr 数组；n 元素个数
+ * @return void 无返回值
+ */
 static void str_array_free(char **arr, size_t n)
 {
     if (!arr) return;
@@ -259,6 +325,11 @@ static cg_item_t **parse_tree_items(const cj_val_t *arr, size_t *count)
     return out;
 }
 
+/**
+ * @brief 递归释放树节点数组（含子节点）
+ * @param items 节点指针数组；n 个数
+ * @return void 无返回值
+ */
 static void tree_items_free(cg_item_t **items, size_t n)
 {
     if (!items) return;
@@ -332,6 +403,11 @@ static char ***parse_rows(const cj_val_t *arr, size_t *nrows, size_t *row_cells)
     return out;
 }
 
+/**
+ * @brief 释放表格行二维数组
+ * @param rows 行数组；nrows 行数；cells 每行单元格数
+ * @return void 无返回值
+ */
 static void rows_free(char ***rows, size_t nrows, size_t cells)
 {
     if (!rows) return;
@@ -345,6 +421,11 @@ static void rows_free(char ***rows, size_t nrows, size_t cells)
 
 /* ------------------------------------------------------------ 节点 */
 
+/**
+ * @brief 递归释放文档节点（子节点、结构化内容、事件名、样式全清）
+ * @param n 目标节点
+ * @return void 无返回值
+ */
 static void node_free(cg_node_t *n)
 {
     if (!n) return;
@@ -368,6 +449,12 @@ static void node_free(cg_node_t *n)
     free(n);
 }
 
+/**
+ * @brief 给文档节点挂一个子节点（数组尾插，child->parent 回填）
+ * @param parent 父节点
+ * @param child 子节点
+ * @return void 无返回值（分配失败静默丢弃）
+ */
 static void node_add_child(cg_node_t *parent, cg_node_t *child)
 {
     cg_node_t **nc = (cg_node_t **)realloc(parent->children, (parent->nchildren + 1) * sizeof(cg_node_t *));
@@ -379,6 +466,13 @@ static void node_add_child(cg_node_t *parent, cg_node_t *child)
 
 static int s_auto_id = 0;
 
+/**
+ * @brief 解析单个控件节点（矩形/样式/状态/事件/结构化内容/children 递归）
+ * @param o JSON 对象
+ * @param err 解析失败时写错误信息
+ * @param errsz err 容量
+ * @return cg_node_t* 节点；失败返回 NULL
+ */
 static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
 {
     cg_node_t *n;
@@ -480,6 +574,13 @@ static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
 
 /* ------------------------------------------------------------ 文档 */
 
+/**
+ * @brief 解析整份 .cgui 文本
+ * @param json UTF-8 JSON 原文
+ * @param err 解析失败时写错误信息
+ * @param errsz err 容量
+ * @return cg_doc_t* 文档（调用方 cg_doc_free）；失败返回 NULL
+ */
 cg_doc_t *cg_doc_parse(const char *json, char *err, size_t errsz)
 {
     cj_val_t *root;
@@ -563,6 +664,12 @@ cg_doc_t *cg_doc_parse(const char *json, char *err, size_t errsz)
     return doc;
 }
 
+/** @brief 释放文档内容，但 doc 本身（可能嵌在别的结构里，或是栈变量）不动 */
+/**
+ * @brief 释放文档内容（doc 本身不动——它可能内嵌在 cg_app_t 里）
+ * @param doc 目标文档
+ * @return void 无返回值
+ */
 void cg_doc_release(cg_doc_t *doc)
 {
     if (!doc) return;
@@ -572,6 +679,12 @@ void cg_doc_release(cg_doc_t *doc)
     doc->root = NULL;
 }
 
+/** @brief 释放内容并释放 doc 本身 */
+/**
+ * @brief 释放文档内容并释放 doc 本身（只给 cg_doc_parse 的返回值用）
+ * @param doc cg_doc_parse 返回的文档
+ * @return void 无返回值
+ */
 void cg_doc_free(cg_doc_t *doc)
 {
     if (!doc) return;
@@ -583,6 +696,11 @@ void cg_doc_free(cg_doc_t *doc)
 
 /* ------------------------------------------------------------ 打印 */
 
+/**
+ * @brief 以缩进形式递归打印一个节点（含状态、事件绑定、结构化内容摘要）
+ * @param n 节点；out 输出流；depth 缩进层数
+ * @return void 无返回值
+ */
 static void dump_node(const cg_node_t *n, FILE *out, int depth)
 {
     for (int i = 0; i < depth; i++) fputs("  ", out);
@@ -613,6 +731,12 @@ static void dump_node(const cg_node_t *n, FILE *out, int depth)
     for (size_t i = 0; i < n->nchildren; i++) dump_node(n->children[i], out, depth + 1);
 }
 
+/** @brief 以缩进树的形式打印到 out（自检 / 排查用） */
+/**
+ * @brief 把整份文档树打印到 out（自检 / 排查用）
+ * @param doc 文档；out 输出流
+ * @return void 无返回值
+ */
 void cg_doc_dump(const cg_doc_t *doc, FILE *out)
 {
     if (!doc || !out) return;

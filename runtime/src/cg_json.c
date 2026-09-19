@@ -12,6 +12,7 @@
 
 /* ------------------------------------------------------------ 工具 */
 
+/** @brief 写一条带行号的解析错误到 errbuf（可传 NULL 静默） */
 static void cj_err(char *errbuf, size_t errsz, const char *msg, size_t line)
 {
     if (errbuf && errsz) {
@@ -30,8 +31,10 @@ typedef struct {
     int         failed;
 } parser_t;
 
+/** @brief 按首字符分派解析任意 JSON 值；失败返回 NULL */
 static cj_val_t *parse_value(parser_t *ps);
 
+/** @brief 新建一个指定类型的值节点；失败返回 NULL */
 static cj_val_t *val_new(cj_type_t t)
 {
     cj_val_t *v = (cj_val_t *)calloc(1, sizeof(cj_val_t));
@@ -39,6 +42,7 @@ static cj_val_t *val_new(cj_type_t t)
     return v;
 }
 
+/** @brief 跳过空白（换行要计数，报错时能给出行号） */
 static void skip_ws(parser_t *ps)
 {
     while (ps->p < ps->end) {
@@ -49,6 +53,7 @@ static void skip_ws(parser_t *ps)
     }
 }
 
+/** @brief 记录第一次解析错误并返回 0（失败后不再覆盖，方便定位首个错误） */
 static int fail(parser_t *ps, const char *msg)
 {
     if (!ps->failed) {
@@ -58,6 +63,7 @@ static int fail(parser_t *ps, const char *msg)
     return 0;
 }
 
+/** @brief 保证动态缓冲装得下 need 个字节（倍增扩容；失败保持原状） */
 static void buf_ensure(char **buf, size_t *len, size_t need, size_t *cap)
 {
     if (*len + need + 1 > *cap) {
@@ -80,7 +86,7 @@ static void byte_append(char **buf, size_t *len, size_t *cap, unsigned char b)
     (*buf)[*len] = '\0';
 }
 
-/* 把 \uXXXX（含代理对）编成 UTF-8 追加到 buf */
+/** @brief 把 \uXXXX（含代理对）编成 UTF-8 追加到 buf */
 static void utf8_append(char **buf, size_t *len, size_t *cap, unsigned cp)
 {
     unsigned char out[4];
@@ -109,6 +115,7 @@ static void utf8_append(char **buf, size_t *len, size_t *cap, unsigned cp)
     (*buf)[*len] = '\0';
 }
 
+/** @brief 解析 4 位十六进制；成功写 *out 并返回 1 */
 static int hex4(const char *s, unsigned *out)
 {
     unsigned v = 0;
@@ -124,6 +131,11 @@ static int hex4(const char *s, unsigned *out)
     return 1;
 }
 
+/**
+ * @brief 解析一个 JSON 字符串（处理转义与 \uXXXX 代理对）
+ * @param ps 解析游标
+ * @return char* UTF-8 堆串（空串可能返回 NULL，由调用方兜底）；解析失败返回 NULL
+ */
 static char *parse_string_raw(parser_t *ps)
 {
     char   *buf = NULL;
@@ -188,6 +200,7 @@ static char *take_string(parser_t *ps)
     return s;
 }
 
+/** @brief 给数组/对象容器追加一个值（对象还要存 key；分配失败静默丢弃） */
 static void push_item(cj_val_t *container, char *key, cj_val_t *item)
 {
     size_t n = container->count;
@@ -204,6 +217,7 @@ static void push_item(cj_val_t *container, char *key, cj_val_t *item)
     container->count = n + 1;
 }
 
+/** @brief 解析对象（"key": value, ...）；失败返回 NULL */
 static cj_val_t *parse_object(parser_t *ps)
 {
     cj_val_t *obj = val_new(CJ_OBJ);
@@ -230,6 +244,7 @@ static cj_val_t *parse_object(parser_t *ps)
     }
 }
 
+/** @brief 解析数组（value, ...）；失败返回 NULL */
 static cj_val_t *parse_array(parser_t *ps)
 {
     cj_val_t *arr = val_new(CJ_ARR);
@@ -250,6 +265,7 @@ static cj_val_t *parse_array(parser_t *ps)
     }
 }
 
+/** @brief 解析数字字面量（整型/浮点/指数），strtod 语义 */
 static cj_val_t *parse_number(parser_t *ps)
 {
     char  tmp[64];
@@ -270,6 +286,7 @@ static cj_val_t *parse_number(parser_t *ps)
     return v;
 }
 
+/** @brief 前缀匹配一个字面量（true/false/null），命中则推进游标 */
 static int lit(parser_t *ps, const char *word)
 {
     size_t n = strlen(word);
@@ -280,6 +297,7 @@ static int lit(parser_t *ps, const char *word)
     return 0;
 }
 
+/** @brief 按首字符分派解析任意 JSON 值；失败返回 NULL */
 static cj_val_t *parse_value(parser_t *ps)
 {
     skip_ws(ps);
@@ -319,6 +337,13 @@ static cj_val_t *parse_value(parser_t *ps)
 
 /* ------------------------------------------------------------ 公共入口 */
 
+/**
+ * @brief 解析一段 JSON 文本
+ * @param text UTF-8 原文（自动跳过 BOM）
+ * @param errbuf 解析失败时写错误信息，可传 NULL
+ * @param errsz errbuf 容量
+ * @return cj_val_t* 根节点（调用方 cj_free）；失败返回 NULL
+ */
 cj_val_t *cj_parse(const char *text, char *errbuf, size_t errsz)
 {
     parser_t ps;
@@ -346,6 +371,7 @@ cj_val_t *cj_parse(const char *text, char *errbuf, size_t errsz)
     return root;
 }
 
+/** @brief 递归释放值节点（含子项与 key） */
 void cj_free(cj_val_t *v)
 {
     if (!v) return;
@@ -359,6 +385,7 @@ void cj_free(cj_val_t *v)
     free(v);
 }
 
+/** @brief 取对象的子值；类型不对/键不存在返回 NULL */
 const cj_val_t *cj_get(const cj_val_t *obj, const char *key)
 {
     if (!obj || obj->type != CJ_OBJ) return NULL;
@@ -368,6 +395,7 @@ const cj_val_t *cj_get(const cj_val_t *obj, const char *key)
     return NULL;
 }
 
+/** @brief 取字符串；类型不符返回 def（调用方不用判空） */
 const char *cj_str(const cj_val_t *v, const char *def)
 {
     if (!v) return def;
@@ -375,6 +403,7 @@ const char *cj_str(const cj_val_t *v, const char *def)
     return def;
 }
 
+/** @brief 取数字（BOOL 视为 0/1，字符串尝试 strtod）；类型不符返回 def */
 double cj_num(const cj_val_t *v, double def)
 {
     if (!v) return def;
@@ -387,12 +416,14 @@ double cj_num(const cj_val_t *v, double def)
     return def;
 }
 
+/** @brief 取整数（四舍五入）；类型不符返回 def */
 int cj_int(const cj_val_t *v, int def)
 {
     double d = cj_num(v, def);
     return (int)(d < 0 ? d - 0.5 : d + 0.5);
 }
 
+/** @brief 取布尔（还认字符串 "true"/"1"/"false"/"0"）；类型不符返回 def */
 int cj_bool(const cj_val_t *v, int def)
 {
     if (!v) return def;
@@ -404,6 +435,11 @@ int cj_bool(const cj_val_t *v, int def)
     return def;
 }
 
+/**
+ * @brief 从 "#RRGGBB" / "#RGB" / 十进制取颜色，支持 0xAARRGGBB 直传
+ * @param v JSON 值；def 类型不符时的默认色
+ * @return unsigned 0xRRGGBB（8 位写法返回 0xAARRGGBB 原样）；不符返回 def
+ */
 unsigned cj_color(const cj_val_t *v, unsigned def)
 {
     if (!v) return def;
@@ -440,11 +476,17 @@ unsigned cj_color(const cj_val_t *v, unsigned def)
     return def;
 }
 
+/**
+ * @brief 数组/对象长度
+ * @param v JSON 值
+ * @return size_t 元素个数；其它类型返回 0
+ */
 size_t cj_count(const cj_val_t *v)
 {
     return (v && (v->type == CJ_ARR || v->type == CJ_OBJ)) ? v->count : 0;
 }
 
+/** @brief 取数组第 i 个元素；越界/类型不对返回 NULL */
 const cj_val_t *cj_at(const cj_val_t *arr, size_t i)
 {
     if (!arr || arr->type != CJ_ARR || i >= arr->count) return NULL;

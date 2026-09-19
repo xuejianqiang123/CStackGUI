@@ -39,6 +39,11 @@ typedef struct {
 
 static biz_t s_biz;
 
+/**
+ * @brief set_status
+ * @param app 所属应用
+ * @param text text
+ */
 static void set_status(cg_app_t *app, const char *text)
 {
     cg_widget_t *lab = cg_find(app, "lab_hello_status");
@@ -46,6 +51,12 @@ static void set_status(cg_app_t *app, const char *text)
 }
 
 /* 把一行日志同时写到控制台和页 0 的 lst_log */
+/**
+ * @brief log_line
+ * @param app 所属应用
+ * @param fmt fmt
+ * @param ... ...
+ */
 static void log_line(cg_app_t *app, const char *fmt, ...)
 {
     char    buf[512];
@@ -61,6 +72,10 @@ static void log_line(cg_app_t *app, const char *fmt, ...)
 }
 
 /* 把业务状态推回界面：滑块 -> 进度条 + 文字 */
+/**
+ * @brief refresh_level
+ * @param app 所属应用
+ */
 static void refresh_level(cg_app_t *app)
 {
     cg_widget_t *lab = cg_find(app, "lab_level");
@@ -75,6 +90,12 @@ static void refresh_level(cg_app_t *app)
 /* ============================================================ 页 1 陈列室 */
 
 /* 把一句话同时写到状态栏第二段和 stdout */
+/**
+ * @brief status
+ * @param app 所属应用
+ * @param fmt fmt
+ * @param ... ...
+ */
 static void status(cg_app_t *app, const char *fmt, ...)
 {
     char    buf[256];
@@ -90,6 +111,11 @@ static void status(cg_app_t *app, const char *fmt, ...)
 }
 
 /* 状态栏第 1 段显示业务概况（第 2 段留给 status() 写最近一次操作） */
+/**
+ * @brief refresh_status_summary
+ * @param app 所属应用
+ * @param biz 业务状态结构
+ */
 static void refresh_status_summary(cg_app_t *app, biz_t *biz)
 {
     cg_widget_t *sb = cg_find(app, "sb_main");
@@ -100,6 +126,12 @@ static void refresh_status_summary(cg_app_t *app, biz_t *biz)
 
 /* ============================================================ 页 2 新特性 */
 
+/**
+ * @brief lab_statusf
+ * @param app 所属应用
+ * @param fmt fmt
+ * @param ... ...
+ */
 static void lab_statusf(cg_app_t *app, const char *fmt, ...)
 {
     char buf[256];
@@ -115,6 +147,10 @@ static void lab_statusf(cg_app_t *app, const char *fmt, ...)
 /* ============================================================ 页 0 回调 */
 
 /* 定时器回调：cg_set_timer 到点后在消息循环里执行，此时跳出原事件栈，安全 */
+/**
+ * @brief reset_level_later
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void reset_level_later(void *user)
 {
     cg_app_t *app = (cg_app_t *)user;
@@ -126,6 +162,12 @@ static void reset_level_later(void *user)
     log_line(app, "2 秒后自动回落到等级 40");
 }
 
+/**
+ * @brief on_ok_click
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_ok_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -143,6 +185,12 @@ static void on_ok_click(cg_widget_t *self, cg_event_t ev, void *user)
     log_line(app, "BTN 单击 #%d", biz->click_count);
 }
 
+/**
+ * @brief on_ok_dblclick
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_ok_dblclick(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -163,6 +211,12 @@ static void on_ok_dblclick(cg_widget_t *self, cg_event_t ev, void *user)
     cg_set_timer(app, 2000, reset_level_later, app);
 }
 
+/**
+ * @brief on_reset_click
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_reset_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -183,6 +237,12 @@ static void on_reset_click(cg_widget_t *self, cg_event_t ev, void *user)
     log_line(app, "重置完成");
 }
 
+/**
+ * @brief on_quit_click
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_quit_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -194,6 +254,12 @@ static void on_quit_click(cg_widget_t *self, cg_event_t ev, void *user)
     cg_quit(app);
 }
 
+/**
+ * @brief on_name_change
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_name_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -205,6 +271,12 @@ static void on_name_change(cg_widget_t *self, cg_event_t ev, void *user)
     set_status(app, s_biz.name[0] ? "姓名已记录" : "姓名已清空");
 }
 
+/**
+ * @brief on_name_submit
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_name_submit(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -214,6 +286,12 @@ static void on_name_submit(cg_widget_t *self, cg_event_t ev, void *user)
     set_status(app, "回车提交");
 }
 
+/**
+ * @brief on_vip_change
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_vip_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -224,6 +302,12 @@ static void on_vip_change(cg_widget_t *self, cg_event_t ev, void *user)
     set_status(app, s_biz.vip ? "VIP 已开启" : "VIP 已关闭");
 }
 
+/**
+ * @brief on_level_change
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_level_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -237,6 +321,12 @@ static void on_level_change(cg_widget_t *self, cg_event_t ev, void *user)
 /* ============================================================ 页 1 回调 */
 
 /* 菜单栏：所有菜单项都汇到这一个回调，用 cg_menu_last_id 区分是哪一项 */
+/**
+ * @brief on_menu_click
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -257,6 +347,12 @@ static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /* 菜单按钮：点一下弹菜单，选中项同样回到这个回调 */
+/**
+ * @brief on_more_click
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_more_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -266,6 +362,12 @@ static void on_more_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /* 工具栏：value 是第几个按钮（0 起） */
+/**
+ * @brief on_toolbar_click
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_toolbar_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -277,6 +379,12 @@ static void on_toolbar_click(cg_widget_t *self, cg_event_t ev, void *user)
     status(app, "工具栏第 %d 个按钮：%s", index + 1, label ? label : "?");
 }
 
+/**
+ * @brief on_richtext_change
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_richtext_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -290,6 +398,12 @@ static void on_richtext_change(cg_widget_t *self, cg_event_t ev, void *user)
     status(app, "富文本改了（未保存），现在 %d 个字符", (int)strlen(cg_widget_text(self)));
 }
 
+/**
+ * @brief on_date_change
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_date_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -298,6 +412,12 @@ static void on_date_change(cg_widget_t *self, cg_event_t ev, void *user)
     status(app, "日期 -> %s", cg_widget_text(self));
 }
 
+/**
+ * @brief on_time_change
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_time_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -306,6 +426,12 @@ static void on_time_change(cg_widget_t *self, cg_event_t ev, void *user)
     status(app, "时间 -> %s", cg_widget_text(self));
 }
 
+/**
+ * @brief on_datetime_change
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_datetime_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -314,6 +440,12 @@ static void on_datetime_change(cg_widget_t *self, cg_event_t ev, void *user)
     status(app, "日期+时间 -> %s", cg_widget_text(self));
 }
 
+/**
+ * @brief on_notify_change
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_notify_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     biz_t *biz = (biz_t *)user;
@@ -326,6 +458,12 @@ static void on_notify_change(cg_widget_t *self, cg_event_t ev, void *user)
     refresh_status_summary(app, biz);
 }
 
+/**
+ * @brief on_count_change
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_count_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -343,6 +481,12 @@ static void on_count_change(cg_widget_t *self, cg_event_t ev, void *user)
     refresh_status_summary(app, biz);
 }
 
+/**
+ * @brief on_tree_select
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_tree_select(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -356,6 +500,12 @@ static void on_tree_select(cg_widget_t *self, cg_event_t ev, void *user)
     status(app, "选中树节点 %d: %s", cg_tree_selected(self), text ? text : "-");
 }
 
+/**
+ * @brief on_tree_dblclick
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_tree_dblclick(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -364,6 +514,12 @@ static void on_tree_dblclick(cg_widget_t *self, cg_event_t ev, void *user)
     status(app, "双击了树节点：%s", cg_tree_selected_text(self) ? cg_tree_selected_text(self) : "-");
 }
 
+/**
+ * @brief on_add_node
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_add_node(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -385,6 +541,12 @@ static void on_add_node(cg_widget_t *self, cg_event_t ev, void *user)
     refresh_status_summary(app, biz);
 }
 
+/**
+ * @brief on_add_row
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_add_row(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -407,6 +569,12 @@ static void on_add_row(cg_widget_t *self, cg_event_t ev, void *user)
     refresh_status_summary(app, biz);
 }
 
+/**
+ * @brief on_tab_change
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_tab_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -415,6 +583,12 @@ static void on_tab_change(cg_widget_t *self, cg_event_t ev, void *user)
     status(app, "切到第 %d 页（共 %d 页）", cg_tabs_selected(self) + 1, cg_tabs_count(self));
 }
 
+/**
+ * @brief on_pages_change
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_pages_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -423,6 +597,12 @@ static void on_pages_change(cg_widget_t *self, cg_event_t ev, void *user)
     status(app, "顶层切到第 %d 页", cg_tabs_selected(self) + 1);
 }
 
+/**
+ * @brief on_table_select
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_table_select(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -436,6 +616,12 @@ static void on_table_select(cg_widget_t *self, cg_event_t ev, void *user)
     }
 }
 
+/**
+ * @brief on_p1_click
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_p1_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -446,6 +632,12 @@ static void on_p1_click(cg_widget_t *self, cg_event_t ev, void *user)
            (edt && cg_widget_text(edt)[0]) ? cg_widget_text(edt) : "(空)");
 }
 
+/**
+ * @brief on_p1_change
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_p1_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -454,6 +646,12 @@ static void on_p1_change(cg_widget_t *self, cg_event_t ev, void *user)
     status(app, "第一页输入框改了：%s", cg_widget_text(self));
 }
 
+/**
+ * @brief on_p2_check
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_p2_check(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -462,6 +660,12 @@ static void on_p2_check(cg_widget_t *self, cg_event_t ev, void *user)
     status(app, "第二页复选框 -> %s", cg_widget_checked(self) ? "勾上" : "取消");
 }
 
+/**
+ * @brief on_tree_expand
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_tree_expand(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -473,6 +677,12 @@ static void on_tree_expand(cg_widget_t *self, cg_event_t ev, void *user)
            cg_tree_selected(self));
 }
 
+/**
+ * @brief on_tree_collapse
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_tree_collapse(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -482,6 +692,12 @@ static void on_tree_collapse(cg_widget_t *self, cg_event_t ev, void *user)
            cg_tree_item_text(self, cg_tree_selected(self)) ? cg_tree_item_text(self, cg_tree_selected(self)) : "-");
 }
 
+/**
+ * @brief on_link_click
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_link_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -491,6 +707,12 @@ static void on_link_click(cg_widget_t *self, cg_event_t ev, void *user)
     status(app, "点的是链接：%s", cg_widget_text(self));
 }
 
+/**
+ * @brief on_icon_click
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_icon_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -499,6 +721,12 @@ static void on_icon_click(cg_widget_t *self, cg_event_t ev, void *user)
     status(app, "图标按钮被点了（src = %s）", cg_widget_image(self));
 }
 
+/**
+ * @brief on_cal_select
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_cal_select(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -513,6 +741,12 @@ static void on_cal_select(cg_widget_t *self, cg_event_t ev, void *user)
 
 /* 窗口关闭前：有没保存的内容就拦一次。
  * 窗口自身也是个"控件"（id 是 __window），所以回调签名和别的事件一样。 */
+/**
+ * @brief on_close
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_close(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -534,6 +768,12 @@ static void on_close(cg_widget_t *self, cg_event_t ev, void *user)
 /* ============================================================ 页 2 回调 */
 
 /* 时钟：每秒把计数写回页内状态标签 */
+/**
+ * @brief on_tick
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_tick(cg_widget_t *self, cg_event_t ev, void *user)
 {
     static int ticks = 0;
@@ -545,6 +785,12 @@ static void on_tick(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /* 通用对话框：自检（无窗口）时什么都不做，避免弹窗卡住 CI */
+/**
+ * @brief on_pick_file
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_pick_file(cg_widget_t *self, cg_event_t ev, void *user)
 {
     char path[1024];
@@ -559,6 +805,12 @@ static void on_pick_file(cg_widget_t *self, cg_event_t ev, void *user)
     }
 }
 
+/**
+ * @brief on_pick_save
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_pick_save(cg_widget_t *self, cg_event_t ev, void *user)
 {
     char path[1024];
@@ -572,6 +824,12 @@ static void on_pick_save(cg_widget_t *self, cg_event_t ev, void *user)
     }
 }
 
+/**
+ * @brief on_show_msg
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_show_msg(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev; (void)user;
@@ -580,6 +838,12 @@ static void on_show_msg(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /* 颜色选择：value 就是 0xRRGGBB */
+/**
+ * @brief on_color_change
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_color_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev; (void)user;
@@ -587,6 +851,12 @@ static void on_color_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /* 表格：勾选 / 多选 / 行数值 */
+/**
+ * @brief on_table_check
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_table_check(cg_widget_t *self, cg_event_t ev, void *user)
 {
     int row = cg_table_selected(self);
@@ -596,6 +866,12 @@ static void on_table_check(cg_widget_t *self, cg_event_t ev, void *user)
                 row, cg_table_checked(self, row), cg_table_row_value(self, row));
 }
 
+/**
+ * @brief on_lab_table_select
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_lab_table_select(cg_widget_t *self, cg_event_t ev, void *user)
 {
     int i;
@@ -611,6 +887,12 @@ static void on_lab_table_select(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /* 画板：点一下画一个圆 */
+/**
+ * @brief on_canvas_click
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_canvas_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev; (void)user;
@@ -619,24 +901,48 @@ static void on_canvas_click(cg_widget_t *self, cg_event_t ev, void *user)
     cg_canvas_text(self, 12, 110, "点了一下");
 }
 
+/**
+ * @brief on_rate_change
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_rate_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev; (void)user;
     lab_statusf(cg_app_of(self), "评分: %d / %d", cg_widget_value(self), 5);
 }
 
+/**
+ * @brief on_page_change
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_page_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev; (void)user;
     lab_statusf(cg_app_of(self), "翻到第 %d 页", cg_widget_value(self) + 1);
 }
 
+/**
+ * @brief on_tag_click
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_tag_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev; (void)user;
     lab_statusf(cg_app_of(self), "标签片被点了");
 }
 
+/**
+ * @brief on_switch_change
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_switch_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev; (void)user;
@@ -644,12 +950,24 @@ static void on_switch_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /* 焦点事件：失焦时校验输入框 */
+/**
+ * @brief on_focus
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_focus(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)self; (void)ev; (void)user;
     lab_statusf(cg_app_of(self), "输入框获得焦点");
 }
 
+/**
+ * @brief on_blur
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_blur(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev; (void)user;
@@ -657,6 +975,12 @@ static void on_blur(cg_widget_t *self, cg_event_t ev, void *user)
                 *cg_widget_text(self) ? cg_widget_text(self) : "(空)");
 }
 
+/**
+ * @brief on_submit
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_submit(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev; (void)user;
@@ -665,6 +989,11 @@ static void on_submit(cg_widget_t *self, cg_event_t ev, void *user)
 
 /* ============================================================ 界面就绪 */
 
+/**
+ * @brief 页 0「基础闭环」的初始状态：挂业务数据、摆滑块初值、写启动日志
+ * @param app 所属应用
+ * @param biz 业务状态结构
+ */
 static void hello_ready(cg_app_t *app, biz_t *biz)
 {
     cg_widget_t *w;
@@ -684,6 +1013,11 @@ static void hello_ready(cg_app_t *app, biz_t *biz)
     log_line(app, "启动完成，共 %d 个控件", cg_widget_count(app));
 }
 
+/**
+ * @brief 页 1「控件陈列」的初始状态：挂业务数据、联动圆环、给树/表格补内容
+ * @param app 所属应用
+ * @param biz 业务状态结构
+ */
 static void gallery_ready(cg_app_t *app, biz_t *biz)
 {
     cg_widget_t *w;
@@ -726,6 +1060,11 @@ static void gallery_ready(cg_app_t *app, biz_t *biz)
     refresh_status_summary(app, biz);
 }
 
+/**
+ * @brief 页 2「新特性」的初始状态：给画板打底稿、给表格挂行数值与初始勾选
+ * @param app 所属应用
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void lab_ready(cg_app_t *app, void *user)
 {
     cg_widget_t *cv = cg_find(app, "cv_board");
@@ -752,6 +1091,11 @@ static void lab_ready(cg_app_t *app, void *user)
     }
 }
 
+/**
+ * @brief 界面就绪钩子：依次调三页的初始化
+ * @param app 所属应用
+ * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ */
 static void on_ready(cg_app_t *app, void *user)
 {
     biz_t *biz = (biz_t *)user;
@@ -823,6 +1167,12 @@ static const cg_binding_t k_bindings[] = {
 
 /* ------------------------------------------------------------ 入口 */
 
+/**
+ * @brief 程序入口：组装 cg_app_desc_t，按命令行参数走自检或正常运行
+ * @param argc argc
+ * @param argv argv
+ * @return 进程退出码（0 正常）
+ */
 int main(int argc, char **argv)
 {
     cg_app_desc_t desc;

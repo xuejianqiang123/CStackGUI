@@ -23,6 +23,7 @@
 
 /* ------------------------------------------------------------ 字符串 */
 
+/** @brief UTF-8 转 UTF-16 堆串（调用方 free）；空/失败返回 NULL */
 static wchar_t *wc_from_utf8(const char *s)
 {
     if (!s) return NULL;
@@ -61,13 +62,19 @@ typedef struct {
 /* 时钟（timer）控件没有自己的窗口，Win32 定时器 id 直接复用 ctrl_id，
  * 这样 WM_TIMER 里按 wp 反查一次就能找到控件。 */
 
-/* app->scale 用百分比存（100 = 96dpi），便于整数运算 */
+/** @brief app->scale 用百分比存（100 = 96dpi），便于整数运算 */
+/** @brief 逻辑像素转物理像素（按 app 的 DPI 百分比四舍五入） */
 static int scale_px(const cg_app_t *app, int logical)
 {
     int s = app->scale > 0 ? app->scale : 100;
     return (int)(((long long)logical * s + 50) / 100);
 }
 
+/**
+ * @brief 取（或缓存创建）一个 HFONT
+ * @param app 所属应用；family 字体族；size_pt 磅数；bold 加粗；underline 下划线
+ * @return HFONT 字体句柄（缓存，勿删）；size_pt<=0 返回 NULL 走系统默认
+ */
 static HFONT font_for(cg_app_t *app, const char *family, int size_pt, int bold, int underline)
 {
     cg_win_state_t *st = (cg_win_state_t *)app->natives;
@@ -115,6 +122,7 @@ static const wchar_t *s_richedit_class = NULL;
  *  起不来（理论上看不到）就退回静态占位文本。 */
 static int s_atl_ok = 0;
 
+/** @brief 控件 -> Win32 窗口类名（group/box/card/shape 走自注册 Panel 类） */
 static const wchar_t *class_of(const cg_widget_t *w)
 {
     if (!strcmp(w->type, "button"))    return L"BUTTON";
@@ -161,11 +169,13 @@ static int is_time_only(const cg_widget_t *w)
     return w->format && strcmp(w->format, "time") == 0;
 }
 
+/** @brief datepicker 是否为"日期+时间"双控件模式（format == "datetime"） */
 static int is_datetime(const cg_widget_t *w)
 {
     return w->format && strcmp(w->format, "datetime") == 0;
 }
 
+/** @brief 控件 -> WS 样式位（table 按 multi 决定单/多选） */
 static DWORD style_of(const cg_widget_t *w)
 {
     if (!strcmp(w->type, "button"))    return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON;
@@ -214,6 +224,7 @@ static DWORD style_of(const cg_widget_t *w)
     return WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_BORDER;
 }
 
+/** @brief 控件 -> 扩展样式位（输入类控件给立体边框） */
 static DWORD exstyle_of(const cg_widget_t *w)
 {
     if (!strcmp(w->type, "edit"))    return WS_EX_CLIENTEDGE;
@@ -226,6 +237,7 @@ static DWORD exstyle_of(const cg_widget_t *w)
 
 /* ------------------------------------------------------------ 颜色 */
 
+/** @brief 0xRRGGBB 转 COLORREF */
 static COLORREF to_colorref(unsigned c) { return RGB((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF); }
 
 /** 一组小画刷缓存，给 WM_CTLCOLOR* 返回用；颜色数量有限，链表足够 */
@@ -247,11 +259,13 @@ static HBRUSH brush_for(unsigned rgb)
 
 /* ------------------------------------------------------------ 类型判断 */
 
+/** @brief 控件类型判断（NULL 安全） */
 static int is_t(const cg_widget_t *w, const char *type)
 {
     return w && w->type && strcmp(w->type, type) == 0;
 }
 
+/** @brief 是否输入类控件（edit/multiedit/spinner/richtext，文字要拉回模型的那类） */
 static int is_editlike(const cg_widget_t *w)
 {
     return is_t(w, "edit") || is_t(w, "multiedit") || is_t(w, "spinner") || is_t(w, "richtext");
@@ -259,6 +273,11 @@ static int is_editlike(const cg_widget_t *w)
 
 /* ------------------------------------------------------------ 日期时间
  * text 里的写法：date -> "2026-09-19"、time -> "14:30"、datetime -> "2026-09-19 14:30"
+ */
+/**
+ * @brief 把 text 里的日期时间写法解析成 SYSTEMTIME（缺省用今天/现在）
+ * @param w datepicker 控件；date/time 输出：日期与时间
+ * @return void 无返回值
  */
 static void datetime_from_text(const cg_widget_t *w, SYSTEMTIME *date, SYSTEMTIME *time)
 {
@@ -391,6 +410,11 @@ static cg_widget_t *widget_by_hwnd(cg_app_t *app, HWND h)
  */
 static cg_app_t *s_app = NULL;
 
+/**
+ * @brief 评分/分页的点击判定：按 x 落点换算成星数或翻页方向并派发 change
+ * @param w rate / pagination 控件；hwnd 控件窗口；x 点击横坐标（客户区）
+ * @return void 无返回值
+ */
 static void rate_or_pag_click(cg_widget_t *w, HWND hwnd, int x)
 {
     RECT rc;
@@ -424,6 +448,10 @@ static void rate_or_pag_click(cg_widget_t *w, HWND hwnd, int x)
     s_in_notify = 0;
 }
 
+/**
+ * @brief 全控件统一子类：焦点变化转事件、通知消息上浮主窗口、评分分页按点判定
+ * @return LRESULT 交回原窗口过程
+ */
 static LRESULT CALLBACK FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
                                   UINT_PTR id, DWORD_PTR ref)
 {
@@ -466,6 +494,7 @@ static LRESULT CALLBACK FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     return DefSubclassProc(hwnd, msg, wp, lp);
 }
 
+/** @brief 给控件挂统一子类（焦点事件 / 通知转发 / 评分分页按点判定） */
 static void subclass_for_events(HWND h)
 {
     SetWindowSubclass(h, FocusProc, 1, 0);
@@ -476,6 +505,7 @@ static void subclass_for_events(HWND h)
  * TTF_SUBCLASS 让 tooltip 自己接管鼠标转发，不需要任何额外消息处理。
  * 文本用 LPSTR_TEXTCALLBACK 现取，cg_widget_set_hint 改完立即生效。
  */
+/** @brief 把控件注册成 tooltip 的一个 tool（文本走 LPSTR_TEXTCALLBACK 现取） */
 static void tooltip_add_for(HWND tooltip, HWND forw)
 {
     TOOLINFOW ti;
@@ -488,6 +518,7 @@ static void tooltip_add_for(HWND tooltip, HWND forw)
     SendMessageW(tooltip, TTM_ADDTOOLW, 0, (LPARAM)&ti);
 }
 
+/** @brief hint 变化后同步 tooltip：按需新增 / 删除 / 更新 tool */
 void cg_win_set_hint(cg_widget_t *w)
 {
     if (!w || !w->native || !s_app) return;
@@ -511,6 +542,7 @@ void cg_win_set_hint(cg_widget_t *w)
     }
 }
 
+/** @brief 重设时钟控件的 Win32 定时器（period=0 即停止；id 复用 ctrl_id） */
 void cg_win_restart_timer(cg_widget_t *w)
 {
     if (!w || !w->app || !w->app->hwnd) return;
@@ -548,6 +580,7 @@ static ULONG_PTR s_gdip_token = 0;   /* GDI+ 的启动令牌，0 表示没起来
 /* 本文件里几处互相调用（切页要同步子控件、建控件后要同步），先声明 */
 static void sync_widget(cg_widget_t *w);
 
+/** @brief 文件是否存在 */
 static int file_exists(const char *path)
 {
     HANDLE h = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -556,6 +589,7 @@ static int file_exists(const char *path)
     return 1;
 }
 
+/** @brief 取路径的目录部分（无目录时写 "."） */
 static void dir_of(const char *path, char *out, size_t size)
 {
     const char *slash = strrchr(path, '\\');
@@ -680,6 +714,7 @@ static LRESULT CALLBACK ImageProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+/** @brief 注册图片控件的自绘窗口类（整进程一次） */
 static void register_image_class(void)
 {
     static int done = 0;
@@ -702,6 +737,11 @@ static void register_image_class(void)
 #define RING_STEPS 72
 #define CG_PI 3.14159265358979
 
+/**
+ * @brief 画圆环进度：底色 + 轨道 + 从 12 点顺时针的进度弧 + 中间百分比
+ * @param dc 目标 DC；w 控件；rc 客户区
+ * @return void 无返回值
+ */
 static void draw_ring(HDC dc, const cg_widget_t *w, const RECT *rc)
 {
     int  width = rc->right - rc->left;
@@ -780,6 +820,7 @@ static void draw_ring(HDC dc, const cg_widget_t *w, const RECT *rc)
     }
 }
 
+/** @brief 圆环进度控件窗口过程（自绘，无交互） */
 static LRESULT CALLBACK RingProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     cg_app_t *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
@@ -807,6 +848,7 @@ static LRESULT CALLBACK RingProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+/** @brief 注册圆环进度的自绘窗口类（整进程一次） */
 static void register_ring_class(void)
 {
     static int done = 0;
@@ -826,11 +868,17 @@ static void register_ring_class(void)
  * cg_canvas_* 命令把每笔记录在 w->ops 里，WM_PAINT 按序回放。
  * 坐标是逻辑像素（跟 .cgui 同一套），绘制时按 DPI 缩放。
  */
+/** @brief 画板坐标：逻辑像素 -> 物理像素（与控件布局同一套缩放） */
 static int canvas_scale(const cg_widget_t *w, int logical)
 {
     return scale_px(w->app, logical);
 }
 
+/**
+ * @brief 画板绘制：填底色后按记录顺序回放 cg_canvas_* 的绘制命令
+ * @param dc 目标 DC；w canvas 控件；rc 客户区
+ * @return void 无返回值
+ */
 static void draw_canvas(HDC dc, cg_widget_t *w, const RECT *rc)
 {
     COLORREF bgc = (w->style.bg != CG_COLOR_NONE) ? to_colorref(w->style.bg)
@@ -891,6 +939,7 @@ static void draw_canvas(HDC dc, cg_widget_t *w, const RECT *rc)
     }
 }
 
+/** @brief 画板控件窗口过程：自绘 + 左键抬起派发 click（双击由运行时合成） */
 static LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     cg_app_t *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
@@ -927,6 +976,7 @@ static LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+/** @brief 注册画板的自绘窗口类（整进程一次） */
 static void register_canvas_class(void)
 {
     static int done = 0;
@@ -944,6 +994,7 @@ static void register_canvas_class(void)
 
 /* ------------------------------------------------------------ 面板窗口 */
 
+/** @brief 面板窗口过程（group/box/card/shape）：通知上浮主窗口 + card/shape 自绘 */
 static LRESULT CALLBACK PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     cg_app_t *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
@@ -1031,6 +1082,7 @@ static LRESULT CALLBACK PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+/** @brief 注册面板窗口类（能装子控件的自绘底板，整进程一次） */
 static void register_panel_class(void)
 {
     static int done = 0;
@@ -1341,6 +1393,7 @@ static void draw_icon_button(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
  * 画什么由各自的状态决定，和 switch 一个路数。
  */
 
+/** @brief 取控件前景色；style.fg 未设置时用 fallback */
 static unsigned widget_fg_or(const cg_widget_t *w, unsigned fallback)
 {
     return (w->style.fg != CG_COLOR_NONE) ? w->style.fg : fallback;
@@ -1534,6 +1587,11 @@ static void draw_own_item(cg_app_t *app, const DRAWITEMSTRUCT *dis)
     (void)label;
 }
 
+/**
+ * @brief WM_COMMAND 入口：反查控件后走 notify_body（带防重入保护）
+ * @param app 所属应用；hwnd 发通知的控件窗口；code 通知码；cmd_id 命令 ID
+ * @return void 无返回值
+ */
 static void notify_from(cg_app_t *app, HWND hwnd, int code, int cmd_id)
 {
     /* 先按窗口句柄找：spinner 有两个 HWND，按 ctrl id 会漏掉箭头 */
@@ -1550,6 +1608,7 @@ static void notify_from(cg_app_t *app, HWND hwnd, int code, int cmd_id)
 
 static void sync_widget(cg_widget_t *w);
 
+/** @brief 主窗口过程：命令/通知分派、自绘、配色、DPI、时钟、关闭流程 */
 static LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     cg_app_t *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
@@ -1738,13 +1797,18 @@ static LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 /* ------------------------------------------------------------ 控件创建 */
 
+/** @brief 控件的原生父窗口（顶层控件挂主窗口，容器子控件挂容器） */
 static HWND parent_hwnd_of(const cg_app_t *app, const cg_widget_t *w)
 {
     if (!w || !w->parent || w->parent->is_window) return (HWND)app->hwnd;
     return (HWND)w->parent->native;
 }
 
-/** 按运行时行表建 HMENU。行表里父项下标一定小于子项，所以一遍扫过去就够。 */
+/**
+ * @brief 按运行时行表建 HMENU（行表里父项下标一定小于子项，一遍扫过去就够）
+ * @param w menu / menubutton 控件
+ * @return HMENU 菜单句柄（调用方挂载或 DestroyMenu）
+ */
 static HMENU menu_build(const cg_widget_t *w)
 {
     HMENU  root;
@@ -1836,6 +1900,7 @@ static void build_toolbar(HWND h, cg_widget_t *w)
     SendMessageW(h, TB_AUTOSIZE, 0, 0);
 }
 
+/** @brief 给单个控件建原生窗口（menu/timer 除外），含子控件拼装与初始同步 */
 static void create_native(cg_widget_t *w)
 {
     cg_app_t *app = w->app;
@@ -1936,6 +2001,7 @@ static void create_native_tree(cg_widget_t *parent)
     }
 }
 
+/** @brief 销毁控件的原生窗口并释放后端资源（位图 / imagelist / 映射表） */
 static void destroy_native(cg_widget_t *w)
 {
     if (w->native2) {
@@ -2012,7 +2078,12 @@ static void build_tree(HWND h, cg_widget_t *w)
     InvalidateRect(h, NULL, TRUE);
 }
 
-/* 表格行图标：把图片缩到 imagelist 的格子尺寸再放进去，返回下标，失败 -1 */
+/** @brief 表格行图标：把图片缩到 imagelist 的格子尺寸再放进去，返回下标，失败 -1 */
+/**
+ * @brief 把图片缩到 imagelist 格子尺寸后加进去（表格行图标用）
+ * @param w 所属控件（解析图片相对路径用）；il 目标列表；path 图片路径；cell 格子边长
+ * @return int 图片下标；失败返回 -1
+ */
 static int imagelist_add_file(cg_widget_t *w, HIMAGELIST il, const char *path, int cell)
 {
     HBITMAP src = load_image_file(w->app, path);
@@ -2254,6 +2325,7 @@ static void browser_recreate(cg_widget_t *w)
     w->native = h;
 }
 
+/** @brief 把控件逻辑状态同步到原生控件（位置/文字/字体/条目/值/显隐），不做防重入 */
 static void sync_widget_body(cg_widget_t *w)
 {
     HWND h = (HWND)w->native;
@@ -2438,6 +2510,7 @@ static void sync_widget(cg_widget_t *w)
 
 /* ------------------------------------------------------------ 后端入口 */
 
+/** @brief 后端初始化：DPI、公共控件、类注册、主窗口、tooltip、定时器、按树序建控件 */
 static int win_init(cg_app_t *app)
 {
     cg_win_state_t *st;
@@ -2617,6 +2690,7 @@ static int win_init(cg_app_t *app)
     return 0;
 }
 
+/** @brief 消息循环（IsDialogMessage 处理 Tab/回车导航），quit 置位即退出 */
 static int win_run(cg_app_t *app)
 {
     MSG msg;
@@ -2629,6 +2703,7 @@ static int win_run(cg_app_t *app)
     return 0;
 }
 
+/** @brief 后端清理：杀定时器、关窗口、停 GDI+、释放字体缓存 */
 static void win_shutdown(cg_app_t *app)
 {
     cg_win_state_t *st = (cg_win_state_t *)app->natives;
@@ -2661,6 +2736,7 @@ static void win_shutdown(cg_app_t *app)
     app->natives = NULL;
 }
 
+/** @brief 改主窗口标题（UTF-8 -> UTF-16） */
 static void win_set_title(cg_app_t *app, const char *title)
 {
     wchar_t *wt = wc_from_utf8(title);
@@ -2668,6 +2744,7 @@ static void win_set_title(cg_app_t *app, const char *title)
     free(wt);
 }
 
+/** @brief 当前 exe 的完整路径（含文件名），成功返回 0 */
 int cg_exe_path(char *buf, size_t size)
 {
     wchar_t wbuf[MAX_PATH * 2];
@@ -2684,11 +2761,13 @@ int cg_exe_path(char *buf, size_t size)
     return 0;
 }
 
+/** @brief 毫秒级时基（后端提供），用于双击判定与定时器 */
 unsigned long cg_ticks(void)
 {
     return (unsigned long)GetTickCount64();
 }
 
+/** @brief 系统双击间隔，默认 500ms */
 unsigned long cg_double_click_ms(void)
 {
     UINT t = GetDoubleClickTime();
@@ -2700,6 +2779,7 @@ unsigned long cg_double_click_ms(void)
  * 这些都要摸 Win32 句柄，所以住在后端文件里，但对外是普通 C 函数。
  */
 
+/** @brief 弹对话框时的属主窗口：优先父控件，退回主窗口 */
 static HWND dialog_owner(const cg_widget_t *parent)
 {
     if (parent && parent->native) return (HWND)parent->native;
@@ -2879,6 +2959,7 @@ static int canvas_ok(const cg_widget_t *w, const char *who)
     return 0;
 }
 
+/** @brief 给画板追加一条绘制命令并触发重绘（容量不够倍增扩容） */
 static void canvas_push(cg_widget_t *w, const cg_canvas_op_t *op)
 {
     if (w->nops >= w->op_cap) {
