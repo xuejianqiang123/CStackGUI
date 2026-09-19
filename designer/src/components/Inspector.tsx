@@ -131,11 +131,25 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
           value={node.id}
           spellCheck={false}
           onChange={(e) => {
-            const next = e.target.value.replace(/[^0-9a-zA-Z_]/g, "_");
+            const raw = e.target.value.replace(/[^0-9a-zA-Z_]/g, "_");
+            if (!raw) return; /* 清空输入的过程不改 id，空 id 会让运行时查找出问题 */
+            /* 查重：id 是 cg_find 的凭据，重名会让「找控件」命中错的那个。
+             * 冲突时自动加后缀，输入过程依然顺畅。 */
+            const taken = new Set<string>();
+            const collect = (ns: CgNode[]) =>
+              ns.forEach((n) => {
+                taken.add(n.id);
+                if (n.children) collect(n.children);
+              });
+            collect(doc.widgets);
+            taken.delete(node.id);
+            let unique = raw;
+            let k = 2;
+            while (taken.has(unique)) unique = `${raw}_${k++}`;
             patch((n) => {
-              n.id = next;
+              n.id = unique;
             });
-            onSelect(next);
+            onSelect(unique);
           }}
         />
       </Row>

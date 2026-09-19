@@ -255,8 +255,8 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
     await fs.mkdir(dir, { recursive: true });
     for (const f of files) {
       const target = path.join(dir, f.name);
-      // 业务代码是用户的资产，已存在就不覆盖
-      const isUserCode = f.name.endsWith("_ui_events.c");
+      // 业务代码是用户的资产，已存在就不覆盖（main.c 用户也常加全局变量/逻辑）
+      const isUserCode = f.name.endsWith("_ui_events.c") || f.name === "main.c";
       if (isUserCode && existsSync(target)) {
         skipped.push(f.name);
         continue;

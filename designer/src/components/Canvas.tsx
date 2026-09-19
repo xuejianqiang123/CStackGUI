@@ -182,11 +182,13 @@ export default function Canvas(props: Props) {
           node.rect.x = abs.x - base.x;
           node.rect.y = abs.y - base.y;
 
-          if (targetParent) {
+          if (targetParent && targetParent.type === "tabs") {
             targetParent.children = targetParent.children ?? [];
-            if (targetParent.type === "tabs") node.page = targetParent.value ?? 0;
+            node.page = targetParent.value ?? 0;
             targetParent.children.push(node);
           } else {
+            /* 从 tabs 拖出时清掉残留的分页号，否则脏 page 会一直写进 .cgui */
+            delete node.page;
             d.widgets.push(node);
           }
         });
