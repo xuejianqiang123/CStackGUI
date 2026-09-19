@@ -1,0 +1,15 @@
+{
+    "autoInvokeSkill": true,
+    "strictMode": true,
+    "codeLanguage": "C",
+    "scopes": ["embedded", "esp32", "rtos", "firmware"],
+    "maxContextFileNum": 10,
+    "enableCodeReviewAutoScan": true,
+    "disableUnreasonableRefactor": true,
+    "preferChineseReply": true,
+    "excludePaths": ["build/", "output/", "keil/", "debug/", "*.hex", "*.bin", "*.log"],
+    "enableSmartContextFilter": true,
+    "autoCompressConversation": true,
+    "enforceSkillOnCodeGen": true,
+    "autoReviewAfterEdit": true
+}

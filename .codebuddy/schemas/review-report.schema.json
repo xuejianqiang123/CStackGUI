@@ -1,0 +1,106 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Code Review Report",
+  "description": "嵌入式代码审查报告的结构化格式（基于 Archify 理念）",
+  "type": "object",
+  "required": ["metadata", "statistics", "findings", "coverage"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["feature", "date", "reviewer", "version"],
+      "properties": {
+        "feature": { "type": "string", "description": "功能名称" },
+        "date": { "type": "string", "format": "date", "description": "审查日期" },
+        "reviewer": { "type": "string", "description": "审查者（AI/人工）" },
+        "version": { "type": "string", "description": "工作流版本" },
+        "relatedDocs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "相关 PRD/SDD/计划路径"
+        }
+      }
+    },
+    "statistics": {
+      "type": "object",
+      "required": ["filesModified", "filesAdded", "filesDeleted", "linesAdded", "linesDeleted"],
+      "properties": {
+        "filesModified": { "type": "integer", "minimum": 0 },
+        "filesAdded": { "type": "integer", "minimum": 0 },
+        "filesDeleted": { "type": "integer", "minimum": 0 },
+        "linesAdded": { "type": "integer", "minimum": 0 },
+        "linesDeleted": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "description": "发现的问题列表",
+      "items": {
+        "type": "object",
+        "required": ["severity", "file", "location", "issue", "detail", "suggestion"],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low"],
+            "description": "严重级别"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "dma_cache", "interrupt", "buffer_overflow", "memory_leak",
+              "flash_storage", "communication_protocol", "peripheral_conflict",
+              "power_management", "rtos_task", "watchdog_timer", "stack_overflow",
+              "struct_best_practice", "error_handling", "code_style"
+            ],
+            "description": "问题类别（对应审查 skill）"
+          },
+          "file": { "type": "string", "description": "文件路径" },
+          "location": { "type": "string", "description": "函数名或行号" },
+          "issue": { "type": "string", "description": "问题一句话描述" },
+          "detail": { "type": "string", "description": "详细说明：为什么是问题" },
+          "suggestion": { "type": "string", "description": "修复建议" },
+          "evidenceCode": {
+            "type": "string",
+            "description": "问题代码片段（可选）"
+          },
+          "fixedCode": {
+            "type": "string",
+            "description": "修复后代码（可选）"
+          }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "description": "审查覆盖的 skills 清单",
+      "properties": {
+        "skillsInvoked": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "已调用的审查 skills"
+        },
+        "skillsSkipped": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "skill": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          },
+          "description": "未覆盖的 skills 及原因"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "passGate": { "type": "boolean", "description": "是否通过审查门禁" },
+        "criticalCount": { "type": "integer", "minimum": 0 },
+        "highCount": { "type": "integer", "minimum": 0 },
+        "mediumCount": { "type": "integer", "minimum": 0 },
+        "lowCount": { "type": "integer", "minimum": 0 },
+        "conclusion": { "type": "string", "description": "审查结论" }
+      }
+    }
+  }
+}

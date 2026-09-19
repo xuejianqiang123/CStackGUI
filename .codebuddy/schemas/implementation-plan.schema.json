@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Implementation Plan",
+  "description": "Validation-First 实现计划的结构化格式",
+  "type": "object",
+  "required": ["metadata", "goal", "steps", "validation"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["feature", "date", "author"],
+      "properties": {
+        "feature": { "type": "string", "description": "功能名称" },
+        "date": { "type": "string", "format": "date" },
+        "author": { "type": "string" },
+        "relatedDocs": {
+          "type": "object",
+          "properties": {
+            "prd": { "type": "string", "description": "关联 PRD 路径" },
+            "sdd": { "type": "string", "description": "关联 SDD 路径" },
+            "slice": { "type": "string", "description": "关联切片清单路径" }
+          }
+        }
+      }
+    },
+    "goal": {
+      "type": "object",
+      "required": ["summary", "deliverable"],
+      "properties": {
+        "summary": { "type": "string", "description": "一句话目标" },
+        "deliverable": { "type": "string", "description": "交付的行为描述" },
+        "nonGoals": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "明确的非目标（Explicit Non-Goals）"
+        }
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "properties": {
+        "prds": { "type": "array", "items": { "type": "string" } },
+        "sdds": { "type": "array", "items": { "type": "string" } },
+        "components": { "type": "array", "items": { "type": "string" } },
+        "hardware": { "type": "array", "items": { "type": "string" } },
+        "contextLoaded": { "type": "boolean", "description": "prime-codebase 是否已执行" }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "description": "实现步骤（按序执行）",
+      "items": {
+        "type": "object",
+        "required": ["id", "action", "files", "changes", "verification"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1 },
+          "action": { "type": "string", "description": "步骤动作描述" },
+          "files": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "涉及的文件路径"
+          },
+          "changes": { "type": "string", "description": "改动要点" },
+          "verification": {
+            "type": "object",
+            "required": ["method", "expectedResult"],
+            "properties": {
+              "method": { "type": "string", "description": "验证方法（如何证明）" },
+              "expectedResult": { "type": "string", "description": "预期结果" },
+              "commands": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "验证命令"
+              }
+            }
+          },
+          "fallback": {
+            "type": "string",
+            "description": "验证失败时的排查路径"
+          }
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "required": ["checklist"],
+      "properties": {
+        "checklist": {
+          "type": "array",
+          "description": "验证清单（Validation-First 核心）",
+          "items": {
+            "type": "object",
+            "required": ["item", "completed"],
+            "properties": {
+              "category": {
+                "type": "string",
+                "enum": ["compile", "behavior", "boundary", "exception", "performance"],
+                "description": "验证类别"
+              },
+              "item": { "type": "string", "description": "验证项" },
+              "completed": { "type": "boolean", "default": false }
+            }
+          }
+        },
+        "boundaryConditions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "边界/异常路径（必须覆盖）"
+        }
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "risk": { "type": "string", "description": "风险描述" },
+          "mitigation": { "type": "string", "description": "缓解措施" },
+          "troubleshooting": { "type": "string", "description": "排查路径" }
+        }
+      }
+    }
+  }
+}
