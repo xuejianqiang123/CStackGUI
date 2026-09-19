@@ -18,6 +18,21 @@ typedef struct {
     int   expanded;
 } cg_tree_row_t;
 
+/** 画板的一条绘制命令（WM_PAINT 时按记录顺序回放） */
+typedef struct cg_canvas_op {
+    int      type;      /* CG_CANVAS_OP_* */
+    unsigned color;     /* 0xRRGGBB */
+    int      penw;
+    int      x1, y1, x2, y2;
+    int      fill;      /* 1 = 实心 */
+    char    *text;      /* CG_CANVAS_OP_TEXT 用 */
+} cg_canvas_op_t;
+
+#define CG_CANVAS_OP_LINE    1
+#define CG_CANVAS_OP_RECT    2
+#define CG_CANVAS_OP_ELLIPSE 3
+#define CG_CANVAS_OP_TEXT    4
+
 /** 菜单的一项（扁平存放，父项的下标保证比自己小）。
  *  cmd 是运行时分配的菜单命令 id，WM_COMMAND 回来的 LOWORD 就是它；
  *  弹出项（有子项）自己不可点，cmd 为 0。text 为 "-" 表示分隔线。 */
@@ -74,7 +89,29 @@ struct cg_widget {
     char        *bitmap_src;    /* 当前位图是从哪个路径加载的（后端维护） */
     int          image_failed;
 
-    /* 细分格式（datepicker："date" / "time" / "datetime"） */
+    /* 悬停提示（tooltip）；运行时用 TTN_GETDISPINFO 现取，改了立即生效 */
+    char        *hint;
+
+    /* 时钟（timer）：周期毫秒，0 = 停。Win32 定时器 id 复用 ctrl_id */
+    int          period;
+
+    /* 表格增强：多选 / 勾选列 / 行数值 / 行图标 */
+    int          multi;
+    int          check;
+    unsigned char *row_checked;  /* 每行勾选状态（随行数增长） */
+    int            row_cap;      /* row_checked/row_val 的容量 */
+    int           *row_val;      /* 每行业务数值（lParam） */
+    char         **row_icon;     /* 每行图标路径（NULL = 无） */
+    int            row_icon_n;
+    void          *imglist;      /* HIMAGELIST，惰性创建 */
+
+    /* 画板：绘制命令记录（重绘时按序回放） */
+    struct cg_canvas_op *ops;
+    int            nops, op_cap;
+    unsigned       canvas_color;   /* 当前画笔颜色 0xRRGGBB */
+    int            canvas_penw;    /* 当前线宽 */
+
+    /* 细分格式（datepicker："date" / "time" / "datetime"；shape："rect"/"roundrect"/"ellipse"） */
     char        *format;
 
     /* 菜单（menu / menubutton） */
@@ -183,9 +220,17 @@ void cg_timers_clear(cg_app_t *app);
 /** 当前 exe 的完整路径（含文件名），成功返回 0 */
 int cg_exe_path(char *buf, size_t size);
 
+/* Win32 后端内部的联动入口（cg_app.c 的公共 API 会调）：
+ * hint / period 改完要动 tooltip 和 SetTimer，那些句柄只有后端知道。 */
+void cg_win_set_hint(cg_widget_t *w);
+void cg_win_restart_timer(cg_widget_t *w);
+
 /** 新建一个运行时控件（内部用） */
 cg_widget_t *cg_widget_new(cg_app_t *app, const char *type, const char *id,
                            int x, int y, int w, int h, const char *text);
 void cg_widget_free(cg_widget_t *w);
+
+/** 表格行数变多时把行级附加数组（勾选/数值/图标）一起补长到 want */
+void cg_table_rows_grow(cg_widget_t *w, int want);
 
 #endif /* CG_INTERNAL_H */

@@ -14,6 +14,7 @@
 
 #include <windows.h>
 #include <commctrl.h>
+#include <commdlg.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -47,12 +48,17 @@ typedef struct {
     int             dpi;
     int             focused_widget;
     UINT_PTR        timer_id;
+    HWND            tooltip;    /* 整窗一个的悬停提示控件 */
 } cg_win_state_t;
 
 #define CG_PANEL_CLASS L"CStackGUIPanel"
 #define CG_IMAGE_CLASS L"CStackGUIImage"
 #define CG_RING_CLASS  L"CStackGUIRing"
+#define CG_CANVAS_CLASS L"CStackGUICanvas"
 #define CG_TIMER_ID    1
+
+/* 时钟（timer）控件没有自己的窗口，Win32 定时器 id 直接复用 ctrl_id，
+ * 这样 WM_TIMER 里按 wp 反查一次就能找到控件。 */
 
 /* app->scale 用百分比存（100 = 96dpi），便于整数运算 */
 static int scale_px(const cg_app_t *app, int logical)
@@ -104,6 +110,10 @@ static HFONT font_for(cg_app_t *app, const char *family, int size_pt, int bold, 
  *  富文本不是系统的必备组件，所以这里做降级而不是直接失败。 */
 static const wchar_t *g_richedit_class = NULL;
 
+/** browser 控件用 atl.dll 的 AtlAxWin 宿主系统 WebBrowser 控件；
+ *  起不来（理论上看不到）就退回静态占位文本。 */
+static int g_atl_ok = 0;
+
 static const wchar_t *class_of(const cg_widget_t *w)
 {
     if (!strcmp(w->type, "button"))    return L"BUTTON";
@@ -132,6 +142,15 @@ static const wchar_t *class_of(const cg_widget_t *w)
     if (!strcmp(w->type, "toolbar"))   return TOOLBARCLASSNAMEW;
     if (!strcmp(w->type, "monthcal"))  return MONTHCAL_CLASSW;
     if (!strcmp(w->type, "progressring")) return CG_RING_CLASS;   /* 自绘圆环 */
+    if (!strcmp(w->type, "canvas"))    return CG_CANVAS_CLASS;    /* 自绘画板 */
+    if (!strcmp(w->type, "colorpicker")) return L"BUTTON";        /* BS_OWNERDRAW 色块 */
+    if (!strcmp(w->type, "badge"))     return L"BUTTON";          /* BS_OWNERDRAW 小圆片 */
+    if (!strcmp(w->type, "tag"))       return L"BUTTON";          /* BS_OWNERDRAW 标签片 */
+    if (!strcmp(w->type, "rate"))      return L"BUTTON";          /* BS_OWNERDRAW 五角星 */
+    if (!strcmp(w->type, "pagination"))return L"BUTTON";          /* BS_OWNERDRAW 分页 */
+    if (!strcmp(w->type, "browser"))   return g_atl_ok ? L"AtlAxWin" : L"STATIC";
+    if (!strcmp(w->type, "timer"))     return L"STATIC";          /* 无窗口，create_native 会跳过 */
+    if (!strcmp(w->type, "card") || !strcmp(w->type, "shape")) return CG_PANEL_CLASS;
     return CG_PANEL_CLASS;   /* group / box */
 }
 
@@ -178,7 +197,16 @@ static DWORD style_of(const cg_widget_t *w)
     if (!strcmp(w->type, "switch"))    return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;
     if (!strcmp(w->type, "tabs"))      return WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_TABSTOP | TCS_HOTTRACK;
     if (!strcmp(w->type, "tree"))      return WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_BORDER | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT | TVS_SHOWSELALWAYS;
-    if (!strcmp(w->type, "table"))     return WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL;
+    if (!strcmp(w->type, "table"))     return WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_BORDER | LVS_REPORT | LVS_SHOWSELALWAYS |
+                                              (w->multi ? 0 : LVS_SINGLESEL);
+    if (!strcmp(w->type, "canvas"))    return WS_CHILD | WS_VISIBLE;
+    if (!strcmp(w->type, "colorpicker")) return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;
+    if (!strcmp(w->type, "badge"))     return WS_CHILD | WS_VISIBLE | BS_OWNERDRAW;
+    if (!strcmp(w->type, "tag"))       return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;
+    if (!strcmp(w->type, "rate"))      return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;
+    if (!strcmp(w->type, "pagination"))return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;
+    if (!strcmp(w->type, "browser"))   return g_atl_ok ? (WS_CHILD | WS_VISIBLE | WS_TABSTOP)
+                                                       : (WS_CHILD | WS_VISIBLE | SS_CENTER | SS_CENTERIMAGE);
     if (!strcmp(w->type, "statusbar")) return WS_CHILD | WS_VISIBLE;
     if (!strcmp(w->type, "spinner"))   return WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_NUMBER | ES_RIGHT | ES_AUTOHSCROLL;
     /* group / box：自己注册的面板类，能装子控件 */
@@ -352,6 +380,125 @@ static cg_widget_t *widget_by_hwnd(cg_app_t *app, HWND h)
         if ((HWND)w->native == h || (HWND)w->native2 == h) return w;
     }
     return NULL;
+}
+
+/* ------------------------------------------------------------ 全局焦点子类
+ * 标准控件不会主动把焦点变化告诉父窗口（EDIT 有 EN_SETFOCUS，但按钮/滑块/树
+ * 什么都没有）。给每个控件套一层 SetWindowSubclass，WM_SETFOCUS / WM_KILLFOCUS
+ * 在这里统一转成 gotfocus / lostfocus 事件。
+ * 顺手干两件"必须知道鼠标坐标"的活：评分点第几颗星、分页点左半边还是右半边。
+ */
+static cg_app_t *g_app = NULL;
+
+static void rate_or_pag_click(cg_widget_t *w, HWND hwnd, int x)
+{
+    RECT rc;
+    GetClientRect(hwnd, &rc);
+    int width = rc.right - rc.left;
+    if (width <= 0) return;
+
+    if (is_t(w, "rate")) {
+        int stars = w->vmax - w->vmin;
+        if (stars < 1) stars = 1;
+        int v = w->vmin + (x * stars + width / 2) / width;   /* 落在第几颗星 */
+        if (v < w->vmin) v = w->vmin;
+        if (v > w->vmax) v = w->vmax;
+        if (v != w->value) {
+            g_in_notify = 1;
+            cg_widget_set_value(w, v);
+            cg_dispatch(w, CG_EVENT_CHANGE);
+            g_in_notify = 0;
+        }
+        return;
+    }
+    /* pagination：左 1/3 上一页，右 1/3 下一页，中间是页码显示 */
+    int v = w->value;
+    if (x < width / 3)      v = w->value - 1;
+    else if (x > width * 2 / 3) v = w->value + 1;
+    else return;
+    if (v < w->vmin || v > w->vmax) return;   /* 越界的一下当没点着 */
+    g_in_notify = 1;
+    cg_widget_set_value(w, v);
+    cg_dispatch(w, CG_EVENT_CHANGE);
+    g_in_notify = 0;
+}
+
+static LRESULT CALLBACK FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
+                                  UINT_PTR id, DWORD_PTR ref)
+{
+    (void)id; (void)ref;
+    if (!g_in_notify && g_app) {
+        cg_widget_t *w = widget_by_hwnd(g_app, hwnd);
+        if (w) {
+            if (msg == WM_SETFOCUS || msg == WM_KILLFOCUS) {
+                cg_event_t ev = (msg == WM_SETFOCUS) ? CG_EVENT_GOTFOCUS : CG_EVENT_LOSTFOCUS;
+                if (cg_kind_supports_event(w->type, ev)) {
+                    g_in_notify = 1;
+                    cg_dispatch(w, ev);
+                    g_in_notify = 0;
+                }
+            } else if (msg == WM_LBUTTONUP &&
+                       (is_t(w, "rate") || is_t(w, "pagination"))) {
+                rate_or_pag_click(w, hwnd, (short)LOWORD(lp));
+            }
+        }
+    }
+    return DefSubclassProc(hwnd, msg, wp, lp);
+}
+
+static void subclass_for_events(HWND h)
+{
+    SetWindowSubclass(h, FocusProc, 1, 0);
+}
+
+/* ------------------------------------------------------------ 悬停提示（tooltip）
+ * 整窗一个 TOOLTIPS 控件；每个有 hint 的控件注册成一个 tool，
+ * TTF_SUBCLASS 让 tooltip 自己接管鼠标转发，不需要任何额外消息处理。
+ * 文本用 LPSTR_TEXTCALLBACK 现取，cg_widget_set_hint 改完立即生效。
+ */
+static void tooltip_add_for(HWND tooltip, HWND forw)
+{
+    TOOLINFOW ti;
+    memset(&ti, 0, sizeof(ti));
+    ti.cbSize = sizeof(ti);
+    ti.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+    ti.hwnd = forw;
+    ti.uId = (UINT_PTR)forw;
+    ti.lpszText = LPSTR_TEXTCALLBACKW;
+    SendMessageW(tooltip, TTM_ADDTOOLW, 0, (LPARAM)&ti);
+}
+
+void cg_win_set_hint(cg_widget_t *w)
+{
+    if (!w || !w->native || !g_app) return;
+    cg_win_state_t *st = (cg_win_state_t *)g_app->natives;
+    if (!st || !st->tooltip) return;
+
+    TOOLINFOW ti;
+    memset(&ti, 0, sizeof(ti));
+    ti.cbSize = sizeof(ti);
+    ti.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+    ti.hwnd = (HWND)w->native;
+    ti.uId = (UINT_PTR)w->native;
+    ti.lpszText = LPSTR_TEXTCALLBACKW;
+    BOOL exists = (BOOL)SendMessageW(st->tooltip, TTM_GETTOOLINFO, 0, (LPARAM)&ti);
+    if (w->hint && *w->hint && !exists) {
+        tooltip_add_for(st->tooltip, (HWND)w->native);
+    } else if ((!w->hint || !*w->hint) && exists) {
+        SendMessageW(st->tooltip, TTM_DELTOOLW, 0, (LPARAM)&ti);
+    } else if (exists) {
+        SendMessageW(st->tooltip, TTM_UPDATETIPTEXTW, 0, (LPARAM)&ti);
+    }
+}
+
+void cg_win_restart_timer(cg_widget_t *w)
+{
+    if (!w || !w->app || !w->app->hwnd) return;
+    HWND hwnd = (HWND)w->app->hwnd;
+    KillTimer(hwnd, (UINT_PTR)w->ctrl_id);
+    if (is_t(w, "timer") && w->period > 0) {
+        SetTimer(hwnd, (UINT_PTR)w->ctrl_id, (UINT)w->period, NULL);
+    }
 }
 
 /* ------------------------------------------------------------ GDI+
@@ -655,6 +802,126 @@ static void register_ring_class(void)
     done = 1;
 }
 
+/* ------------------------------------------------------ 画板（自绘）
+ * cg_canvas_* 命令把每笔记录在 w->ops 里，WM_PAINT 按序回放。
+ * 坐标是逻辑像素（跟 .cgui 同一套），绘制时按 DPI 缩放。
+ */
+static int canvas_scale(const cg_widget_t *w, int logical)
+{
+    return scale_px(w->app, logical);
+}
+
+static void draw_canvas(HDC dc, cg_widget_t *w, const RECT *rc)
+{
+    COLORREF bgc = (w->style.bg != CG_COLOR_NONE) ? to_colorref(w->style.bg)
+                                                  : GetSysColor(COLOR_WINDOW);
+    HBRUSH bg = CreateSolidBrush(bgc);
+    FillRect(dc, rc, bg);
+    DeleteObject(bg);
+
+    for (int i = 0; i < w->nops; i++) {
+        const cg_canvas_op_t *op = &w->ops[i];
+        HPEN pen = CreatePen(PS_SOLID, op->penw > 0 ? op->penw : 1, to_colorref(op->color));
+        HGDIOBJ oldpen = SelectObject(dc, pen);
+        HBRUSH br = NULL;
+        HGDIOBJ oldbr = NULL;
+
+        if (op->fill) {
+            br = CreateSolidBrush(to_colorref(op->color));
+            oldbr = SelectObject(dc, br);
+        } else {
+            oldbr = SelectObject(dc, GetStockObject(NULL_BRUSH));
+        }
+
+        switch (op->type) {
+        case CG_CANVAS_OP_LINE:
+            MoveToEx(dc, canvas_scale(w, op->x1), canvas_scale(w, op->y1), NULL);
+            LineTo(dc, canvas_scale(w, op->x2), canvas_scale(w, op->y2));
+            break;
+        case CG_CANVAS_OP_RECT:
+            Rectangle(dc, canvas_scale(w, op->x1), canvas_scale(w, op->y1),
+                      canvas_scale(w, op->x2), canvas_scale(w, op->y2));
+            break;
+        case CG_CANVAS_OP_ELLIPSE:
+            Ellipse(dc, canvas_scale(w, op->x1), canvas_scale(w, op->y1),
+                    canvas_scale(w, op->x2), canvas_scale(w, op->y2));
+            break;
+        case CG_CANVAS_OP_TEXT: {
+            wchar_t *wt = wc_from_utf8(op->text ? op->text : "");
+            HFONT f = font_for(w->app, w->style.font,
+                               w->style.size > 0 ? w->style.size : 10, w->style.bold, 0);
+            HFONT oldf = (HFONT)SelectObject(dc, f ? f : GetStockObject(DEFAULT_GUI_FONT));
+            SetBkMode(dc, TRANSPARENT);
+            SetTextColor(dc, to_colorref(op->color));
+            if (wt) {
+                TextOutW(dc, canvas_scale(w, op->x1), canvas_scale(w, op->y1),
+                         wt, (int)wcslen(wt));
+                free(wt);
+            }
+            SelectObject(dc, oldf);
+            break;
+        }
+        default:
+            break;
+        }
+        SelectObject(dc, oldpen);
+        DeleteObject(pen);
+        if (br) { SelectObject(dc, oldbr); DeleteObject(br); }
+        else SelectObject(dc, oldbr);
+    }
+}
+
+static LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    cg_app_t *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+
+    switch (msg) {
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC dc = BeginPaint(hwnd, &ps);
+        RECT rc;
+        cg_widget_t *w = widget_by_hwnd(app, hwnd);
+        GetClientRect(hwnd, &rc);
+        if (w) {
+            draw_canvas(dc, w, &rc);
+        } else {
+            FillRect(dc, &rc, (HBRUSH)(COLOR_WINDOW + 1));
+        }
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_LBUTTONUP: {
+        cg_widget_t *w = widget_by_hwnd(app, hwnd);
+        if (w && !g_in_notify) {
+            g_in_notify = 1;
+            cg_dispatch(w, CG_EVENT_CLICK);   /* 双击由运行时按系统间隔合成 */
+            g_in_notify = 0;
+        }
+        break;
+    }
+    default:
+        break;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+static void register_canvas_class(void)
+{
+    static int done = 0;
+    WNDCLASSEXW wc;
+    if (done) return;
+    memset(&wc, 0, sizeof(wc));
+    wc.cbSize = sizeof(wc);
+    wc.lpfnWndProc = CanvasProc;
+    wc.hInstance = GetModuleHandleW(NULL);
+    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
+    wc.lpszClassName = CG_CANVAS_CLASS;
+    RegisterClassExW(&wc);
+    done = 1;
+}
+
 /* ------------------------------------------------------------ 面板窗口 */
 
 static LRESULT CALLBACK PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
@@ -680,6 +947,63 @@ static LRESULT CALLBACK PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         GetClientRect(hwnd, &rc);
         FillRect(dc, &rc, (HBRUSH)(COLOR_BTNFACE + 1));
         return 1;
+    }
+    case WM_PAINT: {
+        /* card / shape 要自己画边框（圆角、椭圆），group / box 保持系统默认 */
+        cg_widget_t *w = app ? widget_by_hwnd(app, hwnd) : NULL;
+        if (!w || (!is_t(w, "card") && !is_t(w, "shape"))) break;
+        {
+            PAINTSTRUCT ps;
+            HDC dc = BeginPaint(hwnd, &ps);
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+            int inset = scale_px(app, 1);
+            COLORREF fillc = (w->style.bg != CG_COLOR_NONE) ? to_colorref(w->style.bg) : 0;
+            COLORREF penc = (w->style.fg != CG_COLOR_NONE) ? to_colorref(w->style.fg)
+                                                           : RGB(0xB4, 0xB0, 0xBB);
+            HPEN pen = CreatePen(PS_SOLID, inset ? inset : 1, penc);
+            HGDIOBJ oldpen = SelectObject(dc, pen);
+            HBRUSH br = NULL;
+            HGDIOBJ oldbr;
+            if (is_t(w, "card") || w->style.bg != CG_COLOR_NONE) {
+                br = CreateSolidBrush((w->style.bg != CG_COLOR_NONE) ? fillc : GetSysColor(COLOR_BTNFACE));
+                oldbr = SelectObject(dc, br);
+            } else {
+                oldbr = SelectObject(dc, GetStockObject(NULL_BRUSH));
+            }
+            if (is_t(w, "shape") && w->format && strcmp(w->format, "ellipse") == 0) {
+                Ellipse(dc, rc.left + 1, rc.top + 1, rc.right - 1, rc.bottom - 1);
+            } else if (is_t(w, "shape") && (!w->format || strcmp(w->format, "rect") != 0)) {
+                int r = scale_px(app, (w->style.radius > 0) ? w->style.radius : 8);
+                RoundRect(dc, rc.left + 1, rc.top + 1, rc.right - 1, rc.bottom - 1, r, r);
+            } else if (is_t(w, "card")) {
+                int r = scale_px(app, (w->style.radius > 0) ? w->style.radius : 12);
+                RoundRect(dc, rc.left + 1, rc.top + 1, rc.right - 1, rc.bottom - 1, r, r);
+            } else {
+                Rectangle(dc, rc.left + 1, rc.top + 1, rc.right - 1, rc.bottom - 1);
+            }
+            SelectObject(dc, oldbr);
+            if (br) DeleteObject(br);
+            SelectObject(dc, oldpen);
+            DeleteObject(pen);
+
+            /* 卡片顶部画标题 */
+            if (is_t(w, "card") && w->text && *w->text) {
+                HFONT f = font_for(app, w->style.font, w->style.size ? w->style.size : 10, w->style.bold, 0);
+                HFONT oldf = (HFONT)SelectObject(dc, f ? f : GetStockObject(DEFAULT_GUI_FONT));
+                RECT tr = rc;
+                tr.left += scale_px(app, 12);
+                tr.top += scale_px(app, 6);
+                SetBkMode(dc, TRANSPARENT);
+                SetTextColor(dc, (w->style.fg != CG_COLOR_NONE) ? to_colorref(w->style.fg)
+                                                                : GetSysColor(COLOR_WINDOWTEXT));
+                wchar_t *wt = wc_from_utf8(w->text);
+                if (wt) { DrawTextW(dc, wt, -1, &tr, DT_LEFT | DT_TOP); free(wt); }
+                SelectObject(dc, oldf);
+            }
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
     }
     default:
         break;
@@ -730,6 +1054,40 @@ static void notify_body(cg_app_t *app, cg_widget_t *w, HWND hwnd, int code, int 
     /* 菜单按钮：不派发 click，改成弹菜单（菜单项被选中时再派发 click） */
     if (!strcmp(w->type, "menubutton")) {
         if (code == BN_CLICKED) popup_menu_for(app, w, hwnd);
+        return;
+    }
+    /* 颜色选择：点色块弹系统选色对话框，选中后写回 value（0xRRGGBB）并报 change。
+     * 注意 value 存的是颜色，不能走 cg_widget_set_value —— 那里会按 min/max 截断。 */
+    if (!strcmp(w->type, "colorpicker")) {
+        if (code != BN_CLICKED) return;
+        {
+            static COLORREF custom[16];
+            CHOOSECOLORW cc;
+            unsigned cur = (w->value > 0) ? (unsigned)w->value : 0x6750A4;
+            memset(&cc, 0, sizeof(cc));
+            cc.lStructSize = sizeof(cc);
+            cc.hwndOwner = app->hwnd ? (HWND)app->hwnd : NULL;
+            cc.rgbResult = to_colorref(cur);
+            cc.lpCustColors = custom;
+            cc.Flags = CC_FULLOPEN | CC_RGBINIT;
+            if (!ChooseColorW(&cc)) return;
+            w->value = (int)(((unsigned)GetRValue(cc.rgbResult) << 16) |
+                             ((unsigned)GetGValue(cc.rgbResult) << 8) |
+                             (unsigned)GetBValue(cc.rgbResult));
+            if (w->node) w->node->value = w->value;
+            if (w->native) InvalidateRect((HWND)w->native, NULL, TRUE);
+            cg_dispatch(w, CG_EVENT_CHANGE);
+        }
+        return;
+    }
+    /* tag：能点的圆角小片，当按钮用 */
+    if (!strcmp(w->type, "tag")) {
+        if (code == BN_CLICKED) cg_dispatch(w, CG_EVENT_CLICK);
+        return;
+    }
+    /* rate / pagination 的点击在 FocusProc 的 WM_LBUTTONUP 里处理
+     * （要知道 x 坐标才能判断点的是哪颗星 / 左右翻页），这里忽略 */
+    if (!strcmp(w->type, "rate") || !strcmp(w->type, "pagination")) {
         return;
     }
     /* 工具栏：按钮点击走 WM_COMMAND，命令 id 反查是第几个按钮 */
@@ -841,6 +1199,15 @@ static void notify_common(cg_app_t *app, const NMHDR *hdr)
         break;
     case LVN_ITEMCHANGED: {
         const NMLISTVIEW *nlv = (const NMLISTVIEW *)hdr;
+        /* 勾选列：状态位图（高 4 位）变了才是勾选切换，别和选中混在一起 */
+        if ((nlv->uChanged & LVIF_STATE) && w->check &&
+            (nlv->uOldState & LVIS_STATEIMAGEMASK) != (nlv->uNewState & LVIS_STATEIMAGEMASK)) {
+            int on = ((nlv->uNewState >> 12) & 0xF) > 1;
+            if (nlv->iItem >= 0 && nlv->iItem < w->row_cap && w->row_checked) {
+                w->row_checked[nlv->iItem] = on ? 1 : 0;
+            }
+            cg_dispatch(w, CG_EVENT_CHECK);
+        }
         if ((nlv->uChanged & LVIF_STATE) && (nlv->uNewState & LVIS_SELECTED)) {
             w->table_sel = nlv->iItem;
             cg_dispatch(w, CG_EVENT_SELECT);
@@ -949,6 +1316,138 @@ static void draw_icon_button(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
     }
 }
 
+/* ------------------------------------------------------ 自绘小控件
+ * colorpicker / badge / tag / rate / pagination 都是 BS_OWNERDRAW 按钮，
+ * 画什么由各自的状态决定，和 switch 一个路数。
+ */
+
+static unsigned widget_fg_or(const cg_widget_t *w, unsigned fallback)
+{
+    return (w->style.fg != CG_COLOR_NONE) ? w->style.fg : fallback;
+}
+
+/** 颜色选择：整个按钮就是一块当前颜色，边上勾一圈边框 */
+static void draw_color_swatch(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
+{
+    unsigned rgb = (w->value > 0) ? (unsigned)w->value : 0x6750A4;
+    HBRUSH br = CreateSolidBrush(to_colorref(rgb));
+    FillRect(dis->hDC, &dis->rcItem, br);
+    DeleteObject(br);
+    FrameRect(dis->hDC, &dis->rcItem, (HBRUSH)GetStockObject(GRAY_BRUSH));
+}
+
+/** 徽章：圆角小圆片 + 文字，底色用 style.bg（没设用品牌红） */
+static void draw_badge(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
+{
+    RECT rc = dis->rcItem;
+    HBRUSH br = CreateSolidBrush((w->style.bg != CG_COLOR_NONE) ? to_colorref(w->style.bg)
+                                                                : RGB(0xB3, 0x26, 0x1E));
+    HGDIOBJ oldbr = SelectObject(dis->hDC, br);
+    HGDIOBJ oldpen = SelectObject(dis->hDC, GetStockObject(NULL_PEN));
+    RoundRect(dis->hDC, rc.left, rc.top, rc.right, rc.bottom, rc.bottom - rc.top, rc.bottom - rc.top);
+    SelectObject(dis->hDC, oldpen);
+    SelectObject(dis->hDC, oldbr);
+    DeleteObject(br);
+    {
+        wchar_t *wt = wc_from_utf8(w->text ? w->text : "");
+        if (wt) {
+            SetBkMode(dis->hDC, TRANSPARENT);
+            SetTextColor(dis->hDC, to_colorref(widget_fg_or(w, 0xFFFFFF)));
+            DrawTextW(dis->hDC, wt, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            free(wt);
+        }
+    }
+}
+
+/** 标签片：圆角底 + 同色系边框 + 文字，像网页里的 tag */
+static void draw_tag(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
+{
+    RECT rc = dis->rcItem;
+    HBRUSH br = CreateSolidBrush((w->style.bg != CG_COLOR_NONE) ? to_colorref(w->style.bg)
+                                                                : RGB(0xE8, 0xDE, 0xF8));
+    HPEN pen = CreatePen(PS_SOLID, 1, to_colorref(widget_fg_or(w, 0x6750A4)));
+    HGDIOBJ oldbr = SelectObject(dis->hDC, br);
+    HGDIOBJ oldpen = SelectObject(dis->hDC, pen);
+    RoundRect(dis->hDC, rc.left, rc.top, rc.right - 1, rc.bottom - 1,
+              rc.bottom - rc.top, rc.bottom - rc.top);
+    SelectObject(dis->hDC, oldpen);
+    SelectObject(dis->hDC, oldbr);
+    DeleteObject(pen);
+    DeleteObject(br);
+    {
+        wchar_t *wt = wc_from_utf8(w->text ? w->text : "");
+        if (wt) {
+            SetBkMode(dis->hDC, TRANSPARENT);
+            SetTextColor(dis->hDC, to_colorref(widget_fg_or(w, 0x1D1B20)));
+            DrawTextW(dis->hDC, wt, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            free(wt);
+        }
+    }
+}
+
+/** 评分：★☆ 按值画，样式字体没给就用默认大小 */
+static void draw_rate(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
+{
+    RECT rc = dis->rcItem;
+    int stars = w->vmax - w->vmin;
+    int val = w->value - w->vmin;
+    wchar_t buf[32];
+    int filled, empty;
+
+    if (stars < 1) stars = 1;
+    if (stars > 10) stars = 10;
+    if (val < 0) val = 0;
+    if (val > stars) val = stars;
+
+    filled = val;
+    empty = stars - filled;
+    {
+        HFONT f = font_for(w->app, w->style.font, w->style.size > 0 ? w->style.size : 12, 0, 0);
+        HFONT oldf = (HFONT)SelectObject(dis->hDC, f ? f : GetStockObject(DEFAULT_GUI_FONT));
+        SetBkMode(dis->hDC, TRANSPARENT);
+        if (filled > 0) {
+            RECT fr = rc;
+            swprintf(buf, 32, L"%.*s", filled, L"★★★★★★★★★★");
+            SetTextColor(dis->hDC, to_colorref(widget_fg_or(w, 0xF2B219)));
+            DrawTextW(dis->hDC, buf, filled, &fr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        }
+        if (empty > 0) {
+            RECT er = rc;
+            /* 空星接在实星后面：先量实星的宽度 */
+            SIZE sz = {0, 0};
+            wchar_t one = L'★';
+            GetTextExtentPoint32W(dis->hDC, &one, 1, &sz);
+            er.left += sz.cx * filled;
+            swprintf(buf, 32, L"%.*s", empty, L"☆☆☆☆☆☆☆☆☆☆");
+            SetTextColor(dis->hDC, RGB(0xC4, 0xC7, 0xCC));
+            DrawTextW(dis->hDC, buf, empty, &er, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        }
+        SelectObject(dis->hDC, oldf);
+    }
+}
+
+/** 分页：<  页码  >，点两侧翻页（点击判定在 FocusProc） */
+static void draw_pagination(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
+{
+    RECT rc = dis->rcItem;
+    wchar_t mid[32];
+    swprintf(mid, 32, L"%d / %d", w->value - w->vmin + 1, w->vmax - w->vmin + 1);
+
+    FillRect(dis->hDC, &rc, (HBRUSH)(COLOR_BTNFACE + 1));
+    {
+        RECT l = rc, r = rc;
+        wchar_t *lt = wc_from_utf8(w->value <= w->vmin ? "" : "<");
+        wchar_t *rt = wc_from_utf8(w->value >= w->vmax ? "" : ">");
+        SetBkMode(dis->hDC, TRANSPARENT);
+        SetTextColor(dis->hDC, GetSysColor(COLOR_WINDOWTEXT));
+        l.right = rc.left + (rc.right - rc.left) / 3;
+        r.left = rc.right - (rc.right - rc.left) / 3;
+        if (lt) { DrawTextW(dis->hDC, lt, -1, &l, DT_CENTER | DT_VCENTER | DT_SINGLELINE); free(lt); }
+        if (rt) { DrawTextW(dis->hDC, rt, -1, &r, DT_CENTER | DT_VCENTER | DT_SINGLELINE); free(rt); }
+        DrawTextW(dis->hDC, mid, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
+}
+
 /** WM_DRAWITEM：开关和图标按钮是自绘的 */
 static void draw_own_item(cg_app_t *app, const DRAWITEMSTRUCT *dis)
 {
@@ -967,6 +1466,11 @@ static void draw_own_item(cg_app_t *app, const DRAWITEMSTRUCT *dis)
         draw_icon_button(w, dis);
         return;
     }
+    if (is_t(w, "colorpicker")) { draw_color_swatch(w, dis); return; }
+    if (is_t(w, "badge"))       { draw_badge(w, dis); return; }
+    if (is_t(w, "tag"))         { draw_tag(w, dis); return; }
+    if (is_t(w, "rate"))        { draw_rate(w, dis); return; }
+    if (is_t(w, "pagination"))  { draw_pagination(w, dis); return; }
     on = w->checked != 0;
     h = rc.bottom - rc.top;
     pad = h >= 28 ? 4 : 3;
@@ -1089,6 +1593,25 @@ static LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     }
     case WM_NOTIFY: {
         if (!app) break;
+        if (((const NMHDR *)lp)->code == TTN_GETDISPINFOW) {
+            /* tooltip 文本现取：控件上挂的 hint 就是提示内容 */
+            NMTTDISPINFOW *di = (NMTTDISPINFOW *)lp;
+            cg_widget_t *tw = widget_by_hwnd(app, ((const NMHDR *)lp)->hwndFrom);
+            if (tw && tw->hint && *tw->hint) {
+                static wchar_t tip_buf[256];
+                wchar_t *wt = wc_from_utf8(tw->hint);
+                if (wt) {
+                    _snwprintf(tip_buf, 256, L"%s", wt);
+                    tip_buf[255] = L'\0';
+                    free(wt);
+                } else {
+                    tip_buf[0] = L'\0';
+                }
+                /* NMTTDISPINFOW 里 lpszText 指回 szText（80 字符）装不下的用外面缓冲 */
+                di->lpszText = tip_buf;
+            }
+            return 0;
+        }
         notify_common(app, (const NMHDR *)lp);
         return 0;
     }
@@ -1147,6 +1670,18 @@ static LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (app && app->natives && wp == ((cg_win_state_t *)app->natives)->timer_id) {
             cg_timers_tick(app);
             return 0;
+        }
+        if (app) {
+            /* 时钟控件：定时器 id 复用 ctrl_id */
+            cg_widget_t *tw = cg_widget_by_ctrl_id(app, (int)wp);
+            if (tw && is_t(tw, "timer") && tw->period > 0) {
+                if (!g_in_notify) {
+                    g_in_notify = 1;
+                    cg_dispatch(tw, CG_EVENT_TICK);
+                    g_in_notify = 0;
+                }
+                return 0;
+            }
         }
         break;
     case WM_DPICHANGED: {
@@ -1291,15 +1826,28 @@ static void create_native(cg_widget_t *w)
     DWORD style = style_of(w);
     DWORD ex = exstyle_of(w);
 
-    /* 菜单栏没有自己的窗口：它是挂在主窗口上的 HMENU，在 win_init 里建 */
+    /* 菜单栏没有自己的窗口：它是挂在主窗口上的 HMENU，在 win_init 里建。
+     * 时钟也一样没有窗口：这里只负责给它起定时器（cg_widget_add 动态加的也走这）。 */
     if (!strcmp(type, "menu")) {
         free(wt);
+        return;
+    }
+    if (!strcmp(type, "timer")) {
+        free(wt);
+        cg_win_restart_timer(w);
         return;
     }
 
     if (!strcmp(type, "group") || !strcmp(type, "box")) register_panel_class();
     if (!strcmp(type, "image")) register_image_class();
     if (!strcmp(type, "progressring")) register_ring_class();
+    if (!strcmp(type, "canvas")) register_canvas_class();
+
+    /* browser 的窗口名就是起始地址（AtlAxWin 的约定） */
+    if (!strcmp(type, "browser") && w->src && *w->src) {
+        free(wt);
+        wt = wc_from_utf8(w->src);
+    }
 
     h = CreateWindowExW(ex, class_of(w), wt ? wt : L"",
                         style,
@@ -1315,8 +1863,19 @@ static void create_native(cg_widget_t *w)
     w->native = h;
 
     if (!strcmp(type, "group") || !strcmp(type, "box") ||
-        !strcmp(type, "image") || !strcmp(type, "progressring")) {
+        !strcmp(type, "card") || !strcmp(type, "shape") ||
+        !strcmp(type, "image") || !strcmp(type, "progressring") ||
+        !strcmp(type, "canvas")) {
         SetWindowLongPtrW(h, GWLP_USERDATA, (LONG_PTR)app);
+    }
+
+    /* 统一挂焦点子类：gotfocus/lostfocus，rate/pagination 的按点判定 */
+    subclass_for_events(h);
+    {
+        cg_win_state_t *st = (cg_win_state_t *)app->natives;
+        if (st && st->tooltip && w->hint && *w->hint) {
+            tooltip_add_for(st->tooltip, h);
+        }
     }
 
     /* 数字微调：输入框 + 右侧上下箭头，是两个原生窗口拼出来的一个控件 */
@@ -1339,6 +1898,9 @@ static void create_native(cg_widget_t *w)
                                  0, 0, 0, 0, parent, NULL, GetModuleHandleW(NULL), NULL);
         w->native2 = t;
     }
+
+    /* 第二个原生窗口也要能报焦点事件 */
+    if (w->native2) subclass_for_events((HWND)w->native2);
 
     sync_widget(w);
 }
@@ -1363,6 +1925,10 @@ static void destroy_native(cg_widget_t *w)
     if (w->bitmap) {                            /* 图片控件的位图 */
         DeleteObject((HGDIOBJ)w->bitmap);
         w->bitmap = NULL;
+    }
+    if (w->imglist) {                           /* 表格行图标 */
+        ImageList_Destroy((HIMAGELIST)w->imglist);
+        w->imglist = NULL;
     }
     if (w->item_map) {
         free(w->item_map);
@@ -1426,6 +1992,56 @@ static void build_tree(HWND h, cg_widget_t *w)
     InvalidateRect(h, NULL, TRUE);
 }
 
+/* 表格行图标：把图片缩到 imagelist 的格子尺寸再放进去，返回下标，失败 -1 */
+static int imagelist_add_file(cg_widget_t *w, HIMAGELIST il, const char *path, int cell)
+{
+    HBITMAP src = load_image_file(w->app, path);
+    HBITMAP fitted = NULL;
+    int idx = -1;
+    HDC sdc, ddc, sdc0;
+    HGDIOBJ olds, oldd;
+
+    if (!src || !il || cell < 4) {
+        if (src) DeleteObject(src);
+        return -1;
+    }
+    sdc0 = GetDC(NULL);
+    fitted = CreateCompatibleBitmap(sdc0, cell, cell);
+    ReleaseDC(NULL, sdc0);
+    sdc = CreateCompatibleDC(NULL);
+    ddc = CreateCompatibleDC(NULL);
+    olds = SelectObject(sdc, src);
+    oldd = SelectObject(ddc, fitted);
+    SetStretchBltMode(ddc, HALFTONE);
+    SetBrushOrgEx(ddc, 0, 0, NULL);
+    {
+        BITMAP bm;
+        int sw = 16, sh = 16;
+        if (GetObjectW(src, sizeof(bm), &bm)) { sw = bm.bmWidth; sh = bm.bmHeight; }
+        StretchBlt(ddc, 0, 0, cell, cell, sdc, 0, 0, sw, sh, SRCCOPY);
+    }
+    SelectObject(sdc, olds);
+    SelectObject(ddc, oldd);
+    DeleteDC(sdc);
+    DeleteDC(ddc);
+    idx = ImageList_Add(il, fitted, NULL);
+    DeleteObject(fitted);
+    DeleteObject(src);
+    return idx;
+}
+
+/** 惰性建表格的 imagelist（行图标用），建好就挂到 LVSIL_SMALL 上 */
+static HIMAGELIST table_imagelist(HWND h, cg_widget_t *w)
+{
+    int cell = scale_px(w->app, 16);
+    if (cell < 12) cell = 12;
+    if (!w->imglist) {
+        w->imglist = ImageList_Create(cell, cell, ILC_COLOR32, 4, 4);
+        SendMessageW(h, LVM_SETIMAGELIST, LVSIL_SMALL, (LPARAM)w->imglist);
+    }
+    return (HIMAGELIST)w->imglist;
+}
+
 /** 重建表格：列 + 行 */
 static void build_table(HWND h, cg_widget_t *w)
 {
@@ -1437,6 +2053,9 @@ static void build_table(HWND h, cg_widget_t *w)
     SendMessageW(h, LVM_DELETEALLITEMS, 0, 0);
     SendMessageW(h, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_FULLROWSELECT, LVS_EX_FULLROWSELECT);
     SendMessageW(h, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_GRIDLINES, LVS_EX_GRIDLINES);
+    if (w->check) {
+        SendMessageW(h, LVM_SETEXTENDEDLISTVIEWSTYLE, LVS_EX_CHECKBOXES, LVS_EX_CHECKBOXES);
+    }
 
     GetClientRect(h, &rc);
     total = rc.right - rc.left;
@@ -1463,10 +2082,11 @@ static void build_table(HWND h, cg_widget_t *w)
         char *first = (w->rows[r] && w->row_cells > 0) ? w->rows[r][0] : NULL;
         wchar_t *wfirst = wc_from_utf8(first ? first : "");
         memset(&it, 0, sizeof(it));
-        it.mask = LVIF_TEXT;
+        it.mask = LVIF_TEXT | LVIF_PARAM;
         it.iItem = r;
         it.iSubItem = 0;
         it.pszText = wfirst ? wfirst : L"";
+        it.lParam = (w->row_val && r < w->row_cap) ? w->row_val[r] : 0;
         SendMessageW(h, LVM_INSERTITEMW, 0, (LPARAM)&it);
         free(wfirst);
 
@@ -1479,6 +2099,38 @@ static void build_table(HWND h, cg_widget_t *w)
             sub.pszText = wt ? wt : L"";
             SendMessageW(h, LVM_SETITEMTEXTW, (WPARAM)r, (LPARAM)&sub);
             free(wt);
+        }
+    }
+
+    /* 行图标：行表刚重建，图片下标要重新放一遍 */
+    for (int r = 0; r < w->nrows && r < w->row_icon_n; r++) {
+        if (!w->row_icon[r]) continue;
+        {
+            HIMAGELIST il = table_imagelist(h, w);
+            int idx = imagelist_add_file(w, il, w->row_icon[r], scale_px(w->app, 16));
+            if (idx >= 0) {
+                LVITEMW it;
+                memset(&it, 0, sizeof(it));
+                it.mask = LVIF_IMAGE;
+                it.iItem = r;
+                it.iImage = idx;
+                SendMessageW(h, LVM_SETITEMW, 0, (LPARAM)&it);
+            }
+        }
+    }
+
+    /* 勾选状态：重建后按记录恢复 */
+    if (w->check) {
+        for (int r = 0; r < w->nrows && r < w->row_cap; r++) {
+            if (!w->row_checked || !w->row_checked[r]) continue;
+            {
+                LVITEMW it;
+                memset(&it, 0, sizeof(it));
+                it.mask = LVIF_STATE;
+                it.state = INDEXTOSTATEIMAGEMASK(2);
+                it.stateMask = LVIS_STATEIMAGEMASK;
+                SendMessageW(h, LVM_SETITEMSTATE, (WPARAM)r, (LPARAM)&it);
+            }
         }
     }
 
@@ -1558,6 +2210,30 @@ static void sync_bitmap(cg_widget_t *w)
     }
 }
 
+/** browser 只在创建时认一次地址，换地址就整个重建（省掉一套 COM 调用） */
+static void browser_recreate(cg_widget_t *w)
+{
+    cg_app_t *app = w->app;
+    wchar_t *wurl;
+    HWND h;
+
+    if (w->native) {
+        DestroyWindow((HWND)w->native);
+        w->native = NULL;
+    }
+    if (!g_atl_ok || !app) return;
+
+    wurl = wc_from_utf8(w->src && *w->src ? w->src : "about:blank");
+    h = CreateWindowExW(0, L"AtlAxWin", wurl ? wurl : L"about:blank",
+                        WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                        scale_px(app, w->x), scale_px(app, w->y),
+                        scale_px(app, w->w), scale_px(app, w->h),
+                        parent_hwnd_of(app, w), (HMENU)(INT_PTR)w->ctrl_id,
+                        GetModuleHandleW(NULL), NULL);
+    free(wurl);
+    w->native = h;
+}
+
 static void sync_widget_body(cg_widget_t *w)
 {
     HWND h = (HWND)w->native;
@@ -1571,6 +2247,17 @@ static void sync_widget_body(cg_widget_t *w)
             if (wt) { SetWindowTextW(h, wt); free(wt); }
         }
         return;
+    }
+
+    /* browser：src 变了就整个重建；位置也由重建时铺好 */
+    if (is_t(w, "browser")) {
+        const char *want = w->src ? w->src : "";
+        if (strcmp(want, w->bitmap_src ? w->bitmap_src : "") != 0) {
+            free(w->bitmap_src);
+            w->bitmap_src = _strdup(want);
+            browser_recreate(w);
+            return;
+        }
     }
 
     /* 位置尺寸 */
@@ -1755,6 +2442,7 @@ static int win_init(cg_app_t *app)
     st->dpi = dpi;
     app->natives = st;
     app->scale = 100;
+    g_app = app;    /* 焦点子类 / tooltip 反查用（单窗口应用，全局一份） */
 
     register_panel_class();
     {
@@ -1775,6 +2463,17 @@ static int win_init(cg_app_t *app)
     } else {
         g_richedit_class = L"EDIT";
         fprintf(stderr, "[cstackgui] 没有可用的富文本控件，richtext 退回普通多行输入\n");
+    }
+
+    /* browser 的宿主类：atl.dll 各版本 Windows 都带；起不来只影响 browser */
+    {
+        HMODULE atl = LoadLibraryW(L"atl.dll");
+        typedef BOOL (WINAPI *axinit_t)(void);
+        axinit_t axinit = atl ? (axinit_t)(void *)GetProcAddress(atl, "AtlAxWinInit") : NULL;
+        g_atl_ok = (axinit && axinit()) ? 1 : 0;
+        if (!g_atl_ok) {
+            fprintf(stderr, "[cstackgui] atl.dll 不可用，browser 控件会显示占位文本\n");
+        }
     }
 
     /* GDI+ 只用来读图片；起不来也不影响其它控件，图片控件会退回占位框 */
@@ -1829,6 +2528,16 @@ static int win_init(cg_app_t *app)
     st->bg_color = (app->doc.bg == CG_COLOR_NONE) ? GetSysColor(COLOR_BTNFACE) : to_colorref(app->doc.bg);
     st->bg_brush = CreateSolidBrush(st->bg_color);
 
+    /* 整窗一个 tooltip：各控件按需把自己注册成 tool */
+    st->tooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, NULL,
+                                  WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP,
+                                  CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+                                  hwnd, NULL, inst, NULL);
+    if (st->tooltip) {
+        SetWindowPos(st->tooltip, HWND_TOPMOST, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+
     /* 定时器：统一一个 50ms 心跳，供 cg_set_timer 用 */
     st->timer_id = (UINT_PTR)SetTimer(hwnd, CG_TIMER_ID, 50, NULL);
 
@@ -1872,6 +2581,13 @@ static int win_init(cg_app_t *app)
      * 子控件的父 HWND 还是 NULL，CreateWindowEx 会失败（整个分组框里的控件全丢）。 */
     create_native_tree(app->window);
 
+    /* 时钟控件按各自的周期起定时器（id 复用 ctrl_id） */
+    for (cg_widget_t *w = app->widgets; w; w = w->next) {
+        if (is_t(w, "timer") && w->period > 0) {
+            SetTimer(hwnd, (UINT_PTR)w->ctrl_id, (UINT)w->period, NULL);
+        }
+    }
+
     ShowWindow(hwnd, SW_SHOW);
     UpdateWindow(hwnd);
     return 0;
@@ -1894,7 +2610,11 @@ static void win_shutdown(cg_app_t *app)
     cg_win_state_t *st = (cg_win_state_t *)app->natives;
     if (!st) return;
     if (st->timer_id) KillTimer((HWND)app->hwnd, CG_TIMER_ID);
+    for (cg_widget_t *w = app->widgets; w; w = w->next) {
+        if (is_t(w, "timer")) KillTimer((HWND)app->hwnd, (UINT_PTR)w->ctrl_id);
+    }
     if (app->hwnd) DestroyWindow((HWND)app->hwnd);
+    g_app = NULL;
     for (cg_widget_t *w = app->widgets; w; w = w->next) {
         if (w->bitmap) {
             DeleteObject((HGDIOBJ)w->bitmap);
@@ -1949,6 +2669,486 @@ unsigned long cg_double_click_ms(void)
 {
     UINT t = GetDoubleClickTime();
     return t ? (unsigned long)t : 500;
+}
+
+/* ============================================================ 公共 API
+ * 通用对话框 / 画板绘制 / 表格增强 / 网页浏览。
+ * 这些都要摸 Win32 句柄，所以住在后端文件里，但对外是普通 C 函数。
+ */
+
+static HWND dialog_owner(const cg_widget_t *parent)
+{
+    if (parent && parent->native) return (HWND)parent->native;
+    return (parent && parent->app && parent->app->hwnd) ? (HWND)parent->app->hwnd : NULL;
+}
+
+/** 把 UTF-16 路径写回调用者的 UTF-8 缓冲区（截断安全） */
+static void put_path_utf8(char *out, int out_size, const wchar_t *wpath)
+{
+    int need;
+    if (!out || out_size <= 0) return;
+    need = WideCharToMultiByte(CP_UTF8, 0, wpath, -1, NULL, 0, NULL, NULL);
+    if (need <= 0) { out[0] = '\0'; return; }
+    if (need > out_size) need = out_size;   /* 缓冲不够就截断 */
+    WideCharToMultiByte(CP_UTF8, 0, wpath, -1, out, need, NULL, NULL);
+    out[out_size - 1] = '\0';
+}
+
+/** filter 写法沿用网页习惯 "文本|*.txt|全部|*.*"，转成 Win32 要的双 0 分隔 */
+static wchar_t *make_filter_w(const char *filter)
+{
+    wchar_t *wf;
+    int n;
+    if (!filter || !*filter) return NULL;
+    n = MultiByteToWideChar(CP_UTF8, 0, filter, -1, NULL, 0);
+    if (n <= 0) return NULL;
+    wf = (wchar_t *)calloc((size_t)n + 1, sizeof(wchar_t));
+    if (!wf) return NULL;
+    MultiByteToWideChar(CP_UTF8, 0, filter, -1, wf, n);
+    for (int i = 0; i < n; i++) {
+        if (wf[i] == L'|') wf[i] = L'\0';
+    }
+    wf[n] = L'\0';   /* 结尾补第二个 0 */
+    return wf;
+}
+
+/**
+ * @brief 弹"打开文件"对话框，选中路径写进 out_path
+ *
+ * @param parent 定位用的控件，可为 NULL
+ * @param title  对话框标题，NULL 用系统默认
+ * @param filter 文件类型过滤器，格式 "说明|模式|说明|模式"，如 "文本|*.txt|全部|*.*"，可为 NULL
+ * @param out_path 选中的完整路径（UTF-8），至少 1024 字节
+ * @param out_size out_path 的容量
+ * @return int 1 = 用户确认，0 = 取消或失败
+ */
+int cg_open_file_dialog(cg_widget_t *parent, const char *title,
+                        const char *filter, char *out_path, int out_size)
+{
+    OPENFILENAMEW ofn;
+    wchar_t buf[1024];
+    wchar_t *wfilter = make_filter_w(filter);
+    wchar_t *wtitle = wc_from_utf8(title);
+    BOOL ok;
+
+    if (out_path && out_size > 0) out_path[0] = '\0';
+    if (!out_path || out_size <= 0) { free(wfilter); free(wtitle); return 0; }
+
+    memset(&ofn, 0, sizeof(ofn));
+    buf[0] = L'\0';
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = dialog_owner(parent);
+    ofn.lpstrFilter = wfilter;
+    ofn.lpstrTitle = wtitle;
+    ofn.lpstrFile = buf;
+    ofn.nMaxFile = 1024;
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
+    ok = GetOpenFileNameW(&ofn);
+    free(wfilter);
+    free(wtitle);
+    if (!ok) return 0;
+    put_path_utf8(out_path, out_size, buf);
+    return 1;
+}
+
+/**
+ * @brief 弹"保存文件"对话框（已存在同名文件时系统会先问一遍）
+ *
+ * @param parent 定位用的控件，可为 NULL
+ * @param title 对话框标题，可为 NULL
+ * @param filter 同 cg_open_file_dialog，可为 NULL
+ * @param default_ext 缺省扩展名（如 "txt"），可为 NULL
+ * @param out_path 选中的完整路径（UTF-8），至少 1024 字节
+ * @param out_size out_path 的容量
+ * @return int 1 = 用户确认，0 = 取消或失败
+ */
+int cg_save_file_dialog(cg_widget_t *parent, const char *title,
+                        const char *filter, const char *default_ext,
+                        char *out_path, int out_size)
+{
+    OPENFILENAMEW ofn;
+    wchar_t buf[1024];
+    wchar_t *wfilter = make_filter_w(filter);
+    wchar_t *wtitle = wc_from_utf8(title);
+    wchar_t *wext = wc_from_utf8(default_ext);
+    BOOL ok;
+
+    if (out_path && out_size > 0) out_path[0] = '\0';
+    if (!out_path || out_size <= 0) { free(wfilter); free(wtitle); free(wext); return 0; }
+
+    memset(&ofn, 0, sizeof(ofn));
+    buf[0] = L'\0';
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = dialog_owner(parent);
+    ofn.lpstrFilter = wfilter;
+    ofn.lpstrTitle = wtitle;
+    ofn.lpstrDefExt = wext;
+    ofn.lpstrFile = buf;
+    ofn.nMaxFile = 1024;
+    ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
+    ok = GetSaveFileNameW(&ofn);
+    free(wfilter);
+    free(wtitle);
+    free(wext);
+    if (!ok) return 0;
+    put_path_utf8(out_path, out_size, buf);
+    return 1;
+}
+
+/**
+ * @brief 弹系统颜色对话框
+ *
+ * @param parent 定位用的控件，可为 NULL
+ * @param rgb 进出都是 0xRRGGBB：进来是初始颜色，用户确认后被更新
+ * @return int 1 = 用户确认，0 = 取消
+ */
+int cg_choose_color(cg_widget_t *parent, unsigned *rgb)
+{
+    static COLORREF custom[16];
+    CHOOSECOLORW cc;
+    unsigned cur = (rgb && *rgb) ? (*rgb & 0xFFFFFF) : 0x6750A4;
+
+    if (!rgb) return 0;
+    memset(&cc, 0, sizeof(cc));
+    cc.lStructSize = sizeof(cc);
+    cc.hwndOwner = dialog_owner(parent);
+    cc.rgbResult = to_colorref(cur);
+    cc.lpCustColors = custom;
+    cc.Flags = CC_FULLOPEN | CC_RGBINIT;
+    if (!ChooseColorW(&cc)) return 0;
+    *rgb = ((unsigned)GetRValue(cc.rgbResult) << 16) |
+           ((unsigned)GetGValue(cc.rgbResult) << 8) |
+           (unsigned)GetBValue(cc.rgbResult);
+    return 1;
+}
+
+/**
+ * @brief 消息框（一个"确定"按钮）
+ *
+ * @param parent 定位用的控件，可为 NULL
+ * @param text 内容
+ * @param title 标题，NULL 用 "提示"
+ * @param icon 0=信息 1=警告 2=错误 3=问号
+ * @return void 无返回值
+ */
+void cg_message_box(cg_widget_t *parent, const char *text, const char *title, int icon)
+{
+    static const unsigned icons[4] = {
+        MB_ICONINFORMATION, MB_ICONWARNING, MB_ICONERROR, MB_ICONQUESTION,
+    };
+    wchar_t *wt = wc_from_utf8(text ? text : "");
+    wchar_t *tt = wc_from_utf8(title ? title : "提示");
+    DWORD flag = (icon >= 0 && icon <= 3) ? icons[icon] : MB_ICONINFORMATION;
+    MessageBoxW(dialog_owner(parent), wt ? wt : L"", tt ? tt : L"", MB_OK | flag);
+    free(wt);
+    free(tt);
+}
+
+/* ------------------------------------------------------------ 画板 */
+
+/** 类型检查：canvas 的绘制命令只能用在 canvas 上 */
+static int canvas_ok(const cg_widget_t *w, const char *who)
+{
+    if (w && w->type && strcmp(w->type, "canvas") == 0) return 1;
+    fprintf(stderr, "[cstackgui] %s: 需要 canvas 控件，实际给的是 %s\n",
+            who, (w && w->type) ? w->type : "(null)");
+    return 0;
+}
+
+static void canvas_push(cg_widget_t *w, const cg_canvas_op_t *op)
+{
+    if (w->nops >= w->op_cap) {
+        int nc = w->op_cap > 0 ? w->op_cap * 2 : 64;
+        cg_canvas_op_t *no = (cg_canvas_op_t *)realloc(w->ops, (size_t)nc * sizeof(cg_canvas_op_t));
+        if (!no) return;
+        w->ops = no;
+        w->op_cap = nc;
+    }
+    w->ops[w->nops++] = *op;
+    if (w->native) InvalidateRect((HWND)w->native, NULL, FALSE);
+}
+
+/**
+ * @brief 清空画板上所有绘制内容
+ * @param w canvas 控件
+ * @return void 无返回值
+ */
+void cg_canvas_clear(cg_widget_t *w)
+{
+    if (!canvas_ok(w, "cg_canvas_clear")) return;
+    for (int i = 0; i < w->nops; i++) {
+        if (w->ops[i].type == CG_CANVAS_OP_TEXT) free(w->ops[i].text);
+    }
+    w->nops = 0;
+    if (w->native) InvalidateRect((HWND)w->native, NULL, TRUE);
+}
+
+/**
+ * @brief 设置后续图形的颜色（0xRRGGBB）
+ * @param w canvas 控件
+ * @param rgb 颜色，如 CG_RGB(0x33,0x33,0x33) 或 0x333333
+ * @return void 无返回值
+ */
+void cg_canvas_set_color(cg_widget_t *w, unsigned rgb)
+{
+    if (!canvas_ok(w, "cg_canvas_set_color")) return;
+    w->canvas_color = rgb & 0xFFFFFF;
+}
+
+/**
+ * @brief 设置后续图形的线宽（像素，最小 1）
+ * @param w canvas 控件
+ * @param px 线宽
+ * @return void 无返回值
+ */
+void cg_canvas_set_line_width(cg_widget_t *w, int px)
+{
+    if (!canvas_ok(w, "cg_canvas_set_line_width")) return;
+    w->canvas_penw = px < 1 ? 1 : px;
+}
+
+/**
+ * @brief 画一条线段
+ * @param w canvas 控件
+ * @param x1,y1 起点；x2,y2 终点（控件内坐标，左上角为 0,0）
+ * @return void 无返回值
+ */
+void cg_canvas_line(cg_widget_t *w, int x1, int y1, int x2, int y2)
+{
+    cg_canvas_op_t op;
+    if (!canvas_ok(w, "cg_canvas_line")) return;
+    memset(&op, 0, sizeof(op));
+    op.type = CG_CANVAS_OP_LINE;
+    op.color = w->canvas_color;
+    op.penw = w->canvas_penw;
+    op.x1 = x1; op.y1 = y1; op.x2 = x2; op.y2 = y2;
+    canvas_push(w, &op);
+}
+
+/**
+ * @brief 画矩形
+ * @param w canvas 控件
+ * @param x,y 左上角；wd,ht 宽高
+ * @param fill 1 = 实心，0 = 描边
+ * @return void 无返回值
+ */
+void cg_canvas_rect(cg_widget_t *w, int x, int y, int wd, int ht, int fill)
+{
+    cg_canvas_op_t op;
+    if (!canvas_ok(w, "cg_canvas_rect")) return;
+    memset(&op, 0, sizeof(op));
+    op.type = CG_CANVAS_OP_RECT;
+    op.color = w->canvas_color;
+    op.penw = w->canvas_penw;
+    op.fill = fill ? 1 : 0;
+    op.x1 = x; op.y1 = y; op.x2 = x + wd; op.y2 = y + ht;
+    canvas_push(w, &op);
+}
+
+/**
+ * @brief 画椭圆（含圆）
+ * @param w canvas 控件
+ * @param x,y 外接矩形左上角；wd,ht 外接矩形宽高
+ * @param fill 1 = 实心，0 = 描边
+ * @return void 无返回值
+ */
+void cg_canvas_ellipse(cg_widget_t *w, int x, int y, int wd, int ht, int fill)
+{
+    cg_canvas_op_t op;
+    if (!canvas_ok(w, "cg_canvas_ellipse")) return;
+    memset(&op, 0, sizeof(op));
+    op.type = CG_CANVAS_OP_ELLIPSE;
+    op.color = w->canvas_color;
+    op.penw = w->canvas_penw;
+    op.fill = fill ? 1 : 0;
+    op.x1 = x; op.y1 = y; op.x2 = x + wd; op.y2 = y + ht;
+    canvas_push(w, &op);
+}
+
+/**
+ * @brief 写一行文字（左上角定位，颜色用当前画笔颜色）
+ * @param w canvas 控件
+ * @param x,y 文字左上角
+ * @param text UTF-8 文本
+ * @return void 无返回值
+ */
+void cg_canvas_text(cg_widget_t *w, int x, int y, const char *text)
+{
+    cg_canvas_op_t op;
+    if (!canvas_ok(w, "cg_canvas_text")) return;
+    memset(&op, 0, sizeof(op));
+    op.type = CG_CANVAS_OP_TEXT;
+    op.color = w->canvas_color;
+    op.penw = w->canvas_penw;
+    op.x1 = x; op.y1 = y;
+    op.text = (text && *text) ? _strdup(text) : NULL;
+    canvas_push(w, &op);
+}
+
+/* ------------------------------------------------------------ 表格增强 */
+
+/**
+ * @brief 给表格某行绑一个业务数值（不显示在表格里，取回用）
+ * @param w table 控件
+ * @param row 行号（0 起）
+ * @param value 要存的整数
+ * @return int 0 成功，-1 参数不对
+ */
+int cg_table_set_row_value(cg_widget_t *w, int row, int value)
+{
+    HWND h;
+    LVITEMW it;
+    if (!w || !is_t(w, "table")) return -1;
+    if (row < 0 || row >= w->nrows) return -1;
+    cg_table_rows_grow(w, w->nrows);
+    w->row_val[row] = value;
+    h = (HWND)w->native;
+    if (!h) return 0;
+    memset(&it, 0, sizeof(it));
+    it.mask = LVIF_PARAM;
+    it.iItem = row;
+    it.lParam = value;
+    SendMessageW(h, LVM_SETITEMW, 0, (LPARAM)&it);
+    return 0;
+}
+
+/**
+ * @brief 读某行绑定的业务数值
+ * @param w table 控件
+ * @param row 行号（0 起）
+ * @return int 绑定的数值；参数不对返回 0
+ */
+int cg_table_row_value(const cg_widget_t *w, int row)
+{
+    if (!w || !is_t(w, "table")) return 0;
+    if (row < 0 || row >= w->nrows) return 0;
+    return (w->row_val && row < w->row_cap) ? w->row_val[row] : 0;
+}
+
+/**
+ * @brief 设置某行的勾选状态（.cgui 里 table 要开 check）
+ * @param w table 控件
+ * @param row 行号（0 起）
+ * @param on 1 = 勾上，0 = 取消
+ * @return void 无返回值（程序设置的勾选不触发 check 事件）
+ */
+void cg_table_set_checked(cg_widget_t *w, int row, int on)
+{
+    HWND h;
+    LVITEMW it;
+    if (!w || !is_t(w, "table")) return;
+    if (row < 0 || row >= w->nrows) return;
+    cg_table_rows_grow(w, w->nrows);
+    if (w->row_checked) w->row_checked[row] = on ? 1 : 0;
+    h = (HWND)w->native;
+    if (!h || !w->check) return;
+    memset(&it, 0, sizeof(it));
+    it.mask = LVIF_STATE;
+    it.state = on ? INDEXTOSTATEIMAGEMASK(2) : INDEXTOSTATEIMAGEMASK(1);
+    it.stateMask = LVIS_STATEIMAGEMASK;
+    SendMessageW(h, LVM_SETITEMSTATE, (WPARAM)row, (LPARAM)&it);
+}
+
+/**
+ * @brief 查某行是否被勾选
+ * @param w table 控件
+ * @param row 行号（0 起）
+ * @return int 1 = 勾选，0 = 没勾 / 参数不对
+ */
+int cg_table_checked(const cg_widget_t *w, int row)
+{
+    if (!w || !is_t(w, "table")) return 0;
+    if (row < 0 || row >= w->nrows) return 0;
+    return (w->row_checked && row < w->row_cap) ? w->row_checked[row] : 0;
+}
+
+/**
+ * @brief 设置某行行首图标；path 传 NULL 清除
+ * @param w table 控件
+ * @param row 行号（0 起）
+ * @param path 图片路径（png/jpg/bmp/gif，查找规则同 image 控件）
+ * @return void 无返回值
+ */
+void cg_table_set_row_icon(cg_widget_t *w, int row, const char *path)
+{
+    HWND h;
+    HIMAGELIST il;
+    int idx;
+    if (!w || !is_t(w, "table")) return;
+    if (row < 0 || row >= w->nrows) return;
+    cg_table_rows_grow(w, w->nrows);
+    free(w->row_icon[row]);
+    w->row_icon[row] = (path && *path) ? _strdup(path) : NULL;
+
+    h = (HWND)w->native;
+    if (!h) return;
+    if (!w->row_icon[row]) {
+        /* 清图标：指向不存在的下标即可 */
+        LVITEMW it;
+        memset(&it, 0, sizeof(it));
+        it.mask = LVIF_IMAGE;
+        it.iItem = row;
+        it.iImage = -1;
+        SendMessageW(h, LVM_SETITEMW, 0, (LPARAM)&it);
+        InvalidateRect(h, NULL, FALSE);
+        return;
+    }
+    il = table_imagelist(h, w);
+    idx = imagelist_add_file(w, il, w->row_icon[row], scale_px(w->app, 16));
+    if (idx >= 0) {
+        LVITEMW it;
+        memset(&it, 0, sizeof(it));
+        it.mask = LVIF_IMAGE;
+        it.iItem = row;
+        it.iImage = idx;
+        SendMessageW(h, LVM_SETITEMW, 0, (LPARAM)&it);
+    }
+    InvalidateRect(h, NULL, FALSE);
+}
+
+/**
+ * @brief 多选表格当前选中了几行
+ * @param w table 控件
+ * @return int 选中行数（单选表格最多 1）
+ */
+int cg_table_selected_count(const cg_widget_t *w)
+{
+    if (!w || !is_t(w, "table") || !w->native) return 0;
+    return (int)SendMessageW((HWND)w->native, LVM_GETSELECTEDCOUNT, 0, 0);
+}
+
+/**
+ * @brief 取第 i 个选中的行号（配合 cg_table_selected_count 遍历）
+ * @param w table 控件
+ * @param index 第几个选中行（0 起）
+ * @return int 行号；没有了返回 -1
+ */
+int cg_table_selected_row(const cg_widget_t *w, int index)
+{
+    int row = -1;
+    if (!w || !is_t(w, "table") || !w->native || index < 0) return -1;
+    for (int i = 0; i <= index; i++) {
+        row = (int)SendMessageW((HWND)w->native, LVM_GETNEXTITEM, (WPARAM)row,
+                                MAKELPARAM(LVNI_SELECTED, 0));
+        if (row == -1) return -1;
+    }
+    return row;
+}
+
+/* ------------------------------------------------------------ 网页浏览 */
+
+/**
+ * @brief 让 browser 控件打开一个地址（实验性：IE 内核，仅本机文件 / 简单页面）
+ * @param w browser 控件
+ * @param url http/https 地址或本地文件完整路径
+ * @return void 无返回值
+ */
+void cg_browser_navigate(cg_widget_t *w, const char *url)
+{
+    if (!w || !is_t(w, "browser")) return;
+    free(w->src);
+    w->src = (url && *url) ? _strdup(url) : NULL;
+    sync_widget(w);   /* sync 发现 src 变了会整个重建 AtlAxWin */
 }
 
 const cg_backend_t cg_backend_win32 = {

@@ -50,6 +50,10 @@ typedef enum {
     CG_EVENT_EXPAND,      /* 展开节点（树） */
     CG_EVENT_COLLAPSE,    /* 折叠节点（树） */
     CG_EVENT_CLOSE,       /* 窗口关闭前（窗口级事件） */
+    CG_EVENT_TICK,        /* 时钟周期到（timer） */
+    CG_EVENT_CHECK,       /* 表格行勾选状态变化（table 勾选列） */
+    CG_EVENT_GOTFOCUS,    /* 获得键盘焦点 */
+    CG_EVENT_LOSTFOCUS,   /* 失去键盘焦点 */
     CG_EVENT_COUNT
 } cg_event_t;
 
@@ -127,6 +131,9 @@ void        cg_quit(cg_app_t *app);
  *  只有 close 回调里调才有意义。 */
 void        cg_cancel_close(cg_app_t *app);
 void        cg_set_title(cg_app_t *app, const char *title);
+/** 当前有没有真正的窗口（--selftest 不开窗）：回调里想弹对话框之前先问一句，
+ *  免得自检/CI 被弹窗卡住。 */
+int         cg_app_has_window(const cg_app_t *app);
 
 /** 把 .cgui 文档树打印到 stdout（调试/自检用） */
 void cg_dump_doc(cg_app_t *app);
@@ -202,6 +209,20 @@ const char *cg_table_cell(const cg_widget_t *w, int row, int col);
 /** 当前选中行，没选中返回 -1 */
 int  cg_table_selected(const cg_widget_t *w);
 
+/* ------------------------------------------------------------ 表格（增强） */
+
+/** 表格行数值 / 勾选 / 行图标（row 从 0 起）。
+ *  勾选需要 .cgui 里 table 开了 check（显示复选框列）；勾选变化触发 check 事件。 */
+int  cg_table_set_row_value(cg_widget_t *w, int row, int value);
+int  cg_table_row_value(const cg_widget_t *w, int row);
+void cg_table_set_checked(cg_widget_t *w, int row, int on);
+int  cg_table_checked(const cg_widget_t *w, int row);
+/** 行首图标（png/jpg/bmp/gif 路径，同 image 控件的查找规则）；path 传 NULL 清除 */
+void cg_table_set_row_icon(cg_widget_t *w, int row, const char *path);
+/** 多选（.cgui 里 table 开了 multi）时：选中行数量 / 第 i 个选中行号 */
+int  cg_table_selected_count(const cg_widget_t *w);
+int  cg_table_selected_row(const cg_widget_t *w, int index);
+
 /* ------------------------------------------------------------ 状态栏 */
 /** 改第 part 段的文字（段不存在且 part 等于段数时相当于追加一段） */
 void cg_status_set(cg_widget_t *w, int part, const char *text);
@@ -232,6 +253,48 @@ const char *cg_menu_last_id(const cg_widget_t *w);
 const char *cg_menu_last_text(const cg_widget_t *w);
 /** 菜单里有多少个可点的项（不含分隔线和顶级弹出项），调试用 */
 int         cg_menu_count(const cg_widget_t *w);
+
+/* ------------------------------------------------------------ 提示与时钟 */
+
+/** 鼠标悬停提示（tooltip）；text 传空串清除。对所有控件生效。 */
+void cg_widget_set_hint(cg_widget_t *w, const char *text);
+const char *cg_widget_hint(const cg_widget_t *w);
+
+/** 时钟（timer 控件）的触发周期，毫秒；0 = 停止，>0 = 立即按新周期重新计时 */
+void cg_widget_set_period(cg_widget_t *w, int period_ms);
+int  cg_widget_period(const cg_widget_t *w);
+
+/* ------------------------------------------------------------ 通用对话框
+ * 都不是控件，是弹系统对话框的函数。parent 传控件（定位用）或 NULL。
+ * 路径缓冲区至少 1024 字节。返回 1 = 用户确定，0 = 取消/失败。
+ */
+int  cg_open_file_dialog(cg_widget_t *parent, const char *title,
+                         const char *filter, char *out_path, int out_size);
+int  cg_save_file_dialog(cg_widget_t *parent, const char *title,
+                         const char *filter, const char *default_ext,
+                         char *out_path, int out_size);
+/** rgb 进出都是 0xRRGGBB；确认时写回并返回 1 */
+int  cg_choose_color(cg_widget_t *parent, unsigned *rgb);
+/** 消息框（确定钮）。icon: 0=信息 1=警告 2=错误 3=问号 */
+void cg_message_box(cg_widget_t *parent, const char *text, const char *title, int icon);
+
+/* ------------------------------------------------------------ 画板
+ * canvas 控件上用代码绘制。坐标系是控件内左上角 (0,0)，
+ * x 向右 y 向下；控件重绘（被盖住再露出来、改大小）时按记录重画。
+ */
+void cg_canvas_clear(cg_widget_t *w);
+/** 后续图形的颜色与线宽（0xRRGGBB） */
+void cg_canvas_set_color(cg_widget_t *w, unsigned rgb);
+void cg_canvas_set_line_width(cg_widget_t *w, int px);
+void cg_canvas_line(cg_widget_t *w, int x1, int y1, int x2, int y2);
+/** fill=0 描边，1 实心 */
+void cg_canvas_rect(cg_widget_t *w, int x, int y, int wd, int ht, int fill);
+void cg_canvas_ellipse(cg_widget_t *w, int x, int y, int wd, int ht, int fill);
+void cg_canvas_text(cg_widget_t *w, int x, int y, const char *text);
+
+/* ------------------------------------------------------------ 网页浏览 */
+/** 让 browser 控件打开一个地址（http/https/本地文件路径均可）；实验性功能 */
+void cg_browser_navigate(cg_widget_t *w, const char *url);
 
 /* ------------------------------------------------------------ 动态扩展 */
 

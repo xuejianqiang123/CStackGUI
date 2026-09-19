@@ -16,27 +16,27 @@
  * 画布只列出这里声明的事件；.cgui 绑了不支持的事件时，运行时启动会警告、自检会报错。
  */
 static const cg_kind_info_t k_kinds[] = {
-    { "button",     CG_K_BUTTON,     0, 120,  40, "按钮", CG_EV_CLICK | CG_EV_DBLCLICK },
+    { "button",     CG_K_BUTTON,     0, 120,  40, "按钮", CG_EV_CLICK | CG_EV_DBLCLICK | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
     { "iconbutton", CG_K_ICONBUTTON, 0,  48,  48, "",     CG_EV_CLICK | CG_EV_DBLCLICK },
     { "label",      CG_K_LABEL,      0, 160,  24, "标签", 0 },
     { "link",       CG_K_LINK,       0, 160,  24, "链接", CG_EV_CLICK | CG_EV_DBLCLICK },
-    { "switch",     CG_K_SWITCH,     0,  56,  32, "",     CG_EV_CHANGE },
-    { "edit",       CG_K_EDIT,       0, 200,  32, "",     CG_EV_CHANGE | CG_EV_SUBMIT },
-    { "multiedit",  CG_K_MULTIEDIT,  0, 240, 120, "",     CG_EV_CHANGE },
-    { "richtext",   CG_K_RICHTEXT,   0, 320, 160, "",     CG_EV_CHANGE },
-    { "spinner",    CG_K_SPINNER,    0, 100,  28, "",     CG_EV_CHANGE },
-    { "datepicker", CG_K_DATEPICKER, 0, 140,  28, "",     CG_EV_CHANGE },
+    { "switch",     CG_K_SWITCH,     0,  56,  32, "",     CG_EV_CHANGE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
+    { "edit",       CG_K_EDIT,       0, 200,  32, "",     CG_EV_CHANGE | CG_EV_SUBMIT | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
+    { "multiedit",  CG_K_MULTIEDIT,  0, 240, 120, "",     CG_EV_CHANGE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
+    { "richtext",   CG_K_RICHTEXT,   0, 320, 160, "",     CG_EV_CHANGE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
+    { "spinner",    CG_K_SPINNER,    0, 100,  28, "",     CG_EV_CHANGE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
+    { "datepicker", CG_K_DATEPICKER, 0, 140,  28, "",     CG_EV_CHANGE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
     { "monthcal",   CG_K_MONTHCAL,   0, 230, 180, "",     CG_EV_SELECT | CG_EV_DBLCLICK },
-    { "checkbox",   CG_K_CHECKBOX,   0, 160,  28, "复选", CG_EV_CHANGE },
-    { "radio",      CG_K_RADIO,      0, 160,  28, "单选", CG_EV_CHANGE },
-    { "listbox",    CG_K_LISTBOX,    0, 220, 140, "",     CG_EV_SELECT | CG_EV_DBLCLICK },
-    { "combo",      CG_K_COMBO,      0, 200, 200, "",     CG_EV_SELECT },
-    { "slider",     CG_K_SLIDER,     0, 200,  32, "",     CG_EV_CHANGE | CG_EV_RELEASE },
+    { "checkbox",   CG_K_CHECKBOX,   0, 160,  28, "复选", CG_EV_CHANGE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
+    { "radio",      CG_K_RADIO,      0, 160,  28, "单选", CG_EV_CHANGE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
+    { "listbox",    CG_K_LISTBOX,    0, 220, 140, "",     CG_EV_SELECT | CG_EV_DBLCLICK | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
+    { "combo",      CG_K_COMBO,      0, 200, 200, "",     CG_EV_SELECT | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
+    { "slider",     CG_K_SLIDER,     0, 200,  32, "",     CG_EV_CHANGE | CG_EV_RELEASE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
     { "progress",   CG_K_PROGRESS,   0, 200,  20, "",     0 },
     { "progressring", CG_K_RING,     0, 120, 120, "",     0 },
-    { "tabs",       CG_K_TABS,       1, 320, 220, "",     CG_EV_SELECT },
-    { "tree",       CG_K_TREE,       0, 220, 180, "",     CG_EV_SELECT | CG_EV_DBLCLICK | CG_EV_EXPAND | CG_EV_COLLAPSE },
-    { "table",      CG_K_TABLE,      0, 360, 180, "",     CG_EV_SELECT | CG_EV_DBLCLICK },
+    { "tabs",       CG_K_TABS,       1, 320, 220, "",     CG_EV_SELECT | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
+    { "tree",       CG_K_TREE,       0, 220, 180, "",     CG_EV_SELECT | CG_EV_DBLCLICK | CG_EV_EXPAND | CG_EV_COLLAPSE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
+    { "table",      CG_K_TABLE,      0, 360, 180, "",     CG_EV_SELECT | CG_EV_DBLCLICK | CG_EV_CHECK | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
     { "statusbar",  CG_K_STATUS,     0, 400,  24, "",     0 },
     { "menu",       CG_K_MENU,       0,   0,   0, "",     CG_EV_CLICK },
     { "menubutton", CG_K_MENUBUTTON, 0, 130,  32, "菜单", CG_EV_CLICK },
@@ -45,6 +45,16 @@ static const cg_kind_info_t k_kinds[] = {
     { "box",        CG_K_BOX,        1, 200, 120, "",     0 },
     { "separator",  CG_K_SEPARATOR,  0, 200,   2, "",     0 },
     { "image",      CG_K_IMAGE,      0, 200, 120, "",     CG_EV_CLICK | CG_EV_DBLCLICK },
+    { "timer",      CG_K_TIMER,      0,   0,   0, "",     CG_EV_TICK },
+    { "canvas",     CG_K_CANVAS,     0, 240, 160, "",     CG_EV_CLICK | CG_EV_DBLCLICK },
+    { "colorpicker", CG_K_COLORPICK, 0,  64,  28, "",     CG_EV_CHANGE },
+    { "browser",    CG_K_BROWSER,    0, 320, 240, "",     0 },
+    { "badge",      CG_K_BADGE,      0,  48,  24, "99+",  0 },
+    { "tag",        CG_K_TAG,        0,  72,  28, "标签", CG_EV_CLICK },
+    { "rate",       CG_K_RATE,       0, 140,  32, "",     CG_EV_CHANGE },
+    { "pagination", CG_K_PAGINATION, 0, 180,  32, "",     CG_EV_CHANGE },
+    { "card",       CG_K_CARD,       1, 280, 180, "卡片", 0 },
+    { "shape",      CG_K_SHAPE,      0, 120, 120, "",     0 },
     { "window",     CG_K_WINDOW,     1,   0,   0, "",     CG_EV_CLOSE },  /* 伪控件：窗口自身 */
 };
 
@@ -351,6 +361,7 @@ static void node_free(cg_node_t *n)
     free(n->text);
     free(n->src);
     free(n->format);
+    free(n->hint);
     free(n);
 }
 
@@ -431,11 +442,16 @@ static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
         }
     }
 
-    /* 标签页归属、图片路径、细分格式 */
+    /* 标签页归属、图片路径、细分格式、悬停提示、时钟周期、表格增强 */
     n->page = cj_int(cj_get(o, "page"), 0);
     if (n->page < 0) n->page = 0;
     n->src = dup_or_null(cj_str(cj_get(o, "src"), NULL));
     n->format = dup_or_null(cj_str(cj_get(o, "format"), NULL));
+    n->hint = dup_or_null(cj_str(cj_get(o, "hint"), NULL));
+    n->period = cj_int(cj_get(o, "period"), 0);
+    if (n->period < 0) n->period = 0;
+    n->multi = cj_bool(cj_get(o, "multi"), 0);
+    n->check = cj_bool(cj_get(o, "check"), 0);
 
     /* 结构化内容 */
     n->items = parse_str_array(cj_get(o, "items"), &n->nitems);
@@ -576,6 +592,10 @@ static void dump_node(const cg_node_t *n, FILE *out, int depth)
     if (n->page) fprintf(out, " page=%d", n->page);
     if (n->src) fprintf(out, " src=%s", n->src);
     if (n->format) fprintf(out, " format=%s", n->format);
+    if (n->hint) fprintf(out, " hint=\"%s\"", n->hint);
+    if (n->period) fprintf(out, " period=%d", n->period);
+    if (n->multi) fputs(" multi", out);
+    if (n->check) fputs(" check", out);
     if (n->items) fprintf(out, " items=%lu", (unsigned long)n->nitems);
     if (n->nodes) fprintf(out, " tree=%lu", (unsigned long)n->nnodes);
     if (n->cols) fprintf(out, " cols=%lu", (unsigned long)n->ncols);

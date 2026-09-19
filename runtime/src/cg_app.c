@@ -19,6 +19,10 @@ static const char *const k_ev_names[CG_EVENT_COUNT] = {
     [CG_EVENT_EXPAND]   = "expand",
     [CG_EVENT_COLLAPSE] = "collapse",
     [CG_EVENT_CLOSE]    = "close",
+    [CG_EVENT_TICK]     = "tick",
+    [CG_EVENT_CHECK]    = "check",
+    [CG_EVENT_GOTFOCUS] = "gotfocus",
+    [CG_EVENT_LOSTFOCUS] = "lostfocus",
 };
 
 const char *cg_event_name(cg_event_t ev)
@@ -79,6 +83,8 @@ cg_widget_t *cg_widget_new(cg_app_t *app, const char *type, const char *id,
     w->vmax = 100;
     w->style.fg = CG_COLOR_NONE;
     w->style.bg = CG_COLOR_NONE;
+    w->canvas_color = 0x333333;
+    w->canvas_penw = 1;
     w->ctrl_id = cg_alloc_ctrl_id(app);
 
     w->next = app->widgets;
@@ -114,6 +120,17 @@ void cg_widget_free(cg_widget_t *w)
     free(w->menu_last_text);
     free(w->tool_ids);
     free(w->format);
+    free(w->hint);
+    if (w->ops) {
+        for (int i = 0; i < w->nops; i++) {
+            if (w->ops[i].type == CG_CANVAS_OP_TEXT) free(w->ops[i].text);
+        }
+        free(w->ops);
+    }
+    free(w->row_checked);
+    free(w->row_val);
+    for (int i = 0; i < w->row_icon_n; i++) free(w->row_icon[i]);
+    free(w->row_icon);
     free(w->item_map);
     free(w->src);
     free(w->bitmap_src);
@@ -225,6 +242,10 @@ static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node
     w->page = n->page;
     if (n->src) w->src = dup_str(n->src);
     if (n->format) w->format = dup_str(n->format);
+    if (n->hint) w->hint = dup_str(n->hint);
+    w->period = n->period;
+    w->multi = n->multi;
+    w->check = n->check;
     /* 菜单栏和菜单按钮共用同一套菜单行表；tree 虽然也用 nodes，但走的是下面那套摊平 */
     if (n->nodes && (!strcmp(n->type, "menu") || !strcmp(n->type, "menubutton"))) {
         menu_push_doc(app, w, n->nodes, n->nnodes, -1);
@@ -273,6 +294,12 @@ static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node
             w->row_cells = w->ncols;
             w->items_dirty = 1;
         }
+        /* 行级附加状态（勾选 / 数值 / 图标）按行数一起开好 */
+        w->row_checked = (unsigned char *)calloc((size_t)w->nrows, 1);
+        w->row_val = (int *)calloc((size_t)w->nrows, sizeof(int));
+        w->row_icon = (char **)calloc((size_t)w->nrows, sizeof(char *));
+        w->row_icon_n = w->nrows;
+        w->row_cap = w->nrows;
     }
 
     /* .cgui 里写的回调名 -> 函数指针 */
@@ -714,6 +741,31 @@ void cg_tree_expand(cg_widget_t *w, int item, int expand)
 
 /* ------------------------------------------------------------ 表格 */
 
+void cg_table_rows_grow(cg_widget_t *w, int want)
+{
+    if (want > w->row_cap) {
+        unsigned char *nc = (unsigned char *)realloc(w->row_checked, (size_t)want);
+        int *nv = (int *)realloc(w->row_val, (size_t)want * sizeof(int));
+        if (nc) {
+            memset(nc + w->row_cap, 0, (size_t)(want - w->row_cap));
+            w->row_checked = nc;
+        }
+        if (nv) {
+            memset(nv + w->row_cap, 0, (size_t)(want - w->row_cap) * sizeof(int));
+            w->row_val = nv;
+        }
+        w->row_cap = want;
+    }
+    if (want > w->row_icon_n) {
+        char **ni = (char **)realloc(w->row_icon, (size_t)want * sizeof(char *));
+        if (ni) {
+            memset(ni + w->row_icon_n, 0, (size_t)(want - w->row_icon_n) * sizeof(char *));
+            w->row_icon = ni;
+            w->row_icon_n = want;
+        }
+    }
+}
+
 int cg_table_add_column(cg_widget_t *w, const char *title, int width)
 {
     cg_col_t *nc;
@@ -751,6 +803,7 @@ int cg_table_add_row(cg_widget_t *w, const char *const *cells, int ncells)
             w->rows[r][c] = dup_str(cell);
         }
     }
+    cg_table_rows_grow(w, w->nrows + 1);
     w->nrows++;
     w->row_cells = w->ncols;
     w->items_dirty = 1;
@@ -901,12 +954,50 @@ void cg_set_title(cg_app_t *app, const char *title)
 
 void cg_quit(cg_app_t *app) { if (app) app->quit = 1; }
 
+int cg_app_has_window(const cg_app_t *app)
+{
+    return (app && app->hwnd) ? 1 : 0;
+}
+
 void cg_cancel_close(cg_app_t *app) { if (app) app->close_cancel = 1; }
 
 void cg_dump_doc(cg_app_t *app)
 {
     if (!app) return;
     cg_doc_dump(&app->doc, stdout);
+}
+
+/* ------------------------------------------------------------ 悬停提示 / 时钟 */
+
+void cg_widget_set_hint(cg_widget_t *w, const char *text)
+{
+    if (!w) return;
+    free(w->hint);
+    w->hint = (text && *text) ? dup_str(text) : NULL;
+    if (w->node) {
+        free(w->node->hint);
+        w->node->hint = w->hint ? dup_str(w->hint) : NULL;
+    }
+    cg_win_set_hint(w);
+}
+
+const char *cg_widget_hint(const cg_widget_t *w)
+{
+    return w ? (w->hint ? w->hint : "") : NULL;
+}
+
+void cg_widget_set_period(cg_widget_t *w, int period_ms)
+{
+    if (!w) return;
+    if (period_ms < 0) period_ms = 0;
+    w->period = period_ms;
+    if (w->node) w->node->period = period_ms;
+    cg_win_restart_timer(w);
+}
+
+int cg_widget_period(const cg_widget_t *w)
+{
+    return w ? w->period : 0;
 }
 
 /* ------------------------------------------------------------ 动态追加控件 */

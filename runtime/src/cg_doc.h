@@ -45,6 +45,16 @@ typedef enum {
     CG_K_ICONBUTTON, /* 图标按钮（BS_OWNERDRAW 画 src 图片） */
     CG_K_MONTHCAL,   /* 月历 */
     CG_K_RING,       /* 环状进度（自绘） */
+    CG_K_TIMER,      /* 时钟（无窗口，按周期发 tick） */
+    CG_K_CANVAS,     /* 画板（自绘 + cg_canvas_* 绘制命令） */
+    CG_K_COLORPICK,  /* 颜色选择（色块按钮 + 系统选色对话框） */
+    CG_K_BROWSER,    /* 网页浏览（系统 WebBrowser，实验性） */
+    CG_K_BADGE,      /* 徽章（自绘小圆片） */
+    CG_K_TAG,        /* 标签片（自绘圆角片，可点） */
+    CG_K_RATE,       /* 评分（自绘五角星，点几星就是几分） */
+    CG_K_PAGINATION, /* 分页（自绘 < 页码 >，点两侧翻页） */
+    CG_K_CARD,       /* 卡片（圆角边框容器） */
+    CG_K_SHAPE,      /* 外形框（矩形/圆角/椭圆，纯视觉） */
     CG_K_WINDOW,     /* 伪控件：窗口自身，只有 close 事件 */
     CG_K_COUNT
 } cg_kind_t;
@@ -60,6 +70,10 @@ typedef enum {
 #define CG_EV_EXPAND     CG_EV_BIT(CG_EVENT_EXPAND)
 #define CG_EV_COLLAPSE   CG_EV_BIT(CG_EVENT_COLLAPSE)
 #define CG_EV_CLOSE      CG_EV_BIT(CG_EVENT_CLOSE)
+#define CG_EV_TICK       CG_EV_BIT(CG_EVENT_TICK)
+#define CG_EV_CHECK      CG_EV_BIT(CG_EVENT_CHECK)
+#define CG_EV_GOTFOCUS   CG_EV_BIT(CG_EVENT_GOTFOCUS)
+#define CG_EV_LOSTFOCUS  CG_EV_BIT(CG_EVENT_LOSTFOCUS)
 
 typedef struct {
     const char *name;      /* .cgui 里 type 字段的写法 */
@@ -135,8 +149,17 @@ typedef struct cg_node {
     int      page;
     /** image 的图片路径（相对 .cgui 目录、exe 目录或绝对） */
     char    *src;
-    /** 细分格式：datepicker 用 "date"（默认）/ "time" / "datetime" */
+    /** 细分格式：datepicker 用 "date"（默认）/ "time" / "datetime"；
+     *  shape 用 "rect" / "roundrect" / "ellipse" */
     char    *format;
+    /** 鼠标悬停提示（tooltip），所有控件通用；NULL / 空 = 无提示 */
+    char    *hint;
+    /** timer 的触发周期（毫秒），0 = 不运行 */
+    int      period;
+    /** table：允许多选行 */
+    int      multi;
+    /** table：显示行首复选框列 */
+    int      check;
     /** 各类事件绑定的回调名，NULL 表示没绑 */
     char    *ev[CG_EVENT_COUNT];
 
