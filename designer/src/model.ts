@@ -627,6 +627,7 @@ export function parseDoc(text: string): { doc?: CgDoc; error?: string } {
   }
   const app = (o.app ?? {}) as Record<string, unknown>;
   if (!Array.isArray(o.widgets)) return { error: "缺少 widgets 数组" };
+  const winEvents = appEvents(app.events);
 
   const doc: CgDoc = {
     cgui: 1,
@@ -635,7 +636,7 @@ export function parseDoc(text: string): { doc?: CgDoc; error?: string } {
       width: Number(app.width) > 0 ? Number(app.width) : 700,
       height: Number(app.height) > 0 ? Number(app.height) : 500,
       bg: typeof app.bg === "string" ? app.bg : "#F3EDF7",
-      ...(appEvents(app.events) ? { events: appEvents(app.events) } : {}),
+      ...(winEvents ? { events: winEvents } : {}),
     },
     widgets: o.widgets.map((w, i) => coerceNode(w, i)).filter((w): w is CgNode => w !== null),
   };

@@ -13,12 +13,15 @@ contextBridge.exposeInMainWorld("cstackgui", {
   setTitle: (title) => ipcRenderer.invoke("app:setTitle", title),
   confirmDiscard: (message) => ipcRenderer.invoke("app:confirmDiscard", message),
 
-  /** 编译/运行输出流（主进程 spawn 的批处理输出） */
+  /** 编译/运行输出流（主进程 spawn 的批处理输出）。
+   *  渲染端 effect 会随依赖变化反复注册，先清旧监听再挂新的，
+   *  否则监听器堆积、输出行成倍重复。 */
   onRunOutput: (handler) => {
+    ipcRenderer.removeAllListeners("run:output");
     ipcRenderer.on("run:output", (_e, o) => handler(o));
   },
 
-  /** 主进程菜单 -> 渲染进程 */
+  /** 主进程菜单 -> 渲染进程（同上，注册前先清旧监听） */
   onMenu: (handler) => {
     const channels = [
       "menu:new",
@@ -36,6 +39,7 @@ contextBridge.exposeInMainWorld("cstackgui", {
       "menu:zoomFit",
     ];
     for (const ch of channels) {
+      ipcRenderer.removeAllListeners(ch);
       ipcRenderer.on(ch, () => handler(ch.replace("menu:", "")));
     }
   },

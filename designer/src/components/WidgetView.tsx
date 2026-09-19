@@ -170,7 +170,7 @@ function inner(node: CgNode) {
       return <div className="ctl-link">{node.text || "链接"}</div>;
 
     case "iconbutton":
-      return <div className="ctl-iconbtn">{[node.src ? "图标" : "图标"]}</div>;
+      return <div className="ctl-iconbtn">图标</div>;
 
     case "monthcal":
       return (
