@@ -312,6 +312,32 @@ export default function App() {
     }
   }, [bridge, dirty, doSave, filePath, say]);
 
+  /* -------------------------------------------------- 发布（运行按钮后面那个） */
+  const [publishing, setPublishing] = useState(false);
+  const doPublish = useCallback(async () => {
+    setRunOpen(true);
+    setRunLines([]);
+
+    /* 发布前必须先落盘：zip 里要打进最新的 .cgui */
+    if (dirty || !filePath) {
+      const saved = await doSave(!filePath);
+      if (saved.canceled) {
+        say("先保存才能发布");
+        setRunOpen(false);
+        return;
+      }
+    }
+
+    setPublishing(true);
+    try {
+      const res = await bridge.publish({ filePath });
+      if (res.ok) say(res.message);
+      else setRunLines((ls) => [...ls, "", `# ${res.message}`]);
+    } finally {
+      setPublishing(false);
+    }
+  }, [bridge, dirty, doSave, filePath, say]);
+
   /* -------------------------------------------------- 菜单 & 快捷键 */
   useEffect(() => {
     bridge.onMenu((action) => {
@@ -499,6 +525,8 @@ export default function App() {
         onExportC={() => void doExportC()}
         running={running}
         onRun={() => void doRun()}
+        publishing={publishing}
+        onPublish={() => void doPublish()}
         onZoom={(z) => setZoom(clamp(z, 0.2, 3))}
         onToggleGrid={() => setShowGrid((v) => !v)}
         onToggleSnap={() => setSnapOn((v) => !v)}

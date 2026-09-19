@@ -19,6 +19,8 @@ type Props = {
   onExportC: () => void;
   running: boolean;
   onRun: () => void;
+  publishing: boolean;
+  onPublish: () => void;
   onZoom: (z: number) => void;
   onToggleGrid: () => void;
   onToggleSnap: () => void;
@@ -65,6 +67,13 @@ export default function Toolbar(p: Props) {
           title="F5：保存 → build-app.bat 编译 → 启动 exe（工程要在 apps\\ 下且已导出 C 骨架）"
         >
           {p.running ? "编译中…" : "▶ 运行"}
+        </button>
+        <button
+          disabled={p.publishing || p.running}
+          onClick={p.onPublish}
+          title="发布：保存 → release 编译 → 打成自包含 zip（publish\\ 下），发给其他人即可双击运行"
+        >
+          {p.publishing ? "发布中…" : "⇪ 发布"}
         </button>
       </div>
 

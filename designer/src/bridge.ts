@@ -32,6 +32,7 @@ export type Bridge = {
   exportC: (p: ExportPayload) => Promise<ExportResult>;
   /** F5 一键运行：调项目根的 build-app.bat 编译，成功后把 exe 跑起来 */
   buildAndRun: (p: { filePath: string }) => Promise<RunResult>;
+  publish: (p: { filePath: string }) => Promise<RunResult>;
   reveal: (target: string) => void;
   setTitle: (title: string) => void;
   confirmDiscard: (message?: string) => Promise<boolean>;
@@ -81,6 +82,7 @@ export function getBridge(): Bridge {
       saveFile: (p) => api.saveFile(p),
       exportC: (p) => api.exportC(p),
       buildAndRun: (p) => api.buildAndRun(p),
+      publish: (p) => api.publish(p),
       reveal: (t) => void api.reveal(t),
       setTitle: (t) => void api.setTitle(t),
       confirmDiscard: (m) => api.confirmDiscard(m),
@@ -113,6 +115,10 @@ export function getBridge(): Bridge {
     buildAndRun: async () => ({
       ok: false,
       message: "浏览器模式没法编译运行，请用打包好的 CStackGUI.exe（或 npm run dev）。",
+    }),
+    publish: async () => ({
+      ok: false,
+      message: "浏览器模式没法编译发布，请用打包好的 CStackGUI.exe（或 npm run dev）。",
     }),
     reveal: () => undefined,
     setTitle: (t) => {

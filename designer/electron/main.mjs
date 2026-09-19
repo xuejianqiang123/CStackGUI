@@ -393,6 +393,116 @@ ipcMain.handle("app:setTitle", (_e, title) => {
   if (win && !win.isDestroyed()) win.setTitle(title ? `CStackGUI — ${title}` : "CStackGUI");
 });
 
+/* 发布：把当前工程编译成 release 版并打成自包含 zip，交给其他用户即可双击运行。
+ * 产物：<项目根>\publish\<工程名>.zip（内含 exe / .cgui / assets / README.txt）。 */
+ipcMain.handle("publish:project", async (_e, { filePath }) => {
+  const fail = (message) => {
+    dialog.showErrorBox("发布失败", message);
+    return { ok: false, message };
+  };
+
+  if (runBusy) return fail("上一次编译还没结束，等一下再点。");
+  if (!filePath || !existsSync(filePath)) {
+    return fail("先把 .cgui 保存到磁盘（Ctrl+S）再发布。");
+  }
+
+  /* 与运行按钮同一套前置检查（找根 / 工程名 / 目录位置 / main.c） */
+  const appDir = path.dirname(path.resolve(filePath));
+  const fileRoot = findProjectRootUpwards(appDir);
+  if (fileRoot && fileRoot !== projectRootCache) await rememberProjectRoot(fileRoot);
+  const root = fileRoot || (await resolveProjectRoot());
+  if (!root) {
+    return fail("还没找到 CStackGUI 项目根。点工具条上的「定位项目根」，\n选含 runtime\\、apps\\ 的那一层目录。");
+  }
+  const name = safeName(path.basename(path.dirname(path.resolve(filePath))));
+  if (!name) {
+    return fail(`工程目录名要只用英文/数字/下划线（当前目录名无法用作编译参数）。\n当前文件在：${appDir}`);
+  }
+  const under = [path.join(root, "apps"), path.join(root, "examples")]
+    .some((base) => appDir.toLowerCase().startsWith(base.toLowerCase() + path.sep));
+  if (!under) {
+    return fail(
+      `工程要放在项目根的 apps\\ 或 examples\\ 下才能编译。\n` +
+      `当前文件在：${appDir}\n` +
+      `用「导出 C 骨架」把工程放进 ${path.join(root, "apps")} 即可。`,
+    );
+  }
+  if (!existsSync(path.join(appDir, "main.c"))) {
+    return fail(`${appDir} 里没有 main.c。\n先点「导出 C 骨架」生成 C 代码，再发布。`);
+  }
+
+  runBusy = true;
+  send("run:output", { kind: "line", text: `$ build-app.bat ${name} --release` });
+
+  /* 1) release 编译（-mwindows：无控制台窗口，适合分发） */
+  let exitCode = -1;
+  await new Promise((resolve) => {
+    const child = spawn("cmd.exe", ["/d", "/s", "/c", `chcp 65001 >nul & build-app.bat ${name} --release`], { cwd: root });
+    const push = (buf) => {
+      for (const line of String(buf).split(/\r?\n/)) {
+        if (line.trim()) send("run:output", { kind: "line", text: line });
+      }
+    };
+    child.stdout.on("data", push);
+    child.stderr.on("data", push);
+    child.on("exit", (code) => { exitCode = code ?? -1; resolve(); });
+    child.on("error", (err) => {
+      send("run:output", { kind: "line", text: `[publish] ${err}` });
+      resolve();
+    });
+  });
+  runBusy = false;
+
+  if (exitCode !== 0) {
+    send("run:output", { kind: "fail", code: exitCode });
+    return fail(`发布编译失败（退出码 ${exitCode}），输出在画布下方的运行面板里。`);
+  }
+  const exePath = path.join(appDir, `${name}.exe`);
+  if (!existsSync(exePath)) {
+    return fail(`编译没有生成 ${exePath}，请确认工程目录里有 main.c。`);
+  }
+
+  /* 2) 组装自包含发布目录：exe + .cgui + assets + 使用说明 */
+  const pubRoot = path.join(root, "publish");
+  const pubDir = path.join(pubRoot, name);
+  const readme = [
+    `${name} —— 由 CStackGUI 制作`,
+    "",
+    "使用方法：解压后双击 " + name + ".exe 即可运行（无需安装任何运行库）。",
+    name + ".cgui 是界面文件，必须和 exe 放在同一目录（解压即已同目录，别单独挪走）。",
+    "assets\\ 里是程序用到的图片等资源（如有）。",
+    "",
+    "想自己改界面：去 CStackGUI 项目（https://github.com/ 上找作者要）用画布打开 .cgui。",
+  ].join("\r\n");
+
+  try {
+    await fs.rm(pubDir, { recursive: true, force: true });
+    await fs.mkdir(pubDir, { recursive: true });
+    await fs.copyFile(exePath, path.join(pubDir, `${name}.exe`));
+    await fs.copyFile(filePath, path.join(pubDir, path.basename(filePath)));
+    const assetsDir = path.join(appDir, "assets");
+    if (existsSync(assetsDir)) await fs.cp(assetsDir, path.join(pubDir, "assets"), { recursive: true });
+    await fs.writeFile(path.join(pubDir, "README.txt"), readme, "utf8");
+  } catch (err) {
+    return fail(`组装发布目录失败：${err}`);
+  }
+
+  /* 3) 打 zip（Windows 10+ 自带 bsdtar，-a 按扩展名选 zip） */
+  const zipPath = path.join(pubRoot, `${name}.zip`);
+  send("run:output", { kind: "line", text: `$ tar -a -c -f ${zipPath}` });
+  let zipOk = true;
+  await new Promise((resolve) => {
+    const child = spawn("tar.exe", ["-a", "-c", "-f", zipPath, "-C", pubRoot, name]);
+    child.on("exit", (code) => { zipOk = code === 0; resolve(); });
+    child.on("error", () => { zipOk = false; resolve(); });
+  });
+
+  const target = zipOk ? zipPath : pubDir;
+  send("run:output", { kind: "done", text: target });
+  shell.showItemInFolder(target);
+  return { ok: true, message: zipOk ? `发布包已生成：${zipPath}` : `发布目录已生成：${pubDir}`, target };
+});
+
 /** 关闭前询问未保存的改动 */
 ipcMain.handle("app:confirmDiscard", async (_e, message) => {
   const res = await dialog.showMessageBox(win, {
