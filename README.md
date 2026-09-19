@@ -34,7 +34,7 @@ apps\<名字>\  业务程序（.cgui + C 文件）──链接──>  apps\<名
 
 | 需要 | 版本 | 说明 |
 | --- | --- | --- |
-| MinGW-w64 gcc | 8+（实测 16.2） | 默认找 `C:\mingw64\bin`，装在别处就设 `set MINGW=D:\你的\mingw64\bin` |
+| MinGW-w64 gcc | 8+（实测 16.2） | 默认找 `C:\mingw64\bin`，下载：https://pan.quark.cn/s/f7f5f4791017 |
 | Node.js | 22.12+ / 24+ | **只有想自己改画布、重新打包画布时才需要** |
 
 先用 `gcc --version` 确认一下；如果提示"不是内部或外部命令"，把 MinGW 的 `bin` 加进 PATH，或者直接设 `MINGW` 环境变量。
