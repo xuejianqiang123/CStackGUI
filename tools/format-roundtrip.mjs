@@ -6,7 +6,7 @@
  * 测法：
  *   1. 用画布的模型代码读一个 .cgui（parseDoc）
  *   2. 改点东西（挪位置、改文字、加控件、绑事件）后重新写出来（serializeDoc）
- *   3. 把写出来的文件交给 C 运行时自检（hello.exe --selftest）
+ *   3. 把写出来的文件交给 C 运行时自检（gallery.exe --selftest）
  *
  * 用法：node tools/format-roundtrip.mjs <exe> <输入.cgui> <输出.cgui>
  * 需要先编译画布模型：npx tsc src/model.ts --outDir ../build/modeljs ...
@@ -19,9 +19,9 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, "..");
 
-const exe = process.argv[2] ? path.resolve(process.argv[2]) : path.join(root, "examples", "hello", "hello.exe");
-const input = process.argv[3] ? path.resolve(process.argv[3]) : path.join(root, "examples", "hello", "hello.cgui");
-const output = process.argv[4] ? path.resolve(process.argv[4]) : path.join(root, "build", "roundtrip_hello.cgui");
+const exe = process.argv[2] ? path.resolve(process.argv[2]) : path.join(root, "examples", "gallery", "gallery.exe");
+const input = process.argv[3] ? path.resolve(process.argv[3]) : path.join(root, "examples", "gallery", "gallery.cgui");
+const output = process.argv[4] ? path.resolve(process.argv[4]) : path.join(root, "build", "roundtrip_gallery.cgui");
 
 const modelPath = path.join(root, "build", "modeljs", "model.js");
 if (!fs.existsSync(modelPath)) {

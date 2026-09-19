@@ -5,36 +5,67 @@
     "width": 900,
     "height": 860,
     "bg": "#F3EDF7",
-    "events": { "close": "on_close" }
+    "events": {
+      "close": "on_close"
+    }
   },
   "widgets": [
     {
       "id": "menu_main",
       "type": "menu",
-      "events": { "click": "on_menu_click" },
+      "events": {
+        "click": "on_menu_click"
+      },
       "nodes": [
         {
           "text": "文件",
           "children": [
-            { "text": "新建", "id": "m_new" },
-            { "text": "打开", "id": "m_open" },
-            { "text": "保存", "id": "m_save" },
-            { "text": "-" },
-            { "text": "退出", "id": "m_quit" }
+            {
+              "text": "新建",
+              "id": "m_new"
+            },
+            {
+              "text": "打开",
+              "id": "m_open"
+            },
+            {
+              "text": "保存",
+              "id": "m_save"
+            },
+            {
+              "text": "-"
+            },
+            {
+              "text": "退出",
+              "id": "m_quit"
+            }
           ]
         },
         {
           "text": "编辑",
           "children": [
-            { "text": "复制", "id": "m_copy" },
-            { "text": "粘贴", "id": "m_paste" }
+            {
+              "text": "复制",
+              "id": "m_copy"
+            },
+            {
+              "text": "粘贴",
+              "id": "m_paste"
+            }
           ]
         },
         {
           "text": "视图",
           "children": [
-            { "text": "状态栏", "id": "m_status", "checked": true },
-            { "text": "关于", "id": "m_about" }
+            {
+              "text": "状态栏",
+              "id": "m_status",
+              "checked": true
+            },
+            {
+              "text": "关于",
+              "id": "m_about"
+            }
           ]
         }
       ]
@@ -42,277 +73,1159 @@
     {
       "id": "tb_main",
       "type": "toolbar",
-      "rect": { "x": 0, "y": 0, "w": 900, "h": 34 },
-      "items": ["新建", "打开", "保存", "关于"],
-      "events": { "click": "on_toolbar_click" }
-    },
-    {
-      "id": "mbtn_more",
-      "type": "menubutton",
-      "rect": { "x": 12, "y": 46, "w": 120, "h": 30 },
-      "text": "更多操作",
-      "style": { "font": "Microsoft YaHei UI", "size": 9 },
-      "events": { "click": "on_more_click" },
-      "nodes": [
-        { "text": "导出为 CSV", "id": "x_csv" },
-        { "text": "导出为 JSON", "id": "x_json" },
-        { "text": "-" },
-        { "text": "清空全部", "id": "x_clear" }
-      ]
-    },
-    {
-      "id": "lab_mbtn_hint",
-      "type": "label",
-      "rect": { "x": 142, "y": 50, "w": 260, "h": 22 },
-      "text": "菜单按钮：点一下在下方弹出菜单",
-      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#79747E" }
-    },
-    {
-      "id": "sw_notify",
-      "type": "switch",
-      "rect": { "x": 12, "y": 90, "w": 180, "h": 32 },
-      "text": "通知",
-      "checked": true,
-      "events": { "change": "on_notify_change" }
-    },
-    {
-      "id": "spn_count",
-      "type": "spinner",
-      "rect": { "x": 12, "y": 134, "w": 110, "h": 28 },
-      "value": 5,
-      "min": 0,
-      "max": 100,
-      "events": { "change": "on_count_change" }
-    },
-    {
-      "id": "lab_count",
-      "type": "label",
-      "rect": { "x": 132, "y": 138, "w": 150, "h": 24 },
-      "text": "数量 5（联动右边圆环）",
-      "style": { "font": "Microsoft YaHei UI", "size": 9 }
-    },
-    {
-      "id": "dt_date",
-      "type": "datepicker",
-      "rect": { "x": 12, "y": 174, "w": 150, "h": 28 },
-      "format": "date",
-      "text": "2026-09-19",
-      "events": { "change": "on_date_change" }
-    },
-    {
-      "id": "dt_time",
-      "type": "datepicker",
-      "rect": { "x": 172, "y": 174, "w": 120, "h": 28 },
-      "format": "time",
-      "text": "14:30",
-      "events": { "change": "on_time_change" }
-    },
-    {
-      "id": "dt_both",
-      "type": "datepicker",
-      "rect": { "x": 12, "y": 214, "w": 280, "h": 28 },
-      "format": "datetime",
-      "text": "2026-09-19 14:30",
-      "events": { "change": "on_datetime_change" }
-    },
-    {
-      "id": "lab_dt_hint",
-      "type": "label",
-      "rect": { "x": 12, "y": 250, "w": 300, "h": 22 },
-      "text": "日期 / 时间 / 日期+时间（后者是两个控件拼的）",
-      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#79747E" }
-    },
-    {
-      "id": "tree_files",
-      "type": "tree",
-      "rect": { "x": 12, "y": 280, "w": 300, "h": 166 },
-      "events": {
-        "select": "on_tree_select",
-        "dblclick": "on_tree_dblclick",
-        "expand": "on_tree_expand",
-        "collapse": "on_tree_collapse"
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 900,
+        "h": 34
       },
-      "nodes": [
-        {
-          "text": "项目",
-          "expanded": true,
-          "children": [
-            { "text": "runtime" },
-            { "text": "designer" },
-            { "text": "examples" }
-          ]
-        },
-        {
-          "text": "构建产物",
-          "children": [
-            { "text": "hello.exe" },
-            { "text": "gallery.exe" }
-          ]
-        }
-      ]
+      "items": [
+        "新建",
+        "打开",
+        "保存",
+        "关于"
+      ],
+      "events": {
+        "click": "on_toolbar_click"
+      }
     },
     {
-      "id": "lab_tree_sel",
-      "type": "label",
-      "rect": { "x": 12, "y": 452, "w": 300, "h": 22 },
-      "text": "树：未选中",
-      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#6750A4" }
-    },
-    {
-      "id": "btn_add_node",
-      "type": "button",
-      "rect": { "x": 12, "y": 480, "w": 146, "h": 36 },
-      "text": "给树加节点",
-      "style": { "font": "Microsoft YaHei UI", "size": 9 },
-      "events": { "click": "on_add_node" }
-    },
-    {
-      "id": "btn_add_row",
-      "type": "button",
-      "rect": { "x": 166, "y": 480, "w": 146, "h": 36 },
-      "text": "给表格加行",
-      "style": { "font": "Microsoft YaHei UI", "size": 9 },
-      "events": { "click": "on_add_row" }
-    },
-    {
-      "id": "lnk_docs",
-      "type": "link",
-      "rect": { "x": 12, "y": 532, "w": 180, "h": 24 },
-      "text": "打开帮助文档（链接）",
-      "events": { "click": "on_link_click" }
-    },
-    {
-      "id": "lab_link_hint",
-      "type": "label",
-      "rect": { "x": 12, "y": 560, "w": 300, "h": 22 },
-      "text": "链接：手型光标 + 下划线，只支持 click / dblclick",
-      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#79747E" }
-    },
-    {
-      "id": "icb_run",
-      "type": "iconbutton",
-      "rect": { "x": 12, "y": 588, "w": 52, "h": 52 },
-      "src": "assets/icon.png",
-      "events": { "click": "on_icon_click" }
-    },
-    {
-      "id": "lab_icon_hint",
-      "type": "label",
-      "rect": { "x": 74, "y": 602, "w": 240, "h": 24 },
-      "text": "图标按钮：src 指定图片",
-      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#79747E" }
-    },
-    {
-      "id": "img_logo",
-      "type": "image",
-      "rect": { "x": 340, "y": 46, "w": 250, "h": 90 },
-      "src": "assets/logo.png"
-    },
-    {
-      "id": "rt_notes",
-      "type": "richtext",
-      "rect": { "x": 606, "y": 46, "w": 282, "h": 90 },
-      "text": "富文本：能装大段文字，\r\n也可以当简易编辑器用。",
-      "events": { "change": "on_richtext_change" }
-    },
-    {
-      "id": "tabs_main",
+      "id": "pages_main",
       "type": "tabs",
-      "rect": { "x": 340, "y": 150, "w": 548, "h": 200 },
+      "rect": {
+        "x": 8,
+        "y": 44,
+        "w": 884,
+        "h": 780
+      },
       "value": 0,
-      "items": ["页面一", "页面二"],
-      "events": { "select": "on_tab_change" },
+      "items": [
+        "基础闭环",
+        "控件陈列",
+        "新特性"
+      ],
+      "events": {
+        "select": "on_pages_change"
+      },
       "children": [
         {
-          "id": "lab_p1",
+          "id": "grp_user",
+          "type": "group",
+          "rect": {
+            "x": 28,
+            "y": 68,
+            "w": 300,
+            "h": 180
+          },
+          "text": "个人信息",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#1D1B20"
+          },
+          "children": [
+            {
+              "id": "lab_name",
+              "type": "label",
+              "rect": {
+                "x": 20,
+                "y": 80,
+                "w": 56,
+                "h": 26
+              },
+              "text": "姓名",
+              "style": {
+                "font": "Microsoft YaHei UI",
+                "size": 9,
+                "fg": "#49454F"
+              }
+            },
+            {
+              "id": "edt_name",
+              "type": "edit",
+              "rect": {
+                "x": 84,
+                "y": 76,
+                "w": 196,
+                "h": 28
+              },
+              "text": "",
+              "events": {
+                "change": "on_name_change",
+                "submit": "on_name_submit"
+              }
+            },
+            {
+              "id": "chk_vip",
+              "type": "checkbox",
+              "rect": {
+                "x": 20,
+                "y": 120,
+                "w": 150,
+                "h": 26
+              },
+              "text": "VIP 用户",
+              "events": {
+                "change": "on_vip_change"
+              }
+            },
+            {
+              "id": "sld_level",
+              "type": "slider",
+              "rect": {
+                "x": 20,
+                "y": 156,
+                "w": 260,
+                "h": 32
+              },
+              "value": 40,
+              "min": 0,
+              "max": 100,
+              "events": {
+                "change": "on_level_change"
+              }
+            },
+            {
+              "id": "lab_level",
+              "type": "label",
+              "rect": {
+                "x": 20,
+                "y": 192,
+                "w": 260,
+                "h": 22
+              },
+              "text": "等级 40",
+              "style": {
+                "font": "Microsoft YaHei UI",
+                "size": 9,
+                "fg": "#49454F"
+              }
+            }
+          ],
+          "page": 0
+        },
+        {
+          "id": "lab_title",
           "type": "label",
-          "rect": { "x": 16, "y": 42, "w": 500, "h": 24 },
-          "text": "标签页里的子控件，坐标相对标签页客户区",
-          "style": { "font": "Microsoft YaHei UI", "size": 9 },
+          "rect": {
+            "x": 352,
+            "y": 68,
+            "w": 330,
+            "h": 32
+          },
+          "text": "CStackGUI 演示",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 16,
+            "bold": true,
+            "fg": "#6750A4"
+          },
           "page": 0
         },
         {
-          "id": "edt_p1",
-          "type": "edit",
-          "rect": { "x": 16, "y": 76, "w": 320, "h": 30 },
-          "events": { "change": "on_p1_change" },
+          "id": "lab_hello_status",
+          "type": "label",
+          "rect": {
+            "x": 352,
+            "y": 108,
+            "w": 330,
+            "h": 24
+          },
+          "text": "就绪：界面由 .cgui 描述，逻辑在 main.c",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#1D1B20"
+          },
           "page": 0
         },
         {
-          "id": "btn_p1",
+          "id": "prg_level",
+          "type": "progress",
+          "rect": {
+            "x": 352,
+            "y": 144,
+            "w": 330,
+            "h": 18
+          },
+          "value": 40,
+          "min": 0,
+          "max": 100,
+          "page": 0
+        },
+        {
+          "id": "lst_log",
+          "type": "listbox",
+          "rect": {
+            "x": 352,
+            "y": 176,
+            "w": 330,
+            "h": 220
+          },
+          "page": 0
+        },
+        {
+          "id": "btn_ok",
           "type": "button",
-          "rect": { "x": 350, "y": 76, "w": 150, "h": 30 },
-          "text": "看输入框内容",
-          "style": { "font": "Microsoft YaHei UI", "size": 9 },
-          "events": { "click": "on_p1_click" },
+          "rect": {
+            "x": 352,
+            "y": 416,
+            "w": 200,
+            "h": 44
+          },
+          "text": "确定（单击 / 双击）",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 10
+          },
+          "events": {
+            "click": "on_ok_click",
+            "dblclick": "on_ok_dblclick"
+          },
           "page": 0
         },
         {
-          "id": "lab_p2",
-          "type": "label",
-          "rect": { "x": 16, "y": 42, "w": 500, "h": 24 },
-          "text": "切页时这一页的控件才显示",
-          "style": { "font": "Microsoft YaHei UI", "size": 9 },
+          "id": "btn_reset",
+          "type": "button",
+          "rect": {
+            "x": 564,
+            "y": 416,
+            "w": 118,
+            "h": 44
+          },
+          "text": "重置",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 10
+          },
+          "events": {
+            "click": "on_reset_click"
+          },
+          "page": 0
+        },
+        {
+          "id": "btn_quit",
+          "type": "button",
+          "rect": {
+            "x": 352,
+            "y": 472,
+            "w": 330,
+            "h": 40
+          },
+          "text": "退出",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 10
+          },
+          "events": {
+            "click": "on_quit_click"
+          },
+          "page": 0
+        },
+        {
+          "id": "mbtn_more",
+          "type": "menubutton",
+          "rect": {
+            "x": 16,
+            "y": 90,
+            "w": 120,
+            "h": 30
+          },
+          "text": "更多操作",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9
+          },
+          "events": {
+            "click": "on_more_click"
+          },
+          "nodes": [
+            {
+              "text": "导出为 CSV",
+              "id": "x_csv"
+            },
+            {
+              "text": "导出为 JSON",
+              "id": "x_json"
+            },
+            {
+              "text": "-"
+            },
+            {
+              "text": "清空全部",
+              "id": "x_clear"
+            }
+          ],
           "page": 1
         },
         {
-          "id": "chk_p2",
-          "type": "checkbox",
-          "rect": { "x": 16, "y": 76, "w": 240, "h": 28 },
-          "text": "第二页的复选框",
-          "events": { "change": "on_p2_check" },
+          "id": "lab_mbtn_hint",
+          "type": "label",
+          "rect": {
+            "x": 146,
+            "y": 94,
+            "w": 260,
+            "h": 22
+          },
+          "text": "菜单按钮：点一下在下方弹出菜单",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#79747E"
+          },
           "page": 1
+        },
+        {
+          "id": "sw_notify",
+          "type": "switch",
+          "rect": {
+            "x": 16,
+            "y": 134,
+            "w": 180,
+            "h": 32
+          },
+          "text": "通知",
+          "checked": true,
+          "events": {
+            "change": "on_notify_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "spn_count",
+          "type": "spinner",
+          "rect": {
+            "x": 16,
+            "y": 178,
+            "w": 110,
+            "h": 28
+          },
+          "value": 5,
+          "min": 0,
+          "max": 100,
+          "events": {
+            "change": "on_count_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "lab_count",
+          "type": "label",
+          "rect": {
+            "x": 136,
+            "y": 182,
+            "w": 150,
+            "h": 24
+          },
+          "text": "数量 5（联动右边圆环）",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9
+          },
+          "page": 1
+        },
+        {
+          "id": "dt_date",
+          "type": "datepicker",
+          "rect": {
+            "x": 16,
+            "y": 218,
+            "w": 150,
+            "h": 28
+          },
+          "format": "date",
+          "text": "2026-09-19",
+          "events": {
+            "change": "on_date_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "dt_time",
+          "type": "datepicker",
+          "rect": {
+            "x": 176,
+            "y": 218,
+            "w": 120,
+            "h": 28
+          },
+          "format": "time",
+          "text": "14:30",
+          "events": {
+            "change": "on_time_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "dt_both",
+          "type": "datepicker",
+          "rect": {
+            "x": 16,
+            "y": 258,
+            "w": 280,
+            "h": 28
+          },
+          "format": "datetime",
+          "text": "2026-09-19 14:30",
+          "events": {
+            "change": "on_datetime_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "lab_dt_hint",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 294,
+            "w": 300,
+            "h": 22
+          },
+          "text": "日期 / 时间 / 日期+时间（后者是两个控件拼的）",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#79747E"
+          },
+          "page": 1
+        },
+        {
+          "id": "tree_files",
+          "type": "tree",
+          "rect": {
+            "x": 16,
+            "y": 324,
+            "w": 300,
+            "h": 166
+          },
+          "events": {
+            "select": "on_tree_select",
+            "dblclick": "on_tree_dblclick",
+            "expand": "on_tree_expand",
+            "collapse": "on_tree_collapse"
+          },
+          "nodes": [
+            {
+              "text": "项目",
+              "expanded": true,
+              "children": [
+                {
+                  "text": "runtime"
+                },
+                {
+                  "text": "designer"
+                },
+                {
+                  "text": "examples"
+                }
+              ]
+            },
+            {
+              "text": "构建产物",
+              "children": [
+                {
+                  "text": "hello.exe"
+                },
+                {
+                  "text": "gallery.exe"
+                }
+              ]
+            }
+          ],
+          "page": 1
+        },
+        {
+          "id": "lab_tree_sel",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 496,
+            "w": 300,
+            "h": 22
+          },
+          "text": "树：未选中",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#6750A4"
+          },
+          "page": 1
+        },
+        {
+          "id": "btn_add_node",
+          "type": "button",
+          "rect": {
+            "x": 16,
+            "y": 524,
+            "w": 146,
+            "h": 36
+          },
+          "text": "给树加节点",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9
+          },
+          "events": {
+            "click": "on_add_node"
+          },
+          "page": 1
+        },
+        {
+          "id": "btn_add_row",
+          "type": "button",
+          "rect": {
+            "x": 170,
+            "y": 524,
+            "w": 146,
+            "h": 36
+          },
+          "text": "给表格加行",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9
+          },
+          "events": {
+            "click": "on_add_row"
+          },
+          "page": 1
+        },
+        {
+          "id": "lnk_docs",
+          "type": "link",
+          "rect": {
+            "x": 16,
+            "y": 576,
+            "w": 180,
+            "h": 24
+          },
+          "text": "打开帮助文档（链接）",
+          "events": {
+            "click": "on_link_click"
+          },
+          "page": 1
+        },
+        {
+          "id": "lab_link_hint",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 604,
+            "w": 300,
+            "h": 22
+          },
+          "text": "链接：手型光标 + 下划线，只支持 click / dblclick",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#79747E"
+          },
+          "page": 1
+        },
+        {
+          "id": "icb_run",
+          "type": "iconbutton",
+          "rect": {
+            "x": 16,
+            "y": 632,
+            "w": 52,
+            "h": 52
+          },
+          "src": "assets/icon.png",
+          "events": {
+            "click": "on_icon_click"
+          },
+          "page": 1
+        },
+        {
+          "id": "lab_icon_hint",
+          "type": "label",
+          "rect": {
+            "x": 78,
+            "y": 646,
+            "w": 240,
+            "h": 24
+          },
+          "text": "图标按钮：src 指定图片",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#79747E"
+          },
+          "page": 1
+        },
+        {
+          "id": "img_logo",
+          "type": "image",
+          "rect": {
+            "x": 344,
+            "y": 90,
+            "w": 250,
+            "h": 90
+          },
+          "src": "assets/logo.png",
+          "page": 1
+        },
+        {
+          "id": "rt_notes",
+          "type": "richtext",
+          "rect": {
+            "x": 610,
+            "y": 90,
+            "w": 282,
+            "h": 90
+          },
+          "text": "富文本：能装大段文字，\r\n也可以当简易编辑器用。",
+          "events": {
+            "change": "on_richtext_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "tabs_main",
+          "type": "tabs",
+          "rect": {
+            "x": 344,
+            "y": 194,
+            "w": 548,
+            "h": 200
+          },
+          "value": 0,
+          "items": [
+            "页面一",
+            "页面二"
+          ],
+          "events": {
+            "select": "on_tab_change"
+          },
+          "children": [
+            {
+              "id": "lab_p1",
+              "type": "label",
+              "rect": {
+                "x": 20,
+                "y": 86,
+                "w": 500,
+                "h": 24
+              },
+              "text": "标签页里的子控件，坐标相对标签页客户区",
+              "style": {
+                "font": "Microsoft YaHei UI",
+                "size": 9
+              },
+              "page": 0
+            },
+            {
+              "id": "edt_p1",
+              "type": "edit",
+              "rect": {
+                "x": 20,
+                "y": 120,
+                "w": 320,
+                "h": 30
+              },
+              "events": {
+                "change": "on_p1_change"
+              },
+              "page": 0
+            },
+            {
+              "id": "btn_p1",
+              "type": "button",
+              "rect": {
+                "x": 354,
+                "y": 120,
+                "w": 150,
+                "h": 30
+              },
+              "text": "看输入框内容",
+              "style": {
+                "font": "Microsoft YaHei UI",
+                "size": 9
+              },
+              "events": {
+                "click": "on_p1_click"
+              },
+              "page": 0
+            },
+            {
+              "id": "lab_p2",
+              "type": "label",
+              "rect": {
+                "x": 20,
+                "y": 86,
+                "w": 500,
+                "h": 24
+              },
+              "text": "切页时这一页的控件才显示",
+              "style": {
+                "font": "Microsoft YaHei UI",
+                "size": 9
+              },
+              "page": 1
+            },
+            {
+              "id": "chk_p2",
+              "type": "checkbox",
+              "rect": {
+                "x": 20,
+                "y": 120,
+                "w": 240,
+                "h": 28
+              },
+              "text": "第二页的复选框",
+              "events": {
+                "change": "on_p2_check"
+              },
+              "page": 1
+            }
+          ],
+          "page": 1
+        },
+        {
+          "id": "tbl_data",
+          "type": "table",
+          "rect": {
+            "x": 344,
+            "y": 408,
+            "w": 548,
+            "h": 152
+          },
+          "events": {
+            "select": "on_table_select"
+          },
+          "columns": [
+            {
+              "title": "姓名",
+              "w": 140
+            },
+            {
+              "title": "年龄",
+              "w": 80
+            },
+            {
+              "title": "城市"
+            }
+          ],
+          "rows": [
+            [
+              "张三",
+              "28",
+              "上海"
+            ],
+            [
+              "李四",
+              "34",
+              "成都"
+            ]
+          ],
+          "page": 1
+        },
+        {
+          "id": "ring_count",
+          "type": "progressring",
+          "rect": {
+            "x": 344,
+            "y": 584,
+            "w": 130,
+            "h": 130
+          },
+          "value": 5,
+          "min": 0,
+          "max": 100,
+          "page": 1
+        },
+        {
+          "id": "lab_ring_hint",
+          "type": "label",
+          "rect": {
+            "x": 344,
+            "y": 722,
+            "w": 130,
+            "h": 40
+          },
+          "text": "圆环进度（自绘）：跟着微调框走",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#79747E"
+          },
+          "page": 1
+        },
+        {
+          "id": "cal_date",
+          "type": "monthcal",
+          "rect": {
+            "x": 504,
+            "y": 584,
+            "w": 230,
+            "h": 170
+          },
+          "events": {
+            "select": "on_cal_select"
+          },
+          "page": 1
+        },
+        {
+          "id": "lab_cal_hint",
+          "type": "label",
+          "rect": {
+            "x": 504,
+            "y": 760,
+            "w": 380,
+            "h": 22
+          },
+          "text": "月历：点某天会把日期写回 text，只支持 select",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#79747E"
+          },
+          "page": 1
+        },
+        {
+          "id": "inp_name",
+          "type": "edit",
+          "rect": {
+            "x": 20,
+            "y": 60,
+            "w": 180,
+            "h": 30
+          },
+          "hint": "输入你的名字，失焦后校验",
+          "events": {
+            "submit": "on_submit",
+            "gotfocus": "on_focus",
+            "lostfocus": "on_blur"
+          },
+          "page": 2
+        },
+        {
+          "id": "btn_file",
+          "type": "button",
+          "rect": {
+            "x": 212,
+            "y": 60,
+            "w": 110,
+            "h": 30
+          },
+          "text": "打开文件...",
+          "events": {
+            "click": "on_pick_file"
+          },
+          "page": 2
+        },
+        {
+          "id": "btn_save",
+          "type": "button",
+          "rect": {
+            "x": 330,
+            "y": 60,
+            "w": 110,
+            "h": 30
+          },
+          "text": "保存文件...",
+          "events": {
+            "click": "on_pick_save"
+          },
+          "page": 2
+        },
+        {
+          "id": "btn_msg",
+          "type": "button",
+          "rect": {
+            "x": 448,
+            "y": 60,
+            "w": 90,
+            "h": 30
+          },
+          "text": "消息框",
+          "events": {
+            "click": "on_show_msg"
+          },
+          "page": 2
+        },
+        {
+          "id": "cp_main",
+          "type": "colorpicker",
+          "rect": {
+            "x": 550,
+            "y": 60,
+            "w": 64,
+            "h": 28
+          },
+          "value": 6774948,
+          "events": {
+            "change": "on_color_change"
+          },
+          "page": 2
+        },
+        {
+          "id": "lab_lab_status",
+          "type": "label",
+          "rect": {
+            "x": 20,
+            "y": 100,
+            "w": 480,
+            "h": 24
+          },
+          "text": "就绪",
+          "page": 2
+        },
+        {
+          "id": "tm_clock",
+          "type": "timer",
+          "rect": {
+            "x": 4,
+            "y": 44,
+            "w": 0,
+            "h": 0
+          },
+          "period": 1000,
+          "events": {
+            "tick": "on_tick"
+          },
+          "page": 2
+        },
+        {
+          "id": "tb_users",
+          "type": "table",
+          "rect": {
+            "x": 20,
+            "y": 136,
+            "w": 380,
+            "h": 180
+          },
+          "check": true,
+          "multi": true,
+          "hint": "可以勾选，也可以多选",
+          "columns": [
+            {
+              "title": "姓名",
+              "w": 120
+            },
+            {
+              "title": "城市",
+              "w": 120
+            },
+            {
+              "title": "年龄",
+              "w": 80
+            }
+          ],
+          "rows": [
+            [
+              "张三",
+              "杭州",
+              "28"
+            ],
+            [
+              "李四",
+              "上海",
+              "35"
+            ],
+            [
+              "王五",
+              "北京",
+              "41"
+            ],
+            [
+              "赵六",
+              "深圳",
+              "23"
+            ]
+          ],
+          "events": {
+            "select": "on_lab_table_select",
+            "check": "on_table_check"
+          },
+          "page": 2
+        },
+        {
+          "id": "cv_board",
+          "type": "canvas",
+          "rect": {
+            "x": 416,
+            "y": 136,
+            "w": 280,
+            "h": 180
+          },
+          "events": {
+            "click": "on_canvas_click"
+          },
+          "page": 2
+        },
+        {
+          "id": "rt_star",
+          "type": "rate",
+          "rect": {
+            "x": 20,
+            "y": 332,
+            "w": 150,
+            "h": 32
+          },
+          "value": 3,
+          "min": 0,
+          "max": 5,
+          "events": {
+            "change": "on_rate_change"
+          },
+          "page": 2
+        },
+        {
+          "id": "pg_main",
+          "type": "pagination",
+          "rect": {
+            "x": 184,
+            "y": 332,
+            "w": 180,
+            "h": 32
+          },
+          "value": 0,
+          "min": 0,
+          "max": 9,
+          "events": {
+            "change": "on_page_change"
+          },
+          "page": 2
+        },
+        {
+          "id": "bd_count",
+          "type": "badge",
+          "rect": {
+            "x": 384,
+            "y": 336,
+            "w": 48,
+            "h": 24
+          },
+          "text": "3",
+          "page": 2
+        },
+        {
+          "id": "tg_demo",
+          "type": "tag",
+          "rect": {
+            "x": 444,
+            "y": 334,
+            "w": 72,
+            "h": 28
+          },
+          "text": "标签片",
+          "events": {
+            "click": "on_tag_click"
+          },
+          "page": 2
+        },
+        {
+          "id": "card_main",
+          "type": "card",
+          "rect": {
+            "x": 20,
+            "y": 380,
+            "w": 300,
+            "h": 160
+          },
+          "text": "卡片",
+          "children": [
+            {
+              "id": "sw_card",
+              "type": "switch",
+              "rect": {
+                "x": 20,
+                "y": 84,
+                "w": 160,
+                "h": 32
+              },
+              "text": "卡片内开关",
+              "events": {
+                "change": "on_switch_change"
+              }
+            },
+            {
+              "id": "lab_card",
+              "type": "label",
+              "rect": {
+                "x": 20,
+                "y": 128,
+                "w": 240,
+                "h": 24
+              },
+              "text": "卡片里的标签"
+            }
+          ],
+          "page": 2
+        },
+        {
+          "id": "sh_round",
+          "type": "shape",
+          "rect": {
+            "x": 344,
+            "y": 388,
+            "w": 90,
+            "h": 90
+          },
+          "format": "roundrect",
+          "style": {
+            "bg": "#D0BCFF"
+          },
+          "page": 2
+        },
+        {
+          "id": "sh_circle",
+          "type": "shape",
+          "rect": {
+            "x": 452,
+            "y": 388,
+            "w": 90,
+            "h": 90
+          },
+          "format": "ellipse",
+          "style": {
+            "bg": "#FFD8E4"
+          },
+          "page": 2
+        },
+        {
+          "id": "sh_rect",
+          "type": "shape",
+          "rect": {
+            "x": 560,
+            "y": 388,
+            "w": 90,
+            "h": 90
+          },
+          "format": "rect",
+          "style": {
+            "bg": "#BCE0FD"
+          },
+          "page": 2
+        },
+        {
+          "id": "br_page",
+          "type": "browser",
+          "rect": {
+            "x": 20,
+            "y": 552,
+            "w": 688,
+            "h": 24
+          },
+          "src": "about:blank",
+          "page": 2
         }
       ]
-    },
-    {
-      "id": "tbl_data",
-      "type": "table",
-      "rect": { "x": 340, "y": 364, "w": 548, "h": 152 },
-      "events": { "select": "on_table_select" },
-      "columns": [
-        { "title": "姓名", "w": 140 },
-        { "title": "年龄", "w": 80 },
-        { "title": "城市" }
-      ],
-      "rows": [
-        ["张三", "28", "上海"],
-        ["李四", "34", "成都"]
-      ]
-    },
-    {
-      "id": "ring_count",
-      "type": "progressring",
-      "rect": { "x": 340, "y": 540, "w": 130, "h": 130 },
-      "value": 5,
-      "min": 0,
-      "max": 100
-    },
-    {
-      "id": "lab_ring_hint",
-      "type": "label",
-      "rect": { "x": 340, "y": 678, "w": 130, "h": 40 },
-      "text": "圆环进度（自绘）：跟着微调框走",
-      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#79747E" }
-    },
-    {
-      "id": "cal_date",
-      "type": "monthcal",
-      "rect": { "x": 500, "y": 540, "w": 230, "h": 170 },
-      "events": { "select": "on_cal_select" }
-    },
-    {
-      "id": "lab_cal_hint",
-      "type": "label",
-      "rect": { "x": 500, "y": 716, "w": 380, "h": 22 },
-      "text": "月历：点某天会把日期写回 text，只支持 select",
-      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#79747E" }
     },
     {
       "id": "sb_main",
       "type": "statusbar",
-      "rect": { "x": 0, "y": 834, "w": 900, "h": 26 },
-      "items": ["就绪", "点个控件试试"]
+      "rect": {
+        "x": 0,
+        "y": 834,
+        "w": 900,
+        "h": 26
+      },
+      "items": [
+        "就绪",
+        "点个控件试试"
+      ]
     }
   ]
 }

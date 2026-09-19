@@ -1,15 +1,16 @@
-/* main.c -- 控件陈列室：演示 v1.1 新增的 6 种控件
+/* main.c -- 控件陈列室（三合一）
  *
- *   image      按控件大小缩放显示图片（路径相对 .cgui 所在目录）
- *   switch     开关（自绘）
- *   spinner    数字微调
- *   tabs       标签页，子控件按 "page" 分页
- *   tree       树（可在 .cgui 里声明，也能用 cg_tree_add 动态加）
- *   table      表格（列/行）
- *   statusbar  状态栏（分段文字）
+ * 一个示例讲完所有东西，窗口顶部的大标签页分三页：
+ *   页 0「基础闭环」：分组框 / 输入 / 勾选 / 滑块 / 进度条 / 列表框 / 按钮（单击+双击），
+ *                     演示业务状态结构、cg_set_timer、控件间联动。
+ *   页 1「控件陈列」：菜单栏 / 工具栏 / 菜单按钮 / 开关 / 微调 / 日期时间 / 树 / 表格 /
+ *                     富文本 / 标签页 / 圆环 / 月历 / 链接 / 图标按钮 / 图片 / 状态栏，
+ *                     演示 close 拦截、动态加节点加行。
+ *   页 2「新特性」  ：时钟 / 悬停提示 / 通用对话框 / 画板 / 颜色选择 / 表格勾选多选 /
+ *                     行数值 / 评分 / 分页 / 徽章 / 标签片 / 卡片 / 外形框 / 网页浏览 / 焦点事件。
  *
  * 界面在 gallery.cgui 里；本文件只有行为和「启动时该干什么」。
- * 编译：在项目根跑 build-app.bat gallery      产物 build\gallery.exe
+ * 编译：在项目根跑 build-app.bat gallery
  */
 #include "cstackgui.h"
 
@@ -17,18 +18,60 @@
 #include <stdio.h>
 #include <string.h>
 
+/* ------------------------------------------------------------ 业务状态
+ * 三页共用一个业务结构：字段不冲突，各页回调各用各的。
+ */
 typedef struct {
-    int notify;
-    int count;
-    int tree_added;   /* 动态加过几个树节点 */
-    int rows_added;   /* 动态加过几行表格 */
-    int dirty;        /* 富文本改过还没"保存" */
-    int close_tried;  /* 已经拦过一次关闭 */
+    /* 页 0（基础闭环） */
+    char  name[64];
+    int   vip;
+    int   level;
+    int   click_count;
+    /* 页 1（控件陈列） */
+    int   notify;
+    int   count;
+    int   tree_added;   /* 动态加过几个树节点 */
+    int   rows_added;   /* 动态加过几行表格 */
+    int   dirty;        /* 富文本改过还没"保存" */
+    int   close_tried;  /* 已经拦过一次关闭 */
 } biz_t;
 
 static biz_t g_biz;
 
-static void refresh_status_summary(cg_app_t *app, biz_t *biz);
+static void set_status(cg_app_t *app, const char *text)
+{
+    cg_widget_t *lab = cg_find(app, "lab_hello_status");
+    if (lab) cg_widget_set_text(lab, text);
+}
+
+/* 把一行日志同时写到控制台和页 0 的 lst_log */
+static void log_line(cg_app_t *app, const char *fmt, ...)
+{
+    char    buf[512];
+    va_list ap;
+    cg_widget_t *log = cg_find(app, "lst_log");
+
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+
+    printf("[log] %s\n", buf);
+    if (log) cg_widget_list_add(log, buf);
+}
+
+/* 把业务状态推回界面：滑块 -> 进度条 + 文字 */
+static void refresh_level(cg_app_t *app)
+{
+    cg_widget_t *lab = cg_find(app, "lab_level");
+    cg_widget_t *prg = cg_find(app, "prg_level");
+    char buf[64];
+
+    snprintf(buf, sizeof(buf), "等级 %d", g_biz.level);
+    if (lab) cg_widget_set_text(lab, buf);
+    if (prg) cg_widget_set_value(prg, g_biz.level);
+}
+
+/* ============================================================ 页 1 陈列室 */
 
 /* 把一句话同时写到状态栏第二段和 stdout */
 static void status(cg_app_t *app, const char *fmt, ...)
@@ -54,7 +97,143 @@ static void refresh_status_summary(cg_app_t *app, biz_t *biz)
                    biz->notify ? "开" : "关", biz->count, biz->tree_added, biz->rows_added);
 }
 
-/* ------------------------------------------------------------ 回调 */
+/* ============================================================ 页 2 新特性 */
+
+static void lab_statusf(cg_app_t *app, const char *fmt, ...)
+{
+    char buf[256];
+    va_list ap;
+    cg_widget_t *lab;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    lab = cg_find(app, "lab_lab_status");
+    if (lab) cg_widget_set_text(lab, buf);
+}
+
+/* ============================================================ 页 0 回调 */
+
+/* 定时器回调：cg_set_timer 到点后在消息循环里执行，此时跳出原事件栈，安全 */
+static void reset_level_later(void *user)
+{
+    cg_app_t *app = (cg_app_t *)user;
+    cg_widget_t *sld = cg_find(app, "sld_level");
+
+    g_biz.level = 40;
+    if (sld) cg_widget_set_value(sld, g_biz.level);
+    refresh_level(app);
+    log_line(app, "2 秒后自动回落到等级 40");
+}
+
+static void on_ok_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    biz_t *biz = (biz_t *)user;
+    char buf[160];
+
+    (void)ev;
+    if (!biz) biz = &g_biz;
+
+    biz->click_count++;
+    snprintf(buf, sizeof(buf), "单击：%s，VIP=%s，等级 %d（第 %d 次单击）",
+             biz->name[0] ? biz->name : "(未填姓名)",
+             biz->vip ? "是" : "否", biz->level, biz->click_count);
+    set_status(app, buf);
+    log_line(app, "BTN 单击 #%d", biz->click_count);
+}
+
+static void on_ok_dblclick(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    char buf[160];
+
+    (void)ev;
+    /* 双击时顺手把等级拉满，演示「事件驱动改状态」 */
+    g_biz.level = 100;
+    {
+        cg_widget_t *sld = cg_find(app, "sld_level");
+        if (sld) cg_widget_set_value(sld, g_biz.level);   /* 会触发 on_level_change */
+    }
+    snprintf(buf, sizeof(buf), "双击：等级已拉满到 %d", g_biz.level);
+    set_status(app, buf);
+    log_line(app, "BTN 双击");
+
+    /* 顺便演示 cg_set_timer：2 秒后自动回落到 40 */
+    cg_set_timer(app, 2000, reset_level_later, app);
+}
+
+static void on_reset_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    cg_widget_t *edt = cg_find(app, "edt_name");
+    cg_widget_t *chk = cg_find(app, "chk_vip");
+    cg_widget_t *sld = cg_find(app, "sld_level");
+
+    (void)ev;
+    (void)user;
+    memset(&g_biz, 0, sizeof(g_biz));
+    g_biz.level = 40;
+
+    if (edt) cg_widget_set_text(edt, "");     /* 界面 -> 会自动回灌 CHANGE，但值一样 */
+    if (chk) cg_widget_set_checked(chk, 0);
+    if (sld) cg_widget_set_value(sld, g_biz.level);
+    refresh_level(app);
+    set_status(app, "已重置");
+    log_line(app, "重置完成");
+}
+
+static void on_quit_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    (void)ev;
+    (void)user;
+    log_line(app, "退出");
+    printf("business summary: clicks=%d vip=%d level=%d name=%s\n",
+           g_biz.click_count, g_biz.vip, g_biz.level, g_biz.name);
+    cg_quit(app);
+}
+
+static void on_name_change(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    const char *text = cg_widget_text(self);
+
+    (void)ev;
+    (void)user;
+    snprintf(g_biz.name, sizeof(g_biz.name), "%s", text ? text : "");
+    set_status(app, g_biz.name[0] ? "姓名已记录" : "姓名已清空");
+}
+
+static void on_name_submit(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    (void)ev;
+    (void)user;
+    log_line(app, "姓名回车提交: %s", cg_widget_text(self));
+    set_status(app, "回车提交");
+}
+
+static void on_vip_change(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    (void)ev;
+    (void)user;
+    g_biz.vip = cg_widget_checked(self);
+    log_line(app, "VIP = %s", g_biz.vip ? "开" : "关");
+    set_status(app, g_biz.vip ? "VIP 已开启" : "VIP 已关闭");
+}
+
+static void on_level_change(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    (void)ev;
+    (void)user;
+    g_biz.level = cg_widget_value(self);
+    refresh_level(app);
+    log_line(app, "等级 -> %d", g_biz.level);
+}
+
+/* ============================================================ 页 1 回调 */
 
 /* 菜单栏：所有菜单项都汇到这一个回调，用 cg_menu_last_id 区分是哪一项 */
 static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
@@ -97,12 +276,6 @@ static void on_toolbar_click(cg_widget_t *self, cg_event_t ev, void *user)
     status(app, "工具栏第 %d 个按钮：%s", index + 1, label ? label : "?");
 }
 
-/**
- * @brief 111
- * @param self 
- * @param ev 
- * @param user 
- */
 static void on_richtext_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -157,10 +330,9 @@ static void on_count_change(cg_widget_t *self, cg_event_t ev, void *user)
     cg_app_t *app = cg_app_of(self);
     biz_t *biz = (biz_t *)user;
     char buf[64];
-
-    (void)ev;
     cg_widget_t *ring = cg_find(app, "ring_count");
 
+    (void)ev;
     if (biz) biz->count = cg_widget_value(self);
     snprintf(buf, sizeof(buf), "数量 %d", cg_widget_value(self));
     cg_widget_set_text(cg_find(app, "lab_count"), buf);
@@ -201,9 +373,8 @@ static void on_add_node(cg_widget_t *self, cg_event_t ev, void *user)
     if (!tree) return;
 
     if (biz && biz->tree_added == 0) {
-        /* 第一次：往已有的「apps」节点下面挂 —— 需要知道它的下标，
-         * 声明式的树按 .cgui 里的顺序摊平，apps 是第 3 个（从 0 数） */
-        int parent = cg_tree_add(tree, 0, "运行时动态加的");   /* 挂在根「项目」下 */
+        /* 第一次：往根上挂一个，再给它挂个子节点 */
+        int parent = cg_tree_add(tree, 0, "运行时动态加的");
         cg_tree_addf(tree, parent, "第 %d 次点击生成的子节点", 1);
     } else {
         cg_tree_addf(tree, -1, "动态节点 #%d", biz ? biz->tree_added + 1 : 1);
@@ -241,6 +412,14 @@ static void on_tab_change(cg_widget_t *self, cg_event_t ev, void *user)
     (void)ev;
     (void)user;
     status(app, "切到第 %d 页（共 %d 页）", cg_tabs_selected(self) + 1, cg_tabs_count(self));
+}
+
+static void on_pages_change(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    (void)ev;
+    (void)user;
+    status(app, "顶层切到第 %d 页", cg_tabs_selected(self) + 1);
 }
 
 static void on_table_select(cg_widget_t *self, cg_event_t ev, void *user)
@@ -281,8 +460,6 @@ static void on_p2_check(cg_widget_t *self, cg_event_t ev, void *user)
     (void)user;
     status(app, "第二页复选框 -> %s", cg_widget_checked(self) ? "勾上" : "取消");
 }
-
-
 
 static void on_tree_expand(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -353,11 +530,161 @@ static void on_close(cg_widget_t *self, cg_event_t ev, void *user)
     printf("[gallery] 窗口关闭\n");
 }
 
-/* ------------------------------------------------------------ 界面就绪 */
+/* ============================================================ 页 2 回调 */
 
-static void on_ready(cg_app_t *app, void *user)
+/* 时钟：每秒把计数写回页内状态标签 */
+static void on_tick(cg_widget_t *self, cg_event_t ev, void *user)
 {
-    biz_t *biz = (biz_t *)user;
+    static int ticks = 0;
+    (void)self; (void)ev; (void)user;
+    ticks++;
+    if (cg_app_has_window(cg_app_of(self))) {
+        lab_statusf(cg_app_of(self), "时钟走了 %d 秒", ticks);
+    }
+}
+
+/* 通用对话框：自检（无窗口）时什么都不做，避免弹窗卡住 CI */
+static void on_pick_file(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    char path[1024];
+    (void)ev; (void)user;
+    if (!cg_app_has_window(cg_app_of(self))) return;
+    if (cg_open_file_dialog(self, "选择一个文件",
+                            "文本文件|*.txt|图片|*.png;*.jpg|全部|*.*",
+                            path, sizeof(path))) {
+        lab_statusf(cg_app_of(self), "打开: %s", path);
+    } else {
+        lab_statusf(cg_app_of(self), "取消了打开");
+    }
+}
+
+static void on_pick_save(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    char path[1024];
+    (void)ev; (void)user;
+    if (!cg_app_has_window(cg_app_of(self))) return;
+    if (cg_save_file_dialog(self, "保存到哪里", "文本文件|*.txt", "txt",
+                            path, sizeof(path))) {
+        lab_statusf(cg_app_of(self), "保存到: %s", path);
+    } else {
+        lab_statusf(cg_app_of(self), "取消了保存");
+    }
+}
+
+static void on_show_msg(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev; (void)user;
+    if (!cg_app_has_window(cg_app_of(self))) return;
+    cg_message_box(self, "这是运行时的消息框。", "gallery", 0);
+}
+
+/* 颜色选择：value 就是 0xRRGGBB */
+static void on_color_change(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev; (void)user;
+    lab_statusf(cg_app_of(self), "选了颜色 #%06X", (unsigned)cg_widget_value(self));
+}
+
+/* 表格：勾选 / 多选 / 行数值 */
+static void on_table_check(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    int row = cg_table_selected(self);
+    (void)ev; (void)user;
+    if (row < 0) row = 0;
+    lab_statusf(cg_app_of(self), "第 %d 行勾选变成 %d（行数值=%d）",
+                row, cg_table_checked(self, row), cg_table_row_value(self, row));
+}
+
+static void on_lab_table_select(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    int i;
+    char names[128] = "";
+    (void)ev; (void)user;
+    for (i = 0; i < cg_table_selected_count(self); i++) {
+        int row = cg_table_selected_row(self, i);
+        const char *cell = cg_table_cell(self, row, 0);
+        if (cell) strncat(names, cell, sizeof(names) - strlen(names) - 2);
+        if (i + 1 < cg_table_selected_count(self)) strncat(names, ",", sizeof(names) - strlen(names) - 2);
+    }
+    lab_statusf(cg_app_of(self), "选中: %s", names);
+}
+
+/* 画板：点一下画一个圆 */
+static void on_canvas_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev; (void)user;
+    cg_canvas_set_color(self, 0x6750A4);
+    cg_canvas_ellipse(self, 60, 60, 40, 40, 1);
+    cg_canvas_text(self, 12, 110, "点了一下");
+}
+
+static void on_rate_change(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev; (void)user;
+    lab_statusf(cg_app_of(self), "评分: %d / %d", cg_widget_value(self), 5);
+}
+
+static void on_page_change(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev; (void)user;
+    lab_statusf(cg_app_of(self), "翻到第 %d 页", cg_widget_value(self) + 1);
+}
+
+static void on_tag_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev; (void)user;
+    lab_statusf(cg_app_of(self), "标签片被点了");
+}
+
+static void on_switch_change(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev; (void)user;
+    lab_statusf(cg_app_of(self), "卡片开关: %s", cg_widget_checked(self) ? "开" : "关");
+}
+
+/* 焦点事件：失焦时校验输入框 */
+static void on_focus(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)self; (void)ev; (void)user;
+    lab_statusf(cg_app_of(self), "输入框获得焦点");
+}
+
+static void on_blur(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev; (void)user;
+    lab_statusf(cg_app_of(self), "失焦，内容是 \"%s\"",
+                *cg_widget_text(self) ? cg_widget_text(self) : "(空)");
+}
+
+static void on_submit(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev; (void)user;
+    lab_statusf(cg_app_of(self), "提交: %s", cg_widget_text(self));
+}
+
+/* ============================================================ 界面就绪 */
+
+static void hello_ready(cg_app_t *app, biz_t *biz)
+{
+    cg_widget_t *w;
+
+    biz->level = 40;
+
+    /* 业务数据挂到需要它的控件上，回调里就能直接拿到 */
+    if ((w = cg_find(app, "btn_ok")) != NULL)  cg_widget_set_user(w, biz);
+    if ((w = cg_find(app, "chk_vip")) != NULL) cg_widget_set_user(w, biz);
+    if ((w = cg_find(app, "edt_name")) != NULL) cg_widget_set_user(w, biz);
+
+    /* 用业务状态摆一次初始界面（.cgui 里给的是设计态默认值） */
+    if ((w = cg_find(app, "sld_level")) != NULL) cg_widget_set_value(w, biz->level);
+    refresh_level(app);
+    set_status(app, "就绪：界面由 .cgui 描述，逻辑在 main.c");
+
+    log_line(app, "启动完成，共 %d 个控件", cg_widget_count(app));
+}
+
+static void gallery_ready(cg_app_t *app, biz_t *biz)
+{
     cg_widget_t *w;
 
     if (biz) {
@@ -373,7 +700,6 @@ static void on_ready(cg_app_t *app, void *user)
     if ((w = cg_find(app, "rt_notes")) != NULL)     cg_widget_set_user(w, biz);
     /* 窗口自身也是控件（id = __window），close 回调要靠它拿业务数据 */
     if ((w = cg_find(app, CG_WINDOW_ID)) != NULL)   cg_widget_set_user(w, biz);
-    /* 菜单 / 工具栏 / 日期时间这些不需要业务数据，按名字走绑定表就够了 */
 
     /* 圆环进度跟上微调框的初值 */
     if ((w = cg_find(app, "ring_count")) != NULL) {
@@ -388,7 +714,6 @@ static void on_ready(cg_app_t *app, void *user)
     if ((w = cg_find(app, "tbl_data")) != NULL) {
         const char *cells[3] = { "王五", "41", "广州" };
         cg_table_add_row(w, cells, 3);
-        cg_tabs_select(cg_find(app, "tabs_main"), 0);   /* 显式回到第一页 */
     }
 
     printf("[gallery] 就绪：控件 %d 个；树 %d 节点；表格 %d 行；菜单 %d 项\n",
@@ -400,16 +725,62 @@ static void on_ready(cg_app_t *app, void *user)
     refresh_status_summary(app, biz);
 }
 
-/* ------------------------------------------------------------ 绑定表 */
+static void lab_ready(cg_app_t *app, void *user)
+{
+    cg_widget_t *cv = cg_find(app, "cv_board");
+    cg_widget_t *tb = cg_find(app, "tb_users");
+    (void)user;
 
+    if (cv) {
+        /* 画板打底稿：线 / 描边矩形 / 椭圆 / 文字 */
+        cg_canvas_set_line_width(cv, 2);
+        cg_canvas_set_color(cv, 0x333333);
+        cg_canvas_line(cv, 10, 10, 260, 10);
+        cg_canvas_rect(cv, 10, 24, 80, 40, 0);
+        cg_canvas_ellipse(cv, 120, 24, 80, 40, 0);
+        cg_canvas_set_color(cv, 0x1A73E8);
+        cg_canvas_text(cv, 12, 90, "画板：cg_canvas_* 画的");
+    }
+    if (tb) {
+        /* 行数值（不显示在表格里）+ 初始勾选 */
+        cg_table_set_row_value(tb, 0, 101);
+        cg_table_set_row_value(tb, 1, 102);
+        cg_table_set_row_value(tb, 2, 103);
+        cg_table_set_row_value(tb, 3, 104);
+        cg_table_set_checked(tb, 0, 1);
+    }
+}
+
+static void on_ready(cg_app_t *app, void *user)
+{
+    biz_t *biz = (biz_t *)user;
+
+    hello_ready(app, biz);
+    gallery_ready(app, biz);
+    lab_ready(app, user);
+}
+
+/* ------------------------------------------------------------ 绑定表
+ * 左边是 .cgui 里写的名字，右边是本文件里的函数。
+ */
 static const cg_binding_t k_bindings[] = {
     /* 窗口级 */
     CG_BIND("on_close",         on_close),
-    /* 菜单栏 / 菜单按钮 / 工具栏 */
+    /* 顶层标签页 */
+    CG_BIND("on_pages_change",  on_pages_change),
+    /* ---- 页 0 基础闭环 ---- */
+    CG_BIND("on_ok_click",      on_ok_click),
+    CG_BIND("on_ok_dblclick",   on_ok_dblclick),
+    CG_BIND("on_reset_click",   on_reset_click),
+    CG_BIND("on_quit_click",    on_quit_click),
+    CG_BIND("on_name_change",   on_name_change),
+    CG_BIND("on_name_submit",   on_name_submit),
+    CG_BIND("on_vip_change",    on_vip_change),
+    CG_BIND("on_level_change",  on_level_change),
+    /* ---- 页 1 控件陈列 ---- */
     CG_BIND("on_menu_click",    on_menu_click),
     CG_BIND("on_more_click",    on_more_click),
     CG_BIND("on_toolbar_click", on_toolbar_click),
-    /* 数据类控件 */
     CG_BIND("on_tree_select",   on_tree_select),
     CG_BIND("on_tree_dblclick", on_tree_dblclick),
     CG_BIND("on_tree_expand",   on_tree_expand),
@@ -419,7 +790,6 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND("on_cal_select",    on_cal_select),
     CG_BIND("on_add_node",      on_add_node),
     CG_BIND("on_add_row",       on_add_row),
-    /* 输入类控件 */
     CG_BIND("on_notify_change", on_notify_change),
     CG_BIND("on_count_change",  on_count_change),
     CG_BIND("on_richtext_change", on_richtext_change),
@@ -429,9 +799,24 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND("on_p1_click",      on_p1_click),
     CG_BIND("on_p1_change",     on_p1_change),
     CG_BIND("on_p2_check",      on_p2_check),
-    /* 链接 / 图标按钮 */
     CG_BIND("on_link_click",    on_link_click),
     CG_BIND("on_icon_click",    on_icon_click),
+    /* ---- 页 2 新特性 ---- */
+    CG_BIND("on_tick",          on_tick),
+    CG_BIND("on_pick_file",     on_pick_file),
+    CG_BIND("on_pick_save",     on_pick_save),
+    CG_BIND("on_show_msg",      on_show_msg),
+    CG_BIND("on_color_change",  on_color_change),
+    CG_BIND("on_table_check",   on_table_check),
+    CG_BIND("on_lab_table_select", on_lab_table_select),
+    CG_BIND("on_canvas_click",  on_canvas_click),
+    CG_BIND("on_rate_change",   on_rate_change),
+    CG_BIND("on_page_change",   on_page_change),
+    CG_BIND("on_tag_click",     on_tag_click),
+    CG_BIND("on_switch_change", on_switch_change),
+    CG_BIND("on_focus",         on_focus),
+    CG_BIND("on_blur",          on_blur),
+    CG_BIND("on_submit",        on_submit),
     CG_BIND_END
 };
 
@@ -443,15 +828,23 @@ int main(int argc, char **argv)
 
     memset(&desc, 0, sizeof(desc));
     desc.bindings = k_bindings;
-    desc.auto_locate_cgui = 1;
+    desc.dblclick_suppress_click = 0;   /* 双击时先给 click 再给 dblclick */
+    desc.auto_locate_cgui = 1;          /* 双击 exe 也能跑：自动去 exe 附近找 .cgui */
     desc.on_ready = on_ready;
     desc.ready_user = &g_biz;
 
+    /* --selftest 走命令行自检：解析 + 打印控件树 + 合成事件，不开窗口 */
     if (argc > 1 && strcmp(argv[1], "--selftest") == 0) {
         desc.cgui_path = (argc > 2) ? argv[2] : "gallery.cgui";
         return cg_app_selftest(&desc);
     }
+    if (argc > 1 && strcmp(argv[1], "--trace") == 0) {
+        desc.cgui_path = (argc > 2) ? argv[2] : "gallery.cgui";
+        desc.trace_doc = 1;
+    } else {
+        desc.cgui_path = (argc > 1) ? argv[1] : "gallery.cgui";
+    }
 
-    desc.cgui_path = (argc > 1) ? argv[1] : "gallery.cgui";
+    printf("CStackGUI %s -- 界面文件: %s\n", CG_VERSION_STRING, desc.cgui_path);
     return cg_app_run(&desc);
 }

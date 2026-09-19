@@ -102,7 +102,7 @@ if errorlevel 1 (
     echo [fail] 发布包里的编译脚本用不了
     exit /b 1
 )
-examples\hello\hello.exe --selftest examples\hello\hello.cgui
+examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui
 if errorlevel 1 (
     popd
     echo [fail] 发布包里编译出来的示例自检没过

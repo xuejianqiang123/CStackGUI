@@ -20,11 +20,9 @@ if not exist build\lib\libcstackgui.a (
     if errorlevel 1 exit /b 1
 )
 rem Artifacts live in each project dir (examples\<name>\<name>.exe)
-for %%a in (hello gallery) do (
-    if not exist examples\%%a\%%a.exe (
-        call build-app.bat %%a
-        if errorlevel 1 exit /b 1
-    )
+if not exist examples\gallery\gallery.exe (
+    call build-app.bat gallery
+    if errorlevel 1 exit /b 1
 )
 
 echo   TSC designer\src\model.ts -^> build\modeljs
@@ -34,14 +32,11 @@ if errorlevel 1 (
     exit /b 1
 )
 
-rem hello covers basic widgets (button/input/check/slider),
-rem gallery covers newer ones (tree/table/tabs/image...)
-for %%a in (hello gallery) do (
-    echo.
-    echo == %%a ==
-    node tools\format-roundtrip.mjs examples\%%a\%%a.exe examples\%%a\%%a.cgui build\roundtrip_%%a.cgui
-    if errorlevel 1 exit /b 1
-)
+rem gallery is the merged showcase: page 0 basic widgets,
+rem page 1 tree/table/tabs/image..., page 2 timer/canvas/dialogs/new widgets
+echo   roundtrip gallery
+node tools\format-roundtrip.mjs examples\gallery\gallery.exe examples\gallery\gallery.cgui build\roundtrip_gallery.cgui
+if errorlevel 1 exit /b 1
 
 echo.
 echo [ok] format contract check passed
