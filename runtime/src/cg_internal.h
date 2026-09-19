@@ -7,6 +7,10 @@
 
 typedef struct cg_app cg_app_t;
 
+/** 后端提供的杂项：有控制台时把它切到 UTF-8（printf 中文不乱码）。
+ *  没有控制台（-mwindows 的 release 版、重定向输出）时是空操作。 */
+void cg_win_console_utf8(void);
+
 /** 树的一个节点（扁平存放，parent 是数组下标，-1 表示根） */
 typedef struct {
     char *text;

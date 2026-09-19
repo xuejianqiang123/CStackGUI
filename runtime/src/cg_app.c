@@ -1195,6 +1195,9 @@ int cg_app_selftest(const cg_app_desc_t *desc)
     selftest_stat_t st = { 0, 0, 0 };
     int rc;
 
+    /* 树/事件名输出里有中文（UTF-8 字节），控制台默认代码页会显示成乱码 */
+    cg_win_console_utf8();
+
     /* app_open 里会调 cg_ticks()，后端在自检模式下不参与，这里给个空后端 */
     rc = app_open(&app, desc, 0);
     if (rc != 0) return rc;

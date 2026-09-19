@@ -295,6 +295,25 @@ static void datetime_pull_text(cg_widget_t *w, HWND date_hwnd, HWND time_hwnd)
  * 含义见「事件映射」那一节。 */
 static int g_in_notify = 0;
 
+/**
+ * @brief 有控制台时把控制台输入/输出代码页切到 UTF-8
+ *
+ * printf 的中文是 UTF-8 字节（源码与执行字符集都是 UTF-8），控制台默认
+ * 代码页（如 GBK）会显示成乱码。带控制台的 debug 版调用后中文正常显示；
+ * 无控制台（-mwindows 的 release 版、输出重定向）时 GetConsoleWindow()
+ * 返回 NULL，本函数不做任何事。
+ *
+ * @param void 无参数
+ * @return void 无返回值
+ */
+void cg_win_console_utf8(void)
+{
+    if (GetConsoleWindow() != NULL) {
+        SetConsoleOutputCP(CP_UTF8);
+        SetConsoleCP(CP_UTF8);
+    }
+}
+
 static HMENU menu_build(const cg_widget_t *w);   /* 定义在「控件创建」一节 */
 
 /** 菜单按钮：点击时在按钮下方弹出菜单，选中项直接派发（TPM_RETURNCMD 省掉消息路由） */
@@ -726,10 +745,19 @@ static void notify_body(cg_app_t *app, cg_widget_t *w, HWND hwnd, int code, int 
         }
         return;
     }
-    if (!strcmp(w->type, "checkbox") || !strcmp(w->type, "radio") ||
-        !strcmp(w->type, "switch")) {
+    if (!strcmp(w->type, "checkbox") || !strcmp(w->type, "radio")) {
+        /* 这两种是 BS_CHECKBOX/BS_RADIOBUTTON：点击时 BUTTON 自己 toggle 过
+         * 内部 check 状态，读回来就是新值。 */
         LRESULT st = SendMessageW(hwnd, BM_GETCHECK, 0, 0);
         cg_widget_set_checked(w, st == BST_CHECKED);
+        cg_dispatch(w, CG_EVENT_CHANGE);
+        return;
+    }
+    if (!strcmp(w->type, "switch")) {
+        /* switch 是 BS_OWNERDRAW 按钮：点击时 BUTTON 不会 toggle check 状态
+         * （BM_SETCHECK/BM_GETCHECK 只对 checkbox/radio 有定义），读 BM_GETCHECK
+         * 只会拿到恒定旧值，表现为"关掉后就再也打不开"。所以自己取反。 */
+        cg_widget_set_checked(w, !w->checked);
         cg_dispatch(w, CG_EVENT_CHANGE);
         return;
     }
@@ -1633,8 +1661,9 @@ static void sync_widget_body(cg_widget_t *w)
     } else if (!strcmp(w->type, "slider")) {
         SendMessageW(h, TBM_SETRANGE, TRUE, MAKELPARAM(w->vmin, w->vmax));
         SendMessageW(h, TBM_SETPOS, TRUE, w->value);
-    } else if (!strcmp(w->type, "checkbox") || !strcmp(w->type, "radio") ||
-               !strcmp(w->type, "switch")) {
+    } else if (!strcmp(w->type, "checkbox") || !strcmp(w->type, "radio")) {
+        /* switch 走 WM_DRAWITEM 自绘（按 w->checked 画），不用 BM_SETCHECK：
+         * 那对 BS_OWNERDRAW 按钮没有定义，只会留下一个误导人的内部状态。 */
         SendMessageW(h, BM_SETCHECK, w->checked ? BST_CHECKED : BST_UNCHECKED, 0);
     } else if (!strcmp(w->type, "spinner")) {
         HWND up = (HWND)w->native2;
@@ -1718,6 +1747,8 @@ static int win_init(cg_app_t *app)
             else SetProcessDPIAware();
         }
     }
+
+    cg_win_console_utf8();
 
     st = (cg_win_state_t *)calloc(1, sizeof(cg_win_state_t));
     if (!st) return -1;
