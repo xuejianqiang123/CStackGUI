@@ -1,0 +1,87 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "lab",
+    "width": 720,
+    "height": 540,
+    "bg": "#F3EDF7"
+  },
+  "widgets": [
+    {
+      "id": "inp_name",
+      "type": "edit",
+      "rect": { "x": 16, "y": 16, "w": 180, "h": 30 },
+      "hint": "输入你的名字，失焦后校验",
+      "events": { "submit": "on_submit", "gotfocus": "on_focus", "lostfocus": "on_blur" }
+    },
+    { "id": "btn_file", "type": "button", "rect": { "x": 208, "y": 16, "w": 110, "h": 30 }, "text": "打开文件...", "events": { "click": "on_pick_file" } },
+    { "id": "btn_save", "type": "button", "rect": { "x": 326, "y": 16, "w": 110, "h": 30 }, "text": "保存文件...", "events": { "click": "on_pick_save" } },
+    { "id": "btn_msg", "type": "button", "rect": { "x": 444, "y": 16, "w": 90, "h": 30 }, "text": "消息框", "events": { "click": "on_show_msg" } },
+    {
+      "id": "cp_main",
+      "type": "colorpicker",
+      "rect": { "x": 546, "y": 16, "w": 64, "h": 28 },
+      "value": 6774948,
+      "events": { "change": "on_color_change" }
+    },
+    { "id": "lab_status", "type": "label", "rect": { "x": 16, "y": 56, "w": 480, "h": 24 }, "text": "就绪" },
+
+    {
+      "id": "tm_clock",
+      "type": "timer",
+      "rect": { "x": 0, "y": 0, "w": 0, "h": 0 },
+      "period": 1000,
+      "events": { "tick": "on_tick" }
+    },
+
+    {
+      "id": "tb_users",
+      "type": "table",
+      "rect": { "x": 16, "y": 92, "w": 380, "h": 180 },
+      "check": true,
+      "multi": true,
+      "hint": "可以勾选，也可以多选",
+      "columns": [
+        { "title": "姓名", "w": 120 },
+        { "title": "城市", "w": 120 },
+        { "title": "年龄", "w": 80 }
+      ],
+      "rows": [
+        ["张三", "杭州", "28"],
+        ["李四", "上海", "35"],
+        ["王五", "北京", "41"],
+        ["赵六", "深圳", "23"]
+      ],
+      "events": { "select": "on_table_select", "check": "on_table_check" }
+    },
+
+    {
+      "id": "cv_board",
+      "type": "canvas",
+      "rect": { "x": 412, "y": 92, "w": 280, "h": 180 },
+      "events": { "click": "on_canvas_click" }
+    },
+
+    { "id": "rt_star", "type": "rate", "rect": { "x": 16, "y": 288, "w": 150, "h": 32 }, "value": 3, "min": 0, "max": 5, "events": { "change": "on_rate_change" } },
+    { "id": "pg_main", "type": "pagination", "rect": { "x": 180, "y": 288, "w": 180, "h": 32 }, "value": 0, "min": 0, "max": 9, "events": { "change": "on_page_change" } },
+    { "id": "bd_count", "type": "badge", "rect": { "x": 380, "y": 292, "w": 48, "h": 24 }, "text": "3" },
+    { "id": "tg_demo", "type": "tag", "rect": { "x": 440, "y": 290, "w": 72, "h": 28 }, "text": "标签片", "events": { "click": "on_tag_click" } },
+
+    {
+      "id": "card_main",
+      "type": "card",
+      "rect": { "x": 16, "y": 336, "w": 300, "h": 160 },
+      "text": "卡片",
+      "children": [
+        { "id": "sw_card", "type": "switch", "rect": { "x": 16, "y": 40, "w": 160, "h": 32 }, "text": "卡片内开关", "events": { "change": "on_switch_change" } },
+        { "id": "lab_card", "type": "label", "rect": { "x": 16, "y": 84, "w": 240, "h": 24 }, "text": "卡片里的标签" }
+      ]
+    },
+
+    { "id": "sh_round", "type": "shape", "rect": { "x": 340, "y": 344, "w": 90, "h": 90 }, "format": "roundrect", "style": { "bg": "#D0BCFF" } },
+    { "id": "sh_circle", "type": "shape", "rect": { "x": 448, "y": 344, "w": 90, "h": 90 }, "format": "ellipse", "style": { "bg": "#FFD8E4" } },
+    { "id": "sh_rect", "type": "shape", "rect": { "x": 556, "y": 344, "w": 90, "h": 90 }, "format": "rect", "style": { "bg": "#BCE0FD" } },
+
+    { "id": "br_page", "type": "browser", "rect": { "x": 16, "y": 508, "w": 688, "h": 24 }, "src": "about:blank" }
+  ]
+}
