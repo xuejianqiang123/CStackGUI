@@ -267,6 +267,70 @@ function inner(node: CgNode) {
     case "group":
       return <div className="ctl-group-title">{node.text || ""}</div>;
 
+    case "timer":
+      return (
+        <div className="ctl-timer">
+          <span className="ctl-timer-icon">⏱</span>
+          <span>{node.period ? `${node.period}ms` : "已停"}</span>
+        </div>
+      );
+
+    case "canvas":
+      return <div className="ctl-canvas">画板</div>;
+
+    case "colorpicker": {
+      const rgb = (node.value ?? 0x6750a4).toString(16).padStart(6, "0");
+      return (
+        <div className="ctl-colorpicker" style={{ background: `#${rgb}` }} title={`#${rgb}`}>
+          <span className="ctl-colorpicker-check">✓</span>
+        </div>
+      );
+    }
+
+    case "browser":
+      return (
+        <div className="ctl-browser">
+          <span className="ctl-browser-url">{node.src || "about:blank"}</span>
+        </div>
+      );
+
+    case "badge":
+      return <div className="ctl-badge">{node.text || ""}</div>;
+
+    case "tag":
+      return <div className="ctl-tag">{node.text || ""}</div>;
+
+    case "rate": {
+      const stars = Math.max(1, Math.min(10, (node.max ?? 5) - (node.min ?? 0)));
+      const val = Math.max(0, Math.min(stars, (node.value ?? 0) - (node.min ?? 0)));
+      return (
+        <div className="ctl-rate">
+          {"★".repeat(val)}
+          <span className="ctl-rate-off">{"☆".repeat(stars - val)}</span>
+        </div>
+      );
+    }
+
+    case "pagination": {
+      const cur = (node.value ?? 0) - (node.min ?? 0) + 1;
+      const total = Math.max(1, (node.max ?? 9) - (node.min ?? 0) + 1);
+      return (
+        <div className="ctl-pagination">
+          <span className="ctl-pagination-btn">{cur > 1 ? "<" : ""}</span>
+          <span className="ctl-pagination-info">
+            {cur} / {total}
+          </span>
+          <span className="ctl-pagination-btn">{cur < total ? ">" : ""}</span>
+        </div>
+      );
+    }
+
+    case "card":
+      return <div className="ctl-card-title">{node.text || ""}</div>;
+
+    case "shape":
+      return null;
+
     default:
       return null;
   }
@@ -293,7 +357,7 @@ export default function WidgetView({ node, depth, selectedId, onSelect, onPointe
   if (node.style?.radius) style.borderRadius = node.style.radius;
 
   const bound = CG_EVENTS.filter((e) => node.events?.[e]);
-  const isGroup = node.type === "group" || node.type === "box" || node.type === "tabs";
+  const isGroup = node.type === "group" || node.type === "box" || node.type === "tabs" || node.type === "card";
 
   /* 菜单栏没有矩形：它画在窗口框架上，由 Canvas 负责，这里不画 */
   if (node.type === "menu") return null;

@@ -370,6 +370,112 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
         </>
       ) : null}
 
+      {node.type === "timer" ? (
+        <Row label="周期">
+          <input
+            className="input"
+            type="number"
+            min={0}
+            step={100}
+            value={node.period ?? 0}
+            onChange={(e) =>
+              patch((n) => {
+                n.period = Math.max(0, Number(e.target.value) || 0);
+              })
+            }
+          />
+          <span className="muted small">毫秒，0 = 停</span>
+        </Row>
+      ) : null}
+      {node.type === "colorpicker" ? (
+        <Row label="颜色">
+          <input
+            className="input color"
+            type="color"
+            value={`#${(node.value ?? 0x6750a4).toString(16).padStart(6, "0")}`}
+            onChange={(e) =>
+              patch((n) => {
+                n.value = parseInt(e.target.value.slice(1), 16);
+              })
+            }
+          />
+          <span className="muted small">运行时点色块弹选色对话框</span>
+        </Row>
+      ) : null}
+      {node.type === "browser" ? (
+        <Row label="地址">
+          <input
+            className="input mono"
+            value={node.src ?? ""}
+            placeholder="about:blank"
+            spellCheck={false}
+            onChange={(e) =>
+              patch((n) => {
+                n.src = e.target.value || undefined;
+              })
+            }
+          />
+        </Row>
+      ) : null}
+      {node.type === "shape" ? (
+        <Row label="形状">
+          <select
+            className="input"
+            value={node.format ?? "roundrect"}
+            onChange={(e) => patch((n) => { n.format = e.target.value; })}
+          >
+            <option value="rect">矩形</option>
+            <option value="roundrect">圆角矩形</option>
+            <option value="ellipse">椭圆</option>
+          </select>
+        </Row>
+      ) : null}
+      {node.type === "table" ? (
+        <>
+          <Row label="多选">
+            <label className="check-inline">
+              <input
+                type="checkbox"
+                checked={!!node.multi}
+                onChange={(e) =>
+                  patch((n) => {
+                    n.multi = e.target.checked || undefined;
+                  })
+                }
+              />
+              允许同时选中多行
+            </label>
+          </Row>
+          <Row label="勾选列">
+            <label className="check-inline">
+              <input
+                type="checkbox"
+                checked={!!node.check}
+                onChange={(e) =>
+                  patch((n) => {
+                    n.check = e.target.checked || undefined;
+                  })
+                }
+              />
+              显示行首复选框（check 事件）
+            </label>
+          </Row>
+        </>
+      ) : null}
+
+      <Row label="悬停提示">
+        <input
+          className="input"
+          value={node.hint ?? ""}
+          placeholder="鼠标停上去显示的文字"
+          onChange={(e) =>
+            patch((n) => {
+              n.hint = e.target.value || undefined;
+            })
+          }
+        />
+      </Row>
+
       <div className="insp-section">内容</div>
       {inTabs ? (
         <Row label="所在页">

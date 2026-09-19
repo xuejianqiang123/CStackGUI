@@ -4,7 +4,7 @@
  * 改这里就要同步改那边，否则「画布能存、运行时读不了」。
  */
 
-export const CG_EVENTS = ["click", "dblclick", "change", "submit", "select", "release", "expand", "collapse"] as const;
+export const CG_EVENTS = ["click", "dblclick", "change", "submit", "select", "release", "expand", "collapse", "tick", "check", "gotfocus", "lostfocus"] as const;
 export type CgEvent = (typeof CG_EVENTS)[number];
 
 export const EVENT_LABEL: Record<CgEvent, string> = {
@@ -16,6 +16,10 @@ export const EVENT_LABEL: Record<CgEvent, string> = {
   release: "拖动结束",
   expand: "展开节点",
   collapse: "折叠节点",
+  tick: "时钟周期到",
+  check: "行勾选变化",
+  gotfocus: "获得焦点",
+  lostfocus: "失去焦点",
 };
 
 export const EVENT_HINT: Record<CgEvent, string> = {
@@ -27,33 +31,37 @@ export const EVENT_HINT: Record<CgEvent, string> = {
   release: "滑块松手才算，适合「拖完再保存」",
   expand: "树节点展开",
   collapse: "树节点折叠",
+  tick: "时钟控件的周期到了（period 毫秒一次）",
+  check: "表格里某一行的复选框被点了",
+  gotfocus: "控件拿到键盘焦点（输入校验常用）",
+  lostfocus: "控件失去键盘焦点（输入校验常用）",
 };
 
 /** 每种控件支持哪些事件 —— 必须和 runtime/src/cg_doc.c 的 k_kinds 表一一对应。
  *  事件是按控件特性设计的：标签没有交互、进度条只能被程序写、只有树有展开折叠。
  *  画布只列这里声明的事件；C 侧也会校验，绑错了启动时会警告。 */
 export const KIND_EVENTS: Record<string, CgEvent[]> = {
-  button: ["click", "dblclick"],
+  button: ["click", "dblclick", "gotfocus", "lostfocus"],
   iconbutton: ["click", "dblclick"],
   link: ["click", "dblclick"],
   label: [],
-  switch: ["change"],
-  edit: ["change", "submit"],
-  multiedit: ["change"],
-  richtext: ["change"],
-  spinner: ["change"],
-  datepicker: ["change"],
+  switch: ["change", "gotfocus", "lostfocus"],
+  edit: ["change", "submit", "gotfocus", "lostfocus"],
+  multiedit: ["change", "gotfocus", "lostfocus"],
+  richtext: ["change", "gotfocus", "lostfocus"],
+  spinner: ["change", "gotfocus", "lostfocus"],
+  datepicker: ["change", "gotfocus", "lostfocus"],
   monthcal: ["select", "dblclick"],
-  checkbox: ["change"],
-  radio: ["change"],
-  listbox: ["select", "dblclick"],
-  combo: ["select"],
-  slider: ["change", "release"],
+  checkbox: ["change", "gotfocus", "lostfocus"],
+  radio: ["change", "gotfocus", "lostfocus"],
+  listbox: ["select", "dblclick", "gotfocus", "lostfocus"],
+  combo: ["select", "gotfocus", "lostfocus"],
+  slider: ["change", "release", "gotfocus", "lostfocus"],
   progress: [],
   progressring: [],
-  tabs: ["select"],
-  tree: ["select", "dblclick", "expand", "collapse"],
-  table: ["select", "dblclick"],
+  tabs: ["select", "gotfocus", "lostfocus"],
+  tree: ["select", "dblclick", "expand", "collapse", "gotfocus", "lostfocus"],
+  table: ["select", "dblclick", "check", "gotfocus", "lostfocus"],
   statusbar: [],
   menu: ["click"],
   menubutton: ["click"],
@@ -62,6 +70,16 @@ export const KIND_EVENTS: Record<string, CgEvent[]> = {
   box: [],
   separator: [],
   image: ["click", "dblclick"],
+  timer: ["tick"],
+  canvas: ["click", "dblclick"],
+  colorpicker: ["change"],
+  browser: [],
+  badge: [],
+  tag: ["click"],
+  rate: ["change"],
+  pagination: ["change"],
+  card: [],
+  shape: [],
 };
 
 /** 这个控件支持的事件；没登记的按"不支持任何事件"处理（C 侧同样会拒绝） */
@@ -114,8 +132,16 @@ export type CgNode = {
   page?: number;
   /** image 的图片路径（相对 .cgui 所在目录） */
   src?: string;
-  /** datepicker 的细分格式：date / time / datetime */
+  /** datepicker 的细分格式：date / time / datetime；shape：rect / roundrect / ellipse */
   format?: string;
+  /** 鼠标悬停提示（tooltip），所有控件通用 */
+  hint?: string;
+  /** timer 的触发周期（毫秒），0 = 停 */
+  period?: number;
+  /** table：允许多选行 */
+  multi?: boolean;
+  /** table：显示行首复选框列 */
+  check?: boolean;
   /** listbox / combo / tabs / statusbar 的文本条目 */
   items?: string[];
   /** 树 */
@@ -183,8 +209,18 @@ export const KINDS: KindInfo[] = [
   { type: "statusbar", label: "状态栏", group: "数据", container: false, w: 400, h: 24, text: "", listLike: true },
   { type: "group", label: "分组框", group: "容器", container: true, w: 260, h: 180, text: "分组" },
   { type: "box", label: "容器块", group: "容器", container: true, w: 200, h: 120, text: "" },
+  { type: "card", label: "卡片", group: "容器", container: true, w: 280, h: 180, text: "卡片" },
   { type: "separator", label: "分割线", group: "其它", container: false, w: 200, h: 2, text: "" },
   { type: "image", label: "图片", group: "其它", container: false, w: 240, h: 140, text: "" },
+  { type: "shape", label: "外形框", group: "其它", container: false, w: 120, h: 120, text: "" },
+  { type: "timer", label: "时钟", group: "其它", container: false, w: 80, h: 24, text: "" },
+  { type: "canvas", label: "画板", group: "其它", container: false, w: 240, h: 160, text: "" },
+  { type: "colorpicker", label: "颜色选择", group: "其它", container: false, w: 64, h: 28, text: "" },
+  { type: "browser", label: "网页浏览", group: "其它", container: false, w: 320, h: 240, text: "" },
+  { type: "badge", label: "徽章", group: "装饰", container: false, w: 48, h: 24, text: "99+" },
+  { type: "tag", label: "标签片", group: "装饰", container: false, w: 72, h: 28, text: "标签" },
+  { type: "rate", label: "评分", group: "装饰", container: false, w: 140, h: 32, text: "", ranged: true },
+  { type: "pagination", label: "分页", group: "装饰", container: false, w: 180, h: 32, text: "", ranged: true },
 ];
 
 export const KIND_MAP: Record<string, KindInfo> = Object.fromEntries(KINDS.map((k) => [k.type, k]));
@@ -372,6 +408,22 @@ export function makeNode(type: string, x: number, y: number): CgNode {
     node.text = todayText();
   } else if (type === "richtext") {
     node.text = "富文本内容";
+  } else if (type === "timer") {
+    node.period = 1000;
+  } else if (type === "colorpicker") {
+    node.value = 0x6750a4;
+  } else if (type === "rate") {
+    node.value = 3;
+    node.min = 0;
+    node.max = 5;
+  } else if (type === "pagination") {
+    node.value = 0;
+    node.min = 0;
+    node.max = 9;
+  } else if (type === "browser") {
+    node.src = "about:blank";
+  } else if (type === "shape") {
+    node.format = "roundrect";
   }
   return node;
 }
@@ -574,10 +626,14 @@ function coerceNode(raw: unknown, index: number): CgNode | null {
   node.min = Number(o.min ?? state.min ?? 0);
   node.max = Number(o.max ?? state.max ?? 100);
 
-  /* 标签页归属 / 图片路径 / 细分格式 */
+  /* 标签页归属 / 图片路径 / 细分格式 / 悬停提示 / 时钟周期 / 表格增强 */
   if (Number.isFinite(Number(o.page))) node.page = Number(o.page);
   if (typeof o.src === "string") node.src = o.src;
   if (typeof o.format === "string") node.format = o.format;
+  if (typeof o.hint === "string" && o.hint.trim()) node.hint = o.hint;
+  if (Number.isFinite(Number(o.period))) node.period = Math.max(0, Math.round(Number(o.period)));
+  if (o.multi === true) node.multi = true;
+  if (o.check === true) node.check = true;
 
   /* 结构化内容：读进来时做形状校验，脏数据丢了总比画布崩了好 */
   if (Array.isArray(o.items)) {
@@ -671,7 +727,13 @@ function cleanNode(node: CgNode): CgNode {
   if (node.text) out.text = node.text;
   if (node.page !== undefined && node.page > 0) out.page = Math.round(node.page);
   if (node.src) out.src = node.src;
-  if (node.format && node.type === "datepicker" && node.format !== "date") out.format = node.format;
+  if (node.format && ((node.type === "datepicker" && node.format !== "date") || node.type === "shape")) {
+    out.format = node.format;
+  }
+  if (node.hint) out.hint = node.hint;
+  if (node.period) out.period = Math.max(0, Math.round(node.period));
+  if (node.multi === true) out.multi = true;
+  if (node.check === true) out.check = true;
   if (node.items && node.items.length) out.items = [...node.items];
   if (node.nodes && node.nodes.length) out.nodes = node.nodes.map(cleanTree);
   if (node.columns && node.columns.length) {
@@ -697,6 +759,8 @@ function cleanNode(node: CgNode): CgNode {
     out.value = node.value ?? 0;
     out.min = node.min ?? 0;
     out.max = node.max ?? 100;
+  } else if (node.type === "colorpicker") {
+    out.value = node.value ?? 0;   /* value 存颜色 0xRRGGBB */
   }
   if (node.events && Object.keys(node.events).length) {
     out.events = { ...node.events };
