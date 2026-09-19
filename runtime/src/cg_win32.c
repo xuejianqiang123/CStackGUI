@@ -427,6 +427,25 @@ static LRESULT CALLBACK FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
                                   UINT_PTR id, DWORD_PTR ref)
 {
     (void)id; (void)ref;
+
+    /* 子控件的通知永远先到直接父窗口。放进 tabs / 其它系统控件的容器里后，
+     * 父窗口不再是主窗口，这些通知必须转发上去，否则 ownerdraw 按钮
+     * （colorpicker/rate/badge/...）画不出来、点击也没反应。
+     * PanelProc 对 group/box 做的是同一件事；这里覆盖剩下所有控件。 */
+    switch (msg) {
+    case WM_COMMAND:
+    case WM_NOTIFY:
+    case WM_DRAWITEM:
+    case WM_HSCROLL:
+    case WM_VSCROLL:
+        if (g_app && g_app->hwnd && (HWND)g_app->hwnd != hwnd) {
+            return SendMessageW((HWND)g_app->hwnd, msg, wp, lp);
+        }
+        break;
+    default:
+        break;
+    }
+
     if (!g_in_notify && g_app) {
         cg_widget_t *w = widget_by_hwnd(g_app, hwnd);
         if (w) {
@@ -2393,11 +2412,15 @@ static void sync_widget_body(cg_widget_t *w)
 
     EnableWindow(h, w->enabled ? TRUE : FALSE);
 
-    /* 标签页的子控件要按当前页显隐 */
+    /* 标签页的子控件要按当前页显隐。
+     * spinner / datetime 是两个 HWND 拼的控件：native2（箭头 / 时间框）
+     * 必须跟 native 同进同退，否则切页/隐藏时会漏出半个控件。 */
     if (w->parent && is_t(w->parent, "tabs") && !page_visible(w)) {
         ShowWindow(h, SW_HIDE);
+        if (w->native2) ShowWindow((HWND)w->native2, SW_HIDE);
     } else {
         ShowWindow(h, w->visible ? SW_SHOWNA : SW_HIDE);
+        if (w->native2) ShowWindow((HWND)w->native2, w->visible ? SW_SHOWNA : SW_HIDE);
     }
     InvalidateRect(h, NULL, TRUE);
 }
