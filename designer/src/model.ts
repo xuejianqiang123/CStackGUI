@@ -386,7 +386,9 @@ function todayText(): string {
 export function emptyDoc(): CgDoc {
   return {
     cgui: 1,
-    app: { title: "新建界面", width: 700, height: 500, bg: "#F3EDF7" },
+    /* 默认标题用 main：保存/导出的文件名都从它推（suggestedBaseName），
+     * 所见即所得，避免中文标题推出乱七八糟的文件名 */
+    app: { title: "main", width: 700, height: 500, bg: "#F3EDF7" },
     widgets: [],
   };
 }
@@ -629,7 +631,7 @@ export function parseDoc(text: string): { doc?: CgDoc; error?: string } {
   const doc: CgDoc = {
     cgui: 1,
     app: {
-      title: typeof app.title === "string" ? app.title : "未命名界面",
+      title: typeof app.title === "string" ? app.title : "main",
       width: Number(app.width) > 0 ? Number(app.width) : 700,
       height: Number(app.height) > 0 ? Number(app.height) : 500,
       bg: typeof app.bg === "string" ? app.bg : "#F3EDF7",

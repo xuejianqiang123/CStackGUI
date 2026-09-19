@@ -77,12 +77,15 @@ async function resolveProjectRoot() {
 
   /* 便携版（release\ 里的那个 CStackGUI.exe）会带这个环境变量：
    * 它指向 exe 所在目录。发布包里 runtime\ 就在旁边，所以直接就能认出来，
-   * 用户不用手动指定项目根，导出/编译提示也都能给对。 */
+   * 用户不用手动指定项目根，导出/编译提示也都能给对。
+   * 但开发机上 release\ 常嵌在真项目里（D:\CPro\CStackGUI\release），
+   * 这种情况要先向上认出真根，否则一开画布就把项目根显示成 release。 */
   const portable = process.env.PORTABLE_EXECUTABLE_DIR;
   if (isProjectRoot(portable)) {
-    projectRootCache = portable;
-    await saveConfig({ projectRoot: portable });
-    return portable;
+    const realRoot = findProjectRootUpwards(path.dirname(portable));
+    projectRootCache = realRoot || portable;
+    await saveConfig({ projectRoot: projectRootCache });
+    return projectRootCache;
   }
 
   if (isProjectRoot(process.env.CSTACKGUI_HOME)) {
@@ -227,8 +230,11 @@ ipcMain.handle("cgui:save", async (_e, { filePath, text, suggestName }) => {
   }
 });
 
-ipcMain.handle("cgui:exportC", async (_e, { baseName, files }) => {
-  const root = await resolveProjectRoot();
+ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
+  /* 和 run:buildAndLaunch 同一个道理：从当前文件位置向上找根优先，
+   * 避免便携版把 release\ 认成项目根、把骨架导到发布包里去。 */
+  const root =
+    (filePath ? findProjectRootUpwards(path.dirname(path.resolve(filePath))) : "") || (await resolveProjectRoot());
   const appsDir = root ? path.join(root, "apps", baseName) : "";
   const res = await dialog.showOpenDialog(win, {
     title: root
@@ -307,13 +313,19 @@ ipcMain.handle("run:buildAndLaunch", async (_e, { filePath }) => {
     return fail("先把 .cgui 保存到磁盘（Ctrl+S）再运行。");
   }
 
-  const root = await resolveProjectRoot();
+  /* 便携版画布常被放在 release\ 里编辑"真项目"的 .cgui。
+   * 文件本身就躺在某个项目根的 apps\ 或 examples\ 下时，以文件位置向上找到的根为准，
+   * PORTABLE_EXECUTABLE_DIR / 配置里的根只作兜底 —— 否则会错把 release\ 当项目根，
+   * 报"工程要放在 apps\ 下"（实际上就在项目里，只是认错了根）。 */
+  const appDir = path.dirname(path.resolve(filePath));
+  const fileRoot = findProjectRootUpwards(appDir);
+  if (fileRoot && fileRoot !== projectRootCache) await rememberProjectRoot(fileRoot);
+  const root = fileRoot || (await resolveProjectRoot());
   if (!root) {
     return fail("还没找到 CStackGUI 项目根。点工具条上的「定位项目根」，\n选含 runtime\\、apps\\ 的那一层目录。");
   }
 
   const name = safeName(path.basename(filePath).replace(/\.cgui$/i, ""));
-  const appDir = path.dirname(path.resolve(filePath));
   const under = [path.join(root, "apps"), path.join(root, "examples")]
     .some((base) => appDir.toLowerCase().startsWith(base.toLowerCase() + path.sep));
   if (!under) {

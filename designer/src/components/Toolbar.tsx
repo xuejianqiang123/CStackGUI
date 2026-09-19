@@ -28,7 +28,8 @@ type Props = {
 };
 
 export default function Toolbar(p: Props) {
-  const name = p.filePath ? p.filePath.split(/[\\/]/).pop() : "未命名.cgui";
+  /* 没保存过时按默认标题显示目标文件名，所见即所得（保存建议名就是它） */
+  const name = p.filePath ? p.filePath.split(/[\\/]/).pop() : `${p.doc.app.title || "main"}.cgui`;
 
   return (
     <div className="toolbar">

@@ -5,7 +5,7 @@
  * 方便在没有 Electron 的机器上看画布。
  */
 export type SavePayload = { filePath?: string; text: string; suggestName?: string };
-export type ExportPayload = { baseName: string; files: { name: string; content: string }[] };
+export type ExportPayload = { baseName: string; files: { name: string; content: string }[]; filePath?: string };
 export type ExportResult = {
   canceled: boolean;
   dir?: string;

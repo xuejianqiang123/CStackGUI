@@ -238,13 +238,14 @@ export default function App() {
   const doExportC = useCallback(async () => {
     const baseName = suggestedBaseName(docRef.current.app.title);
     const files = generateC(docRef.current, baseName);
-    const res = await bridge.exportC({ baseName, files });
+    /* 带上当前文件路径：主进程好从文件位置向上认出真正的项目根（便携版画布尤甚） */
+    const res = await bridge.exportC({ baseName, files, filePath: filePath || undefined });
     if (res.canceled) return;
     if (res.projectRoot) setProjectRoot(res.projectRoot);
     setLastExport({ dir: res.dir ?? "", appName: baseName });
     const skipped = res.skipped?.length ? `（跳过已存在的 ${res.skipped.join("、")}）` : "";
     say(`已导出到 ${res.dir}${skipped}，接着去填 ${baseName}_ui_events.c`);
-  }, [bridge, docRef, projectRoot, say]);
+  }, [bridge, docRef, projectRoot, say, filePath]);
 
   const doLocateProject = useCallback(async () => {
     const res = await bridge.locateProject();
@@ -378,8 +379,8 @@ export default function App() {
 
   /* -------------------------------------------------- 标题 & 项目路径 */
   useEffect(() => {
-    bridge.setTitle(`${filePath ? filePath.split(/[\\/]/).pop() : "未命名"}${dirty ? " *" : ""}`);
-  }, [bridge, filePath, dirty]);
+    bridge.setTitle(`${filePath ? filePath.split(/[\\/]/).pop() : doc.app.title || "main"}${dirty ? " *" : ""}`);
+  }, [bridge, filePath, dirty, doc.app.title]);
 
   useEffect(() => {
     void bridge.info().then((info) => {
@@ -641,12 +642,14 @@ rect = { x:${selected.rect.x}, y:${selected.rect.y}, w:${selected.rect.w}, h:${s
   );
 }
 
-/** 从窗口标题推一个合法的文件名/baseName：中文、空格都能用，只挡掉路径非法字符 */
+/** 从窗口标题推一个合法的导出名：只留 C 标识符字符（导出目录名要和
+ *  build-app.bat 的工程名、exe 名保持一致，必须 ASCII）；清完什么都不剩
+ *  （比如纯中文标题）就回退 main，避免出现 _____ui_events.c 这种文件名。 */
 export function suggestedBaseName(title: string): string {
   const s = title
-    .trim()
-    .replace(/[\\/:*?"<>|\s]+/g, "_")
+    .replace(/[^0-9a-zA-Z_]+/g, "_")
     .replace(/_+/g, "_")
-    .replace(/^_|_$/g, "");
-  return s || "app";
+    .replace(/^_|_$/g, "")
+    .replace(/^(\d)/, "_$1"); /* codegen 的 sanitizeIdent 会给数字开头加 _，这里先统一，保证目录名 = 工程名 */
+  return s || "main";
 }
