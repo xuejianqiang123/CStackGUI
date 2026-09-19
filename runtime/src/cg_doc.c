@@ -1,0 +1,602 @@
+/* cg_doc.c -- .cgui 解析与打印 */
+#include "cg_doc.h"
+#include "cg_json.h"
+
+#include <stdlib.h>
+#include <string.h>
+
+/* ------------------------------------------------------------ 类型表 */
+
+/* 类型表。**事件按控件特性分配**，不是所有控件都有全套事件：
+ *   - 能点的才有 click / dblclick
+ *   - 能改内容的才有 change
+ *   - 有"选择"概念的才有 select（列表 / 标签页 / 树 / 表格 / 日历）
+ *   - 只有树有 expand / collapse，只有滑块有 release
+ *   - 纯显示或只被程序写的（label / progress / statusbar / separator / 容器）一个事件都没有
+ * 画布只列出这里声明的事件；.cgui 绑了不支持的事件时，运行时启动会警告、自检会报错。
+ */
+static const cg_kind_info_t k_kinds[] = {
+    { "button",     CG_K_BUTTON,     0, 120,  40, "按钮", CG_EV_CLICK | CG_EV_DBLCLICK },
+    { "iconbutton", CG_K_ICONBUTTON, 0,  48,  48, "",     CG_EV_CLICK | CG_EV_DBLCLICK },
+    { "label",      CG_K_LABEL,      0, 160,  24, "标签", 0 },
+    { "link",       CG_K_LINK,       0, 160,  24, "链接", CG_EV_CLICK | CG_EV_DBLCLICK },
+    { "switch",     CG_K_SWITCH,     0,  56,  32, "",     CG_EV_CHANGE },
+    { "edit",       CG_K_EDIT,       0, 200,  32, "",     CG_EV_CHANGE | CG_EV_SUBMIT },
+    { "multiedit",  CG_K_MULTIEDIT,  0, 240, 120, "",     CG_EV_CHANGE },
+    { "richtext",   CG_K_RICHTEXT,   0, 320, 160, "",     CG_EV_CHANGE },
+    { "spinner",    CG_K_SPINNER,    0, 100,  28, "",     CG_EV_CHANGE },
+    { "datepicker", CG_K_DATEPICKER, 0, 140,  28, "",     CG_EV_CHANGE },
+    { "monthcal",   CG_K_MONTHCAL,   0, 230, 180, "",     CG_EV_SELECT | CG_EV_DBLCLICK },
+    { "checkbox",   CG_K_CHECKBOX,   0, 160,  28, "复选", CG_EV_CHANGE },
+    { "radio",      CG_K_RADIO,      0, 160,  28, "单选", CG_EV_CHANGE },
+    { "listbox",    CG_K_LISTBOX,    0, 220, 140, "",     CG_EV_SELECT | CG_EV_DBLCLICK },
+    { "combo",      CG_K_COMBO,      0, 200, 200, "",     CG_EV_SELECT },
+    { "slider",     CG_K_SLIDER,     0, 200,  32, "",     CG_EV_CHANGE | CG_EV_RELEASE },
+    { "progress",   CG_K_PROGRESS,   0, 200,  20, "",     0 },
+    { "progressring", CG_K_RING,     0, 120, 120, "",     0 },
+    { "tabs",       CG_K_TABS,       1, 320, 220, "",     CG_EV_SELECT },
+    { "tree",       CG_K_TREE,       0, 220, 180, "",     CG_EV_SELECT | CG_EV_DBLCLICK | CG_EV_EXPAND | CG_EV_COLLAPSE },
+    { "table",      CG_K_TABLE,      0, 360, 180, "",     CG_EV_SELECT | CG_EV_DBLCLICK },
+    { "statusbar",  CG_K_STATUS,     0, 400,  24, "",     0 },
+    { "menu",       CG_K_MENU,       0,   0,   0, "",     CG_EV_CLICK },
+    { "menubutton", CG_K_MENUBUTTON, 0, 130,  32, "菜单", CG_EV_CLICK },
+    { "toolbar",    CG_K_TOOLBAR,    0, 400,  32, "",     CG_EV_CLICK },
+    { "group",      CG_K_GROUP,      1, 260, 180, "分组", 0 },
+    { "box",        CG_K_BOX,        1, 200, 120, "",     0 },
+    { "separator",  CG_K_SEPARATOR,  0, 200,   2, "",     0 },
+    { "image",      CG_K_IMAGE,      0, 200, 120, "",     CG_EV_CLICK | CG_EV_DBLCLICK },
+    { "window",     CG_K_WINDOW,     1,   0,   0, "",     CG_EV_CLOSE },  /* 伪控件：窗口自身 */
+};
+
+#define K_KIND_COUNT (sizeof(k_kinds) / sizeof(k_kinds[0]))
+
+int cg_kind_supports_event(const char *type, cg_event_t ev)
+{
+    const cg_kind_info_t *ki = cg_kind_lookup(type);
+    if (!ki || (int)ev < 0 || ev >= CG_EVENT_COUNT) return 0;
+    return (ki->events & CG_EV_BIT(ev)) != 0;
+}
+
+const char *cg_kind_event_list(cg_kind_t kind)
+{
+    static char buf[192];
+    const cg_kind_info_t *ki = cg_kind_info(kind);
+    size_t used;
+
+    buf[0] = '\0';
+    if (!ki) return buf;
+    for (int i = 0; i < CG_EVENT_COUNT; i++) {
+        if (!(ki->events & CG_EV_BIT(i))) continue;
+        used = strlen(buf);
+        if (used && used + 1 < sizeof(buf)) strncat(buf, "/", sizeof(buf) - used - 1);
+        used = strlen(buf);
+        if (used < sizeof(buf) - 1) strncat(buf, cg_event_name((cg_event_t)i), sizeof(buf) - used - 1);
+    }
+    if (!buf[0]) snprintf(buf, sizeof(buf), "(该控件没有事件)");
+    return buf;
+}
+
+const cg_kind_info_t *cg_kind_lookup(const char *type)
+{
+    if (!type) return NULL;
+    for (size_t i = 0; i < K_KIND_COUNT; i++) {
+        if (strcmp(k_kinds[i].name, type) == 0) return &k_kinds[i];
+    }
+    return NULL;
+}
+
+/* 按 kind 字段找，**不要**用数组下标当枚举值：
+ * 表是按控件逻辑分组排的，和枚举声明顺序故意解耦，
+ * 省得以后插一个控件就把所有下标全带歪（事件名表就踩过这个坑）。 */
+const cg_kind_info_t *cg_kind_info(cg_kind_t kind)
+{
+    for (size_t i = 0; i < K_KIND_COUNT; i++) {
+        if (k_kinds[i].kind == kind) return &k_kinds[i];
+    }
+    return NULL;
+}
+
+const char *cg_kind_name(cg_kind_t kind)
+{
+    const cg_kind_info_t *k = cg_kind_info(kind);
+    return k ? k->name : "unknown";
+}
+
+/* ------------------------------------------------------------ 小工具 */
+
+static char *dup_str(const char *s)
+{
+    if (!s) return NULL;
+    size_t n = strlen(s);
+    char *p = (char *)malloc(n + 1);
+    if (p) memcpy(p, s, n + 1);
+    return p;
+}
+
+static char *dup_or_null(const char *s)
+{
+    if (!s || !*s) return NULL;
+    return dup_str(s);
+}
+
+char *cg_read_file(const char *path)
+{
+    FILE *f;
+    long  len;
+    char *buf;
+
+    if (!path) return NULL;
+    f = fopen(path, "rb");
+    if (!f) return NULL;
+    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return NULL; }
+    len = ftell(f);
+    if (len < 0) { fclose(f); return NULL; }
+    rewind(f);
+    buf = (char *)malloc((size_t)len + 1);
+    if (!buf) { fclose(f); return NULL; }
+    if (len > 0 && fread(buf, 1, (size_t)len, f) != (size_t)len) {
+        free(buf);
+        fclose(f);
+        return NULL;
+    }
+    buf[len] = '\0';
+    fclose(f);
+    return buf;
+}
+
+/* ------------------------------------------------------------ 样式 */
+
+static const char *const k_align_names[] = { "left", "center", "right" };
+
+static void parse_style(const cj_val_t *o, cg_style_t *st)
+{
+    const cj_val_t *v;
+
+    st->font = NULL;
+    st->size = 0;              /* 0 = 用系统 UI 字体 */
+    st->bold = 0;
+    st->fg = CG_COLOR_NONE;
+    st->bg = CG_COLOR_NONE;
+    st->radius = 0;
+    st->align = CG_ALIGN_LEFT;
+
+    if (!o || o->type != CJ_OBJ) return;
+
+    st->font = dup_or_null(cj_str(cj_get(o, "font"), NULL));
+    st->size = cj_int(cj_get(o, "size"), 0);
+    st->bold = cj_bool(cj_get(o, "bold"), 0);
+    st->fg = cj_color(cj_get(o, "fg"), CG_COLOR_NONE);
+    st->bg = cj_color(cj_get(o, "bg"), CG_COLOR_NONE);
+    st->radius = cj_int(cj_get(o, "radius"), 0);
+
+    v = cj_get(o, "align");
+    if (v && v->type == CJ_STR) {
+        for (int i = 0; i < 3; i++) {
+            if (strcmp(v->str ? v->str : "", k_align_names[i]) == 0) {
+                st->align = (cg_align_t)i;
+                break;
+            }
+        }
+    }
+}
+
+static void style_free(cg_style_t *st)
+{
+    free(st->font);
+    st->font = NULL;
+}
+
+/* --------------------------------------------------- 结构化内容的解析 */
+
+static char **parse_str_array(const cj_val_t *arr, size_t *count)
+{
+    char **out;
+    size_t n;
+
+    *count = 0;
+    if (!arr || arr->type != CJ_ARR || arr->count == 0) return NULL;
+
+    n = arr->count;
+    out = (char **)calloc(n, sizeof(char *));
+    if (!out) return NULL;
+    for (size_t i = 0; i < n; i++) {
+        out[i] = dup_str(cj_str(arr->items[i], ""));
+    }
+    *count = n;
+    return out;
+}
+
+static void str_array_free(char **arr, size_t n)
+{
+    if (!arr) return;
+    for (size_t i = 0; i < n; i++) free(arr[i]);
+    free(arr);
+}
+
+/** 树节点（可嵌套："nodes": [{ "text": "根", "expanded": true, "children": [...] }]）
+ *  children 是"指针数组"，因为嵌套深度不定，逐层单独分配比连续数组好写。 */
+static cg_item_t **parse_tree_items(const cj_val_t *arr, size_t *count)
+{
+    cg_item_t **out;
+    size_t n;
+
+    *count = 0;
+    if (!arr || arr->type != CJ_ARR || arr->count == 0) return NULL;
+
+    n = arr->count;
+    out = (cg_item_t **)calloc(n, sizeof(cg_item_t *));
+    if (!out) return NULL;
+
+    for (size_t i = 0; i < n; i++) {
+        const cj_val_t *o = arr->items[i];
+        cg_item_t *it = (cg_item_t *)calloc(1, sizeof(cg_item_t));
+        if (!it) break;
+        if (o && o->type == CJ_OBJ) {
+            it->text = dup_str(cj_str(cj_get(o, "text"), ""));
+            it->id = dup_or_null(cj_str(cj_get(o, "id"), NULL));
+            it->expanded = cj_bool(cj_get(o, "expanded"), 0);
+            it->checked = cj_bool(cj_get(o, "checked"), 0);
+            it->children = parse_tree_items(cj_get(o, "children"), &it->nchildren);
+        } else {
+            it->text = dup_str(cj_str(o, ""));
+        }
+        out[i] = it;
+    }
+    *count = n;
+    return out;
+}
+
+static void tree_items_free(cg_item_t **items, size_t n)
+{
+    if (!items) return;
+    for (size_t i = 0; i < n; i++) {
+        if (!items[i]) continue;
+        tree_items_free(items[i]->children, items[i]->nchildren);
+        free(items[i]->text);
+        free(items[i]->id);
+        free(items[i]);
+    }
+    free(items);
+}
+
+/** 表格列："columns": [{ "title": "姓名", "w": 120 }] */
+static cg_col_t *parse_columns(const cj_val_t *arr, size_t *count)
+{
+    cg_col_t *out;
+    size_t n;
+
+    *count = 0;
+    if (!arr || arr->type != CJ_ARR || arr->count == 0) return NULL;
+
+    n = arr->count;
+    out = (cg_col_t *)calloc(n, sizeof(cg_col_t));
+    if (!out) return NULL;
+    for (size_t i = 0; i < n; i++) {
+        const cj_val_t *o = arr->items[i];
+        if (o && o->type == CJ_STR) {                 /* 允许 "columns": ["姓名","年龄"] */
+            out[i].title = dup_str(cj_str(o, ""));
+            out[i].width = 0;                         /* 0 = 均分 */
+        } else {
+            out[i].title = dup_str(cj_str(cj_get(o, "title"), ""));
+            out[i].width = cj_int(cj_get(o, "w"), 0);
+        }
+    }
+    *count = n;
+    return out;
+}
+
+/** 表格行："rows": [["张三","18"], ["李四","20"]] */
+static char ***parse_rows(const cj_val_t *arr, size_t *nrows, size_t *row_cells)
+{
+    char ***out;
+    size_t  n, cells = 0;
+
+    *nrows = 0;
+    *row_cells = 0;
+    if (!arr || arr->type != CJ_ARR || arr->count == 0) return NULL;
+
+    n = arr->count;
+    out = (char ***)calloc(n, sizeof(char **));
+    if (!out) return NULL;
+
+    for (size_t i = 0; i < n; i++) {
+        const cj_val_t *row = arr->items[i];
+        if (row && row->type == CJ_ARR && row->count > cells) cells = row->count;
+    }
+    if (cells == 0) cells = 1;
+
+    for (size_t i = 0; i < n; i++) {
+        const cj_val_t *row = arr->items[i];
+        out[i] = (char **)calloc(cells, sizeof(char *));
+        if (!out[i]) continue;
+        for (size_t c = 0; c < cells; c++) {
+            const cj_val_t *cell = (row && row->type == CJ_ARR && c < row->count) ? row->items[c] : NULL;
+            out[i][c] = dup_str(cj_str(cell, ""));
+        }
+    }
+    *nrows = n;
+    *row_cells = cells;
+    return out;
+}
+
+static void rows_free(char ***rows, size_t nrows, size_t cells)
+{
+    if (!rows) return;
+    for (size_t i = 0; i < nrows; i++) {
+        if (!rows[i]) continue;
+        for (size_t c = 0; c < cells; c++) free(rows[i][c]);
+        free(rows[i]);
+    }
+    free(rows);
+}
+
+/* ------------------------------------------------------------ 节点 */
+
+static void node_free(cg_node_t *n)
+{
+    if (!n) return;
+    for (size_t i = 0; i < n->nchildren; i++) node_free(n->children[i]);
+    free(n->children);
+    for (int i = 0; i < CG_EVENT_COUNT; i++) free(n->ev[i]);
+    str_array_free(n->items, n->nitems);
+    tree_items_free(n->nodes, n->nnodes);
+    if (n->cols) {
+        for (size_t i = 0; i < n->ncols; i++) free(n->cols[i].title);
+        free(n->cols);
+    }
+    rows_free(n->rows, n->nrows, n->row_cells);
+    style_free(&n->style);
+    free(n->type);
+    free(n->id);
+    free(n->text);
+    free(n->src);
+    free(n->format);
+    free(n);
+}
+
+static void node_add_child(cg_node_t *parent, cg_node_t *child)
+{
+    cg_node_t **nc = (cg_node_t **)realloc(parent->children, (parent->nchildren + 1) * sizeof(cg_node_t *));
+    if (!nc) return;
+    parent->children = nc;
+    parent->children[parent->nchildren++] = child;
+    child->parent = parent;
+}
+
+static int g_auto_id = 0;
+
+static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
+{
+    cg_node_t *n;
+    const cj_val_t *v, *rect;
+    const cg_kind_info_t *ki;
+    const char *type;
+    char auto_id[32];
+
+    if (!o || o->type != CJ_OBJ) {
+        snprintf(err, errsz, "widget entry is not an object");
+        return NULL;
+    }
+
+    type = cj_str(cj_get(o, "type"), "label");
+    ki = cg_kind_lookup(type);
+    if (!ki) {
+        snprintf(err, errsz, "unknown widget type \"%s\"", type);
+        return NULL;
+    }
+
+    n = (cg_node_t *)calloc(1, sizeof(cg_node_t));
+    if (!n) { snprintf(err, errsz, "out of memory"); return NULL; }
+
+    n->type = dup_str(ki->name);
+    v = cj_get(o, "id");
+    if (v && v->type == CJ_STR && v->str && *v->str) {
+        n->id = dup_str(v->str);
+    } else {
+        snprintf(auto_id, sizeof(auto_id), "%s_%d", ki->name, ++g_auto_id);
+        n->id = dup_str(auto_id);
+    }
+    n->text = dup_str(cj_str(cj_get(o, "text"), ki->def_text));
+
+    /* rect 既支持 {x,y,w,h} 对象，也支持扁平的 x/y/w/h */
+    rect = cj_get(o, "rect");
+    n->x = cj_int(cj_get(rect, "x"), cj_int(cj_get(o, "x"), 0));
+    n->y = cj_int(cj_get(rect, "y"), cj_int(cj_get(o, "y"), 0));
+    n->w = cj_int(cj_get(rect, "w"), cj_int(cj_get(o, "w"), ki->def_w));
+    n->h = cj_int(cj_get(rect, "h"), cj_int(cj_get(o, "h"), ki->def_h));
+    if (n->w < 0) n->w = 0;
+    if (n->h < 0) n->h = 0;
+
+    parse_style(cj_get(o, "style"), &n->style);
+
+    /* state 与顶层字段都读，顶层优先（方便手写小文件） */
+    {
+        const cj_val_t *st = cj_get(o, "state");
+        n->visible = cj_bool(cj_get(o, "visible"), cj_bool(cj_get(st, "visible"), 1));
+        n->enabled = cj_bool(cj_get(o, "enabled"), cj_bool(cj_get(st, "enabled"), 1));
+        n->checked = cj_bool(cj_get(o, "checked"), cj_bool(cj_get(st, "checked"), 0));
+        n->value   = cj_int(cj_get(o, "value"), cj_int(cj_get(st, "value"), 0));
+        n->vmin    = cj_int(cj_get(o, "min"), cj_int(cj_get(st, "min"), 0));
+        n->vmax    = cj_int(cj_get(o, "max"), cj_int(cj_get(st, "max"), 100));
+    }
+    if (n->vmax <= n->vmin) n->vmax = n->vmin + 1;
+
+    v = cj_get(o, "events");
+    if (v && v->type == CJ_OBJ) {
+        for (size_t i = 0; i < v->count; i++) {
+            const char *key = (v->keys && v->keys[i]) ? v->keys[i] : NULL;
+            const char *val = cj_str(v->items[i], NULL);
+            int ev = key ? cg_event_from_name(key) : -1;
+            if (ev >= 0 && val && *val) n->ev[ev] = dup_str(val);
+        }
+    }
+
+    /* 标签页归属、图片路径、细分格式 */
+    n->page = cj_int(cj_get(o, "page"), 0);
+    if (n->page < 0) n->page = 0;
+    n->src = dup_or_null(cj_str(cj_get(o, "src"), NULL));
+    n->format = dup_or_null(cj_str(cj_get(o, "format"), NULL));
+
+    /* 结构化内容 */
+    n->items = parse_str_array(cj_get(o, "items"), &n->nitems);
+    n->nodes = parse_tree_items(cj_get(o, "nodes"), &n->nnodes);
+    n->cols  = parse_columns(cj_get(o, "columns"), &n->ncols);
+    n->rows  = parse_rows(cj_get(o, "rows"), &n->nrows, &n->row_cells);
+
+    v = cj_get(o, "children");
+    if (v && v->type == CJ_ARR) {
+        if (!ki->container) {
+            snprintf(err, errsz, "widget \"%s\" (%s) cannot hold children", n->id, n->type);
+            node_free(n);
+            return NULL;
+        }
+        for (size_t i = 0; i < v->count; i++) {
+            cg_node_t *c = parse_node(v->items[i], err, errsz);
+            if (!c) { node_free(n); return NULL; }
+            node_add_child(n, c);
+        }
+    }
+    return n;
+}
+
+/* ------------------------------------------------------------ 文档 */
+
+cg_doc_t *cg_doc_parse(const char *json, char *err, size_t errsz)
+{
+    cj_val_t *root;
+    cg_doc_t *doc;
+    const cj_val_t *v, *app, *ws;
+    char errbuf[256] = { 0 };
+
+    errbuf[0] = '\0';
+    root = cj_parse(json, errbuf, sizeof(errbuf));
+    if (!root) {
+        snprintf(err, errsz, "JSON: %s", errbuf[0] ? errbuf : "parse failed");
+        return NULL;
+    }
+    if (root->type != CJ_OBJ) {
+        cj_free(root);
+        snprintf(err, errsz, "top level of a .cgui must be an object");
+        return NULL;
+    }
+
+    doc = (cg_doc_t *)calloc(1, sizeof(cg_doc_t));
+    if (!doc) { cj_free(root); snprintf(err, errsz, "out of memory"); return NULL; }
+
+    v = cj_get(root, "cgui");
+    if (v && cj_int(v, 1) > 1) {
+        snprintf(err, errsz, "unsupported .cgui version %d (runtime speaks 1)", cj_int(v, 1));
+        cj_free(root);
+        free(doc);
+        return NULL;
+    }
+
+    app = cj_get(root, "app");
+    doc->title = dup_str(cj_str(cj_get(app, "title"), "CStackGUI Application"));
+    doc->width = cj_int(cj_get(app, "width"), 640);
+    doc->height = cj_int(cj_get(app, "height"), 420);
+    doc->bg = cj_color(cj_get(app, "bg"), CG_COLOR_NONE);
+    if (doc->width < 80) doc->width = 80;
+    if (doc->height < 60) doc->height = 60;
+
+    doc->root = (cg_node_t *)calloc(1, sizeof(cg_node_t));
+    if (!doc->root) {
+        cj_free(root);
+        free(doc->title);
+        free(doc);
+        snprintf(err, errsz, "out of memory");
+        return NULL;
+    }
+    doc->root->type = dup_str("window");
+    doc->root->id = dup_str("__window");
+    doc->root->w = doc->width;
+    doc->root->h = doc->height;
+
+    /* 窗口级事件写成 app.events.close，挂在虚拟根上（窗口自身也是个"控件"） */
+    {
+        const cj_val_t *ae = cj_get(app, "events");
+        if (ae && ae->type == CJ_OBJ) {
+            for (int i = 0; i < CG_EVENT_COUNT; i++) {
+                const char *cb = cj_str(cj_get(ae, cg_event_name((cg_event_t)i)), NULL);
+                if (cb && *cb) doc->root->ev[i] = dup_str(cb);
+            }
+        }
+    }
+
+    ws = cj_get(root, "widgets");
+    if (ws && ws->type != CJ_ARR) {
+        snprintf(err, errsz, "\"widgets\" must be an array");
+        cj_free(root);
+        cg_doc_free(doc);
+        return NULL;
+    }
+    for (size_t i = 0; i < cj_count(ws); i++) {
+        cg_node_t *n = parse_node(cj_at(ws, i), err, errsz);
+        if (!n) {
+            cj_free(root);
+            cg_doc_free(doc);
+            return NULL;
+        }
+        node_add_child(doc->root, n);
+    }
+
+    cj_free(root);
+    return doc;
+}
+
+void cg_doc_release(cg_doc_t *doc)
+{
+    if (!doc) return;
+    free(doc->title);
+    node_free(doc->root);
+    doc->title = NULL;
+    doc->root = NULL;
+}
+
+void cg_doc_free(cg_doc_t *doc)
+{
+    if (!doc) return;
+    cg_doc_release(doc);
+    free(doc);
+}
+
+/* ------------------------------------------------------------ 打印 */
+
+/* ------------------------------------------------------------ 打印 */
+
+static void dump_node(const cg_node_t *n, FILE *out, int depth)
+{
+    for (int i = 0; i < depth; i++) fputs("  ", out);
+    fprintf(out, "%s #%s rect=(%d,%d,%d,%d) text=\"%s\"",
+            n->type ? n->type : "?", n->id ? n->id : "-", n->x, n->y, n->w, n->h,
+            n->text ? n->text : "");
+    if (!n->visible) fputs(" hidden", out);
+    if (!n->enabled) fputs(" disabled", out);
+    if (n->checked) fputs(" checked", out);
+    if (n->page) fprintf(out, " page=%d", n->page);
+    if (n->src) fprintf(out, " src=%s", n->src);
+    if (n->format) fprintf(out, " format=%s", n->format);
+    if (n->items) fprintf(out, " items=%lu", (unsigned long)n->nitems);
+    if (n->nodes) fprintf(out, " tree=%lu", (unsigned long)n->nnodes);
+    if (n->cols) fprintf(out, " cols=%lu", (unsigned long)n->ncols);
+    if (n->rows) fprintf(out, " rows=%lu", (unsigned long)n->nrows);
+    if (n->style.font || n->style.size)
+        fprintf(out, " font=%s/%d%s", n->style.font ? n->style.font : "-", n->style.size,
+                n->style.bold ? " bold" : "");
+    for (int i = 0; i < CG_EVENT_COUNT; i++) {
+        if (n->ev[i]) fprintf(out, " %s->%s", cg_event_name((cg_event_t)i), n->ev[i]);
+    }
+    fputc('\n', out);
+    for (size_t i = 0; i < n->nchildren; i++) dump_node(n->children[i], out, depth + 1);
+}
+
+void cg_doc_dump(const cg_doc_t *doc, FILE *out)
+{
+    if (!doc || !out) return;
+    fprintf(out, "app \"%s\" %dx%d bg=#%06X\n",
+            doc->title ? doc->title : "-", doc->width, doc->height,
+            doc->bg == CG_COLOR_NONE ? 0 : doc->bg);
+    if (doc->root) {
+        for (size_t i = 0; i < doc->root->nchildren; i++) dump_node(doc->root->children[i], out, 1);
+    }
+}
