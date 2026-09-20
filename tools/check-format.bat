@@ -39,6 +39,12 @@ echo   roundtrip gallery
 node tools\format-roundtrip.mjs examples\gallery\gallery.exe examples\gallery\gallery.cgui build\roundtrip_gallery.cgui
 if errorlevel 1 exit /b 1
 
+rem The designer's "support library" tab is a hand-written index of the C API,
+rem so it drifts from cstackgui.h unless something checks it.
+echo   support library vs cstackgui.h
+node tools\check-support.mjs
+if errorlevel 1 exit /b 1
+
 echo.
 echo [ok] format contract check passed
 exit /b 0
