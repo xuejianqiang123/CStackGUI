@@ -45,6 +45,19 @@
 - 关闭：用户说"关闭ponytail"/`ponytail off`；切档：`ponytail lite`（更温和）。
 - 与 PIV 流程正交：只影响"写多少代码"决策，不改质量门禁。详见 `skills/ponytail/SKILL.md`。
 
+## 5.3 非破坏性文件操作强制规则（不删为先，默认开启）
+**能覆盖就不删、能不建就不建**：删除类操作会触发风控与人工批准，零散删除等于把用户按在十几个弹窗前。
+- **替代优先**：改内容用覆盖写（`replace_in_file`/`write_to_file`），不"先删再建"；清空文件用写空内容；
+  重新编译**不要删** `build\obj`/`build\lib`（脚本自比时间戳，重编会覆盖 `.o`、`ar rcs` 覆盖归档）；
+  重建输出目录直接往里写；被 git 跟踪的文件要"还原"用 `git restore` 而不是删除；
+  临时探针/截图/提交信息文本一律落 `build\`（gitignore），**收尾不清理**。
+- **硬红线**：禁 `rmdir /s /q`、`del /s /q`、`Remove-Item -Recurse`、`git clean -fd(x)`、通配符批量删除；
+  禁删 `.codebuddy\`、`runtime\`、`designer\src\`、`docs\`、`examples\`/`apps\` 里的手写文件；
+  禁删工作区之外的路径与用户数据目录。
+- **确实要删**：合并成**一次**操作（完整路径、无通配符），先给「删除清单 + 原因 + 为何无法替代」，
+  整个任务只请求一次批准；同一轮里连续第三次动删除命令就要停下来合并。
+- 关闭：用户说"可以随便删"/`safe-file-ops off`。详见 `skills/safe-file-ops/SKILL.md`。
+
 ---
 
 ## 6. PIV 开发工作流强制规则（v0.1）

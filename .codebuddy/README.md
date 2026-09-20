@@ -4,7 +4,7 @@
 > 里只有一部分对本工程有意义（`firmware_code_style`、`buffer_overflow_check`、`memory_leak_check`、
 > `stack_overflow_check`、`error_handling_check`、`struct_best_practice_check`），其余针对 ESP32/RTOS/外设，
 > 本工程用不到。本工程自己的技能是 `designer-modify`（改画布）、`git-commit-style`（提交格式）等。
-> **用途**：AI 辅助编程的完整工作流体系 = 代码审查（14个专项技能）+ 开发流程（14个PIV循环技能）+ 辅助工具（5个）+ 社区引入（4个），共 37 个技能
+> **用途**：AI 辅助编程的完整工作流体系 = 代码审查（14个专项技能）+ 开发流程（PIV 双循环）+ 辅助工具（caveman / ponytail / tokenzero / analyzing-projects / esp-idf-helper）+ 社区引入（4个）+ 本工程专属（designer-modify / git-commit-style / **safe-file-ops**），共 39 个技能目录（明细见下方目录树）
 > **核心价值**：质量门禁前置 + 端到端自动化 + 可追溯产出
 > **维护**：请勿随意删除此文件夹，包含项目级配置、审查规则和工作流定义
 
@@ -94,7 +94,8 @@
     │   └── wavedrom-gen/             # 时序描述 → WaveJSON → SVG/PNG/HTML（Datasheet 级 setup/hold 标注）
     └── [本工程专属] CStackGUI 自己的技能
         ├── designer-modify/          # 改画布 designer/ 的说明书（.cgui 契约、新增控件的 7~8 处、验证门禁）
-        └── git-commit-style/         # 提交规范：[类型][模块] 描述（禁用 conventional-commit）
+        ├── git-commit-style/         # 提交规范：[类型][模块] 描述（禁用 conventional-commit）
+        └── safe-file-ops/            # 非破坏性文件操作：能不删就不删，删除合并成一次并先说明（默认常驻，见 global-rule §5.3）
 ```
 
 ---
