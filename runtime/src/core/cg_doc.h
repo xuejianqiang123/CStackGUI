@@ -12,8 +12,8 @@
 
 #include "cstackgui.h"
 
-/** 「不设置颜色」：这个控件交给系统默认配色 */
-#define CG_COLOR_NONE 0xFFFFFFFFu
+/* CG_COLOR_NONE（「不设置颜色」）定义在公共头 cstackgui.h 里，上面已经 include 进来，
+ * 这里不再重复定义 —— 业务代码也需要它，单一定义才不会漂移。 */
 
 /** 控件类型。新增类型时记得同步 cg_doc_kind.c 的 k_kinds 和画布端的 model.ts/KINDS。 */
 typedef enum {

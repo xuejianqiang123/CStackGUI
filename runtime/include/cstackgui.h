@@ -39,6 +39,13 @@ extern "C" {
 #define CG_VERSION_MINOR 1
 #define CG_VERSION_STRING "0.1.0"
 
+/** 颜色字面量：0xRRGGBB（set_colors / canvas / choose_color 都用这套编码） */
+#define CG_RGB(r, g, b) ((((unsigned)(r) & 0xFFu) << 16) | (((unsigned)(g) & 0xFFu) << 8) | ((unsigned)(b) & 0xFFu))
+
+/** 「不设置颜色」：这个控件/窗口交给系统默认配色。
+ *  业务代码只用 include 本头文件，所以它必须在这里公开（内部 cg_doc.h 直接复用本定义）。 */
+#define CG_COLOR_NONE 0xFFFFFFFFu
+
 /* ---------------------------------------------------------------- 事件 */
 
 typedef enum {
