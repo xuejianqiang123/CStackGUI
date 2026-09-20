@@ -1,5 +1,8 @@
-/* cstackgui.rc -- 把清单与版本信息打进业务 exe */
+/* cstackgui.rc -- 把图标、清单与版本信息打进业务 exe */
 #include <windows.h>
+
+/* 多尺寸 16~256，由 tools\make-ico.mjs 生成 */
+1 ICON "cstackgui.ico"
 
 1 RT_MANIFEST "cstackgui.manifest"
 
