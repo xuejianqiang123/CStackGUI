@@ -116,12 +116,19 @@ static void sk_round_rect(GpPath *p, REAL x, REAL y, REAL w, REAL h, REAL r)
     GdipClosePathFigure(p);
 }
 
+/** 取窗口底色（控件外区域用它填充，避免 owner-draw 自带的灰底） */
+static unsigned sk_winbg(cg_app_t *app)
+{
+    if (app && app->doc.bg != CG_COLOR_NONE) return app->doc.bg;
+    return 0xF3EDF7u;
+}
+
 void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
 {
     cg_widget_t *w = cg_widget_by_hwnd(app, dis->hwndItem);
     RECT rc;
     int x, y, wpx, hpx, scale;
-    unsigned base, fill, textcol, border;
+    unsigned base, fill, textcol, border, winbg;
     int filled, disabled, pressed, hot, has_border;
     int rad;
     GpGraphics *g = NULL;
@@ -134,6 +141,7 @@ void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
     if (wpx <= 0 || hpx <= 0) return;
 
     scale = (app && app->scale > 0) ? app->scale : 100;
+    winbg = sk_winbg(app);
 
     filled   = (w->style.bg != CG_COLOR_NONE);
     base     = filled ? w->style.bg : 0xFFFFFFu;
@@ -172,7 +180,16 @@ void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
     if (rad > wpx / 2) rad = wpx / 2;
     if (rad > hpx / 2) rad = hpx / 2;
 
-    /* ---- 先画圆角填充（GDI+，抗锯齿） ---- */
+    /* ---- 先用窗口底色清整块区域：圆角外/上一帧的残留都会导致黑边 ---- */
+    {
+        HBRUSH b = CreateSolidBrush(sk_colorref(winbg));
+        HBRUSH ob = (HBRUSH)SelectObject(dis->hDC, b);
+        PatBlt(dis->hDC, x, y, wpx, hpx, PATCOPY);
+        SelectObject(dis->hDC, ob);
+        DeleteObject(b);
+    }
+
+    /* ---- 圆角填充（GDI+，抗锯齿） ---- */
     if (GdipCreateFromHDC(dis->hDC, &g) == SK_GDIP_OK && g) {
         GpPath *p = NULL;
         GdipSetSmoothingMode(g, SK_SMOOTH_AA);
@@ -190,13 +207,6 @@ void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
                 if (GdipCreatePen1(sk_argb(255, border), 1.0f, SK_UNIT_PIXEL, &bd) == SK_GDIP_OK && bd) {
                     GdipDrawPath(g, bd, p);
                     GdipDeletePen(bd);
-                }
-            }
-            if (dis->itemState & ODS_FOCUS) {
-                GpPen *pen = NULL;
-                if (GdipCreatePen1(sk_argb(255, 0x6750A4u), 1.0f, SK_UNIT_PIXEL, &pen) == SK_GDIP_OK && pen) {
-                    GdipDrawPath(g, pen, p);
-                    GdipDeletePen(pen);
                 }
             }
             GdipDeletePath(p);
@@ -231,11 +241,114 @@ void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
     }
 }
 
-/** 取窗口底色（控件外区域用它填充，避免 owner-draw 自带的灰底） */
-static unsigned sk_winbg(cg_app_t *app)
+/** M3 开关：右侧胶囊轨道 + 白色圆钮，规格对齐画布（track 2:1、钮内缩 3px） */
+void cg_skin_draw_switch(cg_widget_t *w, HDC hdc, const RECT *rc)
 {
-    if (app && app->doc.bg != CG_COLOR_NONE) return app->doc.bg;
-    return 0xF3EDF7u;
+    int on, disabled, scale, hot, pressed;
+    int x, y, wpx, hpx, th, tw, inset, knob, kx, ky;
+    unsigned track_fill, knob_fill = 0xFFFFFFu, winbg;
+    GpGraphics *g = NULL;
+
+    if (!w) return;
+    x = rc->left; y = rc->top;
+    wpx = rc->right - rc->left;
+    hpx = rc->bottom - rc->top;
+    if (wpx <= 0 || hpx <= 0) return;
+    on       = w->checked ? 1 : 0;
+    disabled = w->enabled ? 0 : 1;
+    scale    = (w->app && w->app->scale > 0) ? w->app->scale : 100;
+    hot      = w->hot ? 1 : 0;
+    pressed  = w->pressed ? 1 : 0;
+    winbg    = sk_winbg(w->app);
+
+    /* 整块填窗口底色（圆角外的残留/owner-draw 默认灰底都盖掉） */
+    {
+        HBRUSH b = CreateSolidBrush(sk_colorref(winbg));
+        HBRUSH ob = (HBRUSH)SelectObject(hdc, b);
+        PatBlt(hdc, x, y, wpx, hpx, PATCOPY);
+        SelectObject(hdc, ob);
+        DeleteObject(b);
+    }
+
+    /* 轨道：高 = 控件高 - 8（画布 32 高里放 24 高轨道），宽 = 2 倍高，右对齐 */
+    th = hpx - 8 * scale / 100;
+    if (th > 24 * scale / 100) th = 24 * scale / 100;
+    if (th < 12) th = 12;
+    tw = th * 2;
+    if (tw > wpx) tw = wpx;
+    inset = (hpx - th) / 2;
+    knob  = th - 6 * scale / 100;
+    if (knob < 8) knob = 8;
+    {
+        int tspace = (tw - knob) / 2;
+        if (inset > tspace) inset = tspace;
+    }
+    kx = on ? (x + wpx - inset - knob) : (x + inset);
+    ky = y + (hpx - knob) / 2;
+
+    if (on)            track_fill = 0x6750A4u;                     /* on：主题紫 */
+    else if (disabled) track_fill = 0xC9C5D0u;
+    else if (pressed)  track_fill = sk_shade(0x9A949Eu, 0.85f);
+    else if (hot)      track_fill = sk_shade(0x9A949Eu, 0.92f);
+    else               track_fill = 0x9A949Eu;                     /* off：画布同款灰 */
+
+    /* 轨道 + 圆钮（GDI+ 抗锯齿；挂了回退 GDI） */
+    if (GdipCreateFromHDC(hdc, &g) == SK_GDIP_OK && g) {
+        GpPath *p = NULL;
+        GdipSetSmoothingMode(g, SK_SMOOTH_AA);
+        if (GdipCreatePath(SK_FILL_WINDING, &p) == SK_GDIP_OK && p) {
+            GpSolidFill *bf = NULL;
+            GdipAddPathEllipse(p, (REAL)(x + wpx - inset - tw), (REAL)(y + inset),
+                               (REAL)tw, (REAL)th);
+            if (GdipCreateSolidFill(sk_argb(255, track_fill), &bf) == SK_GDIP_OK && bf) {
+                GdipFillPath(g, (GpBrush *)bf, p);
+                GdipDeleteBrush((GpBrush *)bf);
+            }
+            GdipDeletePath(p);
+        }
+        {
+            GpPath *kp = NULL;
+            if (GdipCreatePath(SK_FILL_WINDING, &kp) == SK_GDIP_OK && kp) {
+                GpSolidFill *kf = NULL;
+                GdipAddPathEllipse(kp, (REAL)kx, (REAL)ky, (REAL)knob, (REAL)knob);
+                if (GdipCreateSolidFill(sk_argb(255, knob_fill), &kf) == SK_GDIP_OK && kf) {
+                    GdipFillPath(g, (GpBrush *)kf, kp);
+                    GdipDeleteBrush((GpBrush *)kf);
+                }
+                GdipDeletePath(kp);
+            }
+        }
+        GdipDeleteGraphics(g);
+    } else {
+        /* 回退：GDI（原实现） */
+        HBRUSH br = CreateSolidBrush(sk_colorref(track_fill));
+        HGDIOBJ ob = SelectObject(hdc, br);
+        HGDIOBJ op = SelectObject(hdc, GetStockObject(NULL_PEN));
+        RoundRect(hdc, x + wpx - inset - tw, y + inset,
+                  x + wpx - inset, y + inset + th, th, th);
+        SelectObject(hdc, ob);
+        DeleteObject(br);
+        br = CreateSolidBrush(sk_colorref(knob_fill));
+        ob = SelectObject(hdc, br);
+        Ellipse(hdc, kx, ky, kx + knob, ky + knob);
+        SelectObject(hdc, ob);
+        SelectObject(hdc, op);
+        DeleteObject(br);
+    }
+
+    /* 文字（左侧，垂直居中） */
+    if (w->text && *w->text) {
+        wchar_t *wt = sk_to_wcs(w->text);
+        if (wt) {
+            RECT tr = *rc;
+            tr.right = x + wpx - tw - 6 * scale / 100;
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, sk_colorref(disabled ? 0x9A9A9Eu : 0x1D1B20u));
+            DrawTextW(hdc, wt, -1, &tr,
+                      DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+            free(wt);
+        }
+    }
 }
 
 /** M3 复选/单选：圆角方框 + 勾，或圆环 + 实心点；圆角与禁用态都按状态走 */

@@ -25,6 +25,13 @@ void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis);
 void cg_skin_draw_check(cg_app_t *app, const DRAWITEMSTRUCT *dis);
 
 /**
+ * @brief M3 开关自绘：右侧胶囊轨道（on 主题紫 / off 灰）+ 白色圆钮，规格对齐画布
+ * @param w 开关控件（读 checked/enabled/hot/text）；hdc 目标 DC；rc 控件矩形
+ * @return void 无返回值；GDI+ 不可用时回退 GDI
+ */
+void cg_skin_draw_switch(cg_widget_t *w, HDC hdc, const RECT *rc);
+
+/**
  * @brief 滑块（trackbar）的 NM_CUSTOMDRAW 自绘：把轨道和滑块画成 M3 圆角
  * @param app 所属应用；hdr NM_CUSTOMDRAW 通知头（hwndFrom 必须是 slider）
  * @return LRESULT 返回给 WM_NOTIFY 的 CDRF_* 值，告诉系统哪些阶段我们跳过默认绘制

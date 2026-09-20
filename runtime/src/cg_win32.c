@@ -506,7 +506,7 @@ static LRESULT CALLBACK FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
                 rate_or_pag_click(w, hwnd, (short)LOWORD(lp));
             }
             /* 自绘按钮：悬停/按下只影响外观，不派发事件（点击仍走 BN_CLICKED） */
-            if (is_t(w, "button") || is_t(w, "checkbox") || is_t(w, "radio")) {
+            if (is_t(w, "button") || is_t(w, "checkbox") || is_t(w, "radio") || is_t(w, "switch")) {
                 if (msg == WM_LBUTTONDOWN) {
                     w->pressed = 1; InvalidateRect(hwnd, NULL, TRUE);
                 } else if (msg == WM_LBUTTONUP) {
@@ -1619,22 +1619,15 @@ static void draw_pagination(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
     }
 }
 
-/** WM_DRAWITEM：开关和图标按钮是自绘的 */
+/** WM_DRAWITEM：自绘控件统一分发（绘制本体在 cg_skin.c / 各 draw_* 函数） */
 static void draw_own_item(cg_app_t *app, const DRAWITEMSTRUCT *dis)
 {
     cg_widget_t *w = widget_by_hwnd(app, dis->hwndItem);
-    RECT  rc = dis->rcItem;
-    HDC   dc = dis->hDC;
-    int   h, pad, knob, track_w;
-    int   on;
-    COLORREF track, knob_c = RGB(255, 255, 255);
-    HBRUSH  br;
-    HGDIOBJ oldbr, oldpen;
-    wchar_t *label = NULL;
 
     if (!w) return;
     if (is_t(w, "button")) { cg_skin_draw_button(app, dis); return; }  /* M3 圆角自绘 */
     if (is_t(w, "checkbox") || is_t(w, "radio")) { cg_skin_draw_check(app, dis); return; }  /* M3 勾选/单选自绘 */
+    if (is_t(w, "switch")) { cg_skin_draw_switch(w, dis->hDC, &dis->rcItem); return; }  /* M3 开关自绘 */
     if (is_t(w, "iconbutton")) {
         draw_icon_button(w, dis);
         return;
@@ -1644,47 +1637,6 @@ static void draw_own_item(cg_app_t *app, const DRAWITEMSTRUCT *dis)
     if (is_t(w, "tag"))         { draw_tag(w, dis); return; }
     if (is_t(w, "rate"))        { draw_rate(w, dis); return; }
     if (is_t(w, "pagination"))  { draw_pagination(w, dis); return; }
-    on = w->checked != 0;
-    h = rc.bottom - rc.top;
-    pad = h >= 28 ? 4 : 3;
-    knob = h - pad * 2;
-
-    /* 有文字时：左边文字，右边开关 */
-    track_w = h * 2 - 4;
-    if (track_w > rc.right - rc.left) track_w = rc.right - rc.left;
-    if (track_w < 24) track_w = 24;
-
-    if (w->text && *w->text) {
-        RECT tr = rc;
-        tr.right = rc.right - track_w - 6;
-        wchar_t *wt = wc_from_utf8(w->text);
-        SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, (w->style.fg != CG_COLOR_NONE) ? to_colorref(w->style.fg) : GetSysColor(COLOR_WINDOWTEXT));
-        DrawTextW(dc, wt ? wt : L"", -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-        free(wt);
-        rc.left = rc.right - track_w;
-    }
-
-    track = on ? RGB(0x67, 0x50, 0xA4) : RGB(0x9A, 0x94, 0x9E);
-    br = CreateSolidBrush(track);
-    oldbr = SelectObject(dc, br);
-    oldpen = SelectObject(dc, GetStockObject(NULL_PEN));
-    RoundRect(dc, rc.left, rc.top + pad, rc.left + track_w, rc.bottom - pad, rc.bottom - rc.top, rc.bottom - rc.top);
-    SelectObject(dc, oldbr);
-    DeleteObject(br);
-
-    br = CreateSolidBrush(knob_c);
-    oldbr = SelectObject(dc, br);
-    SelectObject(dc, GetStockObject(NULL_PEN));
-    {
-        int cx = on ? (rc.left + track_w - pad - knob / 2) : (rc.left + pad + knob / 2);
-        int cy = (rc.top + rc.bottom) / 2;
-        Ellipse(dc, cx - knob / 2, cy - knob / 2, cx + knob / 2, cy + knob / 2);
-    }
-    SelectObject(dc, oldbr);
-    SelectObject(dc, oldpen);
-    DeleteObject(br);
-    (void)label;
 }
 
 /**
