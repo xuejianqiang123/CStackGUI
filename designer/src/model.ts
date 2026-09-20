@@ -586,6 +586,8 @@ function coerceTree(raw: unknown[]): CgTreeItem[] {
     const o = (r ?? {}) as Record<string, unknown>;
     const item: CgTreeItem = { text: typeof o.text === "string" ? o.text : "" };
     if (o.expanded === true) item.expanded = true;
+    if (typeof o.id === "string" && o.id) item.id = o.id;      /* 菜单项标识，丢了回调就拿不到 */
+    if (o.checked === true) item.checked = true;                /* 菜单勾选态同理 */
     if (Array.isArray(o.children)) item.children = coerceTree(o.children);
     out.push(item);
   }
@@ -761,6 +763,9 @@ function cleanNode(node: CgNode): CgNode {
     out.max = node.max ?? 100;
   } else if (node.type === "colorpicker") {
     out.value = node.value ?? 0;   /* value 存颜色 0xRRGGBB */
+  } else if (KIND_MAP[node.type]?.listLike && node.value) {
+    /* tabs/listbox/combo 的当前选中项：不存的话重开文件永远回第 0 页/第 0 项 */
+    out.value = Math.max(0, Math.round(node.value));
   }
   if (node.events && Object.keys(node.events).length) {
     out.events = { ...node.events };
