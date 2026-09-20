@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("cstackgui", {
   locateProject: () => ipcRenderer.invoke("app:locateProject"),
   openFile: () => ipcRenderer.invoke("cgui:open"),
   saveFile: (payload) => ipcRenderer.invoke("cgui:save", payload),
+  pickIcon: () => ipcRenderer.invoke("app:pickIcon"),
   exportC: (payload) => ipcRenderer.invoke("cgui:exportC", payload),
   buildAndRun: (payload) => ipcRenderer.invoke("run:buildAndLaunch", payload),
   publish: (payload) => ipcRenderer.invoke("publish:project", payload),

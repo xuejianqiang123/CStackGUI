@@ -7,9 +7,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Canvas from "./components/Canvas";
 import EventPanel from "./components/EventPanel";
 import Inspector from "./components/Inspector";
+import InfoDialog from "./components/InfoDialog";
 import LayerTree from "./components/LayerTree";
 import Palette from "./components/Palette";
 import Toolbar from "./components/Toolbar";
+import WindowPanel from "./components/WindowPanel";
 import { getBridge } from "./bridge";
 import { collectCallbacks, generateC, uniqueCallbackNames } from "./codegen";
 import {
@@ -72,6 +74,8 @@ export default function App() {
   const [runOpen, setRunOpen] = useState(false);
   const [runLines, setRunLines] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
+  /** 「程序配置」对话框开关（工具栏按钮 / WindowPanel 入口都能打开） */
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const past = useRef<CgDoc[]>([]);
   const future = useRef<CgDoc[]>([]);
@@ -347,6 +351,7 @@ export default function App() {
       else if (action === "saveAs") void doSave(true);
       else if (action === "exportC") void doExportC();
       else if (action === "run") void doRun();
+      else if (action === "programConfig") setInfoOpen(true);
       else if (action === "undo") undo();
       else if (action === "redo") redo();
       else if (action === "duplicate") duplicateSelected();
@@ -355,7 +360,7 @@ export default function App() {
       else if (action === "zoomOut") setZoom((z) => Math.max(0.2, Math.round((z - 0.1) * 10) / 10));
       else if (action === "zoomFit") setZoom(1);
     });
-  }, [bridge, doNew, doOpen, doSave, doExportC, doRun, undo, redo, duplicateSelected, deleteNode, selectedId]);
+  }, [bridge, doNew, doOpen, doSave, doExportC, doRun, undo, redo, duplicateSelected, deleteNode, selectedId, infoOpen]);
 
   /* 编译/运行输出流：注册一次即可，只碰 setState */
   useEffect(() => {
@@ -527,6 +532,7 @@ export default function App() {
         onRun={() => void doRun()}
         publishing={publishing}
         onPublish={() => void doPublish()}
+        onOpenInfo={() => setInfoOpen(true)}
         onZoom={(z) => setZoom(clamp(z, 0.2, 3))}
         onToggleGrid={() => setShowGrid((v) => !v)}
         onToggleSnap={() => setSnapOn((v) => !v)}
@@ -577,7 +583,21 @@ export default function App() {
           </div>
           <div className="tab-body">
             {tab === "props" ? (
-              <Inspector doc={doc} node={selected} onBeginHistory={onBeginHistory} onApply={onApply} onSelect={setSelectedId} />
+              selected ? (
+                <Inspector doc={doc} node={selected} onBeginHistory={onBeginHistory} onApply={onApply} onSelect={setSelectedId} />
+              ) : (
+                <WindowPanel
+                  doc={doc}
+                  onBeginHistory={onBeginHistory}
+                  onApply={onApply}
+                  onOpenInfo={() => setInfoOpen(true)}
+                  onPickIcon={async () => {
+                    const res = await bridge.pickIcon();
+                    if (res.canceled) return null;
+                    return res.rel ?? res.path ?? null;
+                  }}
+                />
+              )
             ) : null}
             {tab === "events" ? (
               <EventPanel doc={doc} node={selected} onBeginHistory={onBeginHistory} onApply={onApply} />
@@ -700,6 +720,13 @@ rect = { x:${selected.rect.x}, y:${selected.rect.y}, w:${selected.rect.w}, h:${s
       ) : null}
 
       {runOpen ? <RunPanel lines={runLines} running={running} onClose={() => setRunOpen(false)} /> : null}
+      <InfoDialog
+        open={infoOpen}
+        doc={doc}
+        onClose={() => setInfoOpen(false)}
+        onBeginHistory={onBeginHistory}
+        onApply={onApply}
+      />
       <span style={{ display: "none" }}>{histVersion}</span>
     </div>
   );

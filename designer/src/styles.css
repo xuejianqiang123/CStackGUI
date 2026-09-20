@@ -503,10 +503,45 @@ input.narrow {
 }
 .titlebar-text {
   font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .titlebar-size {
   margin-left: auto;
+  flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
+}
+/* 窗口控制按钮（对应 app 的 controlBox / minimizeBox / maximizeBox） */
+.titlebar-controls {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.tb-btn {
+  width: 22px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--on-surface-var);
+}
+.tb-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+.tb-close:hover {
+  background: #e5484d;
+  color: #fff;
+}
+/* 无边框窗口：没有标题栏，边框也去掉 */
+.app-window.borderless {
+  border-radius: 0;
+  border-color: transparent;
 }
 /* 菜单栏：在窗口框架上，客户区之上 —— 和 Win32 的实际位置一致 */
 .menubar {
@@ -632,10 +667,15 @@ input.narrow {
   border-radius: 2px;
   overflow: hidden;
   white-space: nowrap;
+  /* 单行输入：文字左对齐 + 垂直居中（和运行时的 NCCALCSIZE 居中一致） */
+  display: flex;
+  align-items: center;
 }
 .ctl-edit-multi {
   white-space: pre-wrap;
   overflow: auto;
+  display: block;
+  align-items: flex-start;
 }
 .ctl-check {
   display: flex;
@@ -799,7 +839,7 @@ input.narrow {
 .ctl-spinner-text {
   flex: 1;
   padding: 0 6px;
-  text-align: right;
+  text-align: left;
 }
 .ctl-spinner-arrows {
   display: flex;
@@ -1333,6 +1373,33 @@ input.narrow {
   gap: 6px;
   min-width: 0;
 }
+/* 主窗口属性面板：标签列放宽（窗口属性名比控件属性名长，避免换行），勾选框靠右 */
+.win-panel .insp-label {
+  width: 104px;
+  white-space: nowrap;
+}
+.insp-value.right {
+  justify-content: flex-end;
+}
+/* 图标路径输入 + 右侧「选择文件」按钮 */
+.icon-input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+button.icon-pick {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+}
+button.icon-pick svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
 .insp-section {
   margin: 14px 0 8px;
   font-weight: 700;
@@ -1561,4 +1628,98 @@ input.narrow {
   text-overflow: ellipsis;
   white-space: nowrap;
   z-index: 100;
+}
+
+/* 主窗口图标（事件页签 / 属性页签里的「主窗口」头） */
+.glyph-window {
+  background: var(--seed);
+  border-radius: 4px;
+  position: relative;
+}
+.glyph-window::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  top: 3px;
+  height: 4px;
+  background: #fff;
+  border-radius: 2px;
+}
+
+/* 「程序配置」对话框（模态） */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 27, 32, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 120;
+}
+.modal-card {
+  width: min(440px, calc(100vw - 40px));
+  max-height: calc(100vh - 60px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--outline);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.32);
+  overflow: hidden;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--outline);
+}
+.modal-head .mini {
+  margin-left: auto;
+  padding: 2px 9px;
+}
+.modal-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px 0;
+  border-bottom: 1px solid var(--outline);
+}
+.modal-tab {
+  border: none;
+  background: transparent;
+  border-radius: 999px 999px 0 0;
+  padding: 6px 16px;
+  color: var(--on-surface-var);
+}
+.modal-tab.on {
+  background: var(--seed-weak);
+  color: #21005d;
+  font-weight: 600;
+}
+.modal-count {
+  margin-left: auto;
+}
+.modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 14px;
+}
+.modal-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--outline);
+}
+.modal-foot p {
+  flex: 1;
+  margin: 0;
+  line-height: 1.5;
+}
+.modal-foot .primary {
+  flex: 0 0 auto;
+  padding: 7px 22px;
 }

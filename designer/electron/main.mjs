@@ -160,6 +160,9 @@ async function ensureWorkspace(root) {
     await fs.copyFile(srcA, path.join(root, "runtime", "lib", "libcstackgui.a"));
     if (existsSync(srcO)) await fs.copyFile(srcO, path.join(root, "runtime", "lib", "cstackgui_res.o"));
     await fs.copyFile(srcBat, path.join(root, "build-app.bat"));
+    /* runtime\res：带「程序配置」<name>.rc 的工程要从这里找清单和默认图标 */
+    const srcRes = path.join(res, "runtime", "res");
+    if (existsSync(srcRes)) await fs.cp(srcRes, path.join(root, "runtime", "res"), { recursive: true });
     return true;
   } catch {
     return false;
@@ -381,6 +384,34 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
 
 ipcMain.handle("app:reveal", (_e, target) => {
   if (target && existsSync(target)) shell.showItemInFolder(target);
+});
+
+/** 选窗口图标（.ico）。尽量给出相对 .cgui 目录的路径（工程整体搬走也不失效）；
+ *  工程目录之外的图标就拷一份进 <工程>\assets\，这样 .rc 编译和发布包都找得到它。 */
+ipcMain.handle("app:pickIcon", async () => {
+  const res = await dialog.showOpenDialog(win, {
+    title: "选择窗口图标（.ico）",
+    filters: [{ name: "图标文件", extensions: ["ico"] }],
+    properties: ["openFile"],
+  });
+  if (res.canceled || !res.filePaths.length) return { canceled: true };
+  const picked = res.filePaths[0];
+  if (!currentFile) return { canceled: false, path: picked };
+
+  const dir = path.dirname(path.resolve(currentFile));
+  const relRaw = path.relative(dir, picked);
+  if (relRaw && !relRaw.startsWith("..") && !path.isAbsolute(relRaw)) {
+    return { canceled: false, path: picked, rel: relRaw.split(path.sep).join("\\") };
+  }
+  try {
+    const assets = path.join(dir, "assets");
+    await fs.mkdir(assets, { recursive: true });
+    const dest = path.join(assets, path.basename(picked));
+    await fs.copyFile(picked, dest);
+    return { canceled: false, path: dest, rel: `assets\\${path.basename(picked)}` };
+  } catch {
+    return { canceled: false, path: picked };
+  }
 });
 
 /* ------------------------------------------------------------ 一键运行
@@ -660,6 +691,7 @@ Menu.setApplicationMenu(
         { label: "另存为", accelerator: "CmdOrCtrl+Shift+S", click: () => send("menu:saveAs") },
         { type: "separator" },
         { label: "导出 C 骨架", accelerator: "CmdOrCtrl+E", click: () => send("menu:exportC") },
+        { label: "程序配置", click: () => send("menu:programConfig") },
         { type: "separator" },
         { label: "运行（保存并编译启动）", accelerator: "F5", click: () => send("menu:run") },
         { type: "separator" },

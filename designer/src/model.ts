@@ -4,8 +4,28 @@
  * 改这里就要同步改那边，否则「画布能存、运行时读不了」。
  */
 
-export const CG_EVENTS = ["click", "dblclick", "change", "submit", "select", "release", "expand", "collapse", "tick", "check", "gotfocus", "lostfocus"] as const;
+/* 事件名一份总表：控件事件 + 窗口事件。
+ * 必须和 runtime/src/cg_app.c 的 k_ev_names[] 一一对应（名字写错 C 侧不报错、只是不触发）。 */
+export const CG_EVENTS = [
+  /* --- 控件事件 --- */
+  "click", "dblclick", "change", "submit", "select", "release",
+  "expand", "collapse", "tick", "check", "gotfocus", "lostfocus",
+  /* --- 窗口事件（绑在窗口上，对应「启动窗口」那张事件表） --- */
+  "ready", "close", "closequery", "destroy", "move", "size",
+  "activate", "deactivate", "firstactivate", "idle", "tray", "show", "hide",
+  "mousedown", "mouseup", "rdown", "rup", "mousemove",
+  "keydown", "keyup", "char", "wheel",
+] as const;
 export type CgEvent = (typeof CG_EVENTS)[number];
+
+/** 窗口支持的事件（必须和 runtime/src/cg_doc.c 里 "window" 那行的位掩码一致）。
+ *  gotfocus/lostfocus/dblclick 是和控件共用的名字。 */
+export const WINDOW_EVENTS: CgEvent[] = [
+  "ready", "close", "closequery", "destroy", "move", "size",
+  "activate", "deactivate", "firstactivate", "idle", "tray", "show", "hide",
+  "mousedown", "mouseup", "dblclick", "rdown", "rup", "mousemove",
+  "gotfocus", "lostfocus", "keydown", "keyup", "char", "wheel",
+];
 
 export const EVENT_LABEL: Record<CgEvent, string> = {
   click: "单击",
@@ -20,6 +40,29 @@ export const EVENT_LABEL: Record<CgEvent, string> = {
   check: "行勾选变化",
   gotfocus: "获得焦点",
   lostfocus: "失去焦点",
+  /* 窗口事件：名字对着「启动窗口」的事件表 */
+  ready: "创建完毕",
+  close: "可否被关闭",
+  closequery: "窗口可否被关闭",
+  destroy: "将被销毁",
+  move: "位置被改变",
+  size: "尺寸被改变",
+  activate: "被激活",
+  deactivate: "被取消激活",
+  firstactivate: "首次激活",
+  idle: "空闲",
+  tray: "托盘事件",
+  show: "被显示",
+  hide: "被隐藏",
+  mousedown: "鼠标左键被按下",
+  mouseup: "鼠标左键被放开",
+  rdown: "鼠标右键被按下",
+  rup: "鼠标右键被放开",
+  mousemove: "鼠标位置被移动",
+  keydown: "按下某键",
+  keyup: "放开某键",
+  char: "字符输入",
+  wheel: "滚轮被滚动",
 };
 
 export const EVENT_HINT: Record<CgEvent, string> = {
@@ -35,6 +78,28 @@ export const EVENT_HINT: Record<CgEvent, string> = {
   check: "表格里某一行的复选框被点了",
   gotfocus: "控件拿到键盘焦点（输入校验常用）",
   lostfocus: "控件失去键盘焦点（输入校验常用）",
+  ready: "窗口和控件都建好、还没显示出来；启动初始化放这里",
+  close: "用户点关闭（或 Alt+F4）。要拦就用 cg_cancel_close(app)",
+  closequery: "和「可否被关闭」同一时机，两个名字都能拦关闭",
+  destroy: "窗口已经销毁、进程马上退出",
+  move: "窗口位置变了，cg_event_x / cg_event_y 给新坐标",
+  size: "窗口尺寸变了，cg_event_x / cg_event_y 给新的客户区宽高",
+  activate: "从别的程序切回来",
+  deactivate: "切到别的程序去了",
+  firstactivate: "启动后第一次被激活",
+  idle: "消息队列空着的时候；不要在这里做耗时的活",
+  tray: "托盘图标被点，cg_tray_action 给 1=单击 / 2=双击 / 3=右键",
+  show: "窗口被显示出来",
+  hide: "窗口被隐藏",
+  mousedown: "在窗口空白处按下左键；坐标用 cg_event_x / cg_event_y",
+  mouseup: "在窗口空白处松开左键",
+  rdown: "在窗口空白处按下右键",
+  rup: "在窗口空白处松开右键",
+  mousemove: "鼠标在窗口空白处移动（触发很频繁，别做重活）",
+  keydown: "按下按键；cg_event_key 给键代码、cg_event_keys 给 Ctrl/Shift/Alt",
+  keyup: "松开按键",
+  char: "输入了可打印字符（中文输入法也走这里）",
+  wheel: "滚轮滚动；cg_event_delta 给滚动量（正数向上）",
 };
 
 /** 每种控件支持哪些事件 —— 必须和 runtime/src/cg_doc.c 的 k_kinds 表一一对应。
@@ -82,8 +147,10 @@ export const KIND_EVENTS: Record<string, CgEvent[]> = {
   shape: [],
 };
 
-/** 这个控件支持的事件；没登记的按"不支持任何事件"处理（C 侧同样会拒绝） */
-export const eventsOf = (type: string): CgEvent[] => KIND_EVENTS[type] ?? [];
+/** 这个控件支持的事件；没登记的按"不支持任何事件"处理（C 侧同样会拒绝）。
+ *  "window" 是窗口伪控件，走另一张表（app.events）。 */
+export const eventsOf = (type: string): CgEvent[] =>
+  type === "window" ? WINDOW_EVENTS : (KIND_EVENTS[type] ?? []);
 
 export type CgAlign = "left" | "center" | "right";
 
@@ -152,16 +219,104 @@ export type CgNode = {
   children?: CgNode[];
 };
 
+/** 边框（对齐「属性」面板的"边框"下拉） */
+export type CgBorder = "sizable" | "fixed" | "dialog" | "none";
+
+/** 鼠标指针名（对应 Win32 的 IDC_*，见 cursor_id_of） */
+export const CURSORS = [
+  "", "arrow", "hand", "ibeam", "wait", "cross",
+  "sizeall", "sizens", "sizewe", "sizenesw", "sizenwse", "no", "help", "uparrow",
+] as const;
+
+export const BORDER_LABEL: Record<CgBorder, string> = {
+  sizable: "可调整边框（默认）",
+  fixed: "普通固定边框",
+  dialog: "固定对话框边框",
+  none: "无边框",
+};
+
+/** 程序配置（画布工具栏「程序配置」对话框）。
+ *  编译时写进 exe 的版本信息（<工程>.rc），运行时可用 cg_app_info() 读回来。 */
+export type CgInfo = {
+  /** 程序名称 -> ProductName */
+  product?: string;
+  /** 程序描述 -> FileDescription */
+  desc?: string;
+  /** 程序备注 -> Comments */
+  comments?: string;
+  /** 程序版本号（四段 "1.0.0.0"） */
+  version?: string;
+  /** 创建号（那个 0.0，仅供对照） */
+  build?: string;
+  /** 作者 -> CompanyName 之外的 Author 字段 */
+  author?: string;
+  /** 单位 / 公司 -> CompanyName */
+  company?: string;
+  /** 版权声明 -> LegalCopyright */
+  copyright?: string;
+  address?: string;
+  postcode?: string;
+  phone?: string;
+  fax?: string;
+  email?: string;
+  homepage?: string;
+};
+
+/** 程序配置里会被写进版本信息的键（顺序 = 画布对话框里的顺序） */
+export const INFO_KEYS = [
+  "product", "desc", "comments", "version", "build",
+  "author", "company", "copyright",
+  "address", "postcode", "phone", "fax", "email", "homepage",
+] as const;
+
+/** 窗口级属性（画布「窗口属性」面板 = .cgui 的 app 节点）。
+ *  全部可选：不写的按 C 侧默认值走，和加这些属性之前的行为一致。 */
+export type CgApp = {
+  title: string;
+  width: number;
+  height: number;
+  bg: string;
+  /** 窗口左边 / 顶边（屏幕坐标）；不填交给系统默认位置 */
+  x?: number;
+  y?: number;
+  /** 位置=居中（盖过 x/y） */
+  center?: boolean;
+  border?: CgBorder;
+  /** 控制按钮（系统菜单 + 关闭钮），默认 true */
+  controlBox?: boolean;
+  minimizeBox?: boolean;
+  maximizeBox?: boolean;
+  /** 总在最前 */
+  topmost?: boolean;
+  /** 在任务栏中显示，默认 true */
+  taskbar?: boolean;
+  /** 可视，默认 true */
+  visible?: boolean;
+  /** 禁止（整窗禁用），默认 true 即可用 */
+  enabled?: boolean;
+  /** 回车下移焦点（默认 false = 回车当 submit） */
+  enterTab?: boolean;
+  /** Esc 键关闭窗口，默认 true */
+  escClose?: boolean;
+  /** 建托盘图标 */
+  tray?: boolean;
+  /** 窗口图标（.ico） */
+  icon?: string;
+  /** 鼠标指针 */
+  cursor?: string;
+  /** 窗口类名，默认 CStackGUIMain */
+  class?: string;
+  /** 备注（画布记录，运行时不用） */
+  note?: string;
+  /** 程序配置 -> exe 版本信息 */
+  info?: CgInfo;
+  /** 窗口级事件：名字写在 app.events 上（伪控件 __window） */
+  events?: Partial<Record<CgEvent, string>>;
+};
+
 export type CgDoc = {
   cgui: 1;
-  app: {
-    title: string;
-    width: number;
-    height: number;
-    bg: string;
-    /** 窗口级事件（目前只有 close）；绑定窗口关闭前要做的事 */
-    events?: { close?: string };
-  };
+  app: CgApp;
   widgets: CgNode[];
 };
 
@@ -569,11 +724,28 @@ function coerceRect(raw: unknown, fallback: CgRect): CgRect {
   };
 }
 
-/** app.events：窗口级事件，目前只有 close */
-function appEvents(raw: unknown): { close?: string } | undefined {
+/** app.events：窗口级事件（ready/close/activate/keydown... 见 WINDOW_EVENTS） */
+function appEvents(raw: unknown): Partial<Record<CgEvent, string>> | undefined {
   if (!raw || typeof raw !== "object") return undefined;
-  const close = (raw as Record<string, unknown>).close;
-  return typeof close === "string" && close.trim() ? { close: close.trim() } : undefined;
+  const src = raw as Record<string, unknown>;
+  const out: Partial<Record<CgEvent, string>> = {};
+  for (const ev of WINDOW_EVENTS) {
+    const v = src[ev];
+    if (typeof v === "string" && v.trim()) out[ev] = v.trim();
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** app.info：程序配置（版本信息）。只留非空字符串，其余丢掉 */
+function coerceInfo(raw: unknown): CgInfo | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const src = raw as Record<string, unknown>;
+  const out: CgInfo = {};
+  for (const key of INFO_KEYS) {
+    const v = src[key];
+    if (typeof v === "string" && v.trim()) out[key] = v.trim();
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 function coerceTree(raw: unknown[]): CgTreeItem[] {
@@ -687,15 +859,53 @@ export function parseDoc(text: string): { doc?: CgDoc; error?: string } {
   if (!Array.isArray(o.widgets)) return { error: "缺少 widgets 数组" };
   const winEvents = appEvents(app.events);
 
+  const appOut: CgApp = {
+    title: typeof app.title === "string" ? app.title : "main",
+    width: Number(app.width) > 0 ? Number(app.width) : 700,
+    height: Number(app.height) > 0 ? Number(app.height) : 500,
+    bg: typeof app.bg === "string" ? app.bg : "#F3EDF7",
+  };
+
+  /* 窗口属性：只把 .cgui 里真写了的字段收进来，缺省留给 C 侧 */
+  const numOr = (v: unknown): number | undefined => {
+    if (v === undefined || v === null || v === "" || !Number.isFinite(Number(v))) return undefined;
+    return Math.round(Number(v));
+  };
+  const boolOr = (v: unknown): boolean | undefined => (typeof v === "boolean" ? v : undefined);
+  const strOr = (v: unknown): string | undefined =>
+    typeof v === "string" && v.trim() ? v.trim() : undefined;
+
+  const ax = numOr(app.x), ay = numOr(app.y);
+  if (ax !== undefined) appOut.x = ax;
+  if (ay !== undefined) appOut.y = ay;
+
+  const border = app.border;
+  if (border === "sizable" || border === "fixed" || border === "dialog" || border === "none") {
+    appOut.border = border;
+  }
+
+  const flagKeys = [
+    "center", "controlBox", "minimizeBox", "maximizeBox", "topmost", "taskbar",
+    "visible", "enabled", "enterTab", "escClose", "tray",
+  ] as const;
+  for (const k of flagKeys) {
+    const b = boolOr(app[k]);
+    if (b !== undefined) Object.assign(appOut, { [k]: b });
+  }
+
+  const strKeys = ["icon", "cursor", "class", "note"] as const;
+  for (const k of strKeys) {
+    const s = strOr(app[k]);
+    if (s !== undefined) Object.assign(appOut, { [k]: s });
+  }
+
+  const info = coerceInfo(app.info);
+  if (info) appOut.info = info;
+  if (winEvents) appOut.events = winEvents;
+
   const doc: CgDoc = {
     cgui: 1,
-    app: {
-      title: typeof app.title === "string" ? app.title : "main",
-      width: Number(app.width) > 0 ? Number(app.width) : 700,
-      height: Number(app.height) > 0 ? Number(app.height) : 500,
-      bg: typeof app.bg === "string" ? app.bg : "#F3EDF7",
-      ...(winEvents ? { events: winEvents } : {}),
-    },
+    app: appOut,
     widgets: o.widgets.map((w, i) => coerceNode(w, i)).filter((w): w is CgNode => w !== null),
   };
   return { doc };
@@ -776,17 +986,53 @@ function cleanNode(node: CgNode): CgNode {
 }
 
 function cleanDoc(doc: CgDoc): CgDoc {
-  return {
-    cgui: 1,
-    app: {
-      title: doc.app.title,
-      width: Math.round(doc.app.width),
-      height: Math.round(doc.app.height),
-      bg: doc.app.bg,
-      ...(doc.app.events?.close ? { events: { close: doc.app.events.close } } : {}),
-    },
-    widgets: doc.widgets.map(cleanNode),
+  const a = doc.app;
+  const app: CgApp = {
+    title: a.title,
+    width: Math.round(a.width),
+    height: Math.round(a.height),
+    bg: a.bg,
   };
+
+  /* 只写和 C 侧默认值不同的字段：文件干净、老运行时读新文件也不会被多余字段干扰 */
+  if (a.x !== undefined) app.x = Math.round(a.x);
+  if (a.y !== undefined) app.y = Math.round(a.y);
+  if (a.center === true) app.center = true;
+  if (a.border && a.border !== "sizable") app.border = a.border;
+  if (a.controlBox === false) app.controlBox = false;
+  if (a.minimizeBox === false) app.minimizeBox = false;
+  if (a.maximizeBox === false) app.maximizeBox = false;
+  if (a.topmost === true) app.topmost = true;
+  if (a.taskbar === false) app.taskbar = false;
+  if (a.visible === false) app.visible = false;
+  if (a.enabled === false) app.enabled = false;
+  if (a.enterTab === true) app.enterTab = true;
+  if (a.escClose === false) app.escClose = false;
+  if (a.tray === true) app.tray = true;
+  if (a.icon) app.icon = a.icon;
+  if (a.cursor) app.cursor = a.cursor;
+  if (a.class) app.class = a.class;
+  if (a.note) app.note = a.note;
+
+  if (a.info) {
+    const info: CgInfo = {};
+    for (const key of INFO_KEYS) {
+      const v = a.info[key];
+      if (v) info[key] = v;
+    }
+    if (Object.keys(info).length) app.info = info;
+  }
+
+  if (a.events) {
+    const ev: Partial<Record<CgEvent, string>> = {};
+    for (const key of WINDOW_EVENTS) {
+      const v = a.events[key];
+      if (v) ev[key] = v;
+    }
+    if (Object.keys(ev).length) app.events = ev;
+  }
+
+  return { cgui: 1, app, widgets: doc.widgets.map(cleanNode) };
 }
 
 export const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));

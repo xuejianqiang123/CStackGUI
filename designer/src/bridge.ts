@@ -29,6 +29,8 @@ export type Bridge = {
   locateProject: () => Promise<{ canceled: boolean; projectRoot?: string }>;
   openFile: () => Promise<{ canceled: boolean; path?: string; text?: string }>;
   saveFile: (p: SavePayload) => Promise<{ canceled: boolean; path?: string }>;
+  /** 选一个 .ico 当窗口图标；rel 是相对 .cgui 目录的路径（拿不到就给绝对 path） */
+  pickIcon: () => Promise<{ canceled: boolean; path?: string; rel?: string }>;
   exportC: (p: ExportPayload) => Promise<ExportResult>;
   /** F5 一键运行：调项目根的 build-app.bat 编译，成功后把 exe 跑起来 */
   buildAndRun: (p: { filePath: string }) => Promise<RunResult>;
@@ -80,6 +82,7 @@ export function getBridge(): Bridge {
       locateProject: () => api.locateProject(),
       openFile: () => api.openFile(),
       saveFile: (p) => api.saveFile(p),
+      pickIcon: () => api.pickIcon(),
       exportC: (p) => api.exportC(p),
       buildAndRun: (p) => api.buildAndRun(p),
       publish: (p) => api.publish(p),
@@ -107,6 +110,11 @@ export function getBridge(): Bridge {
       const name = `${suggestName || "untitled"}.cgui`;
       download(name, text);
       return { canceled: false, path: name };
+    },
+    pickIcon: async () => {
+      /* 浏览器拿不到真实磁盘路径，只能给个文件名（仅供预览，运行时用不到） */
+      const file = await pickBrowserFile(".ico");
+      return file ? { canceled: false, path: file.name } : { canceled: true };
     },
     exportC: async ({ baseName, files }) => {
       files.forEach((f, i) => setTimeout(() => download(f.name, f.content), i * 250));

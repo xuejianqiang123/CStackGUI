@@ -109,6 +109,8 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
   const style = node.style ?? {};
   const parent = findParent(doc, node.id);
   const inTabs = parent?.type === "tabs";
+  /* 标签 / 链接 / 分割线默认不画底色（透明）；这里给个显式开关，用户一眼能看清 */
+  const transparentBg = node.type === "label" || node.type === "link" || node.type === "separator";
   /** 多行文本编辑：不进撤销栈，靠聚焦时压一次快照 */
   const patchSoft = (fn: (n: CgNode) => void) => {
     onApply((d) => {
@@ -247,28 +249,66 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
           跟随系统
         </button>
       </Row>
-      <Row label="背景色">
-        <input
-          className="input color"
-          type="color"
-          value={style.bg ?? "#eadcff"}
-          onChange={(e) =>
-            patch((n) => {
-              n.style = { ...(n.style ?? {}), bg: e.target.value };
-            })
-          }
-        />
-        <button
-          className="mini"
-          onClick={() =>
-            patch((n) => {
-              if (n.style) delete n.style.bg;
-            })
-          }
-        >
-          跟随系统
-        </button>
-      </Row>
+      {transparentBg ? (
+        <>
+          <Row label="背景">
+            <label className="check-inline">
+              <input
+                type="checkbox"
+                checked={!style.bg}
+                onChange={(e) =>
+                  patch((n) => {
+                    if (e.target.checked) {
+                      /* 透明 = 不写 bg，运行时不画底色，透出窗口底色 */
+                      if (n.style) delete n.style.bg;
+                    } else if (!n.style?.bg) {
+                      n.style = { ...(n.style ?? {}), bg: "#ffffff" };
+                    }
+                  })
+                }
+              />
+              透明（不画底色）
+            </label>
+          </Row>
+          {style.bg ? (
+            <Row label="背景色">
+              <input
+                className="input color"
+                type="color"
+                value={style.bg}
+                onChange={(e) =>
+                  patch((n) => {
+                    n.style = { ...(n.style ?? {}), bg: e.target.value };
+                  })
+                }
+              />
+            </Row>
+          ) : null}
+        </>
+      ) : (
+        <Row label="背景色">
+          <input
+            className="input color"
+            type="color"
+            value={style.bg ?? "#eadcff"}
+            onChange={(e) =>
+              patch((n) => {
+                n.style = { ...(n.style ?? {}), bg: e.target.value };
+              })
+            }
+          />
+          <button
+            className="mini"
+            onClick={() =>
+              patch((n) => {
+                if (n.style) delete n.style.bg;
+              })
+            }
+          >
+            跟随系统
+          </button>
+        </Row>
+      )}
       <Row label="对齐">
         <select
           className="input"

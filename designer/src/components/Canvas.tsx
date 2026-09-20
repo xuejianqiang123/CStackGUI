@@ -31,6 +31,7 @@ type DragState =
       startX: number;
       startY: number;
       origin: { x: number; y: number; w: number; h: number };
+      moved: boolean;
     };
 
 const HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const;
@@ -48,7 +49,8 @@ export default function Canvas(props: Props) {
     e.stopPropagation();
     onSelect(node.id);
     if (e.button !== 0) return;
-    onBeginHistory();
+    /* 这里不压历史、也不动坐标：等真的开始拖（见 onMove 的位移阈值）再压，
+     * 否则「点一下选中」也会进撤销栈、还可能被吸附挪走。 */
     setDrag({
       kind: "move",
       id: node.id,
@@ -62,7 +64,6 @@ export default function Canvas(props: Props) {
   const startResize = (e: React.PointerEvent, dir: string) => {
     if (!selected) return;
     e.stopPropagation();
-    onBeginHistory();
     setDrag({
       kind: "resize",
       id: selected.id,
@@ -70,6 +71,7 @@ export default function Canvas(props: Props) {
       startX: e.clientX,
       startY: e.clientY,
       origin: { ...selected.rect },
+      moved: false,
     });
   };
 
@@ -79,6 +81,11 @@ export default function Canvas(props: Props) {
     const onMove = (e: PointerEvent) => {
       const dx = (e.clientX - drag.startX) / zoom;
       const dy = (e.clientY - drag.startY) / zoom;
+
+      /* 「点一下」没真拖动时绝不能改坐标：位移 < 3px 直接忽略，
+       * 否则 4px 吸附会在点选的瞬间把控件挪到栅格上（坐标自己变的根因）。 */
+      if (!drag.moved && Math.abs(e.clientX - drag.startX) < 3 && Math.abs(e.clientY - drag.startY) < 3) return;
+      if (!drag.moved) onBeginHistory();   /* 历史压在真正开始拖的一刻 */
 
       if (drag.kind === "move") {
         onApply((d) => {
@@ -155,11 +162,12 @@ export default function Canvas(props: Props) {
           h: Math.max(2, snap(h, 4, snapOn)),
         };
       });
+      setDrag({ ...drag, moved: true });
     };
 
     const onUp = () => {
-      if (drag.kind === "move") {
-        /* 拖动结束：重新判定它该待在哪个容器里 */
+      if (drag.kind === "move" && drag.moved) {
+        /* 拖动结束：重新判定它该待在哪个容器里（只是点选、没拖动就别改归属） */
         onApply((d) => {
           const node = findNode(d, drag.id);
           if (!node) return;
@@ -203,7 +211,7 @@ export default function Canvas(props: Props) {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, [drag, doc, zoom, snapOn, onApply]);
+  }, [drag, doc, zoom, snapOn, onApply, onBeginHistory]);
 
   /* -------------------------------------------------- 调色板拖入 */
   useEffect(() => {
@@ -242,17 +250,36 @@ export default function Canvas(props: Props) {
   /* 窗口只能有一根菜单栏，和运行时一样只认第一个 */
   const menuNode = doc.widgets.find((n) => n.type === "menu") ?? null;
 
+  /* ------------------------------------------------------------------
+   * 窗口框架：把 .cgui 的 app 属性（边框 / 控制按钮）如实画出来，所见即所得。
+   * 画布上的标题栏 = Win32 的非客户区，客户区尺寸仍是 app.width × app.height。
+   * ------------------------------------------------------------------ */
+  const app = doc.app;
+  const showTitlebar = app.border !== "none"; /* 无边框 = 没有标题栏 */
+  const sysmenu = app.controlBox !== false;    /* 控制按钮组（含关闭钮） */
+
   return (
     <div className="viewport" onPointerDown={() => onSelect(null)}>
       <div className="stage" ref={stageRef} style={{ transform: `scale(${zoom})` }}>
-        <div className="app-window" style={{ width: doc.app.width, height: doc.app.height, background: doc.app.bg }}>
-          <div className="titlebar">
-            <span className="titlebar-icon" />
-            <span className="titlebar-text">{doc.app.title}</span>
-            <span className="titlebar-size">
-              {doc.app.width}×{doc.app.height}
-            </span>
-          </div>
+        <div className={`app-window${showTitlebar ? "" : " borderless"}`} style={{ width: doc.app.width, height: doc.app.height, background: doc.app.bg }}>
+          {showTitlebar ? (
+            <div className="titlebar">
+              <span className="titlebar-icon" />
+              <span className="titlebar-text">{app.title}</span>
+              <span className="titlebar-size">
+                {app.width}×{app.height}
+              </span>
+              {sysmenu ? (
+                <span className="titlebar-controls" title="窗口控制按钮（跟随「控制按钮 / 最小化 / 最大化」属性）">
+                  {app.minimizeBox !== false ? <span className="tb-btn" title="最小化按钮">–</span> : null}
+                  {app.maximizeBox !== false ? <span className="tb-btn" title="最大化按钮">□</span> : null}
+                  <span className="tb-btn tb-close" title="关闭按钮">
+                    ✕
+                  </span>
+                </span>
+              ) : null}
+            </div>
+          ) : null}
 
           {/* 菜单栏在窗口框架上，不在客户区里（和运行时一致） */}
           {menuNode ? (

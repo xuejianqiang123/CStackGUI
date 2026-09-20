@@ -57,6 +57,10 @@
       {
         "from": "../packaging/build-app.bat",
         "to": "build-app.bat"
+      },
+      {
+        "from": "../runtime/res",
+        "to": "runtime/res"
       }
     ],
     "win": {

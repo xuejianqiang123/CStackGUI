@@ -17,6 +17,7 @@ type Props = {
   onSave: () => void;
   onSaveAs: () => void;
   onExportC: () => void;
+  onOpenInfo: () => void;
   running: boolean;
   onRun: () => void;
   publishing: boolean;
@@ -54,6 +55,9 @@ export default function Toolbar(p: Props) {
           保存
         </button>
         <button onClick={p.onSaveAs}>另存为</button>
+        <button onClick={p.onOpenInfo} title="程序名称 / 版本号 / 作者 / 版权……写进编译后的 exe 版本信息">
+          程序配置
+        </button>
       </div>
 
       <div className="tool-group">

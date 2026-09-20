@@ -3,16 +3,19 @@
  * 目标：画布上填了哪些事件名，就生成对应的空函数 + 绑定表，
  * 让业务同学打开就能填逻辑，不用手抄一遍事件名（抄错就是运行时不报错的空绑定）。
  */
-import { CG_EVENTS, EVENT_LABEL, KIND_MAP, serializeDoc, walk, type CgDoc, type CgEvent, type CgNode } from "./model";
+import {
+  CG_EVENTS, EVENT_LABEL, KIND_MAP, WINDOW_EVENTS, serializeDoc, walk,
+  type CgDoc, type CgEvent, type CgInfo, type CgNode,
+} from "./model";
 
 export type CallbackUse = {
   name: string;
   widgetId: string;
   widgetType: string;
-  event: CgEvent | "close";
+  event: CgEvent;
 };
 
-/** 文档里用到的所有回调（含窗口级 close），按名字去重 */
+/** 文档里用到的所有回调（含窗口级事件，它们挂在 app.events 上，伪控件 id 是 __window） */
 export function collectCallbacks(doc: CgDoc): CallbackUse[] {
   const uses: CallbackUse[] = [];
   walk(doc.widgets, (n: CgNode) => {
@@ -21,9 +24,11 @@ export function collectCallbacks(doc: CgDoc): CallbackUse[] {
       if (name) uses.push({ name, widgetId: n.id, widgetType: n.type, event: ev });
     }
   });
-  /* 窗口级 close 挂在 app.events 上（伪控件 __window），不走 widgets */
-  const close = doc.app.events?.close;
-  if (close) uses.push({ name: close, widgetId: "__window", widgetType: "window", event: "close" });
+  /* 窗口事件写在 app.events 里，不走 widgets */
+  for (const ev of WINDOW_EVENTS) {
+    const name = doc.app.events?.[ev];
+    if (name) uses.push({ name, widgetId: "__window", widgetType: "window", event: ev });
+  }
   return uses;
 }
 
@@ -56,10 +61,105 @@ export type GenFile = { name: string; content: string };
 function callbackBriefs(uses: CallbackUse[]): Record<string, string> {
   const byName: Record<string, string[]> = {};
   for (const u of uses) {
-    const label = u.event === "close" ? "窗口关闭前" : EVENT_LABEL[u.event];
-    (byName[u.name] ??= []).push(`${u.widgetId} 的${label}`);
+    const label = EVENT_LABEL[u.event];
+    const where = u.widgetType === "window" ? "主窗口" : u.widgetId;
+    (byName[u.name] ??= []).push(`${where} 的${label}`);
   }
   return Object.fromEntries(Object.entries(byName).map(([k, v]) => [k, v.join("、")]));
+}
+
+/** 程序版本号：画布填的「版本号」+「创建号」拼成四段，如 1.0 + 0.0 -> 1.0.0.0 */
+export function fullVersion(info: CgInfo | undefined): string {
+  const parts: string[] = [];
+  const push = (s: string | undefined) => {
+    for (const raw of (s ?? "").split(/[.,]/)) {
+      const t = raw.trim();
+      if (t === "") continue;
+      const n = Number(t);
+      parts.push(Number.isFinite(n) && n >= 0 ? String(Math.round(n)) : "0");
+    }
+  };
+  push(info?.version);
+  push(info?.build);
+  while (parts.length < 4) parts.push("0");
+  return parts.slice(0, 4).join(".");
+}
+
+/** 版本信息里的字符串要转义反斜杠和引号，否则 rc 编译不过 */
+const rcStr = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+
+/**
+ * 生成 <工程>.rc：图标 + 清单 + 版本信息。
+ * build-app.bat 见到它就编译它、并用它替换通用的 cstackgui_res.o，
+ * 于是每个业务 exe 都带上画布「程序配置」里填的名字 / 版本 / 作者。
+ */
+function rcFile(base: string, doc: CgDoc): GenFile {
+  const info = doc.app.info ?? {};
+  const ver = fullVersion(info);
+  const comma = ver.replace(/\./g, ",");
+  /* 图标路径：画布选了就用它的（相对工程目录，windres 靠 -I 工程目录找得到），
+   * 没选就用运行时自带的那个（靠 -I runtime\res 找到）。 */
+  const icon = rcStr(doc.app.icon && doc.app.icon.trim() ? doc.app.icon.trim() : "cstackgui.ico");
+
+  const values: [string, string][] = [
+    ["CompanyName", info.company || info.author || ""],
+    ["FileDescription", info.desc || ""],
+    ["FileVersion", ver],
+    ["InternalName", base],
+    ["LegalCopyright", info.copyright || ""],
+    ["OriginalFilename", `${base}.exe`],
+    ["ProductName", info.product || base],
+    ["ProductVersion", ver],
+    ["Comments", info.comments || ""],
+    ["Author", info.author || ""],
+    ["Address", info.address || ""],
+    ["PostalCode", info.postcode || ""],
+    ["Phone", info.phone || ""],
+    ["Fax", info.fax || ""],
+    ["Email", info.email || ""],
+    ["HomePage", info.homepage || ""],
+  ];
+  const body = values
+    .filter(([, v]) => v !== "")
+    .map(([k, v]) => `      VALUE "${k}", "${rcStr(v)}"`)
+    .join("\n");
+
+  const content = `/* ${base}.rc -- 程序图标 + v6 控件清单 + 版本信息
+ * 由 CStackGUI 画布生成（工具栏「程序配置」对话框），改内容请回画布改后重新导出。
+ * build-app.bat 用 windres 编译它：文件是 UTF-8，所以带 --codepage=65001。
+ */
+#pragma code_page(65001)
+
+#include <windows.h>
+
+1 ICON "${icon}"
+
+/* v6 通用控件清单：少了它标签页/进度条是老式外观 */
+1 RT_MANIFEST "cstackgui.manifest"
+
+VS_VERSION_INFO VERSIONINFO
+  FILEVERSION    ${comma}
+  PRODUCTVERSION ${comma}
+  FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+  FILEFLAGS      0
+  FILEOS         VOS_NT_WINDOWS32
+  FILETYPE       VFT_APP
+  FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "080404B0"
+    BEGIN
+${body}
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x804, 1200
+  END
+END
+`;
+  return { name: `${base}.rc`, content };
 }
 
 export function generateC(doc: CgDoc, baseName: string): GenFile[] {
@@ -197,6 +297,8 @@ call "%CSTACKGUI_HOME%build-app.bat" "%~dp0."
     { name: "main.c", content: mainC },
     /* 与画布「保存」同一套序列化（cleanNode 去默认值字段），保证导出即保存、两者字节一致 */
     { name: cguiFile, content: serializeDoc(doc) },
+    /* 程序图标 + 版本信息：build-app.bat 见到这个 rc 就用它，版本信息不再是通用的 */
+    rcFile(base, doc),
     { name: "build.bat", content: buildBat.replace(/\n/g, "\r\n") },
   ];
 }
