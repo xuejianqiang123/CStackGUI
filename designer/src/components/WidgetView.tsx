@@ -24,8 +24,17 @@ function inner(node: CgNode) {
   const pct = max > min ? Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100)) : 0;
 
   switch (node.type) {
-    case "button":
-      return <div className="ctl-button">{node.text || ""}</div>;
+    case "button": {
+      const st = node.style ?? {};
+      const skin: CSSProperties = {};
+      if (st.bg) {
+        skin.background = st.bg;
+        const r = parseInt(st.bg.slice(1, 3), 16), g2 = parseInt(st.bg.slice(3, 5), 16), b = parseInt(st.bg.slice(5, 7), 16);
+        skin.color = (0.2126 * r + 0.7152 * g2 + 0.0722 * b) / 255 < 0.55 ? "#FFFFFF" : "#000000";
+      }
+      if (st.radius != null) skin.borderRadius = st.radius;
+      return <div className="ctl-button" style={skin}>{node.text || ""}</div>;
+    }
 
     case "label":
       return <div className="ctl-label">{node.text || ""}</div>;
