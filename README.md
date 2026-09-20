@@ -202,8 +202,8 @@ cd designer && npx tsc --noEmit && npx vite build   :: 改了画布时
 
 ### 3.4 让 AI 不踩坑的两条铁律（也是代码评审重点）
 
-1. **控件类型表有两份，必须同步**：`runtime\src\cg_doc.c` 的 `k_kinds` 与
-   `designer\src\model.ts` 的 `KINDS`。新增控件 = 两边各加一行 + `cg_win32.c` 的
+1. **控件类型表有两份，必须同步**：`runtime\src\core\cg_doc_kind.c` 的 `k_kinds` 与
+   `designer\src\model.ts` 的 `KINDS`。新增控件 = 两边各加一行 + `cg_win_ctl.c` 的
    class/style 分支 + 画布 `WidgetView.tsx` 外观；事件表 `KIND_EVENTS` 与 `CG_EV_*` 位掩码同理。
 2. **`.cgui` 字段语义的真相在 C 侧**（`cg_doc.c` 的解析逻辑），画布模型跟着它走；
    改格式必须跑 `tools\check-format.bat`，防止"画布能存、程序起不来"。
@@ -228,10 +228,20 @@ CStackGUI\
     electron\main.mjs          文件读写、导出、菜单、项目根记忆（便携版自动识别）
   runtime\                     C 运行时库
     include\cstackgui.h        业务代码唯一需要 include 的头
-    src\cg_json.c              只读 JSON 解析
-    src\cg_doc.c               .cgui -> 控件树，控件类型表（含每种控件支持的事件）
-    src\cg_app.c               控件树、事件派发、公共 API、--selftest
-    src\cg_win32.c             Win32 后端：窗口、原生控件、消息映射、自绘控件
+    src\core\                  后端无关层（JSON / 文档 / 控件模型 / 事件 / 生命周期）
+      cg_json.c                只读 JSON 解析
+      cg_doc.c                 .cgui -> 控件文档树（解析 / 释放 / 打印）
+      cg_doc_kind.c            控件类型表 k_kinds（含每种控件支持的事件）
+      cg_event.c               事件名表、回调绑定解析、事件派发
+      cg_widget.c              运行时控件模型：构建、查找、属性 API
+      cg_widget_data.c         内容 API：列表/树/表格/状态栏/标签页/图片/提示/时钟
+      cg_app.c                 应用生命周期（定位 .cgui / 打开 / 消息循环）与 --selftest
+      cg_timer.c               一次性定时器
+    src\win32\                 Win32 原生后端（窗口、控件、消息映射、对话框、托盘）
+      cg_win_*.c               13 个子模块，共用 cg_win_internal.h
+    src\skin\                  自绘外观层（GDI+，M3 风格）
+      cg_skin.c                按钮/开关/勾选/滑块/进度/圆环
+      cg_skin_edit.c           输入框圆角裁切与单行文字垂直居中
     res\                       清单（v6 通用控件 + 高 DPI）与版本信息
   examples\                    仓库自带的示例
     gallery\                   控件陈列室·三合一（gallery.cgui / main.c / assets\ / 产物）

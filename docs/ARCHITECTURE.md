@@ -31,8 +31,9 @@
                         │ 读
         ┌───────────────┴───────────────┐
         │  运行时库 libcstackgui.a (C)   │
-        │  cg_json / cg_doc / cg_app     │  ← 解析、控件树、事件派发
-        │  cg_win32 (后端：窗口+原生控件) │
+        │  cg_json/cg_doc/cg_event       │  ← 解析、控件树、事件派发
+        │  cg_widget/cg_widget_data      │  ← 控件模型与公共 API
+        │  cg_win_* (Win32 原生后端)      │
         └───────────────┬───────────────┘
                         │ 链接
         ┌───────────────┴───────────────┐
@@ -132,7 +133,7 @@ void cb(cg_widget_t *self, cg_event_t ev, void *user);
 
 ### 3.2 控件类型表
 
-类型表在 C 侧是 `cg_doc.c` 的 `k_kinds`，在画布侧是 `model.ts` 的 `KINDS`——**两处必须同步**，新增控件就是各加一行 + 后端补一个分支。
+类型表在 C 侧是 `cg_doc_kind.c` 的 `k_kinds`，在画布侧是 `model.ts` 的 `KINDS`——**两处必须同步**，新增控件就是各加一行 + 后端补一个分支。
 
 | type | 中文 | 容器 | Win32 实现 |
 | --- | --- | --- | --- |
@@ -166,7 +167,7 @@ void cb(cg_widget_t *self, cg_event_t ev, void *user);
 
 `image` 用 GDI+ 读 png/jpg/bmp/gif，路径按「原样 → 相对 `.cgui` 目录 → 相对 exe 目录」依次找，
 第 2 条最符合直觉（`.cgui` 和 `assets\` 一起搬走就能跑）。GDI+ 只用 4 个函数，
-`cg_win32.c` 里按官方 ABI 手写声明（MinGW 的 `gdiplusflat.h` 在 C 下编不过）；
+`cg_win_internal.h` 里按官方 ABI 手写声明（MinGW 的 `gdiplusflat.h` 在 C 下编不过）；
 `gdiplus.dll` 从 XP 起就是系统组件，不破坏「单 exe、零依赖」。
 
 ### 3.3 状态与运行时 API
@@ -208,31 +209,59 @@ main() -> cg_app_run(desc)
 runtime/
   include/cstackgui.h   业务代码唯一需要 include 的头
   src/
-    cg_json.{h,c}       只读 JSON DOM 解析（支持 \u 转义与代理对、UTF-8 原文）
-    cg_doc.{h,c}        .cgui -> 控件文档树；类型表；打印
-    cg_internal.h       运行时内部结构 + 后端接口（业务代码不该看）
-    cg_app.c            控件树构建、名字绑定解析、事件派发、公共 API、自检
-    cg_timer.c          一次性定时器（后端 50ms 心跳驱动）
-    cg_win32.c          Win32 后端：窗口、原生控件、消息 -> 事件映射
+    core/               后端无关层：不知道 Win32 的存在
+      cg_json.{h,c}     只读 JSON DOM 解析（支持 \u 转义与代理对、UTF-8 原文）
+      cg_doc.{h,c}      .cgui -> 控件文档树；解析 / 释放 / 打印
+      cg_doc_kind.c     控件类型表 k_kinds 与 cg_kind_* 查询
+      cg_internal.h     运行时内部结构 + 后端接口 + 跨模块内部声明
+      cg_event.c        事件名表、回调绑定解析、事件派发中枢
+      cg_widget.c       运行时控件模型：构建、查找、公共属性 API
+      cg_widget_data.c  内容 API：列表/树/表格/状态栏/标签页/图片/提示/时钟
+      cg_app.c          应用生命周期（定位 .cgui / 打开 / 消息循环 / 收尾）与自检
+      cg_timer.c        一次性定时器（后端 50ms 心跳驱动）
+    win32/              Win32 原生后端：不知道业务的存在
+      cg_win_internal.h 后端内部共享接口（各 cg_win_*.c 之间）
+      cg_win_util.c     工具：UTF-8 / 字体缓存 / 颜色刷 / 路径与资源 / 时基
+      cg_win_ctl.c      控件 -> 窗口类与样式、背景色推导、WM_CTLCOLOR
+      cg_win_create.c   原生控件创建与销毁
+      cg_win_sync.c     控件状态同步与条目重建
+      cg_win_notify.c   原生通知 -> 事件映射
+      cg_win_event.c    焦点子类与窗口级事件
+      cg_win_main.c     主窗口过程
+      cg_win_draw.c     自绘窗口类与过程（image/圆环/进度条/画板/面板）
+      cg_win_ownerdraw.c owner-draw 项绘制与 WM_DRAWITEM 分发
+      cg_win_menu.c     菜单与工具栏
+      cg_win_window.c   窗口生命周期与窗口/托盘 API
+      cg_win_dialog.c   通用对话框（打开/保存/选色/消息框）
+      cg_win_api.c      画板 / 表格 API、browser 导航
+    skin/              自绘外观层（GDI+，M3 风格）：换 D2D 内核时整目录替换
+      cg_skin.{h,c}     按钮/开关/勾选/滑块/进度/圆环
+      cg_skin_edit.c    输入框圆角裁切与单行文字垂直居中（EDIT 子类）
   res/                  清单（v6 通用控件 + 每显示器 DPI）与版本资源
 ```
+
+**目录即分层**：三层各自在 include 路径上
+（`-Iruntime\src\core -Iruntime\src\win32 -Iruntime\src\skin`），层内互相 include 直接用裸文件名；
+`runtime\src` 本身**故意不上**路径——跨层引用写错就编不过，而不是被悄悄找到。
+对象名取文件名（`build\obj\<名字>.o`），所以三层里的 `.c` 文件名必须唯一，
+命名约定已经保证（core 用 `cg_*`、后端 `cg_win_*`、外观 `cg_skin_*`）。
 
 ### 4.1 四条容易踩的实现约束
 
 1. **原生控件必须按树序创建（父先于子）。** `app->widgets` 是按创建顺序头插的链表，
    它和树序相反；照链表建控件会出现"子控件的父 HWND 还是 NULL"，`CreateWindowEx` 静默失败，
-   整个分组框里的控件全丢。所以 `win_init` 用 `create_native_tree()` 从 `app->window` 递归下去建。
+   整个分组框里的控件全丢。所以 `cgw_win_init` 用 `cgw_create_native_tree()` 从 `app->window` 递归下去建。
 2. **同步逻辑要防重入。** 回调里改控件会触发原生通知（`EN_CHANGE` 等），再回到回调就递归了。
-   `cg_win32.c` 用 `g_in_notify` 挡住这种嵌套：`sync_widget()` 外层包一层（保存/恢复原值），
-   `notify_from()` / `notify_common()` 也各包一层。
+   `cg_win_event.c` 用 `g_win_in_notify` 挡住这种嵌套：`cgw_sync_widget()` 外层包一层（保存/恢复原值），
+   `cgw_notify_from()` / `cgw_notify_common()` 也各包一层。
 3. **一个控件可能有第二个 HWND。** `spinner` = 输入框 + 上下箭头两个窗口，
-   所以按控件句柄反查控件要用 `widget_by_hwnd()`（同时比对 `native` 和 `native2`），
+   所以按控件句柄反查控件要用 `cgw_widget_by_hwnd()`（同时比对 `native` 和 `native2`），
    只按 `GetDlgCtrlID()` 找会漏掉箭头那条消息。
 4. **子窗口的通知先到父窗口。** 控件把 `WM_COMMAND` / `WM_NOTIFY` / `WM_DRAWITEM` / `WM_HSCROLL`
-   发给**直接父窗口**；分组框里的树、表格、开关要靠 `PanelProc` 把这几种消息转发回主窗口，
+   发给**直接父窗口**；分组框里的树、表格、开关要靠 `cgw_PanelProc` 把这几种消息转发回主窗口，
    少转发一种，那种控件在分组框里就会"没反应"。
 
-**分层规矩**：`cg_app.c` 及以上不知道 Win32 的存在，`cg_win32.c` 不知道业务的存在。两者之间是 `cg_backend_t` 接口：
+**分层规矩**：`cg_app.c` / `cg_widget*.c` 及以上不知道 Win32 的存在，`cg_win_*.c` 不知道业务的存在。两者之间是 `cg_backend_t` 接口：
 
 ```c
 typedef struct cg_backend {

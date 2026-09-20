@@ -20,17 +20,20 @@
 
 ## 2. 接入点（不动上层）
 
-- `runtime/src/cg_win32.c`：
-  - `style_of()` 里把 `button` 的样式从 `BS_PUSHBUTTON` 改成 `BS_OWNERDRAW`，
-    WM_DRAWITEM 就会发到主窗口；
-  - `draw_own_item()` 顶部加 `button` 分支，调 `cg_skin_draw_button()`；
-  - `FocusProc`（统一子类）里给 `button` 加悬停/按下状态跟踪
-    （`WM_MOUSEMOVE`/`WM_MOUSELEAVE`/`WM_LBUTTONDOWN`/`UP` → 置 `hot`/`pressed` 并 `InvalidateRect`）；
-  - `win_init()` 里用 `DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE=ROUND)` 给整窗圆角
-    （`dwmapi.dll` 动态加载，老系统无此 API 自动跳过，零链接依赖）。
-- `runtime/src/cg_skin.c`（新增）：所有绘制逻辑，靠 `cg_internal.h` 的 `widget_by_hwnd()` 反查控件。
-- `runtime/src/cg_internal.h`：`cg_widget_t` 加 `hot` / `pressed` 两个 int 状态位（calloc 默认 0）。
-- `build-runtime.bat`：`SRC` 列表加 `cg_skin`。
+- `runtime/src/win32/cg_win_ctl.c`：`style_of()` 里把 `button` 的样式从 `BS_PUSHBUTTON` 改成 `BS_OWNERDRAW`，
+  WM_DRAWITEM 就会发到主窗口；
+- `runtime/src/win32/cg_win_ownerdraw.c`：`draw_own_item()` 顶部加 `button` 分支，调 `cg_skin_draw_button()`；
+- `runtime/src/win32/cg_win_event.c`：`cgw_FocusProc`（统一子类）里给 `button` 加悬停/按下状态跟踪
+  （`WM_MOUSEMOVE`/`WM_MOUSELEAVE`/`WM_LBUTTONDOWN`/`UP` → 置 `hot`/`pressed` 并 `InvalidateRect`）；
+- `runtime/src/win32/cg_win_window.c`：`cgw_win_init()` 里用
+  `DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE=ROUND)` 给整窗圆角
+  （`dwmapi.dll` 动态加载，老系统无此 API 自动跳过，零链接依赖）。
+- `runtime/src/skin/cg_skin.c`（新增）：所有绘制逻辑，靠 `cg_internal.h` 的 `cg_widget_by_hwnd()` 反查控件。
+- `runtime/src/skin/cg_skin_edit.c`：输入框（edit / multiedit / spinner）的圆角裁切 + 单行文字垂直居中，
+  靠 `SetWindowSubclass` 挂子类实现（EDIT 不支持 owner-draw）。
+- `runtime/src/core/cg_internal.h`：`cg_widget_t` 加 `hot` / `pressed` 两个 int 状态位（calloc 默认 0）。
+- `build-runtime.bat`：不用改——它自动扫 `runtime\src\core|win32|skin\` 下的全部 `.c`，
+  新文件放进 `skin\` 就行。
 
 ## 3. 状态模型
 

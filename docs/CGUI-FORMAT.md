@@ -3,7 +3,7 @@
 `.cgui` 就是一个 UTF-8 编码的 JSON 文件，描述一个窗口和它里面的控件。
 文件可以由画布（CStackGUI.exe）保存，也可以人手写——两者格式完全一致。
 
-解析实现：`runtime/src/cg_doc.c`（C 侧）、`designer/src/model.ts`（画布侧）。
+解析实现：`runtime/src/core/cg_doc.c`（C 侧）、`designer/src/model.ts`（画布侧）。
 **两处对字段的理解必须一致**，`tools/check-format.bat` 就是防它们漂移的回归测试。
 
 ---
@@ -335,7 +335,7 @@ static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
 
 画布只列出某控件支持的事件；手写 `.cgui` 绑了不支持的事件时，运行时启动会打
 警告、`--selftest` 以非 0 退出。两边的事件表是同一份约定：
-C 侧 `runtime/src/cg_doc.c` 的 `k_kinds`，画布侧 `designer/src/model.ts` 的 `KIND_EVENTS`。
+C 侧 `runtime/src/core/cg_doc_kind.c` 的 `k_kinds`，画布侧 `designer/src/model.ts` 的 `KIND_EVENTS`。
 
 容器里的子控件坐标**相对容器客户区**，不是相对窗口。
 
