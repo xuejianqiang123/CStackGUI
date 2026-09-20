@@ -11,6 +11,7 @@ rem    2) 把刚编出来的 CStackGUI.exe 拷到项目根的 release\CStackGUI.
 rem
 rem  只更新画布这一个 exe；运行时库和示例由 build-all.bat / make-release.bat 负责。
 rem ============================================================
+chcp 65001 >nul
 setlocal
 cd /d "%~dp0"
 

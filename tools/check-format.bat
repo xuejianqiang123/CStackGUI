@@ -10,6 +10,7 @@ rem
 rem  NOTE: keep this file ASCII-only. cmd mis-parses non-ASCII comments
 rem  after `chcp 65001` (the designer's F5 run uses it).
 rem ============================================================
+chcp 65001 >nul
 setlocal
 if "%MINGW%"=="" set MINGW=C:\mingw64\bin
 set PATH=%MINGW%;%PATH%
