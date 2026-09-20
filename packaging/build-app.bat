@@ -20,7 +20,7 @@ set PATH=%MINGW%;%PATH%
 cd /d "%~dp0"
 
 set APP=%~1
-if "%APP%"=="" set APP=hello
+if "%APP%"=="" set APP=gallery
 set MODE=%~2
 
 set APPDIR=
@@ -48,16 +48,20 @@ if not exist "runtime\lib\libcstackgui.a" (
     exit /b 1
 )
 
-set LDFLAGS=-lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus
+rem comdlg32 is used by the common dialogs (open/save file, choose color)
+set LDFLAGS=-lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32
 set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include
 
+rem The resource object (manifest + version info) has no code symbols, so the
+rem linker never pulls it out of the static lib -- link it directly so the exe
+rem gets the v6 common controls manifest (modern tabs/progress).
 set OUT=%APPDIR%\%APP%.exe
 if "%MODE%"=="--release" (
     echo   LD %OUT% ^(release, no console^)
-    gcc %CFLAGS% -mwindows -o "%OUT%" "%APPDIR%\*.c" "runtime\lib\libcstackgui.a" %LDFLAGS%
+    gcc %CFLAGS% -mwindows -o "%OUT%" "%APPDIR%\*.c" "runtime\lib\cstackgui_res.o" "runtime\lib\libcstackgui.a" %LDFLAGS%
 ) else (
     echo   LD %OUT% ^(debug, with console^)
-    gcc %CFLAGS% -o "%OUT%" "%APPDIR%\*.c" "runtime\lib\libcstackgui.a" %LDFLAGS%
+    gcc %CFLAGS% -o "%OUT%" "%APPDIR%\*.c" "runtime\lib\cstackgui_res.o" "runtime\lib\libcstackgui.a" %LDFLAGS%
 )
 if errorlevel 1 (
     echo [fail] build of %APP% failed

@@ -46,6 +46,7 @@ mkdir release\runtime\include
 mkdir release\runtime\lib
 copy /y runtime\include\cstackgui.h release\runtime\include\ >nul
 copy /y build\lib\libcstackgui.a release\runtime\lib\ >nul
+copy /y build\obj\cstackgui_res.o release\runtime\lib\ >nul
 if errorlevel 1 (
     echo [fail] 复制运行时库失败
     exit /b 1
@@ -96,7 +97,7 @@ if errorlevel 1 (
 echo.
 echo == 4/4 自检：在 release\ 里编译并校验一个示例 ==
 pushd release
-call build-app.bat hello
+call build-app.bat gallery
 if errorlevel 1 (
     popd
     echo [fail] 发布包里的编译脚本用不了

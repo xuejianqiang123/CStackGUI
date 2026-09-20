@@ -31,16 +31,15 @@ if not exist "build\modeljs\model.js" (
     exit /b 1
 )
 
-for %%a in (hello gallery) do (
+for %%a in (gallery) do (
     if not exist "examples\%%a\%%a.exe" (
         call build-app.bat %%a
         if errorlevel 1 exit /b 1
     )
 )
 
-rem hello covers basic widgets (button/input/check/slider),
-rem gallery covers newer ones (tree/table/tabs/image...)
-for %%a in (hello gallery) do (
+rem gallery covers everything (basic widgets + tree/table/tabs/image...)
+for %%a in (gallery) do (
     echo.
     echo == %%a ==
     node tools\format-roundtrip.mjs examples\%%a\%%a.exe examples\%%a\%%a.cgui build\roundtrip_%%a.cgui
