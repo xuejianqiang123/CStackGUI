@@ -28,6 +28,7 @@ argument-hint: [要改的东西，可以用日常语言，例如 "画布选中�
 | `src/components/Inspector.tsx` | 属性面板（按 `node.type` 显示字段；多行内容用纯文本 `Area` 编辑） | 加/改属性字段与编辑器 |
 | `src/components/EventPanel.tsx` | 事件页签：只列 `eventsOf(type)` 支持的事件，自动命名 `on_<id>_<ev>`，标出「不支持」和「共用」 | 事件相关改动 |
 | `src/components/Palette.tsx` / `LayerTree.tsx` / `Toolbar.tsx` | 控件面板（按 `KINDS[].group` 自动分组）/ 层级（数组顺序 = 层叠）/ 顶部工具条 | UI 排布、层级操作 |
+| `src/components/SupportPanel.tsx` + `src/supportlib.ts` | 「支持库」页签：公共 C API 的可搜索中文索引（分类树 + 帮助卡片 + 双击复制调用代码）。数据是**手写**的，靠 `tools\check-support.mjs` 与 `cstackgui.h` 对齐 | 增改运行时公共 API、新手引导 |
 | `src/codegen.ts` | 导出 C 骨架：`<name>_ui_events.h`、`.c`、`main.c`、`build.bat`、`.cgui` 五件套 | 改导出产物模板 |
 | `src/bridge.ts` | Electron 能力封装 + **浏览器降级**（无磁盘：改成下载文件） | 加新 IPC 能力时同步两端 |
 | `electron/main.mjs` | 主进程：IPC handler、项目根定位、导出目录规则、F5 编译运行 | 加 IPC / 改磁盘行为 |
@@ -115,6 +116,7 @@ argument-hint: [要改的东西，可以用日常语言，例如 "画布选中�
 | `KINDS` | `k_kinds` 同步；`makeNode` 有种子；`WidgetView` 有外观；`styles.css` 有 glyph/ctl 类名 |
 | `KIND_EVENTS` / `CG_EVENTS` | `k_kinds[].events` / `CG_EV_*` 同步；`EVENT_LABEL`/`EVENT_HINT` 补中文 |
 | IPC | `preload.cjs` 白名单 + `bridge.ts` 类型 + **浏览器降级分支** |
+| 运行时公共 API（`cstackgui.h`） | `src/supportlib.ts`（「支持库」页签）同步加/改条目；`node tools\check-support.mjs` 必须过 |
 | 纯视觉 | `tsc --noEmit` 过 + 截图肉眼确认 |
 
 报告格式一句话即可："本次动了 X，同步改了 A/B/C，已过 tsc/vite/check-format，截图在 build\shot.png"。
@@ -188,12 +190,14 @@ argument-hint: [要改的东西，可以用日常语言，例如 "画布选中�
 
 ```bat
 cd designer && npx tsc --noEmit && npx vite build     :: 类型检查 + 构建
-tools\check-format.bat                                :: 画布写的 .cgui 必须被 C 侧读懂
+tools\check-format.bat                                :: 画布写的 .cgui 必须被 C 侧读懂 + 支持库表对齐 cstackgui.h
 build-all.bat                                         :: 运行时 + 所有示例仍能编译
 examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui   :: 回 0 才算事件闭环
 ```
 
-感官类改动（控件外观、画布视觉）光看 stderr 没用，**起 `npm run dev` 肉眼确认**或 `tools\shot.ps1` 截图；
+感官类改动（控件外观、画布视觉）光看 stderr 没用，**起 `npm run dev` 肉眼确认**，或
+`tools\shot-canvas.ps1` 截画布窗口（它截的是启动默认画面；要截要点才能看到的页签，
+先临时改 `App.tsx` 的默认 tab，截完改回来 —— 见脚本头注释）；
 涉及 `.cgui` 字段/结构时，`check-format.bat` 是硬门禁。
 
 ## 陷阱清单
@@ -203,5 +207,6 @@ examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui   :: 回 0
 - `KINDS` 加了、`cg_doc_kind.c::k_kinds` 没加 → 画布能画，运行时静默丢控件
 - `KIND_EVENTS` 与 `k_kinds[].events` 不一致 → 绑了不支持的事件，运行时警告、`--selftest` 返回 5
 - 新 IPC 没写浏览器降级分支 → 浏览器模式下 `bridge` 缺方法崩
+- 改了 `cstackgui.h` 却没动 `supportlib.ts` → 「支持库」页签里点出来的函数不存在（`tools\check-support.mjs` 会拦）
 - 绘制时对 `node.children` 直接递归忘了 tabs 的 `page` 过滤 → 画布显示与运行时不符
 - 一次性替换大文件：这不是一个整文件重构型项目，用定向 `replace_in_file`，不要重写 `model.ts`/`App.tsx`
