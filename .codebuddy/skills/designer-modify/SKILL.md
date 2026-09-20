@@ -26,7 +26,8 @@ argument-hint: [要改的东西，可以用日常语言，例如 "画布选中�
 | `src/components/Canvas.tsx` | 画布：选中、拖动、8 向 resize、拖入/拖出容器、吸附、菜单栏渲染 | 改交互/坐标/容器归属逻辑 |
 | `src/components/WidgetView.tsx` | 单个节点的**外观**（`inner()` 的 switch）；递归画子控件 | 新控件的外观、tabs 分页显示 |
 | `src/components/Inspector.tsx` | 属性面板（按 `node.type` 显示字段；多行内容用纯文本 `Area` 编辑） | 加/改属性字段与编辑器 |
-| `src/components/EventPanel.tsx` | 事件页签：只列 `eventsOf(type)` 支持的事件，自动命名 `on_<id>_<ev>`，标出「不支持」和「共用」 | 事件相关改动 |
+| `src/components/EventPanel.tsx` | 事件页签：只列 `eventsOf(type)` 支持的事件，自动命名 `on_<id>_<ev>`，标出「不支持」和「共用」；「代码」按钮走 `cgui:openCallback` 在编辑器里打开 `*_ui_events.c` 的对应函数（VS Code 用 `code -g` 跳行） | 事件相关改动 |
+| `src/components/NewProjectDialog.tsx` | 「新建工程」模板选择（空白 / 表单 / 托盘小工具）；模板数据在 `model.ts::templateDoc`，只是普通 CgDoc | 加/改工程模板 |
 | `src/components/Palette.tsx` / `LayerTree.tsx` / `Toolbar.tsx` | 控件面板（按 `KINDS[].group` 自动分组）/ 层级（数组顺序 = 层叠）/ 顶部工具条 | UI 排布、层级操作 |
 | `src/components/SupportPanel.tsx` + `src/supportlib.ts` | 「支持库」页签：公共 C API 的可搜索中文索引（分类树 + 帮助卡片 + 双击复制调用代码）。数据是**手写**的，靠 `tools\check-support.mjs` 与 `cstackgui.h` 对齐 | 增改运行时公共 API、新手引导 |
 | `src/codegen.ts` | 导出 C 骨架：`<name>_ui_events.h`、`.c`、`main.c`、`build.bat`、`.cgui` 五件套 | 改导出产物模板 |

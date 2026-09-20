@@ -36,6 +36,22 @@ cg_quit(app);                                 /* 关窗回调里决定到底关�
 cg_widget_id(self), cg_event_name(ev)         /* 调试打印用 */
 ```
 
+界面之外的能力（`cg_kit`）——**别为了这些去 include `windows.h`**：
+
+```c
+char *text = cg_file_read("data.txt");        /* 读文件（UTF-8 BOM 自动去掉）*/
+cg_file_write("out.txt", text);              /* 覆盖写 */
+cg_file_append("log.txt", "一行\r\n");        /* 追加 */
+char *w = cg_ini_read("config.ini", "窗口", "宽", "800");   /* 读配置，没有就用默认 */
+cg_ini_write("config.ini", "窗口", "宽", "1024");           /* 写配置（不动文件里其它内容）*/
+char *u8 = cg_gbk_to_utf8(old_text);          /* GBK 老文件转 UTF-8 */
+cg_clip_set_text(text);                       /* 复制到剪贴板 */
+cg_shell_open("https://example.com");         /* 用默认程序打开文件/网址 */
+char *now = cg_time_now(NULL);                /* "2026-09-21 02:33:53" */
+cg_log(CG_LOG_INFO, "打开了 %s", "data.txt");  /* 写日志（用户报障时看它）*/
+cg_free(text); cg_free(w); cg_free(u8); cg_free(now);       /* 返回的堆串都要释放 */
+```
+
 ### 2. 写在哪
 
 - 只改 `apps\<名字>\<名字>_ui_events.c` —— 画布重新导出**不会覆盖**它。
@@ -64,3 +80,6 @@ select（列表/下拉/标签页/树/表格/月历）· release（滑块松手�
 - `cg_find` 返回找不到的控件会打警告，别假定一定找得到。
 - 定时器回调里不要做耗时操作（阻塞界面消息循环）。
 - `.cgui` 是**运行时读**的：改界面布局不用重编 exe，改了 C 代码才要。
+- `cg_kit` 里返回 `char *` 的函数（`cg_file_read` / `cg_ini_read` / `cg_str_format` / `cg_time_now` …）
+  都是堆内存，用完必须 `cg_free()`，否则跑久了会一直涨。
+- 发布版没有控制台：出问题先看日志 `%LOCALAPPDATA%\<exe名>\app.log`，程序把原因写在那里。
