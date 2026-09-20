@@ -195,6 +195,12 @@ cg_widget_t *cg_widget_by_ctrl_id(cg_app_t *app, int ctrl_id);
  *  找不到返回 NULL。自绘外观层（cg_skin.c）用它把 WM_DRAWITEM 的 hwndItem 映射到控件。 */
 cg_widget_t *cg_widget_by_hwnd(cg_app_t *app, void *hwnd);
 
+/** 某个控件"背后"是什么颜色（0xRRGGBB）：主窗口上的控件 = 窗口底色；分组框 / 容器块 /
+ *  卡片 / 图形里的 = 面板 style.bg（没设就用系统面色）；标签页里的 = 采样到的页体色。
+ *  无底色标签、以及"清掉自身底色"的自绘按钮/开关/勾选框都该用它，
+ *  否则控件在带底色的面板里会露出一块窗口底色的方块。 */
+unsigned cg_win_behind_rgb(cg_app_t *app, void *hwnd);
+
 /** 由文档树构建运行时控件树（不含原生句柄），失败返回 NULL */
 cg_widget_t *cg_build_widgets(cg_app_t *app);
 

@@ -116,11 +116,13 @@ static void sk_round_rect(GpPath *p, REAL x, REAL y, REAL w, REAL h, REAL r)
     GdipClosePathFigure(p);
 }
 
-/** 取窗口底色（控件外区域用它填充，避免 owner-draw 自带的灰底） */
-static unsigned sk_winbg(cg_app_t *app)
+/** 控件"背后"是什么颜色（0xRRGGBB）：自绘控件要清掉自身底色时拿它填充。
+ *  不能一律填窗口底色 —— 控件在带「背景色」的分组框/容器块里时，那块地方是面板的颜色，
+ *  填窗口底色就会露出一块方块（表现为"分组框背景色没生效、反而控件变色"）。 */
+static unsigned sk_behind(const cg_widget_t *w)
 {
-    if (app && app->doc.bg != CG_COLOR_NONE) return app->doc.bg;
-    return 0xF3EDF7u;
+    if (!w || !w->app) return 0xF3EDF7u;
+    return cg_win_behind_rgb(w->app, w->native);
 }
 
 void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
@@ -141,7 +143,7 @@ void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
     if (wpx <= 0 || hpx <= 0) return;
 
     scale = (app && app->scale > 0) ? app->scale : 100;
-    winbg = sk_winbg(app);
+    winbg = sk_behind(w);
 
     filled   = (w->style.bg != CG_COLOR_NONE);
     base     = filled ? w->style.bg : 0xFFFFFFu;
@@ -259,7 +261,7 @@ void cg_skin_draw_switch(cg_widget_t *w, HDC hdc, const RECT *rc)
     scale    = (w->app && w->app->scale > 0) ? w->app->scale : 100;
     hot      = w->hot ? 1 : 0;
     pressed  = w->pressed ? 1 : 0;
-    winbg    = sk_winbg(w->app);
+    winbg    = sk_behind(w);
 
     /* 整块填窗口底色（圆角外的残留/owner-draw 默认灰底都盖掉） */
     {
@@ -383,9 +385,9 @@ void cg_skin_draw_check(cg_app_t *app, const DRAWITEMSTRUCT *dis)
     pad = (hpx - box) / 2;
     bx = x + (int)(2 * scale / 100);
     by = y + pad;
-    winbg = sk_winbg(app);
+    winbg = sk_behind(w);
 
-    /* 1) 整块填窗口底色，挡掉 owner-draw 按钮默认灰底 */
+    /* 1) 整块填"背后"的底色，挡掉 owner-draw 按钮默认灰底 */
     {
         HBRUSH b = CreateSolidBrush(sk_colorref(winbg));
         HBRUSH ob = (HBRUSH)SelectObject(dis->hDC, b);

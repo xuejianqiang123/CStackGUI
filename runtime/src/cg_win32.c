@@ -295,6 +295,12 @@ static int is_editlike(const cg_widget_t *w)
 #define COLOR_ENDCOLORS 30
 #endif
 
+/** @brief COLORREF(0x00BBGGRR) -> 0xRRGGBB */
+static unsigned rgb_of(COLORREF c)
+{
+    return ((unsigned)GetRValue(c) << 16) | ((unsigned)GetGValue(c) << 8) | (unsigned)GetBValue(c);
+}
+
 /* ---- 让父容器"自己画"出背后那一小块，取它的真实颜色 ----
  * 标签页的页体是主题画的（本机 #F9F9F9）：既不是类背景刷（BTNFACE 灰）也不是
  * COLOR_WINDOW（纯白），而且它裁掉子窗口（子控件下面什么都没画，所以不能"不画背景"）。
@@ -364,11 +370,7 @@ static unsigned parent_body_rgb(HWND parent, HWND child)
         if (cache[i].parent == parent) return cache[i].rgb;
     }
     rgb = 0xFFFFFF;
-    if (parent_paint_point(parent, child, &c)) {
-        rgb = ((unsigned)GetRValue(c) << 16) |
-              ((unsigned)GetGValue(c) << 8) |
-              (unsigned)GetBValue(c);
-    }
+    if (parent_paint_point(parent, child, &c)) rgb = rgb_of(c);
     if (used < 8) {
         cache[used].parent = parent;
         cache[used].rgb = rgb;
@@ -377,37 +379,44 @@ static unsigned parent_body_rgb(HWND parent, HWND child)
     return rgb;
 }
 
-/** @brief 无底色标签该用什么颜色和"背后"融为一体
- *  @param app 所属应用（读窗口底色刷）；child 那个标签窗口
- *  @return HBRUSH 该用的背景刷（可能为 NULL，调用方自己兜底）
- *  @details 父窗口是主窗口就用窗口底色；否则问父窗口的类背景刷（分组框等己方类存的是
- *           系统色索引 +1，换算成真实刷子）。窗口底色也没有才返回 NULL。
+/** @brief 某个控件"背后"是什么颜色（0xRRGGBB）
+ *  @param app 所属应用；hwnd 目标控件（按它的**直接父窗口**判断"背后"是谁）
+ *  @return unsigned 0xRRGGBB
+ *  @details 主窗口上的控件 -> 窗口底色；分组框 / 容器块 / 卡片 / 图形里的 -> 该面板的
+ *           style.bg（没设就用它类背景的系统色）；标签页里的 -> 采样页体真实像素。
+ *           无底色标签、以及"清掉自身底色"的自绘按钮/开关/勾选框都用它，
+ *           否则它们会把窗口底色画到带底色的面板上，露出一块方块。
  */
-static HBRUSH transparent_bg_for(cg_app_t *app, HWND child)
+unsigned cg_win_behind_rgb(cg_app_t *app, void *hwnd)
 {
     cg_win_state_t *st = (cg_win_state_t *)app->natives;
+    HWND child = (HWND)hwnd;
     HWND parent = child ? GetParent(child) : NULL;
     cg_widget_t *pw;
     ULONG_PTR v;
 
-    if (!parent || parent == (HWND)app->hwnd) {
-        return (st && st->bg_brush) ? st->bg_brush : NULL;
-    }
-    /* 分组框 / 容器块 / 卡片：面板自己用 style.bg 或系统面色擦背景，
-     * 用同一个颜色才能真的融为一体（顶层标签已在上面的分支处理）。 */
+    if (!st) return 0xF3EDF7u;
+    if (!parent || parent == (HWND)app->hwnd) return rgb_of(st->bg_color);
+
     pw = cg_widget_by_hwnd(app, parent);
     if (pw && (is_t(pw, "group") || is_t(pw, "box") || is_t(pw, "card") || is_t(pw, "shape"))) {
-        if (pw->style.bg != CG_COLOR_NONE) return brush_for(pw->style.bg);
+        if (pw->style.bg != CG_COLOR_NONE) return pw->style.bg;
         v = (ULONG_PTR)GetClassLongPtrW(parent, GCLP_HBRBACKGROUND);
-        if (v == 0 || v > (ULONG_PTR)(COLOR_ENDCOLORS + 1)) return (HBRUSH)GetStockObject(NULL_BRUSH);
-        return GetSysColorBrush((int)v - 1);
+        if (v == 0 || v > (ULONG_PTR)(COLOR_ENDCOLORS + 1)) return rgb_of(st->bg_color);
+        return rgb_of(GetSysColor((int)v - 1));
     }
     /* 标签页等系统容器：让页体自己把"背后那块"画出来取色（什么主题都对得上） */
-    if (pw && is_t(pw, "tabs")) {
-        return brush_for(parent_body_rgb(parent, child));
-    }
-    (void)v;
-    return GetSysColorBrush(COLOR_WINDOW);
+    if (pw && is_t(pw, "tabs")) return parent_body_rgb(parent, child);
+
+    return rgb_of(st->bg_color);
+}
+
+/** @brief 无底色标签该用哪个背景刷（= "背后"的颜色）
+ *  @return HBRUSH 直接当 WM_CTLCOLOR* 的返回值用
+ */
+static HBRUSH transparent_bg_for(cg_app_t *app, HWND child)
+{
+    return brush_for(cg_win_behind_rgb(app, child));
 }
 
 /** @brief WM_CTLCOLOR* 的共用处理：决定控件文字/背景色该用哪个画刷
@@ -1329,6 +1338,53 @@ static void register_canvas_class(void)
 
 /* ------------------------------------------------------------ 面板窗口 */
 
+/** @brief 组框标题：压在顶部边框上（画布也是这么画的）
+ *  @param app 所属应用；hwnd 面板窗口；w 面板控件（读 text/style）
+ *  @details 系统外观只画一圈边框、不会画标题，得自己画。边框不在客户区里，
+ *           所以用整窗 DC；先把那一小段边框用组框底色擦开，再把文字写上去。
+ */
+static void panel_draw_title(cg_app_t *app, HWND hwnd, cg_widget_t *w)
+{
+    HDC dc;
+    HFONT f, oldf;
+    HBRUSH tbg;
+    wchar_t *wt;
+    SIZE sz;
+    RECT tr;
+    int pad;
+
+    if (!w || !w->text || !*w->text) return;
+    wt = wc_from_utf8(w->text);
+    if (!wt) return;
+    dc = GetWindowDC(hwnd);
+    if (!dc) { free(wt); return; }
+
+    f = font_for(app, w->style.font, w->style.size ? w->style.size : 10, w->style.bold, 0);
+    oldf = (HFONT)SelectObject(dc, f ? f : (HFONT)GetStockObject(DEFAULT_GUI_FONT));
+    /* 擦开边框用的颜色 = 组框自己的底色（没设就用系统面色，和面板擦底一致） */
+    tbg = (w->style.bg != CG_COLOR_NONE) ? brush_for(w->style.bg) : (HBRUSH)(COLOR_BTNFACE + 1);
+    pad = scale_px(app, 4);
+    sz.cx = 0;
+    sz.cy = scale_px(app, 16);
+    GetTextExtentPoint32W(dc, wt, (int)wcslen(wt), &sz);
+
+    tr.left = scale_px(app, 8);
+    tr.right = tr.left + sz.cx + pad * 2;
+    tr.top = 0;
+    tr.bottom = sz.cy + scale_px(app, 2);
+    FillRect(dc, &tr, tbg);
+    tr.left += pad;
+    tr.right -= pad;
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, (w->style.fg != CG_COLOR_NONE) ? to_colorref(w->style.fg)
+                                                    : GetSysColor(COLOR_WINDOWTEXT));
+    DrawTextW(dc, wt, -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+
+    SelectObject(dc, oldf);
+    ReleaseDC(hwnd, dc);
+    free(wt);
+}
+
 /** @brief 面板窗口过程（group/box/card/shape）：通知上浮主窗口 + card/shape 自绘 */
 static LRESULT CALLBACK PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
@@ -1352,15 +1408,39 @@ static LRESULT CALLBACK PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         break;
     case WM_ERASEBKGND: {
+        /* 面板自己擦底色：设了 style.bg 就用它（分组框/容器块的「背景色」属性），
+         * 否则用系统面色。面板里的无底色标签会按同一颜色上色，两者才融为一体。 */
+        cg_widget_t *ew = app ? widget_by_hwnd(app, hwnd) : NULL;
         HDC dc = (HDC)wp;
         RECT rc;
         GetClientRect(hwnd, &rc);
-        FillRect(dc, &rc, (HBRUSH)(COLOR_BTNFACE + 1));
+        FillRect(dc, &rc, (ew && ew->style.bg != CG_COLOR_NONE)
+                          ? brush_for(ew->style.bg)
+                          : (HBRUSH)(COLOR_BTNFACE + 1));
         return 1;
     }
+    case WM_SIZE: {
+        /* 边框重画（改变尺寸）会把压在边框上的标题擦掉，这里补一次
+         * （不用 WM_NCPAINT：那个时机调 GDI 会出问题） */
+        LRESULT r = DefSubclassProc(hwnd, msg, wp, lp);
+        cg_widget_t *tw = app ? widget_by_hwnd(app, hwnd) : NULL;
+        if (tw && (is_t(tw, "group") || is_t(tw, "box"))) panel_draw_title(app, hwnd, tw);
+        return r;
+    }
     case WM_PAINT: {
-        /* card / shape 要自己画边框（圆角、椭圆），group / box 保持系统默认 */
+        /* card / shape 要自己画边框（圆角、椭圆），group / box 保持系统外观（只有一圈边框） */
         cg_widget_t *w = app ? widget_by_hwnd(app, hwnd) : NULL;
+        if (w && (is_t(w, "group") || is_t(w, "box"))) {
+            /* 组框：底色（设了才填）和压在边框上的标题都得自己画 */
+            PAINTSTRUCT ps;
+            HDC dc = BeginPaint(hwnd, &ps);
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+            if (w->style.bg != CG_COLOR_NONE) FillRect(dc, &rc, brush_for(w->style.bg));
+            EndPaint(hwnd, &ps);
+            panel_draw_title(app, hwnd, w);
+            return 0;
+        }
         if (!w || (!is_t(w, "card") && !is_t(w, "shape"))) break;
         {
             PAINTSTRUCT ps;
