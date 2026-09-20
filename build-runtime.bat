@@ -44,6 +44,15 @@ rem core = cg_*, backend = cg_win_*, appearance = cg_skin_*.
 rem Incremental: only recompile a source whose .o is missing or not strictly newer
 rem than it. The "YYYY/MM/DD HH:MM" timestamp compares chronologically as a string;
 rem "not strictly newer" counts as stale so a same-minute edit is never missed.
+rem A header change must invalidate every object too: these headers declare the
+rem struct layout / macros the whole library is built on, so a stale .o would
+rem silently link against an old definition. So take the newest header across
+rem runtime\include plus all three layers, and recompile whatever is older.
+set "HDRT=0"
+for %%h in (runtime\include\*.h) do if "%%~th" GTR "!HDRT!" set "HDRT=%%~th"
+for %%d in (core win32 skin) do (
+    for %%h in ("runtime\src\%%d\*.h") do if "%%~th" GTR "!HDRT!" set "HDRT=%%~th"
+)
 for %%d in (core win32 skin) do (
     for %%f in ("runtime\src\%%d\*.c") do (
         set "SRCF=%%~ff"
@@ -53,7 +62,7 @@ for %%d in (core win32 skin) do (
         if exist "!OBJ!" (
             for %%o in ("!OBJ!") do set "OT=%%~to"
             for %%c in ("!SRCF!") do set "CT=%%~tc"
-            if "!OT!" GTR "!CT!" set "DO="
+            if "!OT!" GTR "!CT!" if "!OT!" GTR "!HDRT!" set "DO="
         )
         if defined DO (
             echo   CC runtime\src\%%d\%%~nxf
