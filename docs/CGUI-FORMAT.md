@@ -140,7 +140,7 @@
 | `enabled` | 布尔 | `true` | 全部 |
 | `checked` | 布尔 | `false` | `checkbox` / `radio` |
 | `value` | 整数 | `0`（数值类默认 40）| `slider` / `progress` / `listbox`(选中项序号) |
-| `min` / `max` | 整数 | `0` / `100` | `slider` / `progress` / `spinner`。`max <= min` 时自动修正为 `min+1` |
+| `min` / `max` | 整数 | `0` / `100` | `slider` / `progress` / `spinner` / `rate`（星数 = `max-min`，上限 10）/ `pagination`（页数 = `max-min+1`）。`max <= min` 时自动修正为 `min+1` |
 
 ### 2.4 `src`：图片路径
 
