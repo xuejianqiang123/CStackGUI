@@ -51,10 +51,16 @@ LRESULT cg_skin_draw_slider_notify(cg_app_t *app, const NMHDR *hdr);
 void cg_skin_draw_progress(cg_widget_t *w, HDC hdc, const RECT *rc);
 
 /**
- * @brief 给输入框（edit/multiedit）套圆角：用窗口区域裁切 + Subclass 在 resize 时重裁
+ * @brief 给输入框（edit/multiedit/spinner）套圆角 + 单行文字垂直居中
  * @param w 输入框控件（读 w->native / w->style.radius / w->app->scale）
  * @return void 无返回值；GDI+ 不可用时也照常（圆角仅靠窗口区域，不依赖 GDI+）
  */
 void cg_skin_apply_edit(cg_widget_t *w);
+
+/** 输入框左右边距：文字别怼到圆角边框上（圆角 2px + 6px = 8px，和画布一致）。
+ *  spinner 的上下箭头会给 buddy 重设边距、把左边距清掉，cg_win32 建完控件后
+ *  要按这个值再补一次左边距。 */
+#define CG_EDIT_LEFT_MARGIN  8
+#define CG_EDIT_RIGHT_MARGIN 8
 
 #endif /* CG_SKIN_H */

@@ -601,6 +601,7 @@ typedef struct {
     int      pad;      /* 上方让出的像素（= (控件高 - 文字高) / 2） */
     int      text_h;   /* 当前字体的文字高度（换字号时对比，变了才重排） */
     int      w, h;     /* 控件整块尺寸（比客户区高，含让出来的上边距） */
+    int      left;     /* 左边距（EM_SETMARGINS）；箭头/换字体后会被清，要按它重设 */
     COLORREF bg;       /* 补上边距用的底色（白或 style.bg） */
 } sk_edit_sub_t;
 
@@ -699,6 +700,8 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     }
     if (msg == WM_SETFONT) {
         LRESULT r = DefSubclassProc(hwnd, msg, wp, lp);
+        /* spinner 的上下箭头换字体时会重设 buddy 边距、把左边距清成 0：补一次 */
+        SendMessageW(hwnd, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(s->left, 0));
         if (s->single && sk_edit_text_height(hwnd) != s->text_h) {
             /* 字号变了 -> 重排一次（SWP_FRAMECHANGED 会再发 WM_NCCALCSIZE） */
             SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
@@ -708,6 +711,7 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     }
     if (msg == WM_SIZE) {
         sk_edit_resize(hwnd, s);
+        SendMessageW(hwnd, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(s->left, 0));
         /* resize 时系统按默认非客户区重算客户区，会把让出来的上边距抹掉（spinner 的
          * 上下箭头改 buddy 尺寸就会触发）。补一次 FRAMECHANGED 让 WM_NCCALCSIZE 重新生效；
          * 尺寸没变不会递归发 WM_SIZE。 */
@@ -715,7 +719,10 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
             SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
                          SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
     } else if (msg == WM_PAINT || msg == WM_SETFOCUS || msg == WM_KILLFOCUS) {
-        LRESULT r = DefSubclassProc(hwnd, msg, wp, lp);
+        LRESULT r;
+        if (msg == WM_SETFOCUS)
+            SendMessageW(hwnd, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(s->left, 0));
+        r = DefSubclassProc(hwnd, msg, wp, lp);
         sk_edit_box(hwnd, s, GetFocus() == hwnd);
         return r;
     }
@@ -738,13 +745,16 @@ void cg_skin_apply_edit(cg_widget_t *w)
     memset(s, 0, sizeof(*s));
     s->rad = r;
     s->single = multiline ? 0 : 1;
+    s->left = CG_EDIT_LEFT_MARGIN;
     s->bg = (w->style.bg != CG_COLOR_NONE)
               ? RGB((w->style.bg >> 16) & 0xFF, (w->style.bg >> 8) & 0xFF, w->style.bg & 0xFF)
               : GetSysColor(COLOR_WINDOW);
 
     sk_edit_resize(hw, s);   /* 初始尺寸 + 圆角区域 */
-    /* 左右各留 6px 边距：文字别怼到圆角边框上（垂直居中见 WM_NCCALCSIZE） */
-    SendMessageW(hw, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(6, 6));
+    /* 左右留边距：文字别怼到圆角边框上（垂直居中见 WM_NCCALCSIZE）。
+     * spinner 的箭头稍后会重设边距，WM_SETFONT/WM_SIZE 里会按 s->left 再补。 */
+    SendMessageW(hw, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN,
+                 MAKELPARAM(CG_EDIT_LEFT_MARGIN, CG_EDIT_RIGHT_MARGIN));
     SetWindowSubclass(hw, sk_edit_sub, 1, (DWORD_PTR)s);
     /* 挂上子类后强制一次布局：立刻按当前字体算好垂直居中量 */
     SetWindowPos(hw, NULL, 0, 0, 0, 0,

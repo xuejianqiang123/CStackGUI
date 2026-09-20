@@ -286,6 +286,81 @@ static int is_editlike(const cg_widget_t *w)
     return is_t(w, "edit") || is_t(w, "multiedit") || is_t(w, "spinner") || is_t(w, "richtext");
 }
 
+/* ------------------------------------------------------------ 控件背景（WM_CTLCOLOR*） */
+
+/* 系统色索引最大到 30（COLOR_MENUBAR）；比它大的值一定是真画刷句柄。
+ * MinGW 的 winuser.h 没定义 COLOR_ENDCOLORS，这里补一个。 */
+#ifndef COLOR_ENDCOLORS
+#define COLOR_ENDCOLORS 30
+#endif
+
+/** @brief 无底色标签该用什么颜色和"背后"融为一体
+ *  @param app 所属应用（读窗口底色刷）；child 那个标签窗口
+ *  @return HBRUSH 该用的背景刷（可能为 NULL，调用方自己兜底）
+ *  @details 父窗口是主窗口就用窗口底色；否则问父窗口的类背景刷（分组框等己方类存的是
+ *           系统色索引 +1，换算成真实刷子）。窗口底色也没有才返回 NULL。
+ */
+static HBRUSH transparent_bg_for(cg_app_t *app, HWND child)
+{
+    cg_win_state_t *st = (cg_win_state_t *)app->natives;
+    HWND parent = child ? GetParent(child) : NULL;
+    cg_widget_t *pw;
+    ULONG_PTR v;
+
+    if (!parent || parent == (HWND)app->hwnd) {
+        return (st && st->bg_brush) ? st->bg_brush : NULL;
+    }
+    /* 分组框 / 容器块 / 卡片：面板自己用 style.bg 或系统面色擦背景，
+     * 用同一个颜色才能真的融为一体（顶层标签已在上面的分支处理）。 */
+    pw = cg_widget_by_hwnd(app, parent);
+    if (pw && (is_t(pw, "group") || is_t(pw, "box") || is_t(pw, "card") || is_t(pw, "shape"))) {
+        if (pw->style.bg != CG_COLOR_NONE) return brush_for(pw->style.bg);
+        v = (ULONG_PTR)GetClassLongPtrW(parent, GCLP_HBRBACKGROUND);
+        if (v == 0 || v > (ULONG_PTR)(COLOR_ENDCOLORS + 1)) return (HBRUSH)GetStockObject(NULL_BRUSH);
+        return GetSysColorBrush((int)v - 1);
+    }
+    /* 其它系统控件当容器（标签页等）：页体是主题画的、近白色，
+     * 类背景刷（BTNFACE 灰）并不是它背后的颜色，所以这里用 COLOR_WINDOW。 */
+    return GetSysColorBrush(COLOR_WINDOW);
+}
+
+/** @brief WM_CTLCOLOR* 的共用处理：决定控件文字/背景色该用哪个画刷
+ *  @param app 所属应用；wp 目标 DC；lp 那个控件窗口
+ *  @return HBRUSH NULL = 不处理（交给系统默认），否则返回值该直接当 LRESULT 返回
+ *  @details WM_CTLCOLOR* 只发给控件的**直接父窗口**，所以控件放进分组框/标签页后
+ *           消息会落到容器上；PanelProc / FocusProc 必须把它转发到主窗口走这里，
+ *           否则容器里的标签会退回系统默认灰底（看不到"透明"效果）。
+ */
+static HBRUSH ctlcolor_brush(cg_app_t *app, WPARAM wp, LPARAM lp)
+{
+    HWND child = (HWND)lp;
+    cg_widget_t *w;
+    HDC dc;
+
+    if (!app || !child) return NULL;
+    w = cg_widget_by_ctrl_id(app, GetDlgCtrlID(child));
+    if (!w) return NULL;
+    dc = (HDC)wp;
+
+    if (w->style.fg != CG_COLOR_NONE) {
+        SetTextColor(dc, to_colorref(w->style.fg));
+    } else if (is_t(w, "link")) {
+        SetTextColor(dc, RGB(0x0B, 0x57, 0xD0));   /* 链接默认蓝，没设颜色时用 */
+    }
+    if (w->style.bg != CG_COLOR_NONE) {
+        SetBkColor(dc, to_colorref(w->style.bg));
+        SetBkMode(dc, OPAQUE);
+        return brush_for(w->style.bg);
+    }
+    /* 没设背景色：标签 / 链接 / 分割线默认透明，透出"背后"的颜色
+     * （要底色就在属性里设「背景色」；edit 类由系统画白底，不动它） */
+    if (is_t(w, "label") || is_t(w, "link") || is_t(w, "separator")) {
+        SetBkMode(dc, TRANSPARENT);
+        return transparent_bg_for(app, child);
+    }
+    return NULL;
+}
+
 /* ------------------------------------------------------------ 日期时间
  * text 里的写法：date -> "2026-09-19"、time -> "14:30"、datetime -> "2026-09-19 14:30"
  */
@@ -480,6 +555,9 @@ static LRESULT CALLBACK FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     case WM_COMMAND:
     case WM_NOTIFY:
     case WM_DRAWITEM:
+    case WM_CTLCOLORSTATIC:
+    case WM_CTLCOLOREDIT:
+    case WM_CTLCOLORBTN:
         if (s_app && s_app->hwnd && (HWND)s_app->hwnd != hwnd) {
             return SendMessageW((HWND)s_app->hwnd, msg, wp, lp);
         }
@@ -1177,8 +1255,12 @@ static LRESULT CALLBACK PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_NOTIFY:
     case WM_DRAWITEM:
     case WM_SETCURSOR:
+    case WM_CTLCOLORSTATIC:
+    case WM_CTLCOLOREDIT:
+    case WM_CTLCOLORBTN:
         /* 子控件把通知发给直接父窗口，这里转发到主窗口统一处理。
-         * 分组框里的树/表格/开关/链接都靠这条转发才能收到事件。 */
+         * 分组框里的树/表格/开关/链接都靠这条转发才能收到事件；
+         * WM_CTLCOLOR* 也要转发，否则分组框里的标签拿不到"透明"背景。 */
         if (app && app->hwnd && (HWND)app->hwnd != hwnd) {
             return SendMessageW((HWND)app->hwnd, msg, wp, lp);
         }
@@ -1972,30 +2054,8 @@ static LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:
     case WM_CTLCOLORBTN: {
-        if (app) {
-            HWND child = (HWND)lp;
-            cg_widget_t *w = cg_widget_by_ctrl_id(app, GetDlgCtrlID(child));
-            if (w) {
-                HDC dc = (HDC)wp;
-                if (w->style.fg != CG_COLOR_NONE) {
-                    SetTextColor(dc, to_colorref(w->style.fg));
-                } else if (is_t(w, "link")) {
-                    SetTextColor(dc, RGB(0x0B, 0x57, 0xD0));   /* 链接默认蓝，没设颜色时用 */
-                }
-                if (w->style.bg != CG_COLOR_NONE) {
-                    SetBkColor(dc, to_colorref(w->style.bg));
-                    SetBkMode(dc, OPAQUE);
-                    return (LRESULT)brush_for(w->style.bg);
-                }
-                /* 没设背景色：标签 / 链接 / 分割线默认透明，透出窗口底色
-                 * （要底色就在属性里设「背景色」；edit 类由系统画白底，不动它） */
-                if (is_t(w, "label") || is_t(w, "link") || is_t(w, "separator")) {
-                    cg_win_state_t *st = (cg_win_state_t *)app->natives;
-                    SetBkMode(dc, TRANSPARENT);
-                    return (LRESULT)((st && st->bg_brush) ? st->bg_brush : GetStockObject(NULL_BRUSH));
-                }
-            }
-        }
+        HBRUSH cbr = ctlcolor_brush(app, wp, lp);
+        if (cbr) return (LRESULT)cbr;
         break;
     }
     case WM_ERASEBKGND: {
@@ -2354,7 +2414,7 @@ static void create_native(cg_widget_t *w)
             w->native2 = up;
             /* UDS_ALIGNRIGHT 的箭头会给 buddy 重设边距、把我们的左边距清成 0（文字顶到
              * 圆角边框上）。这里重设左边距；右边距留给箭头，别覆盖。 */
-            SendMessageW(h, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(6, 0));
+            SendMessageW(h, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(CG_EDIT_LEFT_MARGIN, 0));
         }
     }
 
@@ -2370,6 +2430,10 @@ static void create_native(cg_widget_t *w)
     if (w->native2) subclass_for_events((HWND)w->native2);
 
     sync_widget(w);
+
+    /* 字体/箭头设置都可能把 spinner 的 buddy 边距清掉：全部就位后再补一次左边距 */
+    if (!strcmp(type, "spinner"))
+        SendMessageW(h, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(CG_EDIT_LEFT_MARGIN, 0));
 }
 
 /** 递归建原生控件：父先于子 */
