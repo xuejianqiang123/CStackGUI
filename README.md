@@ -44,8 +44,18 @@ apps\<名字>\  业务程序（.cgui + C 文件）──链接──>  apps\<名
 tick / check / gotfocus / lostfocus`（+ 窗口级 `close`）。
 每种控件支持哪些事件见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md)。
 
-仓库自带的示例 `examples\gallery\` 是**控件陈列室（三合一）**：顶层标签页分
-「基础闭环 / 控件陈列 / 新特性」三页，67 个控件、47 个回调，所有控件和事件都能在里面找到用法。
+界面之外还有一套 **基础能力 API**（`cg_kit`）：读写文件、INI 配置、路径处理、
+文本与编码转换（UTF-8 ↔ GBK）、剪贴板、用默认程序打开文件/网址、启动外部程序、
+读写注册表（做开机自启）、写日志。**所以业务代码从头到尾只 include `cstackgui.h`**，
+不用为了读个配置去 include `windows.h`。这 30 个函数的用法在画布「支持库」页签里一查就有。
+
+仓库自带两个示例，分工不同：
+
+- `examples\gallery\` —— **控件陈列室（三合一）**：顶层标签页分「基础闭环 / 控件陈列 / 新特性」
+  三页，67 个控件、47 个回调，**讲"控件怎么用"**。
+- `examples\notepad\` —— **真实小工具范例（记事本）**：菜单分发、脏标记、状态栏刷新、
+  文件读写、GBK/UTF-8 识别、INI 记住上次文件与窗口尺寸、关闭前拦截。**讲"一个工具该怎么组织"**，
+  也是 `cg_kit` 基础能力库的活例子（全程没有 include 任何 Windows 头）。
 
 ### 1.3 当前边界
 
@@ -90,6 +100,8 @@ tick / check / gotfocus / lostfocus`（+ 窗口级 `close`）。
    一个函数名可被多个控件共用；绑了不支持的事件，运行时会警告、`--selftest` 会报错。
    不知道回调里能写什么？右侧第 4 个页签「**支持库**」按用途列出了全部 C 函数（附说明与示例，
    双击即复制调用代码）——新手从这里抄第一段代码最快。
+   导出骨架之后，事件行上的「**代码**」按钮会直接打开 `*_ui_events.c` 里对应那个函数
+   （装了 VS Code 用 `code -g` 跳到行），不用自己翻文件找。
 4. **保存**：`Ctrl+S` 存成 `.cgui`（例如 `apps\myapp\myapp.cgui`）。
 5. **导出 C 骨架**：工具条「导出 C 骨架」→ 选 `apps\` 目录。生成 5 个文件：
    `<名字>.cgui`（画布产物）、`<名字>_ui_events.h/.c`（**.c 是你的代码，主要改它**）、
@@ -140,7 +152,9 @@ build-runtime.bat                :: 只编译运行时库（build-app 会先跑�
 :: 验证（改了 .cgui 字段或控件类型后必跑）
 build-app.bat gallery                                            :: 先有 gallery.exe
 examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui  :: 回调闭环自检
-tools\check-format.bat                                           :: 格式契约回归
+examples\notepad\notepad.exe --selftest examples\notepad\notepad.cgui  :: 真实工具范例自检
+tools\check-format.bat                                           :: 格式契约回归 + 支持库表一致性
+tools\check-kit.bat                                              :: cg_kit 基础能力冒烟测试
 
 :: 画布（designer 目录里执行）
 npm install / npm run dev / npm run build / npm run dist
@@ -200,6 +214,7 @@ build-all.bat                                  :: 运行时 + 所有示例编译
 examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui   :: 回 0 才算事件闭环
 tools\check-format.bat                         :: 画布写的 .cgui 必须被 C 侧读懂（改格式/控件时）
                                                :: 顺带查「支持库」表与 cstackgui.h 是否还一致
+tools\check-kit.bat                            :: cg_kit 基础能力（文件/配置/编码/注册表）冒烟测试
 cd designer && npx tsc --noEmit && npx vite build   :: 改了画布时
 ```
 
@@ -210,6 +225,8 @@ cd designer && npx tsc --noEmit && npx vite build   :: 改了画布时
    class/style 分支 + 画布 `WidgetView.tsx` 外观；事件表 `KIND_EVENTS` 与 `CG_EV_*` 位掩码同理。
 2. **`.cgui` 字段语义的真相在 C 侧**（`cg_doc.c` 的解析逻辑），画布模型跟着它走；
    改格式必须跑 `tools\check-format.bat`，防止"画布能存、程序起不来"。
+3. **界面之外的能力由 `cg_kit` 提供**（文件/配置/编码/剪贴板/注册表）——不要为了这些去
+   include `windows.h`：那样业务代码就绑死在 Win32 上了，而且画布「支持库」页签里也查不到。
 
 ---
 
@@ -240,15 +257,19 @@ CStackGUI\
       cg_widget.c              运行时控件模型：构建、查找、属性 API
       cg_widget_data.c         内容 API：列表/树/表格/状态栏/标签页/图片/提示/时钟
       cg_app.c                 应用生命周期（定位 .cgui / 打开 / 消息循环）与 --selftest
+      cg_log.c                 日志：stderr 镜像 + 日志文件（GUI 版没有控制台时唯一的线索）
       cg_timer.c               一次性定时器
-    src\win32\                 Win32 原生后端（窗口、控件、消息映射、对话框、托盘）
-      cg_win_*.c               13 个子模块，共用 cg_win_internal.h
+    src\win32\                 Win32 原生后端（窗口、控件、消息映射、对话框、托盘、诊断弹窗）
+      cg_win_*.c               14 个子模块，共用 cg_win_internal.h
     src\skin\                  自绘外观层（GDI+，M3 风格）
       cg_skin.c                按钮/开关/勾选/滑块/进度/圆环
       cg_skin_edit.c           输入框圆角裁切与单行文字垂直居中
+    src\kit\                   平台服务层：跟界面无关的那一半（文件/路径/INI/编码/剪贴板/注册表）
+      cg_kit.c                 基础能力 API（cg_kit）：业务代码不必 include windows.h
     res\                       清单（v6 通用控件 + 高 DPI）与版本信息
   examples\                    仓库自带的示例
     gallery\                   控件陈列室·三合一（gallery.cgui / main.c / assets\ / 产物）
+    notepad\                   真实小工具范例：记事本（菜单/文件/配置/cg_kit 全套）
   apps\                        你自己的工程（画布导出的默认位置）
     README.md                  这个目录是干嘛的
   build-runtime.bat            编译运行时库
@@ -256,7 +277,14 @@ CStackGUI\
   build-all.bat                运行时 + 所有示例，一条命令
   make-release.bat             一键打发布包 -> release\（内含自检）
   packaging\                   发布包里的物料模板（编译脚本、使用者说明）
-  tools\                       开发期检查工具（格式契约回归测试等）
+  tools\                       开发期检查工具
+    check-format.bat           格式契约回归（画布写的 .cgui 必须被 C 侧读懂）
+    check-support.mjs          画布「支持库」表 vs cstackgui.h 的一致性检查
+    check-kit.bat              cg_kit 基础能力冒烟测试（编译并运行 kit-test.c）
+    kit-test.c                 上面那个测试的源码（文件/配置/编码/剪贴板/注册表）
+    format-roundtrip.mjs       .cgui 往返：画布改 -> C 读 -> 再写回
+    gen-cc.mjs                 给业务代码生成 clangd 配置（编辑器补全）
+    shot.ps1 / shot-canvas.ps1 截 C 程序窗口 / 截画布窗口（肉眼看外观用）
   .codebuddy\                  CodeBuddy AI 配置（技能、工作流，见第三章）
   build\                       纯构建目录：各 .o 和运行时库源头（可随时删）
   release\                     发布包（make-release.bat 的产物，gitignore）
@@ -312,6 +340,12 @@ cg_dispatch(w, ev) ──> 按 .cgui 里绑的函数名查表 ──> 你的回�
 
 **Q：改了界面，程序里没变？**
 `.cgui` 是运行时读的，看 stderr 里 `[cstackgui] 界面文件: ...` 确认读的是哪个文件。
+
+**Q：双击 exe 什么都没发生 / 程序闪退？**
+发布版（`--release`）没有控制台，提示不会印在屏幕上，而是**写进日志 + 弹中文提示框**。
+日志固定在 `%LOCALAPPDATA%\<exe名>\app.log`（例如 `C:\Users\你\AppData\Local\myapp\app.log`），
+例如把地址栏粘进去就能打开。常见三类：界面文件没和 exe 放一起、`.cgui` 格式有问题、
+某个事件绑的函数名在 C 代码里没 `CG_BIND`（这种情况程序能起来，但会弹一次提示列出名字）。
 
 **Q：按钮圆角/背景色设了没用？**
 按钮/开关/勾选/输入框/滑块/进度条/圆环已走 GDI+ 自绘外观层（`runtime\src\skin\`），圆角与配色生效；

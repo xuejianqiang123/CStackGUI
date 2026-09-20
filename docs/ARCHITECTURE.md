@@ -189,6 +189,20 @@ cg_set_timer(app, 2000, 回调, app);            /* 延迟做一件事，避开�
 cg_quit(app);
 ```
 
+界面之外的能力（`cg_kit`，见 §4 的 `kit/` 层）——**这些让"业务代码只 include cstackgui.h"
+真的成立**：不用再为了读个配置就去 include `windows.h`：
+
+```c
+char *cfg  = cg_path_join(cg_app_data_dir(), "config.ini");
+char *w    = cg_ini_read(cfg, "窗口", "宽", "800");     /* 返回堆串，用完 cg_free */
+char *txt  = cg_file_read("data.txt");                  /* UTF-8 BOM 自动去掉 */
+char *u8   = cg_gbk_to_utf8(txt);                       /* 老 GBK 文件也能读 */
+cg_file_append("log.txt", cg_str_format("%s 启动\r\n", cg_time_now(NULL)));
+cg_log(CG_LOG_INFO, "配置 %s 读出来是 %s", cfg, w);
+cg_shell_open("https://example.com");
+cg_free(w); cg_free(txt); cg_free(u8); cg_free(cfg);
+```
+
 `cg_widget_add` 可以运行时造控件，id 同样参与事件名查找——先在 `.cgui` 里写好事件名、再在运行时造控件也行。
 
 ### 3.4 生命周期
@@ -241,14 +255,19 @@ runtime/
     skin/              自绘外观层（GDI+，M3 风格）：换 D2D 内核时整目录替换
       cg_skin.{h,c}     按钮/开关/勾选/滑块/进度/圆环
       cg_skin_edit.c    输入框圆角裁切与单行文字垂直居中（EDIT 子类）
+    kit/               平台服务层：跟界面无关的那一半 Win32（不属于任何后端）
+      cg_kit.c          文件/路径/INI 配置/文本编码/剪贴板/外部程序/注册表；
+                        有了它业务代码才真的"只 include cstackgui.h"
   res/                  清单（v6 通用控件 + 每显示器 DPI）与版本资源
 ```
 
-**目录即分层**：三层各自在 include 路径上
-（`-Iruntime\src\core -Iruntime\src\win32 -Iruntime\src\skin`），层内互相 include 直接用裸文件名；
+**目录即分层**：四层各自在 include 路径上
+（`-Iruntime\src\core -Iruntime\src\win32 -Iruntime\src\skin -Iruntime\src\kit`），层内互相 include 直接用裸文件名；
 `runtime\src` 本身**故意不上**路径——跨层引用写错就编不过，而不是被悄悄找到。
-对象名取文件名（`build\obj\<名字>.o`），所以三层里的 `.c` 文件名必须唯一，
-命名约定已经保证（core 用 `cg_*`、后端 `cg_win_*`、外观 `cg_skin_*`）。
+对象名取文件名（`build\obj\<名字>.o`），所以各层里的 `.c` 文件名必须唯一，
+命名约定已经保证（core 用 `cg_*`、后端 `cg_win_*`、外观 `cg_skin_*`、平台服务 `cg_kit_*`）。
+`kit` 和 `win32` 一样知道 Win32，但**不知道任何界面概念**——它只管文件、配置、编码这些事，
+所以画布和 skin 都不依赖它，把 `runtime\src\kit` 整个删掉也能编过（只剩 public API 声明）。
 
 ### 4.1 四条容易踩的实现约束
 
@@ -265,6 +284,12 @@ runtime/
    `WM_VSCROLL` **和 `WM_CTLCOLORSTATIC/EDIT/BTN`** 发给**直接父窗口**；放进分组框（`cgw_PanelProc`）
    或系统容器如标签页（`cgw_FocusProc`）的控件，这些消息都要被转发回主窗口 —— 少转发一种，
    那种控件进容器就"没反应"（标签则是露出系统灰底）。
+5. **菜单栏必须用 `CreateMenu()` 建，弹出菜单必须用 `CreatePopupMenu()`。** 给 `SetMenu()` 传一张
+   `CreatePopupMenu()` 的表**不会报错**，只是窗口上永远看不到菜单栏（`GetMenu()` 回 0）；
+   gallery 曾因此长时间"菜单栏其实是工具栏在冒充"。所以 `cgw_menu_build(w, as_bar)` 分了两种顶层容器，
+   调用点一处传 1（窗口菜单栏）、一处传 0（`TrackPopupMenu`）。
+   注意菜单栏会占客户区顶部的高度：挂上之后要按 `GetWindowRect - GetClientRect` 的差值把窗口调高，
+   客户区才是 `.cgui` 里写的尺寸。
 
 **分层规矩**：`cg_app.c` / `cg_widget*.c` 及以上不知道 Win32 的存在，`cg_win_*.c` 不知道业务的存在。两者之间是 `cg_backend_t` 接口：
 

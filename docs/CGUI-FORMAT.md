@@ -578,6 +578,36 @@ cg_widget_t *cg_widget_add(cg_app_t *app, cg_widget_t *parent, const char *type,
 int  cg_on(cg_widget_t *w, cg_event_t ev, cg_event_fn fn);              /* 直接给函数指针 */
 int  cg_on_named(cg_widget_t *w, cg_event_t ev, const char *cb_name);  /* 按 .cgui 里的名字 */
 
+/* 日志：GUI 版（-mwindows）没有控制台，printf/stderr 用户看不到。
+ * 运行时启动时就会开一份日志：%LOCALAPPDATA%\<exe名>\app.log
+ * 致命错误（界面文件找不到 / 格式错 / 创建窗口失败 / 崩溃）会弹中文提示框并写这份日志，
+ * 业务代码也用 cg_log 往同一个文件里补记录。 */
+void cg_log(int level, const char *fmt, ...);   /* CG_LOG_INFO / WARN / ERROR */
+void cg_log_set_level(int level);
+
+/* 基础能力（cg_kit）：界面之外但做真工具一定会用的。
+ * 全是"返回堆串，用完 cg_free"；有了它们业务代码真的只 include cstackgui.h。 */
+char *cg_file_read(const char *path);                       /* 整文件，UTF-8 BOM 自动去掉 */
+int   cg_file_write(const char *path, const char *text);    /* 覆盖写 UTF-8 */
+int   cg_file_append(const char *path, const char *text);
+int   cg_dir_list(const char *dir, const char *filter, int index, char *out, int out_size);
+char *cg_app_dir(void);                                     /* exe 所在目录 */
+char *cg_app_data_dir(void);                                /* %LOCALAPPDATA%\<exe名>，自动建 */
+char *cg_path_join(const char *a, const char *b) / cg_path_dir / cg_path_name / cg_path_ext;
+char *cg_ini_read(const char *path, const char *section, const char *key, const char *def);
+int   cg_ini_write(const char *path, const char *section, const char *key, const char *value);
+char *cg_str_format(const char *fmt, ...) / cg_str_trim / cg_str_replace;
+int   cg_str_equal(const char *a, const char *b);           /* 忽略大小写 */
+char *cg_utf8_to_gbk(const char *utf8) / cg_gbk_to_utf8;    /* 老 ANSI/GBK 文件互转 */
+char *cg_clip_get_text(void);
+int   cg_clip_set_text(const char *text);
+int   cg_shell_open(const char *path_or_url);               /* 默认程序打开文件/网址 */
+int   cg_run_process(const char *cmd_line, int wait);
+char *cg_time_now(const char *fmt);
+char *cg_reg_read(const char *subkey, const char *name, const char *def);
+int   cg_reg_write(const char *subkey, const char *name, const char *value);
+void  cg_free(void *p);                                     /* 上面返回的都要它释放 */
+
 /* 业务数据挂载 / 定时器 / 退出 */
 void  *cg_widget_get_user(const cg_widget_t *w);
 void   cg_widget_set_user(cg_widget_t *w, void *user);
