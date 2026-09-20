@@ -1,0 +1,86 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "入门03 事件进阶：时钟 / 键盘 / 鼠标 / 关闭拦截",
+    "width": 460,
+    "height": 400,
+    "bg": "#F3EDF7",
+    "events": {
+      "ready": "on_ready",
+      "close": "on_close",
+      "mousemove": "on_mouse_move",
+      "keydown": "on_key_down"
+    }
+  },
+  "widgets": [
+    {
+      "id": "tmr_tick",
+      "type": "timer",
+      "rect": { "x": 0, "y": 0, "w": 0, "h": 0 },
+      "period": 1000,
+      "events": { "tick": "on_tick" }
+    },
+    {
+      "id": "lab_clock",
+      "type": "label",
+      "rect": { "x": 16, "y": 16, "w": 428, "h": 30 },
+      "text": "时钟还没走起来",
+      "style": { "font": "Microsoft YaHei UI", "size": 12, "bold": true, "fg": "#1D1B20" }
+    },
+    {
+      "id": "prg_tick",
+      "type": "progress",
+      "rect": { "x": 16, "y": 56, "w": 428, "h": 20 },
+      "min": 0,
+      "max": 100,
+      "value": 0
+    },
+    {
+      "id": "btn_start",
+      "type": "button",
+      "rect": { "x": 16, "y": 92, "w": 120, "h": 36 },
+      "text": "开始",
+      "hint": "让时钟每 1000 毫秒发一次 tick",
+      "events": { "click": "on_timer_click" }
+    },
+    {
+      "id": "btn_stop",
+      "type": "button",
+      "rect": { "x": 152, "y": 92, "w": 120, "h": 36 },
+      "text": "停止",
+      "hint": "period 设成 0 就是停",
+      "events": { "click": "on_timer_click" }
+    },
+    {
+      "id": "sep_line",
+      "type": "separator",
+      "rect": { "x": 16, "y": 144, "w": 428, "h": 2 }
+    },
+    {
+      "id": "lab_mouse",
+      "type": "label",
+      "rect": { "x": 16, "y": 158, "w": 428, "h": 24 },
+      "text": "在窗口空白处移动鼠标（mousemove 是窗口级事件）",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#49454F" }
+    },
+    {
+      "id": "lab_key",
+      "type": "label",
+      "rect": { "x": 16, "y": 186, "w": 428, "h": 24 },
+      "text": "点一下窗口空白处再按键（keydown 是窗口级事件）",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#49454F" }
+    },
+    {
+      "id": "lst_log",
+      "type": "listbox",
+      "rect": { "x": 16, "y": 218, "w": 428, "h": 130 },
+      "items": []
+    },
+    {
+      "id": "sb_main",
+      "type": "statusbar",
+      "rect": { "x": 0, "y": 376, "w": 460, "h": 24 },
+      "items": ["就绪"]
+    }
+  ]
+}

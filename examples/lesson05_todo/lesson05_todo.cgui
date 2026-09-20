@@ -1,0 +1,87 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "入门05 待办清单（综合练习）",
+    "width": 640,
+    "height": 440,
+    "bg": "#F3EDF7",
+    "events": {
+      "ready": "on_ready",
+      "close": "on_close"
+    },
+    "info": {
+      "product": "CStackGUI 待办清单示例",
+      "desc": "入门05 综合练习：菜单分发 + 列表框 + 文件与配置（cg_kit）",
+      "version": "1.0.0.0",
+      "author": "CStackGUI"
+    }
+  },
+  "widgets": [
+    {
+      "id": "menu_main",
+      "type": "menu",
+      "rect": { "x": 0, "y": 0, "w": 0, "h": 0 },
+      "nodes": [
+        {
+          "text": "文件",
+          "children": [
+            { "text": "打开...", "id": "m_open" },
+            { "text": "保存", "id": "m_save" },
+            { "text": "另存为...", "id": "m_save_as" },
+            { "text": "-" },
+            { "text": "退出", "id": "m_quit" }
+          ]
+        },
+        {
+          "text": "帮助",
+          "children": [{ "text": "关于", "id": "m_about" }]
+        }
+      ],
+      "events": { "click": "on_menu_click" }
+    },
+    {
+      "id": "edt_new",
+      "type": "edit",
+      "rect": { "x": 16, "y": 16, "w": 420, "h": 32 },
+      "text": "",
+      "style": { "font": "Microsoft YaHei UI", "size": 10 },
+      "hint": "输入一条待办，回车 = 点「添加」",
+      "events": { "submit": "on_add_submit" }
+    },
+    {
+      "id": "btn_add",
+      "type": "button",
+      "rect": { "x": 448, "y": 16, "w": 80, "h": 32 },
+      "text": "添加",
+      "events": { "click": "on_add_click" }
+    },
+    {
+      "id": "btn_done",
+      "type": "button",
+      "rect": { "x": 536, "y": 16, "w": 88, "h": 32 },
+      "text": "完成/取消",
+      "hint": "给选中的一条加/去掉「[x] 」前缀",
+      "events": { "click": "on_done_click" }
+    },
+    {
+      "id": "lab_tip",
+      "type": "label",
+      "rect": { "x": 16, "y": 54, "w": 608, "h": 22 },
+      "text": "双击某一条 = 删除它；内容会存成纯文本文件，下次启动自动接上上次那份。",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#49454F" }
+    },
+    {
+      "id": "lst_todo",
+      "type": "listbox",
+      "rect": { "x": 16, "y": 82, "w": 608, "h": 320 },
+      "items": [],
+      "events": { "dblclick": "on_list_dblclick" }
+    },
+    {
+      "id": "sb_main",
+      "type": "statusbar",
+      "rect": { "x": 0, "y": 416, "w": 640, "h": 24 },
+      "items": ["0 项", "未命名", "已保存"]
+    }
+  ]
+}

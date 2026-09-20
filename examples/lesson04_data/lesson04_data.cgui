@@ -1,0 +1,137 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "入门04 数据控件：列表框 / 树 / 表格",
+    "width": 760,
+    "height": 500,
+    "bg": "#F3EDF7"
+  },
+  "widgets": [
+    {
+      "id": "grp_list",
+      "type": "group",
+      "rect": { "x": 16, "y": 16, "w": 230, "h": 240 },
+      "text": "列表框 listbox",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "bg": "#F7F2FA" },
+      "children": [
+        {
+          "id": "lst_items",
+          "type": "listbox",
+          "rect": { "x": 16, "y": 32, "w": 198, "h": 140 },
+          "items": ["苹果", "香蕉", "橘子"],
+          "events": { "select": "on_list_select" }
+        },
+        {
+          "id": "btn_list_add",
+          "type": "button",
+          "rect": { "x": 16, "y": 182, "w": 95, "h": 32 },
+          "text": "加一条",
+          "events": { "click": "on_list_op" }
+        },
+        {
+          "id": "btn_list_clear",
+          "type": "button",
+          "rect": { "x": 119, "y": 182, "w": 95, "h": 32 },
+          "text": "清空",
+          "events": { "click": "on_list_op" }
+        }
+      ]
+    },
+    {
+      "id": "grp_tree",
+      "type": "group",
+      "rect": { "x": 258, "y": 16, "w": 230, "h": 240 },
+      "text": "树 tree",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "bg": "#F7F2FA" },
+      "children": [
+        {
+          "id": "tre_dir",
+          "type": "tree",
+          "rect": { "x": 16, "y": 32, "w": 198, "h": 140 },
+          "nodes": [
+            {
+              "text": "项目",
+              "expanded": true,
+              "children": [
+                { "text": "runtime" },
+                { "text": "apps" }
+              ]
+            },
+            { "text": "构建产物" }
+          ],
+          "events": {
+            "select": "on_tree_select",
+            "expand": "on_tree_expand",
+            "collapse": "on_tree_collapse"
+          }
+        },
+        {
+          "id": "btn_tree_add",
+          "type": "button",
+          "rect": { "x": 16, "y": 182, "w": 95, "h": 32 },
+          "text": "加节点",
+          "hint": "加在树上当前选中的节点下面；没选中就加在根上",
+          "events": { "click": "on_tree_op" }
+        },
+        {
+          "id": "btn_tree_all",
+          "type": "button",
+          "rect": { "x": 119, "y": 182, "w": 95, "h": 32 },
+          "text": "全展开",
+          "events": { "click": "on_tree_op" }
+        }
+      ]
+    },
+    {
+      "id": "grp_table",
+      "type": "group",
+      "rect": { "x": 500, "y": 16, "w": 244, "h": 240 },
+      "text": "表格 table",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "bg": "#F7F2FA" },
+      "children": [
+        {
+          "id": "tbl_data",
+          "type": "table",
+          "rect": { "x": 16, "y": 32, "w": 212, "h": 140 },
+          "columns": [
+            { "title": "姓名", "w": 100 },
+            { "title": "城市" }
+          ],
+          "rows": [["张三", "上海"], ["李四", "成都"]],
+          "multi": true,
+          "check": true,
+          "events": {
+            "select": "on_table_select",
+            "check": "on_table_check"
+          }
+        },
+        {
+          "id": "btn_row_add",
+          "type": "button",
+          "rect": { "x": 16, "y": 182, "w": 95, "h": 32 },
+          "text": "加一行",
+          "events": { "click": "on_table_op" }
+        },
+        {
+          "id": "btn_row_clear",
+          "type": "button",
+          "rect": { "x": 119, "y": 182, "w": 95, "h": 32 },
+          "text": "清空",
+          "events": { "click": "on_table_op" }
+        }
+      ]
+    },
+    {
+      "id": "lst_event",
+      "type": "listbox",
+      "rect": { "x": 16, "y": 276, "w": 728, "h": 140 },
+      "items": []
+    },
+    {
+      "id": "sb_main",
+      "type": "statusbar",
+      "rect": { "x": 0, "y": 476, "w": 760, "h": 24 },
+      "items": ["就绪"]
+    }
+  ]
+}

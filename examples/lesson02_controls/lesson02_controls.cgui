@@ -1,0 +1,145 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "入门02 常用输入控件",
+    "width": 520,
+    "height": 460,
+    "bg": "#F3EDF7"
+  },
+  "widgets": [
+    {
+      "id": "grp_form",
+      "type": "group",
+      "rect": { "x": 16, "y": 16, "w": 488, "h": 266 },
+      "text": "用户资料（容器里的坐标是相对容器的）",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20", "bg": "#F7F2FA" },
+      "children": [
+        {
+          "id": "lab_name",
+          "type": "label",
+          "rect": { "x": 20, "y": 34, "w": 44, "h": 24 },
+          "text": "姓名",
+          "style": { "font": "Microsoft YaHei UI", "size": 9 }
+        },
+        {
+          "id": "edt_name",
+          "type": "edit",
+          "rect": { "x": 70, "y": 32, "w": 170, "h": 30 },
+          "text": "",
+          "style": { "font": "Microsoft YaHei UI", "size": 10 },
+          "events": { "change": "on_form_change" }
+        },
+        {
+          "id": "lab_age",
+          "type": "label",
+          "rect": { "x": 256, "y": 34, "w": 44, "h": 24 },
+          "text": "年龄",
+          "style": { "font": "Microsoft YaHei UI", "size": 9 }
+        },
+        {
+          "id": "spn_age",
+          "type": "spinner",
+          "rect": { "x": 302, "y": 32, "w": 86, "h": 30 },
+          "min": 1,
+          "max": 120,
+          "value": 24,
+          "events": { "change": "on_form_change" }
+        },
+        {
+          "id": "chk_vip",
+          "type": "checkbox",
+          "rect": { "x": 20, "y": 80, "w": 120, "h": 26 },
+          "text": "VIP 会员",
+          "events": { "change": "on_form_change" }
+        },
+        {
+          "id": "rad_male",
+          "type": "radio",
+          "rect": { "x": 158, "y": 80, "w": 76, "h": 26 },
+          "text": "男",
+          "checked": true,
+          "events": { "change": "on_form_change" }
+        },
+        {
+          "id": "rad_female",
+          "type": "radio",
+          "rect": { "x": 242, "y": 80, "w": 76, "h": 26 },
+          "text": "女",
+          "events": { "change": "on_form_change" }
+        },
+        {
+          "id": "lab_city",
+          "type": "label",
+          "rect": { "x": 20, "y": 122, "w": 44, "h": 24 },
+          "text": "城市",
+          "style": { "font": "Microsoft YaHei UI", "size": 9 }
+        },
+        {
+          "id": "cmb_city",
+          "type": "combo",
+          "rect": { "x": 70, "y": 120, "w": 170, "h": 200 },
+          "items": ["北京", "上海", "广州", "深圳"],
+          "events": { "select": "on_form_change" }
+        },
+        {
+          "id": "lab_level",
+          "type": "label",
+          "rect": { "x": 256, "y": 122, "w": 50, "h": 24 },
+          "text": "满意度",
+          "style": { "font": "Microsoft YaHei UI", "size": 9 }
+        },
+        {
+          "id": "sld_level",
+          "type": "slider",
+          "rect": { "x": 312, "y": 120, "w": 136, "h": 30 },
+          "min": 1,
+          "max": 5,
+          "value": 3,
+          "events": { "change": "on_form_change" }
+        },
+        {
+          "id": "lab_bar",
+          "type": "label",
+          "rect": { "x": 20, "y": 168, "w": 44, "h": 24 },
+          "text": "完成度",
+          "style": { "font": "Microsoft YaHei UI", "size": 9 }
+        },
+        {
+          "id": "prg_done",
+          "type": "progress",
+          "rect": { "x": 70, "y": 170, "w": 378, "h": 18 },
+          "min": 0,
+          "max": 100,
+          "value": 0
+        },
+        {
+          "id": "btn_reset",
+          "type": "button",
+          "rect": { "x": 70, "y": 204, "w": 120, "h": 36 },
+          "text": "重置",
+          "events": { "click": "on_reset_click" }
+        },
+        {
+          "id": "lab_hint",
+          "type": "label",
+          "rect": { "x": 206, "y": 210, "w": 250, "h": 24 },
+          "text": "点「重置」恢复上面所有默认值",
+          "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#79747E" }
+        }
+      ]
+    },
+    {
+      "id": "lab_summary",
+      "type": "label",
+      "rect": { "x": 16, "y": 296, "w": 488, "h": 120 },
+      "text": "",
+      "style": { "font": "Microsoft YaHei UI", "size": 10, "fg": "#1D1B20" }
+    },
+    {
+      "id": "sb_main",
+      "type": "statusbar",
+      "rect": { "x": 0, "y": 436, "w": 520, "h": 24 },
+      "items": ["就绪"]
+    }
+  ]
+}
