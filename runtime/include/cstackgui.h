@@ -42,6 +42,7 @@ extern "C" {
 /* ---------------------------------------------------------------- 事件 */
 
 typedef enum {
+    /* ---------------- 控件事件 ---------------- */
     CG_EVENT_CLICK = 0,   /* 单击 */
     CG_EVENT_DBLCLICK,    /* 双击 */
     CG_EVENT_CHANGE,      /* 内容 / 值 / 勾选变化 */
@@ -55,6 +56,31 @@ typedef enum {
     CG_EVENT_CHECK,       /* 表格行勾选状态变化（table 勾选列） */
     CG_EVENT_GOTFOCUS,    /* 获得键盘焦点 */
     CG_EVENT_LOSTFOCUS,   /* 失去键盘焦点 */
+
+    /* ---------------- 窗口级事件 ----------------
+     * 全部绑在窗口伪控件（id = CG_WINDOW_ID）上，写在 .cgui 的 app.events 里。
+     */
+    CG_EVENT_READY,         /* 创建完毕：窗口与全部控件建好、首次显示之后 */
+    CG_EVENT_DESTROY,       /* 将被销毁（窗口已销毁，进程即将退出） */
+    CG_EVENT_MOVE,          /* 位置被改变 */
+    CG_EVENT_SIZE,          /* 尺寸被改变 */
+    CG_EVENT_ACTIVATE,      /* 被激活（从别的程序切回来） */
+    CG_EVENT_DEACTIVATE,    /* 被取消激活 */
+    CG_EVENT_FIRSTACTIVATE, /* 首次激活 */
+    CG_EVENT_IDLE,          /* 空闲：消息队列空着时（别在这里做耗时的活） */
+    CG_EVENT_TRAY,          /* 托盘事件（用 cg_tray_action 问是哪种动作） */
+    CG_EVENT_SHOW,          /* 被显示 */
+    CG_EVENT_HIDE,          /* 被隐藏 */
+    CG_EVENT_CLOSEQUERY,    /* 窗口可否被关闭（与 close 同时机，两处都能拦） */
+    CG_EVENT_MOUSEDOWN,     /* 鼠标左键被按下 */
+    CG_EVENT_MOUSEUP,       /* 鼠标左键被放开 */
+    CG_EVENT_RDOWN,         /* 鼠标右键被按下 */
+    CG_EVENT_RUP,           /* 鼠标右键被放开 */
+    CG_EVENT_MOUSEMOVE,     /* 鼠标位置被移动 */
+    CG_EVENT_KEYDOWN,       /* 按下某键 */
+    CG_EVENT_KEYUP,         /* 放开某键 */
+    CG_EVENT_CHAR,          /* 字符输入 */
+    CG_EVENT_WHEEL,         /* 滚轮被滚动 */
     CG_EVENT_COUNT
 } cg_event_t;
 
@@ -78,6 +104,28 @@ typedef struct cg_widget cg_widget_t;
  *  @param user cg_widget_set_user() 挂上的业务数据，默认 NULL
  */
 typedef void (*cg_event_fn)(cg_widget_t *self, cg_event_t ev, void *user);
+
+/* ------------------------------------------------------ 事件参数（窗口事件用）
+ * 鼠标 / 按键 / 滚轮 / 托盘事件都带参数，但回调签名固定是三参数，
+ * 所以参数放在"最近一次事件"里，回调里用下面这些函数读：
+ *
+ *   static void on_keydown(cg_widget_t *self, cg_event_t ev, void *user) {
+ *       int key = cg_event_key(self);          // 键代码，见 VK_*
+ *       int fnk = cg_event_keys(self);         // 1=Ctrl 2=Shift 4=Alt（对齐）
+ *   }
+ *
+ * 坐标是相对窗口客户区的逻辑像素；非鼠标事件返回 0。
+ */
+int cg_event_x(const cg_widget_t *self);
+int cg_event_y(const cg_widget_t *self);
+/** 功能键状态：1=Ctrl 2=Shift 4=Alt，可位或 */
+int cg_event_keys(const cg_widget_t *self);
+/** 键代码（keydown / keyup 是虚拟键码，char 是字符码） */
+int cg_event_key(const cg_widget_t *self);
+/** 滚轮滚动量（正数向上）；非滚轮事件返回 0 */
+int cg_event_delta(const cg_widget_t *self);
+/** 托盘动作：1=左键单击 2=左键双击 3=右键单击 */
+int cg_tray_action(const cg_widget_t *self);
 
 /** 名字 -> 函数。表尾必须用 CG_BIND_END 结束。 */
 typedef struct {
@@ -141,6 +189,46 @@ int         cg_app_has_window(const cg_app_t *app);
 
 /** 把 .cgui 文档树打印到 stdout（调试/自检用） */
 void cg_dump_doc(cg_app_t *app);
+
+/* ------------------------------------------------------------ 窗口操作
+ * 都是运行时改窗口属性；.cgui 的 app 节点里也能写（窗口属性表见 docs/CGUI-FORMAT.md）。
+ */
+/** 移动窗口（top-left，屏幕坐标） */
+void cg_win_set_pos(cg_app_t *app, int x, int y);
+/** 改窗口客户区尺寸（逻辑像素，和 .cgui 的 width/height 同一套单位） */
+void cg_win_set_size(cg_app_t *app, int width, int height);
+/** 窗口居中（当前显示器工作区） */
+void cg_win_center(cg_app_t *app);
+/** 显示 / 隐藏窗口 */
+void cg_win_show(cg_app_t *app, int show);
+/** 最小化 / 最大化 / 还原：cmd 传 "min" / "max" / "normal" */
+void cg_win_set_state(cg_app_t *app, const char *cmd);
+/** 总在最前（1）或取消（0） */
+void cg_win_set_topmost(cg_app_t *app, int on);
+/** 改窗口图标（.ico 路径，同 .cgui 里 app.icon 的查找规则）；NULL 还原默认 */
+void cg_win_set_icon(cg_app_t *app, const char *ico_path);
+
+/* ------------------------------------------------------------ 托盘
+ * .cgui 的 app 里写 tray:true 会自动建托盘图标；也可以运行时代码调用。
+ * 托盘被点（左键单击 / 左键双击 / 右键单击）时派发 window 的 tray 事件，
+ * 回调里用 cg_tray_action() 分辨动作。
+ */
+/** 建/改托盘图标：ico_path 传 NULL 用窗口图标，tip 传 NULL 用窗口标题 */
+void cg_tray_set(cg_app_t *app, const char *ico_path, const char *tip);
+/** 移除托盘图标 */
+void cg_tray_remove(cg_app_t *app);
+/** 气泡提示（tip_title / text 都可 NULL） */
+void cg_tray_balloon(cg_app_t *app, const char *tip_title, const char *text);
+
+/* ------------------------------------------------------------ 程序配置（版本信息）
+ * 来自 .cgui 的 app.info（画布「程序配置」对话框填的那些），
+ * 编译时会被写进 exe 的版本信息，运行时也能读出来做「关于」对话框。
+ * 支持的 key："product"（程序名称）/"desc"（描述）/"comments"（备注）/"version"（版本号）
+ *              "author"/"company"/"copyright"/"address"/"postcode"/"phone"/"fax"
+ *              "email"/"homepage"/"build"（创建号）
+ * 没有的 key 返回 NULL。
+ */
+const char *cg_app_info(const cg_app_t *app, const char *key);
 
 /* ------------------------------------------------------------ 控件读取 */
 

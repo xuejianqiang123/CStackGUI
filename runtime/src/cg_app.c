@@ -26,6 +26,28 @@ static const char *const k_ev_names[CG_EVENT_COUNT] = {
     [CG_EVENT_CHECK]    = "check",
     [CG_EVENT_GOTFOCUS] = "gotfocus",
     [CG_EVENT_LOSTFOCUS] = "lostfocus",
+    /* 窗口级事件（绑在 __window 上，写在 .cgui 的 app.events 里） */
+    [CG_EVENT_READY]         = "ready",
+    [CG_EVENT_DESTROY]       = "destroy",
+    [CG_EVENT_MOVE]          = "move",
+    [CG_EVENT_SIZE]          = "size",
+    [CG_EVENT_ACTIVATE]      = "activate",
+    [CG_EVENT_DEACTIVATE]    = "deactivate",
+    [CG_EVENT_FIRSTACTIVATE] = "firstactivate",
+    [CG_EVENT_IDLE]          = "idle",
+    [CG_EVENT_TRAY]          = "tray",
+    [CG_EVENT_SHOW]          = "show",
+    [CG_EVENT_HIDE]          = "hide",
+    [CG_EVENT_CLOSEQUERY]    = "closequery",
+    [CG_EVENT_MOUSEDOWN]     = "mousedown",
+    [CG_EVENT_MOUSEUP]       = "mouseup",
+    [CG_EVENT_RDOWN]         = "rdown",
+    [CG_EVENT_RUP]           = "rup",
+    [CG_EVENT_MOUSEMOVE]     = "mousemove",
+    [CG_EVENT_KEYDOWN]       = "keydown",
+    [CG_EVENT_KEYUP]         = "keyup",
+    [CG_EVENT_CHAR]          = "char",
+    [CG_EVENT_WHEEL]         = "wheel",
 };
 
 /** @brief 事件名的规范写法，也是 .cgui 中 events 对象的键名 */
@@ -44,6 +66,54 @@ int cg_event_from_name(const char *name)
         if (strcmp(k_ev_names[i], name) == 0) return i;
     }
     return -1;
+}
+
+/* ------------------------------------------------------------ 事件参数
+ * 回调签名固定三个参数，鼠标/按键/滚轮/托盘的参数没法直接传，
+ * 就由后端在派发前写进控件的 ev_* 字段，回调里用下面这些读取。
+ */
+/** @brief 最近一次鼠标事件的 x（相对窗口客户区）；没有则 0 */
+int cg_event_x(const cg_widget_t *self) { return self ? self->ev_x : 0; }
+/** @brief 最近一次鼠标事件的 y（相对窗口客户区）；没有则 0 */
+int cg_event_y(const cg_widget_t *self) { return self ? self->ev_y : 0; }
+/** @brief 功能键状态：1=Ctrl 2=Shift 4=Alt（对齐） */
+int cg_event_keys(const cg_widget_t *self) { return self ? self->ev_keys : 0; }
+/** @brief 键代码（keydown/keyup 是虚拟键码，char 是字符码） */
+int cg_event_key(const cg_widget_t *self) { return self ? self->ev_key : 0; }
+/** @brief 滚轮滚动量（正数向上） */
+int cg_event_delta(const cg_widget_t *self) { return self ? self->ev_delta : 0; }
+/** @brief 托盘动作：1=左键单击 2=左键双击 3=右键单击 */
+int cg_tray_action(const cg_widget_t *self) { return self ? self->ev_action : 0; }
+
+/* ------------------------------------------------------------ 程序配置 */
+
+/**
+ * @brief 读程序配置（.cgui 的 app.info）里的一项
+ * @param app 应用
+ * @param key "product"/"desc"/"comments"/"version"/"build"/"author"/"company"/
+ *            "copyright"/"address"/"postcode"/"phone"/"fax"/"email"/"homepage"
+ * @return const char* 值（UTF-8）；没有返回 NULL
+ */
+const char *cg_app_info(const cg_app_t *app, const char *key)
+{
+    const cg_info_t *in;
+    if (!app || !key) return NULL;
+    in = &app->doc.info;
+    if (!strcmp(key, "product"))   return in->product;
+    if (!strcmp(key, "desc"))      return in->desc;
+    if (!strcmp(key, "comments"))  return in->comments;
+    if (!strcmp(key, "version"))   return in->version;
+    if (!strcmp(key, "build"))     return in->build;
+    if (!strcmp(key, "author"))    return in->author;
+    if (!strcmp(key, "company"))   return in->company;
+    if (!strcmp(key, "copyright")) return in->copyright;
+    if (!strcmp(key, "address"))   return in->address;
+    if (!strcmp(key, "postcode"))  return in->postcode;
+    if (!strcmp(key, "phone"))     return in->phone;
+    if (!strcmp(key, "fax"))       return in->fax;
+    if (!strcmp(key, "email"))     return in->email;
+    if (!strcmp(key, "homepage"))  return in->homepage;
+    return NULL;
 }
 
 /* ------------------------------------------------------------ 控件生命周期 */
@@ -1443,6 +1513,17 @@ static void selftest_walk(cg_app_t *app, cg_widget_t *w, selftest_stat_t *st, in
     (void)depth;
 
     if (w->is_window) {
+        /* 窗口级事件：不合成触发（会真的关窗/退出），但要确认回调名在 C 侧登记过，
+         * 否则事件名抄错在自检里看不出来。 */
+        for (int i = 0; i < CG_EVENT_COUNT; i++) {
+            if (!w->node || !w->node->ev[i]) continue;
+            if (!cg_kind_supports_event(w->type, (cg_event_t)i)) continue;
+            if (w->handlers[i]) continue;
+            fprintf(stderr, "  [FAIL] %-10s #%-14s %-13s 绑定 \"%s\" 未在 C 侧登记\n",
+                    "window", w->id ? w->id : "-",
+                    cg_event_name((cg_event_t)i), w->node->ev[i]);
+            st->unresolved++;
+        }
         for (size_t i = 0; i < w->nchildren; i++) selftest_walk(app, w->children[i], st, depth);
         return;
     }

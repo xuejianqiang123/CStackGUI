@@ -17,6 +17,7 @@
 #include <windows.h>
 #include <commctrl.h>
 #include <commdlg.h>
+#include <shellapi.h>   /* 托盘图标 Shell_NotifyIcon */
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,6 +53,10 @@ typedef struct {
     int             focused_widget;
     UINT_PTR        timer_id;
     HWND            tooltip;    /* 整窗一个的悬停提示控件 */
+    HICON           icon;       /* 我们自己 LoadImage 出来的窗口图标，退出时要 DestroyIcon */
+    int             tray_on;    /* 托盘图标已建 */
+    int             activated;  /* 首次激活已经发过了 */
+    unsigned long   tray_click_tick; /* 托盘左键单击/双击判定 */
 } cg_win_state_t;
 
 #define CG_PANEL_CLASS L"CStackGUIPanel"
@@ -60,6 +65,10 @@ typedef struct {
 #define CG_PROGRESS_CLASS L"CStackGUIProgress"
 #define CG_CANVAS_CLASS L"CStackGUICanvas"
 #define CG_TIMER_ID    1
+
+/* 托盘图标的回调消息。放 WM_APP 段，避免和窗口消息撞号。 */
+#define CG_TRAY_CALLBACK (WM_APP + 1)
+#define CG_TRAY_ID       1
 
 /* 时钟（timer）控件没有自己的窗口，Win32 定时器 id 直接复用 ctrl_id，
  * 这样 WM_TIMER 里按 wp 反查一次就能找到控件。 */
@@ -222,7 +231,8 @@ static DWORD style_of(const cg_widget_t *w)
     if (!strcmp(w->type, "browser"))   return s_atl_ok ? (WS_CHILD | WS_VISIBLE | WS_TABSTOP)
                                                        : (WS_CHILD | WS_VISIBLE | SS_CENTER | SS_CENTERIMAGE);
     if (!strcmp(w->type, "statusbar")) return WS_CHILD | WS_VISIBLE;
-    if (!strcmp(w->type, "spinner"))   return WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_NUMBER | ES_RIGHT | ES_AUTOHSCROLL;
+    /* 微调框：数字左对齐（原先 ES_RIGHT 在窄框里会贴着箭头，很难看） */
+    if (!strcmp(w->type, "spinner"))   return WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_NUMBER | ES_LEFT | ES_AUTOHSCROLL;
     /* group / box：自己注册的面板类，能装子控件 */
     return WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_BORDER;
 }
@@ -641,39 +651,41 @@ static void dir_of(const char *path, char *out, size_t size)
     out[n] = '\0';
 }
 
-/** 打开图片成位图。路径按三处依次找：
+/** 资产路径按三处依次找：
  *  1) 原样（相对当前目录）  2) 相对 .cgui 所在目录  3) 相对 exe 所在目录
- *  第 2 条最符合直觉：.cgui 和 assets\ 放在一起，换台机器整个目录搬走也能用。 */
+ *  第 2 条最符合直觉：.cgui 和 assets\ 放在一起，换台机器整个目录搬走也能用。
+ *  找到返回 1，并把完整路径写进 out。 */
+static int resolve_asset(const cg_app_t *app, const char *path, char *out, size_t outsz)
+{
+    if (!path || !*path || outsz == 0) return 0;
+    snprintf(out, outsz, "%s", path);
+    if (file_exists(out)) return 1;
+    if (app && app->cgui_dir) {
+        snprintf(out, outsz, "%s\\%s", app->cgui_dir, path);
+        if (file_exists(out)) return 1;
+    }
+    {
+        char exe[512], dir[512];
+        if (cg_exe_path(exe, sizeof(exe)) == 0) {
+            dir_of(exe, dir, sizeof(dir));
+            snprintf(out, outsz, "%s\\%s", dir, path);
+            if (file_exists(out)) return 1;
+        }
+    }
+    return 0;
+}
+
+/** 打开图片成位图（路径查找见 resolve_asset） */
 static HBITMAP load_image_file(const cg_app_t *app, const char *path)
 {
     char   full[1024];
-    char   base[512];
     WCHAR *wpath;
     void  *gdip_bmp = NULL;
     HBITMAP hbmp = NULL;
     int     need;
-    int     found = 0;
 
     if (!path || !*path) return NULL;
-
-    snprintf(full, sizeof(full), "%s", path);
-    if (file_exists(full)) {
-        found = 1;
-    } else {
-        if (app && app->cgui_dir) {
-            snprintf(full, sizeof(full), "%s\\%s", app->cgui_dir, path);
-            if (file_exists(full)) found = 1;
-        }
-        if (!found) {
-            char exe[512], dir[512];
-            if (cg_exe_path(exe, sizeof(exe)) == 0) {
-                dir_of(exe, dir, sizeof(dir));
-                snprintf(full, sizeof(full), "%s\\%s", dir, path);
-                if (file_exists(full)) found = 1;
-            }
-        }
-    }
-    if (!found) return NULL;
+    if (!resolve_asset(app, path, full, sizeof(full))) return NULL;
 
     need = MultiByteToWideChar(CP_UTF8, 0, full, -1, NULL, 0);
     if (need <= 0) return NULL;
@@ -686,9 +698,85 @@ static HBITMAP load_image_file(const cg_app_t *app, const char *path)
         GdipDisposeImage(gdip_bmp);
     }
     free(wpath);
-    (void)base;
     return hbmp;
 }
+
+/** 打开 .ico 成 HICON（路径查找见 resolve_asset）；找不到返回 NULL */
+static HICON load_icon_file(const cg_app_t *app, const char *path)
+{
+    char    full[1024];
+    WCHAR  *wp;
+    HICON   ic = NULL;
+    int     need;
+
+    if (!path || !*path) return NULL;
+    if (!resolve_asset(app, path, full, sizeof(full))) return NULL;
+
+    need = MultiByteToWideChar(CP_UTF8, 0, full, -1, NULL, 0);
+    if (need <= 0) return NULL;
+    wp = (WCHAR *)malloc((size_t)need * sizeof(WCHAR));
+    if (!wp) return NULL;
+    MultiByteToWideChar(CP_UTF8, 0, full, -1, wp, need);
+    ic = (HICON)LoadImageW(NULL, wp, IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE);
+    free(wp);
+    return ic;
+}
+
+/** 鼠标指针名 -> 系统光标 id（.cgui 的 app.cursor，对齐「鼠标指针」属性） */
+static LPCWSTR cursor_id_of(const char *name)
+{
+    if (!name || !*name) return NULL;
+    if (!strcmp(name, "arrow"))    return IDC_ARROW;
+    if (!strcmp(name, "hand"))     return IDC_HAND;
+    if (!strcmp(name, "ibeam"))    return IDC_IBEAM;
+    if (!strcmp(name, "wait"))     return IDC_WAIT;
+    if (!strcmp(name, "cross"))    return IDC_CROSS;
+    if (!strcmp(name, "sizeall"))  return IDC_SIZEALL;
+    if (!strcmp(name, "sizens"))   return IDC_SIZENS;
+    if (!strcmp(name, "sizewe"))   return IDC_SIZEWE;
+    if (!strcmp(name, "sizenesw")) return IDC_SIZENESW;
+    if (!strcmp(name, "sizenwse")) return IDC_SIZENWSE;
+    if (!strcmp(name, "no"))       return IDC_NO;
+    if (!strcmp(name, "help"))     return IDC_HELP;
+    if (!strcmp(name, "uparrow"))  return IDC_UPARROW;
+    return IDC_ARROW;
+}
+
+/**
+ * @brief .cgui 的窗口属性 -> Win32 窗口样式
+ * @param d 文档（取 border/controlBox/minimizeBox/maximizeBox/topmost/taskbar）
+ * @param exstyle 出参：扩展样式
+ * @return DWORD 窗口样式
+ * @note border 不写按 "sizable"（可拉伸），和加属性之前的老行为一致
+ */
+static DWORD style_of_doc(const cg_doc_t *d, DWORD *exstyle)
+{
+    const char *bd = (d->border && *d->border) ? d->border : "sizable";
+    DWORD style = WS_OVERLAPPED | WS_CAPTION;
+
+    if (!strcmp(bd, "none")) {
+        style = WS_POPUP;                 /* 无边框：自己画标题栏那种 */
+    } else if (!strcmp(bd, "dialog")) {
+        style |= WS_SYSMENU;              /* 固定对话框：只有关闭钮，不可拉伸 */
+    } else {
+        if (!strcmp(bd, "sizable")) style |= WS_THICKFRAME;
+        style |= WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+    }
+
+    /* 按钮开关只在有系统菜单时成立（没有 WS_SYSMENU 时这两个位会被系统忽略） */
+    if (style & WS_SYSMENU) {
+        if (!d->control_box) style &= ~WS_SYSMENU;
+        if (!d->min_box) style &= ~WS_MINIMIZEBOX;
+        if (!d->max_box) style &= ~WS_MAXIMIZEBOX;
+    }
+
+    *exstyle = 0;
+    if (d->topmost) *exstyle |= WS_EX_TOPMOST;      /* 总在最前 */
+    if (!d->taskbar) *exstyle |= WS_EX_TOOLWINDOW;  /* 不在任务栏出现（Alt-Tab 也不出现） */
+    return style;
+}
+
+
 
 /** 图片控件：按控件大小 StretchBlt，缺图时画占位框 */
 static LRESULT CALLBACK ImageProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
@@ -1660,7 +1748,118 @@ static void notify_from(cg_app_t *app, HWND hwnd, int code, int cmd_id)
 
 static void sync_widget(cg_widget_t *w);
 
-/** @brief 主窗口过程：命令/通知分派、自绘、配色、DPI、时钟、关闭流程 */
+/* ------------------------------------------------------------ 窗口级事件支撑 */
+
+/**
+ * @brief 给窗口伪控件派发窗口级事件
+ * @param app 应用
+ * @param ev 事件（ready/size/activate/keydown... 见 cg_event_t）
+ * @note 和控件通知共用 s_in_notify 防重入：回调里再触发窗口消息不会套娃
+ */
+static void win_emit(cg_app_t *app, cg_event_t ev)
+{
+    if (!app || !app->window || s_in_notify) return;
+    s_in_notify = 1;
+    cg_dispatch(app->window, ev);
+    s_in_notify = 0;
+}
+
+/** @brief 鼠标消息的按键组合 -> 1=Ctrl 2=Shift 4=Alt（对齐「功能键状态」） */
+static int mods_from_mouse(WPARAM wp)
+{
+    int m = 0;
+    if (wp & MK_CONTROL) m |= 1;
+    if (wp & MK_SHIFT) m |= 2;
+    if (GetKeyState(VK_MENU) & 0x8000) m |= 4;
+    return m;
+}
+
+/** @brief 键盘消息的按键组合 -> 1=Ctrl 2=Shift 4=Alt */
+static int mods_from_key(void)
+{
+    int m = 0;
+    if (GetKeyState(VK_CONTROL) & 0x8000) m |= 1;
+    if (GetKeyState(VK_SHIFT) & 0x8000) m |= 2;
+    if (GetKeyState(VK_MENU) & 0x8000) m |= 4;
+    return m;
+}
+
+/** @brief 把鼠标消息的客户区坐标与按键状态写进窗口伪控件（回调里读 cg_event_x/y/keys） */
+static void fill_mouse(cg_app_t *app, WPARAM wp, LPARAM lp)
+{
+    cg_widget_t *w = app ? app->window : NULL;
+    if (!w) return;
+    w->ev_x = (int)(short)LOWORD(lp);
+    w->ev_y = (int)(short)HIWORD(lp);
+    w->ev_keys = mods_from_mouse(wp);
+}
+
+/**
+ * @brief 托盘图标回调：左键单击显示窗口、左键双击、右键弹默认菜单，并派发 tray 事件
+ * @param app 应用
+ * @param hwnd 主窗口
+ * @param lp 鼠标消息（WM_LBUTTONUP 等）
+ * @return void
+ * @note 业务绑了 tray 事件就能自己接管动作；没绑也有「显示/退出」的默认行为，不会变成孤儿图标
+ */
+static void tray_callback(cg_app_t *app, HWND hwnd, WPARAM wp, LPARAM lp)
+{
+    cg_win_state_t *st = app ? (cg_win_state_t *)app->natives : NULL;
+    cg_widget_t *w = app ? app->window : NULL;
+    unsigned long now;
+    int action = 0;
+
+    (void)wp;
+    if (!st) return;
+
+    if (lp == WM_LBUTTONUP || lp == WM_LBUTTONDBLCLK) {
+        action = 1;
+        if (lp == WM_LBUTTONDBLCLK) {
+            action = 2;
+        } else {
+            /* 托盘的单/双击要自己判：两次单击间隔在双击时间内就升格为双击 */
+            now = GetTickCount();
+            if (st->tray_click_tick && now - st->tray_click_tick <= GetDoubleClickTime()) action = 2;
+            st->tray_click_tick = now;
+        }
+        if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE);
+        else ShowWindow(hwnd, SW_SHOW);
+        SetForegroundWindow(hwnd);
+    } else if (lp == WM_RBUTTONUP) {
+        action = 3;
+        /* 右键：默认给一个「显示窗口 / 退出」菜单。
+         * TrackPopupMenu 自己跑消息循环，弹之前必须放开防重入锁。 */
+        HMENU m = CreatePopupMenu();
+        if (m) {
+            POINT pt;
+            int cmd, keep = s_in_notify;
+            AppendMenuW(m, MF_STRING, 1, L"显示窗口");
+            AppendMenuW(m, MF_SEPARATOR, 0, NULL);
+            AppendMenuW(m, MF_STRING, 2, L"退出");
+            GetCursorPos(&pt);
+            SetForegroundWindow(hwnd);
+            s_in_notify = 0;
+            cmd = (int)TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON,
+                                      pt.x, pt.y, 0, hwnd, NULL);
+            s_in_notify = keep;
+            DestroyMenu(m);
+            if (cmd == 1) {
+                if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE);
+                else ShowWindow(hwnd, SW_SHOW);
+                SetForegroundWindow(hwnd);
+            } else if (cmd == 2) {
+                PostMessageW(hwnd, WM_CLOSE, 0, 0);
+            }
+        }
+    } else {
+        return;   /* 其它托盘消息（气泡被点等）不派发 */
+    }
+
+    if (w) w->ev_action = action;
+    win_emit(app, CG_EVENT_TRAY);
+}
+
+/** @brief 主窗口过程：命令/通知分派、自绘、配色、DPI、时钟、窗口事件、关闭流程 */
 static LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     cg_app_t *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
@@ -1678,7 +1877,16 @@ static LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             cg_dispatch_menu_cmd(app, (int)LOWORD(wp));
             return 0;
         }
-        /* IsDialogMessage 把回车变成 IDOK/IDCANCEL：交给当前焦点控件当 SUBMIT 用 */
+        /* IsDialogMessage 把回车变成 IDOK、Esc 变成 IDCANCEL：
+         * 默认当 SUBMIT 用；app.enterTab / app.escClose 可以改成"回车下移焦点 / Esc 关窗" */
+        if (LOWORD(wp) == IDOK && app->doc.enter_tab) {
+            SendMessageW(hwnd, WM_NEXTDLGCTL, 0, FALSE);
+            return 0;
+        }
+        if (LOWORD(wp) == IDCANCEL && app->doc.esc_close) {
+            PostMessageW(hwnd, WM_CLOSE, 0, 0);
+            return 0;
+        }
         if (LOWORD(wp) == IDOK || LOWORD(wp) == IDCANCEL) {
             HWND focus = GetFocus();
             if (focus) {
@@ -1779,6 +1987,13 @@ static LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                     SetBkMode(dc, OPAQUE);
                     return (LRESULT)brush_for(w->style.bg);
                 }
+                /* 没设背景色：标签 / 链接 / 分割线默认透明，透出窗口底色
+                 * （要底色就在属性里设「背景色」；edit 类由系统画白底，不动它） */
+                if (is_t(w, "label") || is_t(w, "link") || is_t(w, "separator")) {
+                    cg_win_state_t *st = (cg_win_state_t *)app->natives;
+                    SetBkMode(dc, TRANSPARENT);
+                    return (LRESULT)((st && st->bg_brush) ? st->bg_brush : GetStockObject(NULL_BRUSH));
+                }
             }
         }
         break;
@@ -1827,10 +2042,115 @@ static LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         return 0;
     }
+    /* ---- 窗口级事件：原生窗口消息派发给 __window（「启动窗口」事件表） ---- */
+    case WM_MOVE:
+        if (app && app->window) {
+            RECT r;
+            GetWindowRect(hwnd, &r);
+            app->window->ev_x = r.left;    /* 位置被改变：窗口在屏幕上的左上角 */
+            app->window->ev_y = r.top;
+        }
+        win_emit(app, CG_EVENT_MOVE);
+        break;
+    case WM_SIZE:
+        if (app && app->window) {
+            app->window->ev_x = (int)(short)LOWORD(lp);   /* 尺寸被改变：新的客户区宽高 */
+            app->window->ev_y = (int)(short)HIWORD(lp);
+        }
+        win_emit(app, CG_EVENT_SIZE);
+        break;
+    case WM_ACTIVATE: {
+        int active = (LOWORD(wp) != WA_INACTIVE);
+        if (app && active) {
+            cg_win_state_t *wst = (cg_win_state_t *)app->natives;
+            if (wst && !wst->activated) {
+                wst->activated = 1;
+                win_emit(app, CG_EVENT_FIRSTACTIVATE);
+            }
+        }
+        win_emit(app, active ? CG_EVENT_ACTIVATE : CG_EVENT_DEACTIVATE);
+        break;
+    }
+    case WM_SHOWWINDOW:
+        win_emit(app, wp ? CG_EVENT_SHOW : CG_EVENT_HIDE);
+        break;
+    case WM_SETFOCUS:
+        win_emit(app, CG_EVENT_GOTFOCUS);
+        break;
+    case WM_KILLFOCUS: {
+        /* 焦点只是挪到本窗口的某个控件上不算"窗口失去焦点"，
+         * 否则 Tab 一下用户就收到一次失焦事件。 */
+        HWND nf = (HWND)wp;
+        if (nf && IsChild(hwnd, nf)) break;
+        win_emit(app, CG_EVENT_LOSTFOCUS);
+        break;
+    }
+    case WM_LBUTTONDOWN:
+        fill_mouse(app, wp, lp);
+        win_emit(app, CG_EVENT_MOUSEDOWN);
+        break;
+    case WM_LBUTTONUP:
+        fill_mouse(app, wp, lp);
+        win_emit(app, CG_EVENT_MOUSEUP);
+        break;
+    case WM_LBUTTONDBLCLK:
+        fill_mouse(app, wp, lp);
+        win_emit(app, CG_EVENT_DBLCLICK);
+        break;
+    case WM_RBUTTONDOWN:
+        fill_mouse(app, wp, lp);
+        win_emit(app, CG_EVENT_RDOWN);
+        break;
+    case WM_RBUTTONUP:
+        fill_mouse(app, wp, lp);
+        win_emit(app, CG_EVENT_RUP);
+        break;
+    case WM_MOUSEMOVE:
+        fill_mouse(app, wp, lp);
+        win_emit(app, CG_EVENT_MOUSEMOVE);
+        break;
+    case WM_MOUSEWHEEL:
+        if (app && app->window) {
+            /* 滚轮消息的坐标是屏幕坐标，先换成客户区；MK_ 位在 wParam 低字 */
+            POINT pt;
+            pt.x = (int)(short)LOWORD(lp);
+            pt.y = (int)(short)HIWORD(lp);
+            ScreenToClient(hwnd, &pt);
+            app->window->ev_x = pt.x;
+            app->window->ev_y = pt.y;
+            app->window->ev_keys = mods_from_mouse(LOWORD(wp));
+            app->window->ev_delta = (int)(short)HIWORD(wp);
+        }
+        win_emit(app, CG_EVENT_WHEEL);
+        break;
+    case WM_KEYDOWN:
+    case WM_SYSKEYDOWN:
+        if (app && app->window) {
+            app->window->ev_key = (int)wp;
+            app->window->ev_keys = mods_from_key();
+        }
+        win_emit(app, CG_EVENT_KEYDOWN);
+        break;
+    case WM_KEYUP:
+    case WM_SYSKEYUP:
+        if (app && app->window) {
+            app->window->ev_key = (int)wp;
+            app->window->ev_keys = mods_from_key();
+        }
+        win_emit(app, CG_EVENT_KEYUP);
+        break;
+    case WM_CHAR:
+        if (app && app->window) app->window->ev_key = (int)wp;
+        win_emit(app, CG_EVENT_CHAR);
+        break;
+    case CG_TRAY_CALLBACK:
+        tray_callback(app, hwnd, wp, lp);
+        return 0;
     case WM_CLOSE: {
         if (app && app->window) {
             app->close_cancel = 0;
-            cg_dispatch(app->window, CG_EVENT_CLOSE);
+            cg_dispatch(app->window, CG_EVENT_CLOSE);       /* 可否被关闭 */
+            cg_dispatch(app->window, CG_EVENT_CLOSEQUERY);  /* 窗口可否被关闭（同一时机） */
             /* 回调里调了 cg_cancel_close() 就先别关（"还有没保存的东西"那种） */
             if (app->close_cancel && !app->quit) return 0;
         }
@@ -1838,6 +2158,7 @@ static LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     }
     case WM_DESTROY:
+        win_emit(app, CG_EVENT_DESTROY);
         PostQuitMessage(0);
         return 0;
     default:
@@ -1999,8 +2320,9 @@ static void create_native(cg_widget_t *w)
     }
     w->native = h;
 
-    /* 输入框圆角：用窗口区域裁成圆角（Subclass 在 resize 时重裁），Win32 原生 EDIT 不支持 owner-draw */
-    if (!strcmp(type, "edit") || !strcmp(type, "multiedit"))
+    /* 输入框圆角 + 单行文字垂直居中（spinner 的输入框也是 EDIT，同样要）
+     * Subclass 在 resize/换字体时重算，Win32 原生 EDIT 不支持 owner-draw */
+    if (!strcmp(type, "edit") || !strcmp(type, "multiedit") || !strcmp(type, "spinner"))
         cg_skin_apply_edit(w);
 
     if (!strcmp(type, "group") || !strcmp(type, "box") ||
@@ -2030,6 +2352,9 @@ static void create_native(cg_widget_t *w)
             SendMessageW(up, UDM_SETRANGE32, (WPARAM)w->vmin, (LPARAM)w->vmax);
             SendMessageW(up, UDM_SETPOS32, 0, (LPARAM)w->value);
             w->native2 = up;
+            /* UDS_ALIGNRIGHT 的箭头会给 buddy 重设边距、把我们的左边距清成 0（文字顶到
+             * 圆角边框上）。这里重设左边距；右边距留给箭头，别覆盖。 */
+            SendMessageW(h, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(6, 0));
         }
     }
 
@@ -2598,7 +2923,13 @@ static int win_init(cg_app_t *app)
     WNDCLASSEXW wc;
     HWND hwnd;
     int  dpi = 96;
-    RECT rc;
+    RECT  rc;
+    int   ww, wh;
+    DWORD wstyle = 0, wexstyle = 0;
+    int   wx = CW_USEDEFAULT, wy = CW_USEDEFAULT;
+    HICON wicon = NULL;
+    LPCWSTR wclass = L"CStackGUIMain", wcursor;
+    wchar_t *wclass_buf = NULL;
     wchar_t *wtitle;
     HINSTANCE inst = GetModuleHandleW(NULL);
 
@@ -2665,29 +2996,64 @@ static int win_init(cg_app_t *app)
         }
     }
 
+    /* ---- 窗口属性（.cgui 的 app 节点 = 画布「属性」面板那一栏） ---- */
+    wstyle = style_of_doc(&app->doc, &wexstyle);
+    wcursor = cursor_id_of(app->doc.cursor);
+    wicon = load_icon_file(app, app->doc.icon);   /* 找不到就是 NULL，退回系统默认图标 */
+    st->icon = wicon;
+    if (app->doc.class_name && *app->doc.class_name) {
+        wclass_buf = wc_from_utf8(app->doc.class_name);
+        if (wclass_buf) wclass = wclass_buf;
+    }
+
     memset(&wc, 0, sizeof(wc));
     wc.cbSize = sizeof(wc);
     wc.style = CS_HREDRAW | CS_VREDRAW;
     wc.lpfnWndProc = MainProc;
     wc.hInstance = inst;
-    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
-    wc.hIcon = LoadIconW(NULL, IDI_APPLICATION);
-    wc.lpszClassName = L"CStackGUIMain";
-    if (!RegisterClassExW(&wc)) return -1;
+    wc.hCursor = LoadCursorW(NULL, wcursor ? wcursor : IDC_ARROW);
+    wc.hIcon = wicon ? wicon : LoadIconW(NULL, IDI_APPLICATION);
+    wc.lpszClassName = wclass;
+    if (!RegisterClassExW(&wc)) {
+        free(wclass_buf);
+        return -1;
+    }
 
     rc.left = 0; rc.top = 0;
     rc.right = app->doc.width;
     rc.bottom = app->doc.height;
-    AdjustWindowRectEx(&rc, WS_OVERLAPPEDWINDOW, FALSE, 0);
+    AdjustWindowRectEx(&rc, wstyle, FALSE, wexstyle);
+    ww = rc.right - rc.left;
+    wh = rc.bottom - rc.top;
+
+    if (app->doc.has_pos) {
+        wx = app->doc.x;
+        wy = app->doc.y;
+    }
+    if (app->doc.center) {
+        /* 居中：按主显示器的工作区算（任务栏那块不算数） */
+        MONITORINFO mi;
+        memset(&mi, 0, sizeof(mi));
+        mi.cbSize = sizeof(mi);
+        if (GetMonitorInfoW(MonitorFromPoint((POINT){0, 0}, MONITOR_DEFAULTTOPRIMARY), &mi)) {
+            wx = mi.rcWork.left + (mi.rcWork.right - mi.rcWork.left - ww) / 2;
+            wy = mi.rcWork.top + (mi.rcWork.bottom - mi.rcWork.top - wh) / 2;
+        }
+    }
 
     wtitle = wc_from_utf8(app->doc.title);
-    hwnd = CreateWindowExW(0, L"CStackGUIMain", wtitle ? wtitle : L"CStackGUI",
-                           WS_OVERLAPPEDWINDOW,
-                           CW_USEDEFAULT, CW_USEDEFAULT,
-                           rc.right - rc.left, rc.bottom - rc.top,
+    hwnd = CreateWindowExW(wexstyle, wclass, wtitle ? wtitle : L"CStackGUI",
+                           wstyle, wx, wy, ww, wh,
                            NULL, NULL, inst, app);
     free(wtitle);
+    free(wclass_buf);
     if (!hwnd) return -1;
+
+    /* 任务栏/Alt-Tab 用的小图标也换成自己的 */
+    if (wicon) {
+        SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)wicon);
+        SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)wicon);
+    }
 
     app->hwnd = hwnd;
 
@@ -2780,7 +3146,15 @@ static int win_init(cg_app_t *app)
         }
     }
 
-    ShowWindow(hwnd, SW_SHOW);
+    /* 初始状态：禁止（整窗禁用）/ 托盘图标 */
+    if (!app->doc.enabled) EnableWindow(hwnd, FALSE);
+    if (app->doc.tray) cg_tray_set(app, NULL, NULL);
+
+    /* 创建完毕：控件都建好了、窗口还没显示出来之前派发，
+     * 回调里可以调窗口/控件 API（也因此 首次激活 排在它后面）。 */
+    win_emit(app, CG_EVENT_READY);
+
+    ShowWindow(hwnd, app->doc.visible ? SW_SHOW : SW_HIDE);
     UpdateWindow(hwnd);
     return 0;
 }
@@ -2789,10 +3163,20 @@ static int win_init(cg_app_t *app)
 static int win_run(cg_app_t *app)
 {
     MSG msg;
-    while (GetMessageW(&msg, NULL, 0, 0) > 0 && !app->quit) {
-        if (!IsDialogMessageW((HWND)app->hwnd, &msg)) {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
+
+    /* 用 PeekMessage + WaitMessage 而不是 GetMessage：
+     * 队列空的时候正好是「空闲」事件的时机 —— 处理完就睡，不空转烧 CPU。 */
+    for (;;) {
+        if (app->quit) break;
+        if (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
+            if (msg.message == WM_QUIT) break;
+            if (!IsDialogMessageW((HWND)app->hwnd, &msg)) {
+                TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+        } else {
+            win_emit(app, CG_EVENT_IDLE);
+            WaitMessage();   /* 睡到有消息为止；下一个心跳靠 WM_TIMER 叫醒 */
         }
     }
     return 0;
@@ -2803,11 +3187,16 @@ static void win_shutdown(cg_app_t *app)
 {
     cg_win_state_t *st = (cg_win_state_t *)app->natives;
     if (!st) return;
+    cg_tray_remove(app);   /* 托盘图标不主动摘，会一直留在通知区里 */
     if (st->timer_id) KillTimer((HWND)app->hwnd, CG_TIMER_ID);
     for (cg_widget_t *w = app->widgets; w; w = w->next) {
         if (is_t(w, "timer")) KillTimer((HWND)app->hwnd, (UINT_PTR)w->ctrl_id);
     }
     if (app->hwnd) DestroyWindow((HWND)app->hwnd);
+    if (st->icon) {
+        DestroyIcon(st->icon);
+        st->icon = NULL;
+    }
     s_app = NULL;
     for (cg_widget_t *w = app->widgets; w; w = w->next) {
         if (w->bitmap) {
@@ -2867,6 +3256,191 @@ unsigned long cg_double_click_ms(void)
 {
     UINT t = GetDoubleClickTime();
     return t ? (unsigned long)t : 500;
+}
+
+/* ============================================================ 窗口操作 / 托盘
+ * .cgui 的 app 节点能一次性写好的窗口属性在这里也能运行时改。
+ * 没有窗口（--selftest）时全部空转，业务代码不用自己判。
+ */
+
+/** @brief 主窗口句柄；没有窗口返回 NULL（窗口类 API 的统一守卫） */
+static HWND win_hwnd_of(const cg_app_t *app)
+{
+    return (app && app->hwnd) ? (HWND)app->hwnd : NULL;
+}
+
+/** @brief 移动窗口到屏幕坐标 x,y */
+void cg_win_set_pos(cg_app_t *app, int x, int y)
+{
+    HWND h = win_hwnd_of(app);
+    if (!h) return;
+    SetWindowPos(h, NULL, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+/** @brief 改窗口客户区尺寸（width/height 是逻辑像素，和 .cgui 里同一套单位） */
+void cg_win_set_size(cg_app_t *app, int width, int height)
+{
+    HWND h = win_hwnd_of(app);
+    RECT rc;
+    DWORD style, ex;
+    if (!h || width <= 0 || height <= 0) return;
+    style = (DWORD)GetWindowLongPtrW(h, GWL_STYLE);
+    ex = (DWORD)GetWindowLongPtrW(h, GWL_EXSTYLE);
+    rc.left = 0; rc.top = 0; rc.right = width; rc.bottom = height;
+    /* 带上菜单标志：客户区尺寸才是调用者要的那个数，不含标题栏/边框/菜单栏 */
+    AdjustWindowRectEx(&rc, style, GetMenu(h) != NULL, ex);
+    SetWindowPos(h, NULL, 0, 0, rc.right - rc.left, rc.bottom - rc.top,
+                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+/** @brief 把窗口移到当前显示器工作区正中 */
+void cg_win_center(cg_app_t *app)
+{
+    HWND h = win_hwnd_of(app);
+    RECT wr;
+    MONITORINFO mi;
+    if (!h) return;
+    GetWindowRect(h, &wr);
+    memset(&mi, 0, sizeof(mi));
+    mi.cbSize = sizeof(mi);
+    if (!GetMonitorInfoW(MonitorFromWindow(h, MONITOR_DEFAULTTONEAREST), &mi)) return;
+    SetWindowPos(h, NULL,
+                 mi.rcWork.left + (mi.rcWork.right - mi.rcWork.left - (wr.right - wr.left)) / 2,
+                 mi.rcWork.top + (mi.rcWork.bottom - mi.rcWork.top - (wr.bottom - wr.top)) / 2,
+                 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+/** @brief 显示（show!=0）或隐藏窗口 */
+void cg_win_show(cg_app_t *app, int show)
+{
+    HWND h = win_hwnd_of(app);
+    if (h) ShowWindow(h, show ? SW_SHOW : SW_HIDE);
+}
+
+/** @brief 最小化 / 最大化 / 还原；cmd 传 "min" / "max" / "normal" */
+void cg_win_set_state(cg_app_t *app, const char *cmd)
+{
+    HWND h = win_hwnd_of(app);
+    if (!h) return;
+    if (cmd && !strcmp(cmd, "min"))         ShowWindow(h, SW_MINIMIZE);
+    else if (cmd && !strcmp(cmd, "max"))    ShowWindow(h, SW_MAXIMIZE);
+    else                                    ShowWindow(h, SW_RESTORE);
+}
+
+/** @brief 总在最前（on!=0）或取消置顶 */
+void cg_win_set_topmost(cg_app_t *app, int on)
+{
+    HWND h = win_hwnd_of(app);
+    if (!h) return;
+    SetWindowPos(h, on ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+}
+
+/** @brief 换窗口图标（.ico 路径按 resolve_asset 找）；传 NULL 还原系统默认图标 */
+void cg_win_set_icon(cg_app_t *app, const char *ico_path)
+{
+    cg_win_state_t *st = app ? (cg_win_state_t *)app->natives : NULL;
+    HWND h;
+    HICON ic = NULL, use;
+
+    if (!app) return;
+    h = win_hwnd_of(app);
+    if (ico_path && *ico_path) ic = load_icon_file(app, ico_path);
+
+    if (st) {
+        if (st->icon) DestroyIcon(st->icon);   /* 上一张是我们自己 LoadImage 的，要还 */
+        st->icon = ic;
+    }
+    if (h) {
+        use = ic ? ic : LoadIconW(NULL, IDI_APPLICATION);
+        SendMessageW(h, WM_SETICON, ICON_BIG, (LPARAM)use);
+        SendMessageW(h, WM_SETICON, ICON_SMALL, (LPARAM)use);
+        SetClassLongPtrW(h, GCLP_HICON, (LONG_PTR)use);
+    }
+}
+
+/** @brief 建/改托盘图标：ico_path 传 NULL 用窗口图标，tip 传 NULL 用窗口标题 */
+void cg_tray_set(cg_app_t *app, const char *ico_path, const char *tip)
+{
+    cg_win_state_t *st;
+    HWND h;
+    NOTIFYICONDATAW nid;
+    HICON ic = NULL;
+    int owned = 0;
+    wchar_t *wt;
+
+    if (!app) return;
+    st = (cg_win_state_t *)app->natives;
+    h = win_hwnd_of(app);
+    if (!st || !h) return;
+
+    memset(&nid, 0, sizeof(nid));
+    nid.cbSize = sizeof(nid);
+    nid.hWnd = h;
+    nid.uID = CG_TRAY_ID;
+    nid.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
+    nid.uCallbackMessage = CG_TRAY_CALLBACK;   /* MainProc 里按这个号收托盘消息 */
+
+    if (ico_path && *ico_path) {
+        ic = load_icon_file(app, ico_path);
+        owned = 1;
+    }
+    if (!ic) {
+        /* 没指定就用窗口图标，一路退到系统默认 */
+        ic = (HICON)SendMessageW(h, WM_GETICON, ICON_SMALL, 0);
+        if (!ic) ic = (HICON)SendMessageW(h, WM_GETICON, ICON_BIG, 0);
+        if (!ic) ic = (HICON)GetClassLongPtrW(h, GCLP_HICONSM);
+        if (!ic) ic = LoadIconW(NULL, IDI_APPLICATION);
+    }
+    nid.hIcon = ic;
+
+    wt = wc_from_utf8((tip && *tip) ? tip : app->doc.title);
+    if (wt) {
+        _snwprintf(nid.szTip, 128, L"%s", wt);
+        nid.szTip[127] = L'\0';
+        free(wt);
+    }
+
+    Shell_NotifyIconW(st->tray_on ? NIM_MODIFY : NIM_ADD, &nid);
+    st->tray_on = 1;
+    if (owned && ic) DestroyIcon(ic);   /* 外壳已拷走图标，我们这张可以放了 */
+}
+
+/** @brief 摘掉托盘图标 */
+void cg_tray_remove(cg_app_t *app)
+{
+    cg_win_state_t *st = app ? (cg_win_state_t *)app->natives : NULL;
+    NOTIFYICONDATAW nid;
+    if (!st || !st->tray_on || !app->hwnd) return;
+    memset(&nid, 0, sizeof(nid));
+    nid.cbSize = sizeof(nid);
+    nid.hWnd = (HWND)app->hwnd;
+    nid.uID = CG_TRAY_ID;
+    Shell_NotifyIconW(NIM_DELETE, &nid);
+    st->tray_on = 0;
+}
+
+/** @brief 气泡提示（托盘图标已有时才有效） */
+void cg_tray_balloon(cg_app_t *app, const char *tip_title, const char *text)
+{
+    cg_win_state_t *st = app ? (cg_win_state_t *)app->natives : NULL;
+    NOTIFYICONDATAW nid;
+    wchar_t *wt = NULL, *wb = NULL;
+
+    if (!st || !st->tray_on || !app->hwnd) return;
+    memset(&nid, 0, sizeof(nid));
+    nid.cbSize = sizeof(nid);
+    nid.hWnd = (HWND)app->hwnd;
+    nid.uID = CG_TRAY_ID;
+    nid.uFlags = NIF_INFO;
+    nid.dwInfoFlags = NIIF_INFO;
+
+    wt = wc_from_utf8(tip_title);
+    if (wt) { _snwprintf(nid.szInfoTitle, 64, L"%s", wt); nid.szInfoTitle[63] = L'\0'; free(wt); }
+    wb = wc_from_utf8(text);
+    if (wb) { _snwprintf(nid.szInfo, 256, L"%s", wb); nid.szInfo[255] = L'\0'; free(wb); }
+
+    Shell_NotifyIconW(NIM_MODIFY, &nid);
 }
 
 /* ============================================================ 公共 API

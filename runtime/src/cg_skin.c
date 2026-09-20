@@ -590,57 +590,133 @@ void cg_skin_draw_progress(cg_widget_t *w, HDC hdc, const RECT *rc)
     }
 }
 
-/* ---- 输入框圆角：窗口区域裁切 + Subclass 在 resize 时重裁（EDIT 不支持 owner-draw） ---- */
+/* ---- 输入框：圆角裁切 + 单行文字垂直居中（EDIT 不支持 owner-draw） ----
+ * 单行 EDIT 的文字默认贴着客户区顶部：用 WM_NCCALCSIZE 把客户区上边让出一段，文字就落到中间。
+ * 让出来的那条上边距成了非客户区，由我们自己在 WM_PAINT 里用底色补上，否则会露出窗口底色。
+ * 字体是在控件建好后才 WM_SETFONT 设进去的，所以还要在 WM_SETFONT 时按实际字号重算一次。 */
 
-typedef struct { int rad; } sk_edit_sub_t;
+typedef struct {
+    int      rad;      /* 圆角半径 */
+    int      single;   /* 单行（edit / spinner）：需要垂直居中；multiedit 保持顶部对齐 */
+    int      pad;      /* 上方让出的像素（= (控件高 - 文字高) / 2） */
+    int      text_h;   /* 当前字体的文字高度（换字号时对比，变了才重排） */
+    int      w, h;     /* 控件整块尺寸（比客户区高，含让出来的上边距） */
+    COLORREF bg;       /* 补上边距用的底色（白或 style.bg） */
+} sk_edit_sub_t;
 
-/** 在客户区四周画一圈圆角边框（聚焦时用主题紫），画在 DefSubclassProc 之后叠上去 */
-static void sk_edit_border(HWND hwnd, const sk_edit_sub_t *s, int focus)
+/** 画整块的底 + 圆角边框（聚焦时主题紫）；用整窗 DC 才能覆盖让出来的上边距 */
+static void sk_edit_box(HWND hwnd, const sk_edit_sub_t *s, int focus)
 {
-    RECT rc;
     HDC dc;
     HPEN pn, op;
     HBRUSH ob;
     COLORREF col = focus ? 0x6750A4 : 0xB8B2BD;
 
-    GetClientRect(hwnd, &rc);
-    if (rc.right <= 2 || rc.bottom <= 2) return;
-    dc = GetDC(hwnd);
+    if (s->w <= 2 || s->h <= 2) return;
+    dc = GetWindowDC(hwnd);
+    if (!dc) return;
+
+    /* 让出来的上边距：填成输入框底色，免得露窗口底色 */
+    if (s->pad > 0) {
+        RECT top;
+        HBRUSH fb;
+        top.left = 0; top.top = 0; top.right = s->w; top.bottom = s->pad;
+        fb = CreateSolidBrush(s->bg);
+        FillRect(dc, &top, fb);
+        DeleteObject(fb);
+    }
+
     pn = CreatePen(PS_SOLID, 2, col);
     op = (HPEN)SelectObject(dc, pn);
     ob = (HBRUSH)SelectObject(dc, GetStockObject(NULL_BRUSH));
-    RoundRect(dc, 0, 0, rc.right, rc.bottom, s->rad * 2 + 4, s->rad * 2 + 4);
+    RoundRect(dc, 0, 0, s->w, s->h, s->rad * 2 + 4, s->rad * 2 + 4);
     SelectObject(dc, ob);
     SelectObject(dc, op);
     DeleteObject(pn);
     ReleaseDC(hwnd, dc);
 }
 
+/** 取当前字体的文字行高（拿不到就是 0） */
+static int sk_edit_text_height(HWND hwnd)
+{
+    HDC dc = GetDC(hwnd);
+    TEXTMETRICW tm;
+    int th = 0;
+    if (!dc) return 0;
+    memset(&tm, 0, sizeof(tm));
+    if (GetTextMetricsW(dc, &tm)) th = tm.tmHeight;
+    ReleaseDC(hwnd, dc);
+    return th;
+}
+
+/** 重算整块尺寸 + 圆角区域；多行输入框顺带把客户区往里缩一点 */
+static void sk_edit_resize(HWND hwnd, sk_edit_sub_t *s)
+{
+    RECT wr;
+    GetWindowRect(hwnd, &wr);
+    s->w = wr.right - wr.left;
+    s->h = wr.bottom - wr.top;
+    if (s->w > 0 && s->h > 0) {
+        HRGN rgn = CreateRoundRectRgn(0, 0, s->w, s->h, s->rad * 2, s->rad * 2);
+        if (rgn) { SetWindowRgn(hwnd, rgn, TRUE); DeleteObject(rgn); }
+    }
+    if (!s->single) {
+        RECT tr;
+        GetClientRect(hwnd, &tr);
+        InflateRect(&tr, -5, -3);
+        SendMessageW(hwnd, EM_SETRECT, 0, (LPARAM)&tr);
+    }
+}
+
 static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
                                     UINT_PTR id, DWORD_PTR data)
 {
     sk_edit_sub_t *s = (sk_edit_sub_t *)data;
+
     if (msg == WM_NCDESTROY) {
         RemoveWindowSubclass(hwnd, sk_edit_sub, id);
         free(s);
         return DefSubclassProc(hwnd, msg, wp, lp);
     }
-    if (msg == WM_SIZE) {
-        RECT rc;
-        GetClientRect(hwnd, &rc);
-        if (rc.right > 0 && rc.bottom > 0) {
-            HRGN rgn = CreateRoundRectRgn(0, 0, rc.right, rc.bottom, s->rad * 2, s->rad * 2);
-            if (rgn) { SetWindowRgn(hwnd, rgn, TRUE); DeleteObject(rgn); }
-            /* 多行输入框：客户端矩形内缩，文字离边框远一点（单行 EDIT 自带边距与垂直居中） */
-            if (GetWindowLongW(hwnd, GWL_STYLE) & ES_MULTILINE) {
-                RECT tr = rc;
-                InflateRect(&tr, -5, -3);
-                SendMessageW(hwnd, EM_SETRECT, 0, (LPARAM)&tr);
-            }
+    if (msg == WM_NCCALCSIZE && wp) {
+        /* 进来时 rgrc[0] 是通过的建议窗口矩形，处理完变成客户区 */
+        NCCALCSIZE_PARAMS *p = (NCCALCSIZE_PARAMS *)lp;
+        int win_w = p->rgrc[0].right - p->rgrc[0].left;
+        int win_h = p->rgrc[0].bottom - p->rgrc[0].top;
+        LRESULT r = DefSubclassProc(hwnd, msg, wp, lp);
+        if (s->single) {
+            int th = sk_edit_text_height(hwnd);
+            int pad = (th > 0) ? (win_h - th) / 2 : 0;
+            if (pad < 0) pad = 0;
+            if (pad > win_h - 2) pad = win_h - 2;
+            s->text_h = th;
+            s->pad = pad;
+            s->w = win_w;
+            s->h = win_h;
+            p->rgrc[0].top += pad;   /* 让出上边距 -> 文字垂直居中 */
         }
+        return r;
+    }
+    if (msg == WM_SETFONT) {
+        LRESULT r = DefSubclassProc(hwnd, msg, wp, lp);
+        if (s->single && sk_edit_text_height(hwnd) != s->text_h) {
+            /* 字号变了 -> 重排一次（SWP_FRAMECHANGED 会再发 WM_NCCALCSIZE） */
+            SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        }
+        return r;
+    }
+    if (msg == WM_SIZE) {
+        sk_edit_resize(hwnd, s);
+        /* resize 时系统按默认非客户区重算客户区，会把让出来的上边距抹掉（spinner 的
+         * 上下箭头改 buddy 尺寸就会触发）。补一次 FRAMECHANGED 让 WM_NCCALCSIZE 重新生效；
+         * 尺寸没变不会递归发 WM_SIZE。 */
+        if (s->single)
+            SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
     } else if (msg == WM_PAINT || msg == WM_SETFOCUS || msg == WM_KILLFOCUS) {
         LRESULT r = DefSubclassProc(hwnd, msg, wp, lp);
-        sk_edit_border(hwnd, s, GetFocus() == hwnd);
+        sk_edit_box(hwnd, s, GetFocus() == hwnd);
         return r;
     }
     return DefSubclassProc(hwnd, msg, wp, lp);
@@ -649,24 +725,28 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
 void cg_skin_apply_edit(cg_widget_t *w)
 {
     HWND hw = (HWND)w->native;
-    int scale, r;
+    int scale, r, multiline;
     sk_edit_sub_t *s;
     if (!hw) return;
     scale = (w->app && w->app->scale > 0) ? w->app->scale : 100;
     r = (w->style.radius > 0 ? w->style.radius : 2) * scale / 100;   /* 画布输入框默认 2px */
     if (r < 1) r = 1;
+    multiline = (GetWindowLongW(hw, GWL_STYLE) & ES_MULTILINE) != 0;
+
     s = (sk_edit_sub_t *)malloc(sizeof(sk_edit_sub_t));
     if (!s) return;
+    memset(s, 0, sizeof(*s));
     s->rad = r;
-    {
-        RECT rc;
-        GetClientRect(hw, &rc);
-        if (rc.right > 0 && rc.bottom > 0) {
-            HRGN rgn = CreateRoundRectRgn(0, 0, rc.right, rc.bottom, r * 2, r * 2);
-            if (rgn) { SetWindowRgn(hw, rgn, TRUE); DeleteObject(rgn); }
-        }
-    }
-    /* 左右各留 6px 边距：文字别怼到圆角边框上 */
+    s->single = multiline ? 0 : 1;
+    s->bg = (w->style.bg != CG_COLOR_NONE)
+              ? RGB((w->style.bg >> 16) & 0xFF, (w->style.bg >> 8) & 0xFF, w->style.bg & 0xFF)
+              : GetSysColor(COLOR_WINDOW);
+
+    sk_edit_resize(hw, s);   /* 初始尺寸 + 圆角区域 */
+    /* 左右各留 6px 边距：文字别怼到圆角边框上（垂直居中见 WM_NCCALCSIZE） */
     SendMessageW(hw, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(6, 6));
     SetWindowSubclass(hw, sk_edit_sub, 1, (DWORD_PTR)s);
+    /* 挂上子类后强制一次布局：立刻按当前字体算好垂直居中量 */
+    SetWindowPos(hw, NULL, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 }

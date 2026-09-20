@@ -58,7 +58,14 @@ static const cg_kind_info_t k_kinds[] = {
     { "pagination", CG_K_PAGINATION, 0, 180,  32, "",     CG_EV_CHANGE },
     { "card",       CG_K_CARD,       1, 280, 180, "卡片", 0 },
     { "shape",      CG_K_SHAPE,      0, 120, 120, "",     0 },
-    { "window",     CG_K_WINDOW,     1,   0,   0, "",     CG_EV_CLOSE },  /* 伪控件：窗口自身 */
+    /* 伪控件：窗口自身。事件表与「启动窗口」的事件表对齐（见 cg_event_t 注释）。 */
+    { "window",     CG_K_WINDOW,     1,   0,   0, "",
+      CG_EV_CLOSE | CG_EV_READY | CG_EV_DESTROY | CG_EV_MOVE | CG_EV_SIZE |
+      CG_EV_ACTIVATE | CG_EV_DEACTIVATE | CG_EV_FIRSTACTIVATE | CG_EV_IDLE |
+      CG_EV_TRAY | CG_EV_SHOW | CG_EV_HIDE | CG_EV_CLOSEQUERY |
+      CG_EV_MOUSEDOWN | CG_EV_MOUSEUP | CG_EV_DBLCLICK | CG_EV_RDOWN | CG_EV_RUP |
+      CG_EV_MOUSEMOVE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS |
+      CG_EV_KEYDOWN | CG_EV_KEYUP | CG_EV_CHAR | CG_EV_WHEEL },
 };
 
 #define K_KIND_COUNT (sizeof(k_kinds) / sizeof(k_kinds[0]))
@@ -619,11 +626,54 @@ cg_doc_t *cg_doc_parse(const char *json, char *err, size_t errsz)
     if (doc->width < 80) doc->width = 80;
     if (doc->height < 60) doc->height = 60;
 
+    /* 窗口属性（app 节点，全部可选；不写就保持 Windows 默认观感） */
+    {
+        const cj_val_t *vx = cj_get(app, "x");
+        const cj_val_t *vy = cj_get(app, "y");
+        doc->has_pos = (vx != NULL || vy != NULL);
+        doc->x = cj_int(vx, 0);
+        doc->y = cj_int(vy, 0);
+        doc->center = cj_bool(cj_get(app, "center"), 0);
+        doc->border = dup_str(cj_str(cj_get(app, "border"), "sizable"));
+        doc->control_box = cj_bool(cj_get(app, "controlBox"), 1);
+        doc->min_box = cj_bool(cj_get(app, "minimizeBox"), 1);
+        doc->max_box = cj_bool(cj_get(app, "maximizeBox"), 1);
+        doc->topmost = cj_bool(cj_get(app, "topmost"), 0);
+        doc->taskbar = cj_bool(cj_get(app, "taskbar"), 1);
+        doc->visible = cj_bool(cj_get(app, "visible"), 1);
+        doc->enabled = cj_bool(cj_get(app, "enabled"), 1);
+        doc->enter_tab = cj_bool(cj_get(app, "enterTab"), 0);
+        doc->esc_close = cj_bool(cj_get(app, "escClose"), 1);
+        doc->tray = cj_bool(cj_get(app, "tray"), 0);
+        doc->icon = dup_str(cj_str(cj_get(app, "icon"), NULL));
+        doc->cursor = dup_str(cj_str(cj_get(app, "cursor"), NULL));
+        doc->class_name = dup_str(cj_str(cj_get(app, "class"), NULL));
+        doc->note = dup_str(cj_str(cj_get(app, "note"), NULL));
+    }
+
+    /* 程序配置（app.info）：编译进 exe 的版本信息 + 运行时能读到的程序信息 */
+    {
+        const cj_val_t *in = cj_get(app, "info");
+        doc->info.product  = dup_str(cj_str(cj_get(in, "product"), NULL));
+        doc->info.desc     = dup_str(cj_str(cj_get(in, "desc"), NULL));
+        doc->info.comments = dup_str(cj_str(cj_get(in, "comments"), NULL));
+        doc->info.version  = dup_str(cj_str(cj_get(in, "version"), NULL));
+        doc->info.build    = dup_str(cj_str(cj_get(in, "build"), NULL));
+        doc->info.author   = dup_str(cj_str(cj_get(in, "author"), NULL));
+        doc->info.company  = dup_str(cj_str(cj_get(in, "company"), NULL));
+        doc->info.copyright = dup_str(cj_str(cj_get(in, "copyright"), NULL));
+        doc->info.address  = dup_str(cj_str(cj_get(in, "address"), NULL));
+        doc->info.postcode = dup_str(cj_str(cj_get(in, "postcode"), NULL));
+        doc->info.phone    = dup_str(cj_str(cj_get(in, "phone"), NULL));
+        doc->info.fax      = dup_str(cj_str(cj_get(in, "fax"), NULL));
+        doc->info.email    = dup_str(cj_str(cj_get(in, "email"), NULL));
+        doc->info.homepage = dup_str(cj_str(cj_get(in, "homepage"), NULL));
+    }
+
     doc->root = (cg_node_t *)calloc(1, sizeof(cg_node_t));
     if (!doc->root) {
         cj_free(root);
-        free(doc->title);
-        free(doc);
+        cg_doc_free(doc);   /* 窗口属性那些字段也要一起放（别只手写 free(title)） */
         snprintf(err, errsz, "out of memory");
         return NULL;
     }
@@ -674,9 +724,18 @@ void cg_doc_release(cg_doc_t *doc)
 {
     if (!doc) return;
     free(doc->title);
+    free(doc->border);
+    free(doc->icon);
+    free(doc->cursor);
+    free(doc->class_name);
+    free(doc->note);
+    free(doc->info.product);  free(doc->info.desc);     free(doc->info.comments);
+    free(doc->info.version);  free(doc->info.build);    free(doc->info.author);
+    free(doc->info.company);  free(doc->info.copyright); free(doc->info.address);
+    free(doc->info.postcode); free(doc->info.phone);    free(doc->info.fax);
+    free(doc->info.email);    free(doc->info.homepage);
     node_free(doc->root);
-    doc->title = NULL;
-    doc->root = NULL;
+    memset(doc, 0, sizeof(*doc));
 }
 
 /** @brief 释放内容并释放 doc 本身 */
@@ -740,9 +799,28 @@ static void dump_node(const cg_node_t *n, FILE *out, int depth)
 void cg_doc_dump(const cg_doc_t *doc, FILE *out)
 {
     if (!doc || !out) return;
-    fprintf(out, "app \"%s\" %dx%d bg=#%06X\n",
+    fprintf(out, "app \"%s\" %dx%d bg=#%06X",
             doc->title ? doc->title : "-", doc->width, doc->height,
             doc->bg == CG_COLOR_NONE ? 0 : doc->bg);
+    if (doc->has_pos) fprintf(out, " pos=(%d,%d)", doc->x, doc->y);
+    if (doc->center) fputs(" centered", out);
+    if (doc->border && strcmp(doc->border, "sizable")) fprintf(out, " border=%s", doc->border);
+    if (!doc->control_box) fputs(" no-controlbox", out);
+    if (!doc->min_box) fputs(" no-minbox", out);
+    if (!doc->max_box) fputs(" no-maxbox", out);
+    if (doc->topmost) fputs(" topmost", out);
+    if (!doc->taskbar) fputs(" no-taskbar", out);
+    if (!doc->visible) fputs(" hidden", out);
+    if (!doc->enabled) fputs(" disabled", out);
+    if (doc->enter_tab) fputs(" enter-tab", out);
+    if (!doc->esc_close) fputs(" no-esc-close", out);
+    if (doc->tray) fputs(" tray", out);
+    if (doc->icon) fprintf(out, " icon=%s", doc->icon);
+    if (doc->cursor) fprintf(out, " cursor=%s", doc->cursor);
+    if (doc->class_name) fprintf(out, " class=%s", doc->class_name);
+    if (doc->info.product) fprintf(out, " product=\"%s\"", doc->info.product);
+    if (doc->info.version) fprintf(out, " version=%s", doc->info.version);
+    fputc('\n', out);
     if (doc->root) {
         for (size_t i = 0; i < doc->root->nchildren; i++) dump_node(doc->root->children[i], out, 1);
     }

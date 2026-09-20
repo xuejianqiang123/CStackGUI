@@ -60,8 +60,11 @@ typedef enum {
     CG_K_COUNT
 } cg_kind_t;
 
-/** 类型表里"支持哪些事件"用的位 */
-#define CG_EV_BIT(e) (1u << (unsigned)(e))
+/** 类型表里"支持哪些事件"用的位。
+ *  注意是 64 位：窗口事件加上后总数已超 32（见 cg_event_t），
+ *  用 unsigned 会让高位静默丢失，绑了却没反应。 */
+typedef unsigned long long cg_evmask_t;
+#define CG_EV_BIT(e) (1ULL << (unsigned)(e))
 #define CG_EV_CLICK      CG_EV_BIT(CG_EVENT_CLICK)
 #define CG_EV_DBLCLICK   CG_EV_BIT(CG_EVENT_DBLCLICK)
 #define CG_EV_CHANGE     CG_EV_BIT(CG_EVENT_CHANGE)
@@ -75,6 +78,28 @@ typedef enum {
 #define CG_EV_CHECK      CG_EV_BIT(CG_EVENT_CHECK)
 #define CG_EV_GOTFOCUS   CG_EV_BIT(CG_EVENT_GOTFOCUS)
 #define CG_EV_LOSTFOCUS  CG_EV_BIT(CG_EVENT_LOSTFOCUS)
+/* 窗口级事件 */
+#define CG_EV_READY         CG_EV_BIT(CG_EVENT_READY)
+#define CG_EV_DESTROY       CG_EV_BIT(CG_EVENT_DESTROY)
+#define CG_EV_MOVE          CG_EV_BIT(CG_EVENT_MOVE)
+#define CG_EV_SIZE          CG_EV_BIT(CG_EVENT_SIZE)
+#define CG_EV_ACTIVATE      CG_EV_BIT(CG_EVENT_ACTIVATE)
+#define CG_EV_DEACTIVATE    CG_EV_BIT(CG_EVENT_DEACTIVATE)
+#define CG_EV_FIRSTACTIVATE CG_EV_BIT(CG_EVENT_FIRSTACTIVATE)
+#define CG_EV_IDLE          CG_EV_BIT(CG_EVENT_IDLE)
+#define CG_EV_TRAY          CG_EV_BIT(CG_EVENT_TRAY)
+#define CG_EV_SHOW          CG_EV_BIT(CG_EVENT_SHOW)
+#define CG_EV_HIDE          CG_EV_BIT(CG_EVENT_HIDE)
+#define CG_EV_CLOSEQUERY    CG_EV_BIT(CG_EVENT_CLOSEQUERY)
+#define CG_EV_MOUSEDOWN     CG_EV_BIT(CG_EVENT_MOUSEDOWN)
+#define CG_EV_MOUSEUP       CG_EV_BIT(CG_EVENT_MOUSEUP)
+#define CG_EV_RDOWN         CG_EV_BIT(CG_EVENT_RDOWN)
+#define CG_EV_RUP           CG_EV_BIT(CG_EVENT_RUP)
+#define CG_EV_MOUSEMOVE     CG_EV_BIT(CG_EVENT_MOUSEMOVE)
+#define CG_EV_KEYDOWN       CG_EV_BIT(CG_EVENT_KEYDOWN)
+#define CG_EV_KEYUP         CG_EV_BIT(CG_EVENT_KEYUP)
+#define CG_EV_CHAR          CG_EV_BIT(CG_EVENT_CHAR)
+#define CG_EV_WHEEL         CG_EV_BIT(CG_EVENT_WHEEL)
 
 typedef struct {
     const char *name;      /* .cgui 里 type 字段的写法 */
@@ -85,7 +110,7 @@ typedef struct {
     /** 这个控件**真正**支持的事件（位掩码）。
      *  事件是按控件特性设计的：标签没有交互、进度条只能被写、树才有展开折叠，
      *  所以画布只该列出这里声明的事件，绑得上的也必须是这里有的。 */
-    unsigned    events;
+    cg_evmask_t events;
 } cg_kind_info_t;
 
 const cg_kind_info_t *cg_kind_lookup(const char *type);
@@ -175,11 +200,51 @@ typedef struct cg_node {
     size_t           nchildren;
 } cg_node_t;
 
+/** 程序配置（画布「程序配置」对话框填的那些）。
+ *  编译时由画布生成的 <工程>.rc 写进 exe 的版本信息；运行时也能读（cg_app_info）。 */
+typedef struct {
+    char *product;    /* 程序名称 */
+    char *desc;       /* 程序描述 */
+    char *comments;   /* 程序备注 */
+    char *version;    /* 程序版本号，四段 "1.0.0.0" */
+    char *build;      /* 创建号（那个 0.0，单独留一份便于对照） */
+    char *author;     /* 作者 */
+    char *company;    /* 单位 / 公司 */
+    char *copyright;  /* 版权声明 */
+    char *address;    /* 联系地址 */
+    char *postcode;   /* 邮政编码 */
+    char *phone;      /* 电话 */
+    char *fax;        /* 传真 */
+    char *email;      /* 电子信箱 */
+    char *homepage;   /* 主页地址 */
+} cg_info_t;
+
+/** 窗口属性（.cgui 的 app 节点；缺省值 = 保持 Windows 默认观感，不设就一切照旧） */
 typedef struct {
     char       *title;
     int         width, height;
     unsigned    bg;
-    cg_node_t  *root;      /* 虚拟根：children 即顶层控件，无矩形 */
+    /* ---- 位置与外观（对齐「属性」面板） ---- */
+    int         x, y;          /* 窗口左上角；has_pos=0 时交给系统 CW_USEDEFAULT */
+    int         has_pos;
+    int         center;        /* 位置 = 居中 */
+    char       *border;        /* "sizable"(默认) / "fixed" / "dialog" / "none" */
+    int         control_box;   /* 控制按钮（系统菜单/关闭钮），默认 1 */
+    int         min_box;       /* 最小化按钮，默认 1 */
+    int         max_box;       /* 最大化按钮，默认 1 */
+    int         topmost;       /* 总在最前 */
+    int         taskbar;       /* 在任务栏中显示，默认 1 */
+    int         visible;       /* 可视，默认 1 */
+    int         enabled;       /* 禁止（0 = 建好就整体禁用），默认 1 */
+    int         enter_tab;     /* 回车下移焦点（默认 0 = 回车当 submit） */
+    int         esc_close;     /* Esc 键关闭窗口，默认 1 */
+    int         tray;          /* 建托盘图标 */
+    char       *icon;          /* 窗口图标（.ico 路径） */
+    char       *cursor;        /* 鼠标指针："arrow"/"hand"/"ibeam"/"wait"/"cross"/"sizeall"/... */
+    char       *class_name;    /* 窗口类名，默认 CStackGUIMain */
+    char       *note;          /* 备注（画布记录，运行时不用） */
+    cg_info_t   info;          /* 程序配置（版本信息） */
+    cg_node_t  *root;          /* 虚拟根：children 即顶层控件，无矩形 */
 } cg_doc_t;
 
 /** 解析 .cgui 文本。失败返回 NULL 并写错误信息。 */

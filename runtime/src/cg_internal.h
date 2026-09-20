@@ -143,6 +143,14 @@ struct cg_widget {
     unsigned long last_click_tick; /* 双击探测 */
     int          dbl_pending;      /* 上一次 click 已回调，第二次要补 dblclick */
 
+    /* 最近一次事件的参数（鼠标 / 按键 / 滚轮 / 托盘）。
+     * 回调签名固定，参数只能这样带给业务，读法见 cg_event_x()/cg_event_key() 等。 */
+    int          ev_x, ev_y;       /* 客户区坐标（逻辑像素） */
+    int          ev_keys;          /* 1=Ctrl 2=Shift 4=Alt */
+    int          ev_key;           /* 虚拟键码 / 字符码 */
+    int          ev_delta;         /* 滚轮滚动量 */
+    int          ev_action;        /* 托盘动作：1=左键单击 2=左键双击 3=右键单击 */
+
     cg_widget_t *next;       /* 全局链表 */
 };
 
