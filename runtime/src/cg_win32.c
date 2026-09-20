@@ -234,8 +234,10 @@ static DWORD style_of(const cg_widget_t *w)
     if (!strcmp(w->type, "statusbar")) return WS_CHILD | WS_VISIBLE;
     /* 微调框：数字左对齐（原先 ES_RIGHT 在窄框里会贴着箭头，很难看） */
     if (!strcmp(w->type, "spinner"))   return WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_NUMBER | ES_LEFT | ES_AUTOHSCROLL;
-    /* group / box：自己注册的面板类，能装子控件 */
-    return WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_BORDER;
+    /* group / box：自己注册的面板类，能装子控件。
+     * 边框和标题都自己画，**不能用 WS_BORDER** —— 系统重绘非客户区时会盖掉标题，
+     * 看起来就是"边框线穿过文字"。 */
+    return WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN;
 }
 
 /** @brief 控件 -> 扩展样式位（输入类控件给立体边框） */
@@ -1079,91 +1081,32 @@ static void register_image_class(void)
  * 原生控件里没有圆环进度，这个和 switch 一样是 owner-draw 思路的样板：
  * 自己画在窗口上，所以能吃 style 的颜色，也才能有圆角/圆弧这种原生控件画不出的东西。
  */
-#define RING_STEPS 72
-#define CG_PI 3.14159265358979
-
 /**
- * @brief 画圆环进度：底色 + 轨道 + 从 12 点顺时针的进度弧 + 中间百分比
+ * @brief 画圆环中间那一行百分比文字
  * @param dc 目标 DC；w 控件；rc 客户区
+ * @details 圆环本身（底色 / 轨道 / 进度弧）在 cg_skin.c 的 `cg_skin_draw_ring()` 里
+ *          用 GDI+ 抗锯齿画（GDI 的粗弧锯齿非常明显）；文字要用本文件的 `font_for()`，
+ *          所以留在调用方画完圆环之后补。
  * @return void 无返回值
  */
-static void draw_ring(HDC dc, const cg_widget_t *w, const RECT *rc)
+static void draw_ring_text(HDC dc, const cg_widget_t *w, const RECT *rc)
 {
-    int  width = rc->right - rc->left;
-    int  height = rc->bottom - rc->top;
-    int  thick = width < 80 ? 6 : (width < 160 ? 10 : 14);
-    int  radius;
-    int  cx = (rc->left + rc->right) / 2;
-    int  cy = (rc->top + rc->bottom) / 2;
-    int  span = (w->vmax > w->vmin) ? (w->vmax - w->vmin) : 1;
-    int  val = w->value;
-    int  sweep;
-    int  fg = (w->style.fg != CG_COLOR_NONE) ? (int)w->style.fg : 0x6750A4;
-    HBRUSH  bg;
-    HGDIOBJ oldbr, oldpen;
-    HPEN    pen;
+    int span = (w->vmax > w->vmin) ? (w->vmax - w->vmin) : 1;
+    int val = w->value;
     wchar_t text[32];
-    RECT    tr;
+    HFONT f, oldf;
+    RECT tr = *rc;
 
     if (val < w->vmin) val = w->vmin;
     if (val > w->vmax) val = w->vmax;
 
-    /* 底：没设背景色就填"背后"的颜色（分组框/标签页里的控件不能一律填系统面色） */
-    bg = CreateSolidBrush((w->style.bg != CG_COLOR_NONE)
-                              ? to_colorref(w->style.bg)
-                              : to_colorref(cg_win_behind_rgb(w->app, w->native)));
-    oldbr = SelectObject(dc, bg);
-    oldpen = SelectObject(dc, GetStockObject(NULL_PEN));
-    Rectangle(dc, rc->left, rc->top, rc->right, rc->bottom);
-    SelectObject(dc, oldpen);
-    SelectObject(dc, oldbr);
-    DeleteObject(bg);
-
-    radius = ((width < height ? width : height) - thick) / 2 - 2;
-    if (radius < 4) return;
-
-    /* 轨道 */
-    pen = CreatePen(PS_SOLID, thick, RGB(0xE0, 0xDA, 0xE6));
-    oldpen = SelectObject(dc, pen);
-    MoveToEx(dc, cx + radius, cy, NULL);
-    AngleArc(dc, cx, cy, radius, 0.0f, 359.9f);
-    SelectObject(dc, oldpen);
-    DeleteObject(pen);
-
-    /* 进度弧：从 12 点方向顺时针。
-     * 不用 GDI 的 AngleArc —— 它的角度约定和屏幕方向对不上，容易画出
-     * 一根从 12 点连到弧起点的"棒棒糖"线。自己算点最稳。 */
-    sweep = (int)((long long)(val - w->vmin) * 360 / span);
-    if (sweep > 0) {
-        POINT pts[RING_STEPS + 1];
-        int   steps = RING_STEPS * sweep / 360;
-        int   k;
-
-        if (steps < 1) steps = 1;
-        if (steps > RING_STEPS) steps = RING_STEPS;
-        for (k = 0; k <= steps; k++) {
-            double a = -CG_PI / 2 + (CG_PI / 180) * (double)sweep * (double)k / (double)steps;
-            pts[k].x = cx + (int)((double)radius * cos(a) + 0.5);
-            pts[k].y = cy + (int)((double)radius * sin(a) + 0.5);
-        }
-        pen = CreatePen(PS_SOLID, thick, to_colorref((unsigned)fg));
-        oldpen = SelectObject(dc, pen);
-        Polyline(dc, pts, steps + 1);
-        SelectObject(dc, oldpen);
-        DeleteObject(pen);
-    }
-
-    /* 中间百分比 */
-    {
-        HFONT f = w->app ? font_for(w->app, w->style.font, w->style.size, w->style.bold, 0) : NULL;
-        HFONT oldf = (HFONT)SelectObject(dc, f ? f : GetStockObject(DEFAULT_GUI_FONT));
-        swprintf(text, 32, L"%d%%", (val - w->vmin) * 100 / span);
-        tr = *rc;
-        SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, GetSysColor(COLOR_WINDOWTEXT));
-        DrawTextW(dc, text, -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        SelectObject(dc, oldf);
-    }
+    f = w->app ? font_for(w->app, w->style.font, w->style.size, w->style.bold, 0) : NULL;
+    oldf = (HFONT)SelectObject(dc, f ? f : (HFONT)GetStockObject(DEFAULT_GUI_FONT));
+    swprintf(text, 32, L"%d%%", (val - w->vmin) * 100 / span);
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, GetSysColor(COLOR_WINDOWTEXT));
+    DrawTextW(dc, text, -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(dc, oldf);
 }
 
 /** @brief 圆环进度控件窗口过程（自绘，无交互） */
@@ -1181,7 +1124,8 @@ static LRESULT CALLBACK RingProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         cg_widget_t *w = widget_by_hwnd(app, hwnd);
         GetClientRect(hwnd, &rc);
         if (w) {
-            draw_ring(dc, w, &rc);
+            cg_skin_draw_ring(w, dc, &rc);   /* GDI+ 抗锯齿：底色 + 轨道 + 进度弧 */
+            draw_ring_text(dc, w, &rc);      /* 中心百分比 */
         } else {
             FillRect(dc, &rc, brush_for(cg_win_behind_rgb(app, hwnd)));
         }
@@ -1386,51 +1330,71 @@ static void register_canvas_class(void)
 
 /* ------------------------------------------------------------ 面板窗口 */
 
-/** @brief 组框标题：压在顶部边框上（画布也是这么画的）
- *  @param app 所属应用；hwnd 面板窗口；w 面板控件（读 text/style）
- *  @details 系统外观只画一圈边框、不会画标题，得自己画。边框不在客户区里，
- *           所以用整窗 DC；先把那一小段边框用组框底色擦开，再把文字写上去。
+/** @brief 画整个组框（group/box）：内区底色 + 压在顶边线上的标题 + 边框
+ *  @param app 所属应用；dc 客户区 DC；w 面板控件；rc 客户区矩形
+ *  @details 三样都得自己画（**不能用 WS_BORDER**）：交给系统画边框时，系统重绘非客户区
+ *           会把标题盖掉，看起来就是"边框线穿过文字"。标题的上下各占一半、中线压在顶边线
+ *           上（原生 BS_GROUPBOX 就是这个观感），并且用组框底色把那一小段线擦开。
+ *           顶边线以上那一条留空，透出"背后"的颜色（和画布 `top:-8px` 的关系一致）。
  */
-static void panel_draw_title(cg_app_t *app, HWND hwnd, cg_widget_t *w)
+static void panel_draw_group(cg_app_t *app, HDC dc, cg_widget_t *w, const RECT *rc)
 {
-    HDC dc;
-    HFONT f, oldf;
-    HBRUSH tbg;
-    wchar_t *wt;
-    SIZE sz;
-    RECT tr;
-    int pad;
+    int inset = scale_px(app, 1);
+    int has_title = (w->text && *w->text) ? 1 : 0;
+    int top;
+    unsigned bg = (w->style.bg != CG_COLOR_NONE) ? w->style.bg
+                                                : cg_win_behind_rgb(app, w->native);
+    COLORREF penc = (w->style.fg != CG_COLOR_NONE) ? to_colorref(w->style.fg)
+                                                   : RGB(0x79, 0x74, 0x7E);   /* 画布 --outline-strong */
 
-    if (!w || !w->text || !*w->text) return;
-    wt = wc_from_utf8(w->text);
-    if (!wt) return;
-    dc = GetWindowDC(hwnd);
-    if (!dc) { free(wt); return; }
+    if (inset < 1) inset = 1;
+    top = has_title ? scale_px(app, 8) : inset;   /* 顶边线：有标题就让出一条给标题 */
 
-    f = font_for(app, w->style.font, w->style.size ? w->style.size : 10, w->style.bold, 0);
-    oldf = (HFONT)SelectObject(dc, f ? f : (HFONT)GetStockObject(DEFAULT_GUI_FONT));
-    /* 擦开边框用的颜色 = 组框自己的底色（没设就用系统面色，和面板擦底一致） */
-    tbg = (w->style.bg != CG_COLOR_NONE) ? brush_for(w->style.bg) : (HBRUSH)(COLOR_BTNFACE + 1);
-    pad = scale_px(app, 4);
-    sz.cx = 0;
-    sz.cy = scale_px(app, 16);
-    GetTextExtentPoint32W(dc, wt, (int)wcslen(wt), &sz);
+    /* 内区底色（顶边线以上不填，透出背后） */
+    {
+        RECT b = *rc;
+        b.top = top;
+        if (b.right > b.left && b.bottom > b.top) FillRect(dc, &b, brush_for(bg));
+    }
 
-    tr.left = scale_px(app, 8);
-    tr.right = tr.left + sz.cx + pad * 2;
-    tr.top = 0;
-    tr.bottom = sz.cy + scale_px(app, 2);
-    FillRect(dc, &tr, tbg);
-    tr.left += pad;
-    tr.right -= pad;
-    SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, (w->style.fg != CG_COLOR_NONE) ? to_colorref(w->style.fg)
-                                                    : GetSysColor(COLOR_WINDOWTEXT));
-    DrawTextW(dc, wt, -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    /* 边框 */
+    {
+        HPEN pen = CreatePen(PS_SOLID, inset, penc);
+        HGDIOBJ oldpen = SelectObject(dc, pen);
+        HGDIOBJ oldbr = SelectObject(dc, GetStockObject(NULL_BRUSH));
+        Rectangle(dc, rc->left, top, rc->right, rc->bottom);
+        SelectObject(dc, oldbr);
+        SelectObject(dc, oldpen);
+        DeleteObject(pen);
+    }
 
-    SelectObject(dc, oldf);
-    ReleaseDC(hwnd, dc);
-    free(wt);
+    /* 标题：先铺一小块自己的底色擦开顶边线，再写字 */
+    if (has_title) {
+        HFONT f = font_for(app, w->style.font, w->style.size ? w->style.size : 10, w->style.bold, 0);
+        HFONT oldf = (HFONT)SelectObject(dc, f ? f : (HFONT)GetStockObject(DEFAULT_GUI_FONT));
+        wchar_t *wt = wc_from_utf8(w->text);
+        int pad = scale_px(app, 4);
+        SIZE sz;
+        sz.cx = 0;
+        sz.cy = scale_px(app, 16);
+        if (wt) GetTextExtentPoint32W(dc, wt, (int)wcslen(wt), &sz);
+        {
+            RECT tr;
+            tr.left = scale_px(app, 8);
+            tr.right = tr.left + sz.cx + pad * 2;
+            if (tr.right > rc->right - inset) tr.right = rc->right - inset;
+            tr.top = top - sz.cy / 2;
+            tr.bottom = tr.top + sz.cy + 2;
+            if (tr.top < 0) { tr.bottom -= tr.top; tr.top = 0; }
+            FillRect(dc, &tr, brush_for(bg));
+            SetBkMode(dc, TRANSPARENT);
+            SetTextColor(dc, (w->style.fg != CG_COLOR_NONE) ? to_colorref(w->style.fg)
+                                                            : GetSysColor(COLOR_WINDOWTEXT));
+            if (wt) DrawTextW(dc, wt, -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+        }
+        if (wt) free(wt);
+        SelectObject(dc, oldf);
+    }
 }
 
 /** @brief 面板窗口过程（group/box/card/shape）：通知上浮主窗口 + card/shape 自绘 */
@@ -1455,38 +1419,20 @@ static LRESULT CALLBACK PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             return SendMessageW((HWND)app->hwnd, msg, wp, lp);
         }
         break;
-    case WM_ERASEBKGND: {
-        /* 面板自己擦底色：设了 style.bg 就用它（分组框/容器块的「背景色」属性），
-         * 否则用系统面色。面板里的无底色标签会按同一颜色上色，两者才融为一体。 */
-        cg_widget_t *ew = app ? widget_by_hwnd(app, hwnd) : NULL;
-        HDC dc = (HDC)wp;
-        RECT rc;
-        GetClientRect(hwnd, &rc);
-        FillRect(dc, &rc, (ew && ew->style.bg != CG_COLOR_NONE)
-                          ? brush_for(ew->style.bg)
-                          : (HBRUSH)(COLOR_BTNFACE + 1));
+    case WM_ERASEBKGND:
+        /* 面板可见的部分全在 WM_PAINT 里画（内区底色 / 边框 / 标题 / 圆角形状），
+         * 这里再填一遍会把"顶边线以上透出背后"的效果糊掉。 */
         return 1;
-    }
-    case WM_SIZE: {
-        /* 边框重画（改变尺寸）会把压在边框上的标题擦掉，这里补一次
-         * （不用 WM_NCPAINT：那个时机调 GDI 会出问题） */
-        LRESULT r = DefSubclassProc(hwnd, msg, wp, lp);
-        cg_widget_t *tw = app ? widget_by_hwnd(app, hwnd) : NULL;
-        if (tw && (is_t(tw, "group") || is_t(tw, "box"))) panel_draw_title(app, hwnd, tw);
-        return r;
-    }
     case WM_PAINT: {
-        /* card / shape 要自己画边框（圆角、椭圆），group / box 保持系统外观（只有一圈边框） */
+        /* card / shape 画圆角/椭圆边框，group / box 连底色带标题一起画 */
         cg_widget_t *w = app ? widget_by_hwnd(app, hwnd) : NULL;
         if (w && (is_t(w, "group") || is_t(w, "box"))) {
-            /* 组框：底色（设了才填）和压在边框上的标题都得自己画 */
             PAINTSTRUCT ps;
             HDC dc = BeginPaint(hwnd, &ps);
             RECT rc;
             GetClientRect(hwnd, &rc);
-            if (w->style.bg != CG_COLOR_NONE) FillRect(dc, &rc, brush_for(w->style.bg));
+            panel_draw_group(app, dc, w, &rc);
             EndPaint(hwnd, &ps);
-            panel_draw_title(app, hwnd, w);
             return 0;
         }
         if (!w || (!is_t(w, "card") && !is_t(w, "shape"))) break;

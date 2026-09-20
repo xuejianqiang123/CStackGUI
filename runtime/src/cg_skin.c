@@ -14,6 +14,7 @@
 #include <commctrl.h>   /* NMCUSTOMDRAW / CDRF_* / TBCD_* / SetWindowSubclass */
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>       /* 圆环的 GDI 回退要算弧上的点 */
 
 /* ---- GDI+ 扁平 API（本机 MinGW 无 gdiplus.h 头，仅前向声明用到的几个） ---- */
 typedef int     GpStatus;
@@ -45,6 +46,13 @@ __declspec(dllimport) GpStatus WINAPI GdipDeletePen(GpPen *pen);
 __declspec(dllimport) GpStatus WINAPI GdipDrawPath(GpGraphics *g, GpPen *pen, GpPath *path);
 __declspec(dllimport) GpStatus WINAPI GdipAddPathEllipse(GpPath *path, REAL x, REAL y, REAL w, REAL h);
 __declspec(dllimport) GpStatus WINAPI GdipDrawLine(GpGraphics *g, GpPen *pen, REAL x1, REAL y1, REAL x2, REAL y2);
+__declspec(dllimport) GpStatus WINAPI GdipDrawArc(GpGraphics *g, GpPen *pen, REAL x, REAL y, REAL w, REAL h, REAL sa, REAL sw);
+__declspec(dllimport) GpStatus WINAPI GdipSetPenStartCap(GpPen *pen, int cap);
+__declspec(dllimport) GpStatus WINAPI GdipSetPenEndCap(GpPen *pen, int cap);
+
+#define SK_CAP_ROUND 2   /* GDI+ LineCapRound */
+#define SK_PI        3.14159265358979
+#define SK_RING_STEPS 72
 
 /* 0xAARRGGBB */
 static unsigned int sk_argb(unsigned char a, unsigned rgb)
@@ -123,6 +131,106 @@ static unsigned sk_behind(const cg_widget_t *w)
 {
     if (!w || !w->app) return 0xF3EDF7u;
     return cg_win_behind_rgb(w->app, w->native);
+}
+
+/**
+ * @brief 圆环进度（progressring）的轨道 + 进度弧，全部走 GDI+ 抗锯齿
+ * @param w 圆环控件（读 value/vmin/vmax/style）；hdc 目标 DC；rc 客户区矩形
+ * @return void 无返回值；GDI+ 不可用时回退 GDI AngleArc（有锯齿但不至于不显示）
+ * @details 中心百分比文字不在这里画：那要用 `font_for()`（在 cg_win32.c），
+ *          调用方画完圆环再补文字。GDI 的粗线/粗弧锯齿很明显，圆环上最扎眼，
+ *          所以这里一定优先 GDI+。
+ */
+void cg_skin_draw_ring(cg_widget_t *w, HDC hdc, const RECT *rc)
+{
+    int width, height, scale, thick, cx, cy, radius, span, val, sweep;
+    unsigned fg, trackc = 0xE0DAE6u;
+    GpGraphics *g = NULL;
+
+    if (!w) return;
+    width  = rc->right - rc->left;
+    height = rc->bottom - rc->top;
+    if (width <= 0 || height <= 0) return;
+
+    scale = (w->app && w->app->scale > 0) ? w->app->scale : 100;
+    thick = (width < 80 ? 6 : (width < 160 ? 10 : 14)) * scale / 100;
+    if (thick < 2) thick = 2;
+    cx = (rc->left + rc->right) / 2;
+    cy = (rc->top + rc->bottom) / 2;
+    radius = ((width < height ? width : height) - thick) / 2 - 2 * scale / 100;
+    if (radius < 4) return;
+
+    span = (w->vmax > w->vmin) ? (w->vmax - w->vmin) : 1;
+    val = w->value;
+    if (val < w->vmin) val = w->vmin;
+    if (val > w->vmax) val = w->vmax;
+    sweep = (int)((long long)(val - w->vmin) * 360 / span);
+    fg = (w->style.fg != CG_COLOR_NONE) ? w->style.fg : 0x6750A4u;
+
+    /* 底：设了背景色用它，否则用"背后"的颜色 */
+    {
+        HBRUSH bb = CreateSolidBrush(sk_colorref((w->style.bg != CG_COLOR_NONE) ? w->style.bg
+                                                                                : sk_behind(w)));
+        FillRect(hdc, rc, bb);
+        DeleteObject(bb);
+    }
+
+    if (GdipCreateFromHDC(hdc, &g) == SK_GDIP_OK && g) {
+        REAL x = (REAL)(cx - radius), y = (REAL)(cy - radius), d = (REAL)(radius * 2);
+        GpPen *pen = NULL;
+
+        GdipSetSmoothingMode(g, SK_SMOOTH_AA);
+
+        /* 轨道：整圈（椭圆路径描边 —— GdipDrawArc 画 360° 在部分实现上会退化） */
+        {
+            GpPath *p = NULL;
+            if (GdipCreatePath(SK_FILL_WINDING, &p) == SK_GDIP_OK && p) {
+                GdipAddPathEllipse(p, x, y, d, d);
+                if (GdipCreatePen1(sk_argb(255, trackc), (REAL)thick, SK_UNIT_PIXEL, &pen) == SK_GDIP_OK && pen) {
+                    GdipDrawPath(g, pen, p);
+                    GdipDeletePen(pen);
+                    pen = NULL;
+                }
+                GdipDeletePath(p);
+            }
+        }
+        /* 进度弧：12 点方向顺时针，圆头收尾 */
+        if (sweep > 0 &&
+            GdipCreatePen1(sk_argb(255, fg), (REAL)thick, SK_UNIT_PIXEL, &pen) == SK_GDIP_OK && pen) {
+            GdipSetPenStartCap(pen, SK_CAP_ROUND);
+            GdipSetPenEndCap(pen, SK_CAP_ROUND);
+            GdipDrawArc(g, pen, x, y, d, d, -90.0f, (REAL)sweep);
+            GdipDeletePen(pen);
+            pen = NULL;
+        }
+        GdipDeleteGraphics(g);
+    } else {
+        /* 回退：GDI（无抗锯齿） */
+        HPEN pen = CreatePen(PS_SOLID, thick, sk_colorref(trackc));
+        HGDIOBJ oldpen = SelectObject(hdc, pen);
+        MoveToEx(hdc, cx + radius, cy, NULL);
+        AngleArc(hdc, cx, cy, radius, 0.0f, 359.9f);
+        SelectObject(hdc, oldpen);
+        DeleteObject(pen);
+
+        if (sweep > 0) {
+            POINT pts[SK_RING_STEPS + 1];
+            int steps = SK_RING_STEPS * sweep / 360;
+            int k;
+            if (steps < 1) steps = 1;
+            if (steps > SK_RING_STEPS) steps = SK_RING_STEPS;
+            for (k = 0; k <= steps; k++) {
+                double a = -SK_PI / 2 + (SK_PI / 180) * (double)sweep * (double)k / (double)steps;
+                pts[k].x = cx + (int)((double)radius * cos(a) + 0.5);
+                pts[k].y = cy + (int)((double)radius * sin(a) + 0.5);
+            }
+            pen = CreatePen(PS_SOLID, thick, sk_colorref(fg));
+            oldpen = SelectObject(hdc, pen);
+            Polyline(hdc, pts, steps + 1);
+            SelectObject(hdc, oldpen);
+            DeleteObject(pen);
+        }
+    }
 }
 
 void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)

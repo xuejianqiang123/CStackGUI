@@ -51,6 +51,13 @@ LRESULT cg_skin_draw_slider_notify(cg_app_t *app, const NMHDR *hdr);
 void cg_skin_draw_progress(cg_widget_t *w, HDC hdc, const RECT *rc);
 
 /**
+ * @brief 圆环进度（progressring）的轨道 + 进度弧，走 GDI+ 抗锯齿
+ * @param w 圆环控件（读 value/vmin/vmax/style）；hdc 目标 DC；rc 客户区矩形
+ * @return void 无返回值；中心百分比文字由调用方补（那要用 cg_win32.c 的 font_for）
+ */
+void cg_skin_draw_ring(cg_widget_t *w, HDC hdc, const RECT *rc);
+
+/**
  * @brief 给输入框（edit/multiedit/spinner）套圆角 + 单行文字垂直居中
  * @param w 输入框控件（读 w->native / w->style.radius / w->app->scale）
  * @return void 无返回值；GDI+ 不可用时也照常（圆角仅靠窗口区域，不依赖 GDI+）
