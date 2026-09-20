@@ -302,6 +302,39 @@ let runBusy = false;
 /** 工程名只允许安全字符：它要拼进 cmd 命令行 */
 const safeName = (s) => (s || "").replace(/[^0-9a-zA-Z_\-]/g, "");
 
+/** MinGW-w64 下载页（没有编译环境时引导用户去这里拿） */
+const MINGW_URL = "https://pan.quark.cn/s/f7f5f4791017";
+
+/** 编译环境检测：MINGW 环境变量 / 默认安装位置 / PATH，三处任一找到 gcc 即可。
+ *  build-app.bat 就是按这个顺序找编译器的，这里保持同一套规则。 */
+function hasMinGW() {
+  const mingwDir = process.env.MINGW;
+  if (mingwDir && existsSync(path.join(mingwDir, "gcc.exe"))) return Promise.resolve(true);
+  if (existsSync("C:\\mingw64\\bin\\gcc.exe")) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const child = spawn("where.exe", ["gcc"], { stdio: "ignore" });
+    child.on("exit", (code) => resolve(code === 0));
+    child.on("error", () => resolve(false));
+  });
+}
+
+/** 没有 MinGW-w64：弹窗引导下载（主按钮直接打开网盘链接） */
+async function failNoMinGW() {
+  const res = await dialog.showMessageBox(win, {
+    type: "warning",
+    title: "缺少 MinGW-w64",
+    message: "没有检测到 MinGW-w64 编译环境（gcc）",
+    detail:
+      "CStackGUI 编译 C 程序需要 MinGW-w64。\n\n" +
+      "点「打开下载页」获取：\n" + MINGW_URL + "\n\n" +
+      "装好后把 <mingw64>\\bin 加入 PATH（或设置 MINGW 环境变量），再重启画布。",
+    buttons: ["打开下载页", "取消"],
+    defaultId: 0,
+  });
+  if (res.response === 0) await shell.openExternal(MINGW_URL);
+  return { ok: false, message: `缺少 MinGW-w64 编译环境，请从这里下载：${MINGW_URL}` };
+}
+
 ipcMain.handle("run:buildAndLaunch", async (_e, { filePath }) => {
   const fail = (message) => {
     dialog.showErrorBox("跑不起来", message);
@@ -312,6 +345,7 @@ ipcMain.handle("run:buildAndLaunch", async (_e, { filePath }) => {
   if (!filePath || !existsSync(filePath)) {
     return fail("先把 .cgui 保存到磁盘（Ctrl+S）再运行。");
   }
+  if (!(await hasMinGW())) return failNoMinGW();
 
   /* 便携版画布常被放在 release\ 里编辑"真项目"的 .cgui。
    * 文件本身就躺在某个项目根的 apps\ 或 examples\ 下时，以文件位置向上找到的根为准，
@@ -405,6 +439,7 @@ ipcMain.handle("publish:project", async (_e, { filePath }) => {
   if (!filePath || !existsSync(filePath)) {
     return fail("先把 .cgui 保存到磁盘（Ctrl+S）再发布。");
   }
+  if (!(await hasMinGW())) return failNoMinGW();
 
   /* 与运行按钮同一套前置检查（找根 / 工程名 / 目录位置 / main.c） */
   const appDir = path.dirname(path.resolve(filePath));
