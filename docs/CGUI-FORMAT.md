@@ -31,6 +31,53 @@
 | `app.bg` | 字符串 | 否 | 窗口底色 `#RRGGBB`；不写则用系统窗口色 |
 | `widgets` | 数组 | 是 | 顶层控件。数组顺序 = 层叠顺序，**后面的盖在前面的上面** |
 
+### 1.1 主窗口属性（`app` 的其余字段，全部可选）
+
+对齐「启动窗口」的属性面板。**不写的字段一律保持 Windows 默认行为**，所以老文件完全兼容。
+
+| 字段 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `app.x` / `app.y` | 整数 | 系统决定 | 窗口左上角屏幕坐标（逻辑像素） |
+| `app.center` | 布尔 | `false` | 启动时按当前显示器工作区居中（盖过 `x`/`y`） |
+| `app.border` | 字符串 | `sizable` | 边框：`sizable` 可调整 / `fixed` 普通固定 / `dialog` 对话框固定 / `none` 无边框 |
+| `app.controlBox` | 布尔 | `true` | 是否显示标题栏按钮组（系统菜单 + 关闭钮） |
+| `app.minimizeBox` / `app.maximizeBox` | 布尔 | `true` | 是否显示最小化 / 最大化按钮 |
+| `app.topmost` | 布尔 | `false` | 总在最前 |
+| `app.taskbar` | 布尔 | `true` | 是否在任务栏显示 |
+| `app.visible` | 布尔 | `true` | 启动即显示；`false` 时先隐藏，等业务代码 `cg_win_show()` |
+| `app.enabled` | 布尔 | `true` | `false` = 整窗禁用（点了没反应） |
+| `app.enterTab` | 布尔 | `false` | 回车当 Tab 下移焦点（默认回车触发 `submit`） |
+| `app.escClose` | 布尔 | `true` | Esc 关闭窗口；关掉后 Esc 会当成当前控件的 `submit` |
+| `app.tray` | 布尔 | `false` | 建系统托盘图标（用窗口图标）；左键显示、右键弹菜单，并触发 `tray` 事件 |
+| `app.icon` | 字符串 | 运行时自带 | 窗口图标 `.ico` 路径，解析顺序同 `src`（见 2.4） |
+| `app.cursor` | 字符串 | `arrow` | 窗口鼠标指针：`arrow`/`hand`/`ibeam`/`wait`/`cross`/`sizeall`/`sizens`/`sizewe`/`sizenesw`/`sizenwse`/`no`/`help`/`uparrow` |
+| `app.class` | 字符串 | `CStackGUIMain` | 窗口类名（注册 Win32 窗口类用的，一般不用改） |
+| `app.note` | 字符串 | — | 备注，**只给画布看**，运行时忽略 |
+
+### 1.2 程序配置（`app.info`，写进 exe 版本信息）
+
+画布工具栏「程序配置」对话框填的内容。编译时由画布生成的 `<工程名>.rc` 落进 exe 的
+`VERSIONINFO`，运行时可用 `cg_app_info(app, "键")` 读回。空字段不写。
+
+| 键 | 说明 | 键 | 说明 |
+| --- | --- | --- | --- |
+| `product` | 程序名称（ProductName）| `author` | 作者（单独的 Author 字段）|
+| `desc` | 程序描述（FileDescription）| `company` | 单位 / 公司（CompanyName）|
+| `comments` | 程序备注（Comments）| `copyright` | 版权声明（LegalCopyright）|
+| `version` | 程序版本号（四段 `1.0.0.0`）| `address` | 地址 |
+| `build` | 创建号（和 `version` 拼成完整版本号）| `postcode` | 邮政编码 |
+| `phone` | 电话 | `fax` | 传真 |
+| `email` | 电子邮箱 | `homepage` | 主页 |
+
+```json
+"app": {
+  "title": "我的程序", "width": 700, "height": 500, "bg": "#F3EDF7",
+  "center": true, "tray": true,
+  "events": { "close": "on_close" },
+  "info": { "product": "我的程序", "version": "1.0.0.0", "author": "作者" }
+}
+```
+
 ---
 
 ## 2. 控件节点
@@ -79,7 +126,7 @@
 | `size` | 整数 | 字号（**磅**）。`0` / 不写 = 系统默认字号 |
 | `bold` | 布尔 | 是否加粗 |
 | `fg` | 字符串 | 文字色 `#RRGGBB`，也接受 `#RGB` / `#AARRGGBB` / 十进制 |
-| `bg` | 字符串 | 背景色，同上。不写 = 跟随系统 |
+| `bg` | 字符串 | 背景色，同上。**`label`/`link`/`separator` 不写 = 透明（透出窗口底色）**；其它控件不写 = 跟随系统 |
 | `align` | `left`\|`center`\|`right` | 文本对齐（`label` 生效）|
 | `radius` | 整数 | 圆角半径。**Win32 后端目前忽略**，留给自绘后端 |
 
@@ -246,12 +293,36 @@ static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
 | `separator` | 分割线 | 否 | 200×2 | — | **无** | `STATIC` |
 | `image` | 图片 | 否 | 200×120 | — | `click`、`dblclick` | 自绘窗口（GDI+ 读图） |
 
-**窗口本身也是一个"控件"**（id 固定为 `__window`，头文件里是 `CG_WINDOW_ID`），
-只有一个事件：`close`。写在 `app.events` 里：
+**窗口本身也是一个"控件"**（伪控件 id 固定为 `__window`，头文件里是 `CG_WINDOW_ID`）。
+它的事件写在 `app.events` 里，和控件事件共用同一套 `CG_BIND` 机制：
 
 ```json
-"app": { "title": "...", "events": { "close": "on_close" } }
+"app": { "title": "...", "events": { "ready": "on_ready", "close": "on_close", "tray": "on_tray" } }
 ```
+
+窗口支持的事件（对齐「启动窗口」的事件表）：
+
+| 事件 | 什么时候发 |
+| --- | --- |
+| `ready` | 窗口与控件都建好、还没显示；启动初始化放这里 |
+| `close` | 用户点关闭（或 Alt+F4）；回调里 `cg_cancel_close(app)` 可拦下这次关闭 |
+| `closequery` | 和 `close` 同一时机，两个名字都能拦关闭 |
+| `destroy` | 窗口已销毁、进程马上退出 |
+| `move` / `size` | 位置 / 客户区尺寸变了（新坐标/尺寸用 `cg_event_x` / `cg_event_y` 取）|
+| `activate` / `deactivate` | 被激活 / 被取消激活 |
+| `firstactivate` | 启动后第一次被激活 |
+| `idle` | 消息队列空着时（别在这里做耗时活）|
+| `tray` | 托盘图标被点，`cg_tray_action()` 给 1=单击 / 2=双击 / 3=右键 |
+| `show` / `hide` | 被显示 / 被隐藏 |
+| `mousedown`/`mouseup`/`rdown`/`rup`/`mousemove` | 在窗口空白处按/放左键、按/放右键、移动鼠标 |
+| `dblclick` | 在窗口空白处双击 |
+| `gotfocus` / `lostfocus` | 窗口获得 / 失去键盘焦点 |
+| `keydown` / `keyup` | 按下 / 放开按键（`cg_event_key()` 键码、`cg_event_keys()` 功能键）|
+| `char` | 输入了可打印字符（中文输入法也走这里）|
+| `wheel` | 滚轮滚动（`cg_event_delta()` 滚动量，正数向上）|
+
+鼠标/键盘/滚轮事件的参数因为回调签名固定（只有 `self`/`ev`/`user`），存在窗口对象上，
+用 `cg_event_x/y/keys/key/delta` 和 `cg_tray_action` 读（`self` 传回调收到的那个控件即可）。
 
 `close` 回调里可以调 `cg_cancel_close(app)` 取消这次关闭（比如还有没保存的内容）。
 
@@ -420,6 +491,31 @@ int         cg_menu_count(const cg_widget_t *w);   /* 可点项个数，不含�
 /* 窗口 */
 void cg_set_title(cg_app_t *app, const char *title);
 void cg_cancel_close(cg_app_t *app);   /* 只在窗口的 close 回调里有意义：这次不关了 */
+void cg_win_set_pos(cg_app_t *app, int x, int y);        /* top-left，屏幕坐标 */
+void cg_win_set_size(cg_app_t *app, int width, int height);
+void cg_win_center(cg_app_t *app);
+void cg_win_show(cg_app_t *app, int show);
+void cg_win_set_state(cg_app_t *app, const char *cmd);   /* "min" / "max" / "normal" */
+void cg_win_set_topmost(cg_app_t *app, int on);
+void cg_win_set_icon(cg_app_t *app, const char *ico_path);   /* NULL 还原默认 */
+int  cg_app_has_window(const cg_app_t *app);   /* --selftest 不开窗：弹框前先问一句 */
+
+/* 托盘图标（app.tray = true 会自动建；这里可手动控制 / 弹气泡）。
+ * ico_path 为 NULL 用窗口图标，tip 为 NULL 用窗口标题。 */
+void cg_tray_set(cg_app_t *app, const char *ico_path, const char *tip);
+void cg_tray_remove(cg_app_t *app);
+void cg_tray_balloon(cg_app_t *app, const char *tip_title, const char *text);
+
+/* 窗口事件的参数（鼠标坐标 / 功能键 / 键码 / 滚轮量 / 托盘动作） */
+int cg_event_x(const cg_widget_t *self);
+int cg_event_y(const cg_widget_t *self);
+int cg_event_keys(const cg_widget_t *self);   /* 1=Ctrl 2=Shift 4=Alt（位或，对齐）*/
+int cg_event_key(const cg_widget_t *self);    /* 键码（keydown/keyup，VK_*）*/
+int cg_event_delta(const cg_widget_t *self);  /* 滚轮量，正数向上 */
+int cg_tray_action(const cg_widget_t *self);  /* 1=单击 2=双击 3=右键 */
+
+/* 程序配置（app.info）：key 见 1.2 节，取不到返回 NULL */
+const char *cg_app_info(const cg_app_t *app, const char *key);
 
 /* 动态扩展与绑定 */
 cg_widget_t *cg_widget_add(cg_app_t *app, cg_widget_t *parent, const char *type, const char *id,
