@@ -3,9 +3,9 @@ rem ============================================================
 rem  Build a UI project into a standalone exe (source-repo version)
 rem
 rem  Usage (run at the repo root):
-rem    build-app.bat hello              debug build (console, printf visible)
+rem    build-app.bat gallery            debug build (console, printf visible)
 rem    build-app.bat myapp --release    release build (-mwindows, no console)
-rem    build-app.bat                    no args = build hello
+rem    build-app.bat                    no args = first project under apps\, else examples\
 rem
 rem  NOTE: keep this file ASCII-only. cmd mis-parses non-ASCII comments
 rem  after `chcp 65001` (the designer's F5 run uses it), turning rem
@@ -21,7 +21,11 @@ set APP=%~1
 rem The designer passes the project directory via CG_APP_DIR (env, not argv:
 rem cmd quoting of paths inside spawn gets mangled). Manual use stays %1.
 if "%APP%"=="" if not "%CG_APP_DIR%"=="" set "APP=%CG_APP_DIR%"
-if "%APP%"=="" set APP=hello
+rem No argument: build the first project under apps\, else the first example.
+rem (This used to default to "hello", an example that was deleted when the two
+rem  examples were merged into examples\gallery.)
+if "%APP%"=="" for /d %%a in (apps\*) do if not defined APP set "APP=%%~nxa"
+if "%APP%"=="" for /d %%a in (examples\*) do if not defined APP set "APP=%%~nxa"
 set MODE=%~2
 
 rem %APP% is a bare project name (apps\<name> / examples\<name>) or a path
