@@ -14,7 +14,8 @@ rem
 rem  NOTE: keep this file ASCII-only. cmd mis-parses non-ASCII comments
 rem  after `chcp 65001` (the designer's F5 run uses it).
 rem ============================================================
-setlocal
+chcp 65001 >nul
+setlocal enabledelayedexpansion
 if "%MINGW%"=="" set MINGW=C:\mingw64\bin
 set PATH=%MINGW%;%PATH%
 cd /d "%~dp0"
@@ -69,13 +70,59 @@ set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include
 rem The resource object (manifest + version info) has no code symbols, so the
 rem linker never pulls it out of the static lib -- link it directly so the exe
 rem gets the v6 common controls manifest (modern tabs/progress).
+rem A project-level <name>.rc (designer "program config" dialog) replaces the
+rem generic one: it carries this app's product name / version / author / icon.
+rem It is UTF-8 (Chinese inside) so --codepage=65001; -I runtime\res finds the
+rem manifest + default icon it references.
+if not exist "%APPDIR%\lib" mkdir "%APPDIR%\lib"
+set RESOBJ=runtime\lib\cstackgui_res.o
+if exist "%APPDIR%\%NAME%.rc" (
+    echo   RC %APPDIR%\%NAME%.rc
+    windres --codepage=65001 -I "%APPDIR%" -I "runtime\res" -O coff "%APPDIR%\%NAME%.rc" -o "%APPDIR%\lib\%NAME%_res.o"
+    if errorlevel 1 (
+        echo [fail] compiling %APPDIR%\%NAME%.rc failed
+        exit /b 1
+    )
+    set RESOBJ=%APPDIR%\lib\%NAME%_res.o
+)
+
 set OUT=%APPDIR%\%NAME%.exe
+
+rem Incremental: compile each <project>\*.c to lib\<name>.o, only when the .o is
+rem missing or not strictly newer than the source / project headers / cstackgui.h.
+rem Deleted sources just drop out of the link list. (The runtime lib is always
+rem re-linked, so it deliberately does NOT gate the app compile.)
+set "HDRT=0"
+for %%h in ("%APPDIR%\*.h") do if "%%~th" GTR "!HDRT!" set "HDRT=%%~th"
+for %%x in ("runtime\include\cstackgui.h") do if "%%~tx" GTR "!HDRT!" set "HDRT=%%~tx"
+
+set "OBJS="
+for %%f in ("%APPDIR%\*.c") do (
+    set "SRCF=%%~ff"
+    set "OBJ=%APPDIR%\lib\%%~nf.o"
+    set "DO=1"
+    if exist "!OBJ!" (
+        for %%o in ("!OBJ!") do set "OT=%%~to"
+        for %%c in ("!SRCF!") do set "CT=%%~tc"
+        if "!OT!" GTR "!CT!" if "!OT!" GTR "!HDRT!" set "DO="
+    )
+    if defined DO (
+        echo   CC !SRCF!
+        gcc %CFLAGS% -c "!SRCF!" -o "!OBJ!"
+        if errorlevel 1 (
+            echo [fail] compiling !SRCF! failed
+            exit /b 1
+        )
+    )
+    set "OBJS=!OBJS! "!OBJ!""
+)
+
 if "%MODE%"=="--release" (
     echo   LD %OUT% ^(release, no console^)
-    gcc %CFLAGS% -mwindows -o "%OUT%" "%APPDIR%\*.c" "runtime\lib\cstackgui_res.o" "runtime\lib\libcstackgui.a" %LDFLAGS%
+    gcc %CFLAGS% -mwindows -o "%OUT%" !OBJS! "%RESOBJ%" "runtime\lib\libcstackgui.a" %LDFLAGS%
 ) else (
     echo   LD %OUT% ^(debug, with console^)
-    gcc %CFLAGS% -o "%OUT%" "%APPDIR%\*.c" "runtime\lib\cstackgui_res.o" "runtime\lib\libcstackgui.a" %LDFLAGS%
+    gcc %CFLAGS% -o "%OUT%" !OBJS! "%RESOBJ%" "runtime\lib\libcstackgui.a" %LDFLAGS%
 )
 if errorlevel 1 (
     echo [fail] build of %APP% failed

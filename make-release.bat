@@ -13,6 +13,7 @@ rem    4) 自检：从 release\ 里真的编译并运行一次示例，确认发
 rem
 rem  release\ 是纯产物，可以随时删掉重打。
 rem ============================================================
+chcp 65001 >nul
 setlocal
 cd /d "%~dp0"
 
@@ -45,9 +46,13 @@ echo == 3/4 组装 release\ ==
 if exist release rmdir /s /q release
 mkdir release\runtime\include
 mkdir release\runtime\lib
+mkdir release\runtime\res
 copy /y runtime\include\cstackgui.h release\runtime\include\ >nul
 copy /y build\lib\libcstackgui.a release\runtime\lib\ >nul
 copy /y build\obj\cstackgui_res.o release\runtime\lib\ >nul
+rem runtime\res: projects with a program-config <name>.rc reference the manifest
+rem and default icon from here -- without it the windres step fails.
+xcopy /e /i /q /y runtime\res release\runtime\res >nul
 if errorlevel 1 (
     echo [fail] 复制运行时库失败
     exit /b 1
