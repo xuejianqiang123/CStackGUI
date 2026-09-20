@@ -109,6 +109,9 @@
         "控件陈列",
         "新特性"
       ],
+      "style": {
+        "bg": "#dbf8ff"
+      },
       "events": {
         "select": "on_pages_change"
       },
@@ -126,7 +129,8 @@
           "style": {
             "font": "Microsoft YaHei UI",
             "size": 9,
-            "fg": "#1D1B20"
+            "fg": "#1D1B20",
+            "bg": "#dbfff0"
           },
           "children": [
             {
