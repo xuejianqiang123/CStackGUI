@@ -27,27 +27,40 @@ if errorlevel 1 (
 if not exist build\obj mkdir build\obj
 if not exist build\lib mkdir build\lib
 
-set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include -Iruntime\src
-set SRC=cg_json cg_doc cg_app cg_timer cg_win32 cg_skin
+rem Sources are grouped by layer under runtime\src:
+rem   core\   backend-agnostic: JSON, doc + kind table, widget model, events, lifecycle
+rem   win32\  Win32 backend: window, native controls, message mapping, dialogs, tray
+rem   skin\   GDI+ appearance layer (replace the whole folder to swap in a D2D kernel)
+rem Each layer is on the include path so the files can include each other by bare name;
+rem runtime\src itself is deliberately NOT on it -- cross-layer includes must be explicit.
+set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include -Iruntime\src\core -Iruntime\src\win32 -Iruntime\src\skin
 set CHANGED=
+set OBJS=
 
+rem Compile every .c under core\ win32\ skin\ -- no hand-maintained file list to forget.
+rem Object name = source basename (build\obj\<name>.o), so two folders must never hold
+rem files with the same name. The naming convention guarantees it:
+rem core = cg_*, backend = cg_win_*, appearance = cg_skin_*.
 rem Incremental: only recompile a source whose .o is missing or not strictly newer
 rem than it. The "YYYY/MM/DD HH:MM" timestamp compares chronologically as a string;
 rem "not strictly newer" counts as stale so a same-minute edit is never missed.
-for %%f in (%SRC%) do (
-    set "OBJ=build\obj\%%f.o"
-    set "SRCF=runtime\src\%%f.c"
-    set "DO=1"
-    if exist "!OBJ!" (
-        for %%o in ("!OBJ!") do set "OT=%%~to"
-        for %%c in ("!SRCF!") do set "CT=%%~tc"
-        if "!OT!" GTR "!CT!" set "DO="
-    )
-    if defined DO (
-        echo   CC !SRCF!
-        gcc %CFLAGS% -c "!SRCF!" -o "!OBJ!"
-        if errorlevel 1 goto :fail
-        set "CHANGED=1"
+for %%d in (core win32 skin) do (
+    for %%f in ("runtime\src\%%d\*.c") do (
+        set "SRCF=%%~ff"
+        set "OBJ=build\obj\%%~nf.o"
+        set "OBJS=!OBJS! build\obj\%%~nf.o"
+        set "DO=1"
+        if exist "!OBJ!" (
+            for %%o in ("!OBJ!") do set "OT=%%~to"
+            for %%c in ("!SRCF!") do set "CT=%%~tc"
+            if "!OT!" GTR "!CT!" set "DO="
+        )
+        if defined DO (
+            echo   CC runtime\src\%%d\%%~nxf
+            gcc %CFLAGS% -c "!SRCF!" -o "!OBJ!"
+            if errorlevel 1 goto :fail
+            set "CHANGED=1"
+        )
     )
 )
 
@@ -71,7 +84,7 @@ rem Re-archive only when something actually changed (or the lib is missing)
 if not exist build\lib\libcstackgui.a set "CHANGED=1"
 if defined CHANGED (
     echo   AR build\lib\libcstackgui.a
-    ar rcs build\lib\libcstackgui.a build\obj\cg_json.o build\obj\cg_doc.o build\obj\cg_app.o build\obj\cg_timer.o build\obj\cg_win32.o build\obj\cg_skin.o build\obj\cstackgui_res.o
+    ar rcs build\lib\libcstackgui.a !OBJS! build\obj\cstackgui_res.o
     if errorlevel 1 goto :fail
     echo [ok] build\lib\libcstackgui.a
 ) else (

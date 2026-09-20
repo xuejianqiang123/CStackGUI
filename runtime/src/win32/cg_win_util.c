@@ -1,0 +1,279 @@
+/**
+ * @file    cg_win_util.c
+ * @brief   后端通用工具：UTF-8 转换、字体缓存、颜色刷、路径与资源解析、时基
+ * @details 从原 cg_win32.c 按职责拆分而来，跨模块接口见 cg_win_internal.h。
+ */
+#include "cg_win_internal.h"
+
+/* ------------------------------------------------------------ 字符串 */
+
+/** @brief UTF-8 转 UTF-16 堆串（调用方 free）；空/失败返回 NULL */
+wchar_t *cgw_wc_from_utf8(const char *s)
+{
+    if (!s) return NULL;
+    int n = MultiByteToWideChar(CP_UTF8, 0, s, -1, NULL, 0);
+    if (n <= 0) return NULL;
+    wchar_t *out = (wchar_t *)malloc((size_t)n * sizeof(wchar_t));
+    if (!out) return NULL;
+    MultiByteToWideChar(CP_UTF8, 0, s, -1, out, n);
+    return out;
+}
+
+/* ------------------------------------------------------------ 字体缓存与缩放 */
+
+/** @brief 逻辑像素转物理像素（app->scale 用百分比存，100 = 96dpi） */
+int cgw_scale_px(const cg_app_t *app, int logical)
+{
+    int s = app->scale > 0 ? app->scale : 100;
+    return (int)(((long long)logical * s + 50) / 100);
+}
+
+/**
+ * @brief 取（或缓存创建）一个 HFONT
+ * @param app 所属应用；family 字体族；size_pt 磅数；bold 加粗；underline 下划线
+ * @return HFONT 字体句柄（缓存，勿删）；size_pt<=0 返回 NULL 走系统默认
+ */
+HFONT cgw_font_for(cg_app_t *app, const char *family, int size_pt, int bold, int underline)
+{
+    cg_win_state_t *st = (cg_win_state_t *)app->natives;
+    char key[128];
+    int  height;
+    cg_font_node_t *node;
+
+    if (!st) return NULL;
+    if (!family || !*family) family = "Microsoft YaHei UI";
+    if (size_pt <= 0) {
+        /* 不指定就跟随系统 UI 字体，交给 DEFAULT_GUI_FONT */
+        return NULL;
+    }
+    height = -MulDiv(size_pt, st->dpi, 72);
+
+    snprintf(key, sizeof(key), "%s|%d|%d|%d", family, size_pt, bold ? 1 : 0, underline ? 1 : 0);
+    for (node = st->fonts; node; node = node->next) {
+        if (strcmp(node->key, key) == 0) return node->hfont;
+    }
+
+    node = (cg_font_node_t *)calloc(1, sizeof(*node));
+    if (!node) return NULL;
+    node->key = _strdup(key);
+    {
+        wchar_t *wf = cgw_wc_from_utf8(family);
+        node->hfont = CreateFontW(height, 0, 0, 0, bold ? FW_BOLD : FW_NORMAL,
+                                  0, underline ? TRUE : FALSE, 0,
+                                  DEFAULT_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
+                                  CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
+                                  wf ? wf : L"Microsoft YaHei UI");
+        free(wf);
+    }
+    if (!node->key || !node->hfont) {
+        /* 分配失败就丢给系统字体，别缓存一个戳不上的 key（strcmp 会崩） */
+        HFONT hf = node->hfont;
+        free(node->key);
+        free(node);
+        return hf ? hf : NULL;
+    }
+    node->next = st->fonts;
+    st->fonts = node;
+    return node->hfont;
+}
+
+
+/* ------------------------------------------------------------ 颜色 */
+
+/** @brief 0xRRGGBB 转 COLORREF */
+COLORREF cgw_to_colorref(unsigned c) { return RGB((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF); }
+
+/** 一组小画刷缓存，给 WM_CTLCOLOR* 返回用；颜色数量有限，链表足够 */
+HBRUSH cgw_brush_for(unsigned rgb)
+{
+    static struct { unsigned rgb; HBRUSH br; } cache[64];
+    static int used = 0;
+
+    for (int i = 0; i < used; i++) {
+        if (cache[i].rgb == rgb) return cache[i].br;
+    }
+    if (used < (int)(sizeof(cache) / sizeof(cache[0]))) {
+        cache[used].br = CreateSolidBrush(cgw_to_colorref(rgb));
+        cache[used].rgb = rgb;
+        return cache[used++].br;
+    }
+    return (HBRUSH)GetStockObject(WHITE_BRUSH);
+}
+
+/* ------------------------------------------------------------ 类型判断 */
+
+/** @brief 控件类型判断（NULL 安全） */
+int cgw_is_t(const cg_widget_t *w, const char *type)
+{
+    return w && w->type && strcmp(w->type, type) == 0;
+}
+
+/** @brief 是否输入类控件（edit/multiedit/spinner/richtext，文字要拉回模型的那类） */
+int cgw_is_editlike(const cg_widget_t *w)
+{
+    return cgw_is_t(w, "edit") || cgw_is_t(w, "multiedit") || cgw_is_t(w, "spinner") || cgw_is_t(w, "richtext");
+}
+
+/**
+ * @brief 有控制台时把控制台输入/输出代码页切到 UTF-8
+ *
+ * printf 的中文是 UTF-8 字节（源码与执行字符集都是 UTF-8），控制台默认
+ * 代码页（如 GBK）会显示成乱码。带控制台的 debug 版调用后中文正常显示；
+ * 无控制台（-mwindows 的 release 版、输出重定向）时 GetConsoleWindow()
+ * 返回 NULL，本函数不做任何事。
+ *
+ * @param void 无参数
+ * @return void 无返回值
+ */
+void cg_win_console_utf8(void)
+{
+    if (GetConsoleWindow() != NULL) {
+        SetConsoleOutputCP(CP_UTF8);
+        SetConsoleCP(CP_UTF8);
+    }
+}
+ULONG_PTR g_win_gdip_token = 0;   /* GDI+ 的启动令牌，0 表示没起来 */
+
+/** @brief 文件是否存在 */
+static int file_exists(const char *path)
+{
+    HANDLE h = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) return 0;
+    CloseHandle(h);
+    return 1;
+}
+
+/** @brief 取路径的目录部分（无目录时写 "."） */
+static void dir_of(const char *path, char *out, size_t size)
+{
+    const char *slash = strrchr(path, '\\');
+    const char *slash2 = strrchr(path, '/');
+    size_t n;
+    if (slash2 > slash) slash = slash2;
+    if (!slash) { snprintf(out, size, "."); return; }
+    n = (size_t)(slash - path);
+    if (n > size - 1) n = size - 1;
+    memcpy(out, path, n);
+    out[n] = '\0';
+}
+
+/** 资产路径按三处依次找：
+ *  1) 原样（相对当前目录）  2) 相对 .cgui 所在目录  3) 相对 exe 所在目录
+ *  第 2 条最符合直觉：.cgui 和 assets\ 放在一起，换台机器整个目录搬走也能用。
+ *  找到返回 1，并把完整路径写进 out。 */
+int cgw_resolve_asset(const cg_app_t *app, const char *path, char *out, size_t outsz)
+{
+    if (!path || !*path || outsz == 0) return 0;
+    snprintf(out, outsz, "%s", path);
+    if (file_exists(out)) return 1;
+    if (app && app->cgui_dir) {
+        snprintf(out, outsz, "%s\\%s", app->cgui_dir, path);
+        if (file_exists(out)) return 1;
+    }
+    {
+        char exe[512], dir[512];
+        if (cg_exe_path(exe, sizeof(exe)) == 0) {
+            dir_of(exe, dir, sizeof(dir));
+            snprintf(out, outsz, "%s\\%s", dir, path);
+            if (file_exists(out)) return 1;
+        }
+    }
+    return 0;
+}
+
+/** 打开图片成位图（路径查找见 cgw_resolve_asset） */
+HBITMAP cgw_load_image_file(const cg_app_t *app, const char *path)
+{
+    char   full[1024];
+    WCHAR *wpath;
+    void  *gdip_bmp = NULL;
+    HBITMAP hbmp = NULL;
+    int     need;
+
+    if (!path || !*path) return NULL;
+    if (!cgw_resolve_asset(app, path, full, sizeof(full))) return NULL;
+
+    need = MultiByteToWideChar(CP_UTF8, 0, full, -1, NULL, 0);
+    if (need <= 0) return NULL;
+    wpath = (WCHAR *)malloc((size_t)need * sizeof(WCHAR));
+    if (!wpath) return NULL;
+    MultiByteToWideChar(CP_UTF8, 0, full, -1, wpath, need);
+
+    if (GdipCreateBitmapFromFile(wpath, &gdip_bmp) == 0 && gdip_bmp) {
+        GdipCreateHBITMAPFromBitmap(gdip_bmp, &hbmp, 0x00FFFFFF);
+        GdipDisposeImage(gdip_bmp);
+    }
+    free(wpath);
+    return hbmp;
+}
+
+/** 打开 .ico 成 HICON（路径查找见 cgw_resolve_asset）；找不到返回 NULL */
+HICON cgw_load_icon_file(const cg_app_t *app, const char *path)
+{
+    char    full[1024];
+    WCHAR  *wp;
+    HICON   ic = NULL;
+    int     need;
+
+    if (!path || !*path) return NULL;
+    if (!cgw_resolve_asset(app, path, full, sizeof(full))) return NULL;
+
+    need = MultiByteToWideChar(CP_UTF8, 0, full, -1, NULL, 0);
+    if (need <= 0) return NULL;
+    wp = (WCHAR *)malloc((size_t)need * sizeof(WCHAR));
+    if (!wp) return NULL;
+    MultiByteToWideChar(CP_UTF8, 0, full, -1, wp, need);
+    ic = (HICON)LoadImageW(NULL, wp, IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE);
+    free(wp);
+    return ic;
+}
+
+/** 鼠标指针名 -> 系统光标 id（.cgui 的 app.cursor，对齐「鼠标指针」属性） */
+LPCWSTR cgw_cursor_id_of(const char *name)
+{
+    if (!name || !*name) return NULL;
+    if (!strcmp(name, "arrow"))    return IDC_ARROW;
+    if (!strcmp(name, "hand"))     return IDC_HAND;
+    if (!strcmp(name, "ibeam"))    return IDC_IBEAM;
+    if (!strcmp(name, "wait"))     return IDC_WAIT;
+    if (!strcmp(name, "cross"))    return IDC_CROSS;
+    if (!strcmp(name, "sizeall"))  return IDC_SIZEALL;
+    if (!strcmp(name, "sizens"))   return IDC_SIZENS;
+    if (!strcmp(name, "sizewe"))   return IDC_SIZEWE;
+    if (!strcmp(name, "sizenesw")) return IDC_SIZENESW;
+    if (!strcmp(name, "sizenwse")) return IDC_SIZENWSE;
+    if (!strcmp(name, "no"))       return IDC_NO;
+    if (!strcmp(name, "help"))     return IDC_HELP;
+    if (!strcmp(name, "uparrow"))  return IDC_UPARROW;
+    return IDC_ARROW;
+}
+
+/** @brief 当前 exe 的完整路径（含文件名），成功返回 0 */
+int cg_exe_path(char *buf, size_t size)
+{
+    wchar_t wbuf[MAX_PATH * 2];
+    DWORD   n;
+    int     need;
+
+    if (!buf || size == 0) return -1;
+    n = GetModuleFileNameW(NULL, wbuf, (DWORD)(sizeof(wbuf) / sizeof(wbuf[0])));
+    if (n == 0 || n >= (DWORD)(sizeof(wbuf) / sizeof(wbuf[0]))) return -1;
+
+    need = WideCharToMultiByte(CP_UTF8, 0, wbuf, -1, NULL, 0, NULL, NULL);
+    if (need <= 0 || (size_t)need > size) return -1;
+    WideCharToMultiByte(CP_UTF8, 0, wbuf, -1, buf, need, NULL, NULL);
+    return 0;
+}
+
+/** @brief 毫秒级时基（后端提供），用于双击判定与定时器 */
+unsigned long cg_ticks(void)
+{
+    return (unsigned long)GetTickCount64();
+}
+
+/** @brief 系统双击间隔，默认 500ms */
+unsigned long cg_double_click_ms(void)
+{
+    UINT t = GetDoubleClickTime();
+    return t ? (unsigned long)t : 500;
+}

@@ -15,7 +15,7 @@
 /** 「不设置颜色」：这个控件交给系统默认配色 */
 #define CG_COLOR_NONE 0xFFFFFFFFu
 
-/** 控件类型。新增类型时记得同步 cg_doc.c 的 k_kinds 和画布端的 model.ts/KINDS。 */
+/** 控件类型。新增类型时记得同步 cg_doc_kind.c 的 k_kinds 和画布端的 model.ts/KINDS。 */
 typedef enum {
     CG_K_BUTTON = 0,
     CG_K_LABEL,

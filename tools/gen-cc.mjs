@@ -34,11 +34,12 @@ const commonFlags = [
 /** 各翻译单元额外需要的参数（和对应构建脚本一致） */
 function extraFlags(file) {
   const flags = [];
-  if (file.includes(`${path.sep}runtime${path.sep}`)) {
-    flags.push("-Iruntime/src");
+  if (file.includes(`${path.sep}runtime${path.sep}src${path.sep}`)) {
+    /* 与 build-runtime.bat 的 CFLAGS 一致：三层目录各自在 include 路径上 */
+    flags.push("-Iruntime/src/core", "-Iruntime/src/win32", "-Iruntime/src/skin");
   }
-  if (path.basename(file) === "cg_win32.c") {
-    /* cg_win32.c 明确走 W 系列 API */
+  if (path.basename(file).startsWith("cg_win")) {
+    /* Win32 后端子模块都明确走 W 系列 API */
     flags.push("-DUNICODE", "-D_UNICODE");
   }
   return flags;
@@ -52,10 +53,13 @@ const list = (base) => {
     .filter((d) => d.isDirectory())
     .map((d) => path.join(dir, d.name));
 };
-/* apps\ 也要：用户自己的工程同样享受 clangd；
- * runtime\src 发布包里没有（只有预编译库），缺了跳过 */
-const runtimeSrc = path.join(root, "runtime", "src");
-const dirs = [...(existsSync(runtimeSrc) ? [runtimeSrc] : []), ...list("apps"), ...list("examples")];
+/* runtime\src 按分层分子目录（core = 后端无关，win32 = 原生后端，skin = GDI+ 外观层）；
+ * 发布包里没有源码（只有预编译库），缺了跳过。
+ * apps\ 也要：用户自己的工程同样享受 clangd。 */
+const runtimeSrcDirs = ["core", "win32", "skin"]
+  .map((d) => path.join(root, "runtime", "src", d))
+  .filter(existsSync);
+const dirs = [...runtimeSrcDirs, ...list("apps"), ...list("examples")];
 
 const entries = [];
 for (const dir of dirs) {

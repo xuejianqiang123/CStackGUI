@@ -1,0 +1,403 @@
+/**
+ * @file    cg_win_main.c
+ * @brief   主窗口过程：窗口消息、窗口级事件填充与托盘回调
+ * @details 从原 cg_win32.c 按职责拆分而来，跨模块接口见 cg_win_internal.h。
+ */
+#include "cg_win_internal.h"
+
+/* ------------------------------------------------------------ 窗口级事件支撑 */
+
+/**
+ * @brief 给窗口伪控件派发窗口级事件
+ * @param app 应用
+ * @param ev 事件（ready/size/activate/keydown... 见 cg_event_t）
+ * @note 和控件通知共用 g_win_in_notify 防重入：回调里再触发窗口消息不会套娃
+ */
+void cgw_win_emit(cg_app_t *app, cg_event_t ev)
+{
+    if (!app || !app->window || g_win_in_notify) return;
+    g_win_in_notify = 1;
+    cg_dispatch(app->window, ev);
+    g_win_in_notify = 0;
+}
+
+/** @brief 鼠标消息的按键组合 -> 1=Ctrl 2=Shift 4=Alt（对齐「功能键状态」） */
+static int mods_from_mouse(WPARAM wp)
+{
+    int m = 0;
+    if (wp & MK_CONTROL) m |= 1;
+    if (wp & MK_SHIFT) m |= 2;
+    if (GetKeyState(VK_MENU) & 0x8000) m |= 4;
+    return m;
+}
+
+/** @brief 键盘消息的按键组合 -> 1=Ctrl 2=Shift 4=Alt */
+static int mods_from_key(void)
+{
+    int m = 0;
+    if (GetKeyState(VK_CONTROL) & 0x8000) m |= 1;
+    if (GetKeyState(VK_SHIFT) & 0x8000) m |= 2;
+    if (GetKeyState(VK_MENU) & 0x8000) m |= 4;
+    return m;
+}
+
+/** @brief 把鼠标消息的客户区坐标与按键状态写进窗口伪控件（回调里读 cg_event_x/y/keys） */
+static void fill_mouse(cg_app_t *app, WPARAM wp, LPARAM lp)
+{
+    cg_widget_t *w = app ? app->window : NULL;
+    if (!w) return;
+    w->ev_x = (int)(short)LOWORD(lp);
+    w->ev_y = (int)(short)HIWORD(lp);
+    w->ev_keys = mods_from_mouse(wp);
+}
+
+/**
+ * @brief 托盘图标回调：左键单击显示窗口、左键双击、右键弹默认菜单，并派发 tray 事件
+ * @param app 应用
+ * @param hwnd 主窗口
+ * @param lp 鼠标消息（WM_LBUTTONUP 等）
+ * @return void
+ * @note 业务绑了 tray 事件就能自己接管动作；没绑也有「显示/退出」的默认行为，不会变成孤儿图标
+ */
+static void tray_callback(cg_app_t *app, HWND hwnd, WPARAM wp, LPARAM lp)
+{
+    cg_win_state_t *st = app ? (cg_win_state_t *)app->natives : NULL;
+    cg_widget_t *w = app ? app->window : NULL;
+    unsigned long now;
+    int action = 0;
+
+    (void)wp;
+    if (!st) return;
+
+    if (lp == WM_LBUTTONUP || lp == WM_LBUTTONDBLCLK) {
+        action = 1;
+        if (lp == WM_LBUTTONDBLCLK) {
+            action = 2;
+        } else {
+            /* 托盘的单/双击要自己判：两次单击间隔在双击时间内就升格为双击 */
+            now = GetTickCount();
+            if (st->tray_click_tick && now - st->tray_click_tick <= GetDoubleClickTime()) action = 2;
+            st->tray_click_tick = now;
+        }
+        if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE);
+        else ShowWindow(hwnd, SW_SHOW);
+        SetForegroundWindow(hwnd);
+    } else if (lp == WM_RBUTTONUP) {
+        action = 3;
+        /* 右键：默认给一个「显示窗口 / 退出」菜单。
+         * TrackPopupMenu 自己跑消息循环，弹之前必须放开防重入锁。 */
+        HMENU m = CreatePopupMenu();
+        if (m) {
+            POINT pt;
+            int cmd, keep = g_win_in_notify;
+            AppendMenuW(m, MF_STRING, 1, L"显示窗口");
+            AppendMenuW(m, MF_SEPARATOR, 0, NULL);
+            AppendMenuW(m, MF_STRING, 2, L"退出");
+            GetCursorPos(&pt);
+            SetForegroundWindow(hwnd);
+            g_win_in_notify = 0;
+            cmd = (int)TrackPopupMenu(m, TPM_RETURNCMD | TPM_RIGHTBUTTON,
+                                      pt.x, pt.y, 0, hwnd, NULL);
+            g_win_in_notify = keep;
+            DestroyMenu(m);
+            if (cmd == 1) {
+                if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE);
+                else ShowWindow(hwnd, SW_SHOW);
+                SetForegroundWindow(hwnd);
+            } else if (cmd == 2) {
+                PostMessageW(hwnd, WM_CLOSE, 0, 0);
+            }
+        }
+    } else {
+        return;   /* 其它托盘消息（气泡被点等）不派发 */
+    }
+
+    if (w) w->ev_action = action;
+    cgw_win_emit(app, CG_EVENT_TRAY);
+}
+
+/** @brief 主窗口过程：命令/通知分派、自绘、配色、DPI、时钟、窗口事件、关闭流程 */
+LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    cg_app_t *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+
+    switch (msg) {
+    case WM_CREATE: {
+        CREATESTRUCTW *cs = (CREATESTRUCTW *)lp;
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)cs->lpCreateParams);
+        return 0;
+    }
+    case WM_COMMAND: {
+        if (!app) break;
+        /* lParam 为 0 = 这条命令来自窗口菜单（菜单栏），不是控件 */
+        if (!lp) {
+            cg_dispatch_menu_cmd(app, (int)LOWORD(wp));
+            return 0;
+        }
+        /* IsDialogMessage 把回车变成 IDOK、Esc 变成 IDCANCEL：
+         * 默认当 SUBMIT 用；app.enterTab / app.escClose 可以改成"回车下移焦点 / Esc 关窗" */
+        if (LOWORD(wp) == IDOK && app->doc.enter_tab) {
+            SendMessageW(hwnd, WM_NEXTDLGCTL, 0, FALSE);
+            return 0;
+        }
+        if (LOWORD(wp) == IDCANCEL && app->doc.esc_close) {
+            PostMessageW(hwnd, WM_CLOSE, 0, 0);
+            return 0;
+        }
+        if (LOWORD(wp) == IDOK || LOWORD(wp) == IDCANCEL) {
+            HWND focus = GetFocus();
+            if (focus) {
+                cg_widget_t *fw = cg_widget_by_ctrl_id(app, GetDlgCtrlID(focus));
+                if (fw && (!strcmp(fw->type, "edit") || !strcmp(fw->type, "multiedit"))) {
+                    cgw_pull_edit_text(fw, focus);
+                    cg_dispatch(fw, CG_EVENT_SUBMIT);
+                }
+            }
+            return 0;
+        }
+        cgw_notify_from(app, (HWND)lp, HIWORD(wp), (int)LOWORD(wp));
+        return 0;
+    }
+    case WM_HSCROLL:
+    case WM_VSCROLL: {
+        if (!app) break;
+        if (lp) {
+            cg_widget_t *w = cgw_widget_by_hwnd(app, (HWND)lp);
+            if (w && !strcmp(w->type, "slider")) {
+                LRESULT v = SendMessageW((HWND)lp, TBM_GETPOS, 0, 0);
+                /* 拖动结束才发 release：拖的过程中 change 会刷很多次，
+                 * 需要"松手才存一次"的场景（联网保存、重算）就绑 release。 */
+                cg_widget_set_value(w, (int)v);
+                cg_dispatch(w, LOWORD(wp) == TB_ENDTRACK ? CG_EVENT_RELEASE : CG_EVENT_CHANGE);
+                return 0;
+            }
+            if (w && !strcmp(w->type, "spinner")) {
+                HWND up = (HWND)w->native2;
+                if (up && !g_win_in_notify) {
+                    DWORD pos = (DWORD)SendMessageW(up, UDM_GETPOS32, 0, 0);
+                    g_win_in_notify = 1;
+                    w->value = (int)pos;
+                    if (w->node) w->node->value = (int)pos;
+                    cg_dispatch(w, CG_EVENT_CHANGE);
+                    g_win_in_notify = 0;
+                }
+                return 0;
+            }
+            return 0;
+        }
+        break;
+    }
+    case WM_NOTIFY: {
+        if (!app) break;
+        if (((const NMHDR *)lp)->code == TTN_GETDISPINFOW) {
+            /* tooltip 文本现取：控件上挂的 hint 就是提示内容 */
+            NMTTDISPINFOW *di = (NMTTDISPINFOW *)lp;
+            cg_widget_t *tw = cgw_widget_by_hwnd(app, ((const NMHDR *)lp)->hwndFrom);
+            if (tw && tw->hint && *tw->hint) {
+                static wchar_t tip_buf[256];
+                wchar_t *wt = cgw_wc_from_utf8(tw->hint);
+                if (wt) {
+                    _snwprintf(tip_buf, 256, L"%ls", wt);   /* 宽串必须 %ls（见 build_rate 那条注释） */
+                    tip_buf[255] = L'\0';
+                    free(wt);
+                } else {
+                    tip_buf[0] = L'\0';
+                }
+                /* NMTTDISPINFOW 里 lpszText 指回 szText（80 字符）装不下的用外面缓冲 */
+                di->lpszText = tip_buf;
+            }
+            return 0;
+        }
+        return cgw_notify_common(app, (const NMHDR *)lp);
+    }
+    case WM_DRAWITEM: {
+        if (!app) break;
+        cgw_draw_own_item(app, (const DRAWITEMSTRUCT *)lp);
+        return TRUE;
+    }
+    case WM_SETCURSOR: {
+        /* 链接要手型光标，否则用户不知道那能点 */
+        if (app && LOWORD(lp) == HTCLIENT && wp) {
+            cg_widget_t *cw = cgw_widget_by_hwnd(app, (HWND)wp);
+            if (cw && cgw_is_t(cw, "link")) {
+                SetCursor(LoadCursorW(NULL, IDC_HAND));
+                return TRUE;
+            }
+        }
+        break;
+    }
+    case WM_CTLCOLORSTATIC:
+    case WM_CTLCOLOREDIT:
+    case WM_CTLCOLORBTN: {
+        HBRUSH cbr = cgw_ctlcolor_brush(app, wp, lp);
+        if (cbr) return (LRESULT)cbr;
+        break;
+    }
+    case WM_ERASEBKGND: {
+        if (app) {
+            cg_win_state_t *st = (cg_win_state_t *)app->natives;
+            if (st && st->bg_brush) {
+                HDC dc = (HDC)wp;
+                RECT rc;
+                GetClientRect(hwnd, &rc);
+                FillRect(dc, &rc, st->bg_brush);
+                return 1;
+            }
+        }
+        break;
+    }
+    case WM_TIMER:
+        if (app && app->natives && wp == ((cg_win_state_t *)app->natives)->timer_id) {
+            cg_timers_tick(app);
+            return 0;
+        }
+        if (app) {
+            /* 时钟控件：定时器 id 复用 ctrl_id */
+            cg_widget_t *tw = cg_widget_by_ctrl_id(app, (int)wp);
+            if (tw && cgw_is_t(tw, "timer") && tw->period > 0) {
+                if (!g_win_in_notify) {
+                    g_win_in_notify = 1;
+                    cg_dispatch(tw, CG_EVENT_TICK);
+                    g_win_in_notify = 0;
+                }
+                return 0;
+            }
+        }
+        break;
+    case WM_DPICHANGED: {
+        if (app) {
+            RECT *r = (RECT *)lp;
+            int dpi = HIWORD(wp);
+            cg_win_state_t *st = (cg_win_state_t *)app->natives;
+            if (st) st->dpi = dpi;
+            app->scale = (int)((long long)dpi * 100 / 96);
+            SetWindowPos(hwnd, NULL, r->left, r->top, r->right - r->left, r->bottom - r->top,
+                         SWP_NOZORDER | SWP_NOACTIVATE);
+            for (cg_widget_t *w = app->widgets; w; w = w->next) cgw_sync_widget(w);
+        }
+        return 0;
+    }
+    /* ---- 窗口级事件：原生窗口消息派发给 __window（「启动窗口」事件表） ---- */
+    case WM_MOVE:
+        if (app && app->window) {
+            RECT r;
+            GetWindowRect(hwnd, &r);
+            app->window->ev_x = r.left;    /* 位置被改变：窗口在屏幕上的左上角 */
+            app->window->ev_y = r.top;
+        }
+        cgw_win_emit(app, CG_EVENT_MOVE);
+        break;
+    case WM_SIZE:
+        if (app && app->window) {
+            app->window->ev_x = (int)(short)LOWORD(lp);   /* 尺寸被改变：新的客户区宽高 */
+            app->window->ev_y = (int)(short)HIWORD(lp);
+        }
+        cgw_win_emit(app, CG_EVENT_SIZE);
+        break;
+    case WM_ACTIVATE: {
+        int active = (LOWORD(wp) != WA_INACTIVE);
+        if (app && active) {
+            cg_win_state_t *wst = (cg_win_state_t *)app->natives;
+            if (wst && !wst->activated) {
+                wst->activated = 1;
+                cgw_win_emit(app, CG_EVENT_FIRSTACTIVATE);
+            }
+        }
+        cgw_win_emit(app, active ? CG_EVENT_ACTIVATE : CG_EVENT_DEACTIVATE);
+        break;
+    }
+    case WM_SHOWWINDOW:
+        cgw_win_emit(app, wp ? CG_EVENT_SHOW : CG_EVENT_HIDE);
+        break;
+    case WM_SETFOCUS:
+        cgw_win_emit(app, CG_EVENT_GOTFOCUS);
+        break;
+    case WM_KILLFOCUS: {
+        /* 焦点只是挪到本窗口的某个控件上不算"窗口失去焦点"，
+         * 否则 Tab 一下用户就收到一次失焦事件。 */
+        HWND nf = (HWND)wp;
+        if (nf && IsChild(hwnd, nf)) break;
+        cgw_win_emit(app, CG_EVENT_LOSTFOCUS);
+        break;
+    }
+    case WM_LBUTTONDOWN:
+        fill_mouse(app, wp, lp);
+        cgw_win_emit(app, CG_EVENT_MOUSEDOWN);
+        break;
+    case WM_LBUTTONUP:
+        fill_mouse(app, wp, lp);
+        cgw_win_emit(app, CG_EVENT_MOUSEUP);
+        break;
+    case WM_LBUTTONDBLCLK:
+        fill_mouse(app, wp, lp);
+        cgw_win_emit(app, CG_EVENT_DBLCLICK);
+        break;
+    case WM_RBUTTONDOWN:
+        fill_mouse(app, wp, lp);
+        cgw_win_emit(app, CG_EVENT_RDOWN);
+        break;
+    case WM_RBUTTONUP:
+        fill_mouse(app, wp, lp);
+        cgw_win_emit(app, CG_EVENT_RUP);
+        break;
+    case WM_MOUSEMOVE:
+        fill_mouse(app, wp, lp);
+        cgw_win_emit(app, CG_EVENT_MOUSEMOVE);
+        break;
+    case WM_MOUSEWHEEL:
+        if (app && app->window) {
+            /* 滚轮消息的坐标是屏幕坐标，先换成客户区；MK_ 位在 wParam 低字 */
+            POINT pt;
+            pt.x = (int)(short)LOWORD(lp);
+            pt.y = (int)(short)HIWORD(lp);
+            ScreenToClient(hwnd, &pt);
+            app->window->ev_x = pt.x;
+            app->window->ev_y = pt.y;
+            app->window->ev_keys = mods_from_mouse(LOWORD(wp));
+            app->window->ev_delta = (int)(short)HIWORD(wp);
+        }
+        cgw_win_emit(app, CG_EVENT_WHEEL);
+        break;
+    case WM_KEYDOWN:
+    case WM_SYSKEYDOWN:
+        if (app && app->window) {
+            app->window->ev_key = (int)wp;
+            app->window->ev_keys = mods_from_key();
+        }
+        cgw_win_emit(app, CG_EVENT_KEYDOWN);
+        break;
+    case WM_KEYUP:
+    case WM_SYSKEYUP:
+        if (app && app->window) {
+            app->window->ev_key = (int)wp;
+            app->window->ev_keys = mods_from_key();
+        }
+        cgw_win_emit(app, CG_EVENT_KEYUP);
+        break;
+    case WM_CHAR:
+        if (app && app->window) app->window->ev_key = (int)wp;
+        cgw_win_emit(app, CG_EVENT_CHAR);
+        break;
+    case CG_TRAY_CALLBACK:
+        tray_callback(app, hwnd, wp, lp);
+        return 0;
+    case WM_CLOSE: {
+        if (app && app->window) {
+            app->close_cancel = 0;
+            cg_dispatch(app->window, CG_EVENT_CLOSE);       /* 可否被关闭 */
+            cg_dispatch(app->window, CG_EVENT_CLOSEQUERY);  /* 窗口可否被关闭（同一时机） */
+            /* 回调里调了 cg_cancel_close() 就先别关（"还有没保存的东西"那种） */
+            if (app->close_cancel && !app->quit) return 0;
+        }
+        DestroyWindow(hwnd);
+        return 0;
+    }
+    case WM_DESTROY:
+        cgw_win_emit(app, CG_EVENT_DESTROY);
+        PostQuitMessage(0);
+        return 0;
+    default:
+        break;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}

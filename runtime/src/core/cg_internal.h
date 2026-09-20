@@ -255,4 +255,17 @@ void cg_widget_free(cg_widget_t *w);
 /** 表格行数变多时把行级附加数组（勾选/数值/图标）一起补长到 want */
 void cg_table_rows_grow(cg_widget_t *w, int want);
 
+/* ---------------------------------------------- cg_app.c 拆分后的跨模块接口
+ * 原来这几个是 cg_app.c 里的 static 助手，拆成 cg_widget.c / cg_event.c 之后
+ * 需要跨模块调用。名字都加了 cg_ 前缀，避免和业务代码里的同名符号撞车。 */
+
+/** @brief 复制字符串到堆内存（调用方 free），失败返回 NULL */
+char *cg_str_dup(const char *s);
+/** @brief 把运行时控件挂到父控件末尾，child->parent 设好；失败就静默丢弃 */
+void cg_widget_attach_child(cg_widget_t *parent, cg_widget_t *child);
+/** @brief 在控件的树模型末尾追加一个节点，返回新节点下标（-1 表示失败） */
+int cg_widget_tree_push(cg_widget_t *w, int parent, const char *text, int expanded);
+/** @brief 把控件逻辑状态推给后端（无后端时是空操作） */
+void cg_widget_sync(cg_widget_t *w);
+
 #endif /* CG_INTERNAL_H */
