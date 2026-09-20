@@ -165,23 +165,30 @@ int main(int argc, char **argv)
 
   const buildBat = `@echo off
 rem Build this UI project into a standalone exe.
-rem Standard setup: put this folder under CStackGUI\\apps\\, then just run this
-rem script (or run build-app.bat <this-folder-name> from the CStackGUI root).
-rem If this folder lives elsewhere, set the CSTACKGUI_HOME env var to the
-rem CStackGUI project root first.
+rem Works no matter where this folder lives: it walks up from here to find the
+rem CStackGUI root (a folder with build-app.bat + runtime\\lib), so this project
+rem can sit in CStackGUI\\apps\\, right beside CStackGUI.exe, or in any custom
+rem folder. You can still force the root with the CSTACKGUI_HOME env var.
 rem NOTE: keep this file ASCII-only (cmd mis-parses non-ASCII after chcp 65001).
-setlocal
-if "%CSTACKGUI_HOME%"=="" set CSTACKGUI_HOME=%~dp0..\\..
-if not exist "%CSTACKGUI_HOME%\\build-app.bat" (
-    echo [fail] build-app.bat not found in "%CSTACKGUI_HOME%"
-    echo        Set CSTACKGUI_HOME to the CStackGUI project root, or move this
-    echo        folder into CStackGUI\\apps\\.
+setlocal enabledelayedexpansion
+if not "%CSTACKGUI_HOME%"=="" goto have_home
+set "SEARCH=%~dp0"
+for /L %%%%i in (1,1,10) do (
+    if not defined CSTACKGUI_HOME if exist "!SEARCH!build-app.bat" if exist "!SEARCH!runtime\\lib\\libcstackgui.a" set "CSTACKGUI_HOME=!SEARCH!"
+    if not defined CSTACKGUI_HOME set "SEARCH=!SEARCH!..\\"
+)
+:have_home
+if "%CSTACKGUI_HOME:~-1%" NEQ "\\" set "CSTACKGUI_HOME=%CSTACKGUI_HOME%\\"
+if "%CSTACKGUI_HOME%"=="\\" (
+    echo [fail] cannot find the CStackGUI root ^(a folder with build-app.bat + runtime\\lib^).
+    echo        Walked up from: %~dp0
+    echo        Put this folder beside CStackGUI.exe, under CStackGUI\\apps\\, or set
+    echo        CSTACKGUI_HOME to the CStackGUI root.
     exit /b 1
 )
-rem build-app.bat takes the PROJECT FOLDER name, not the file base name,
-rem so this folder can be renamed or moved and still builds itself.
-for %%%%I in ("%~dp0.") do set CG_APP=%%%%~nI
-call "%CSTACKGUI_HOME%\\build-app.bat" %%CG_APP%%
+rem build-app.bat accepts the project directory as an absolute path (any
+rem location), so this folder can be renamed or moved and still builds itself.
+call "%CSTACKGUI_HOME%build-app.bat" "%~dp0."
 `;
 
   return [

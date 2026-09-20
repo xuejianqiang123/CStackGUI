@@ -398,32 +398,41 @@ ipcMain.handle("run:buildAndLaunch", async (_e, { filePath }) => {
   const appDir = path.dirname(path.resolve(filePath));
   const fileRoot = findProjectRootUpwards(appDir);
   if (fileRoot && fileRoot !== projectRootCache) await rememberProjectRoot(fileRoot);
-  const root = fileRoot || (await resolveProjectRoot());
+  let root = fileRoot || (await resolveProjectRoot());
   if (!root) {
     return fail("还没找到 CStackGUI 项目根。点工具条上的「定位项目根」，\n选含 runtime\\、apps\\ 的那一层目录。");
   }
 
-  /* build-app.bat 的定位参数是「工程目录相对根的路径」，不是界面文件名：
-   * main.cgui 放在 examples\test\ 里时，要编译的是 examples\test，
-   * 按「main」找工程会错编 apps\main（同名文件不同目录的工程会互相串）。
-   * 便携工作区里工程可以放在根下任意子目录（不强制 apps\examples）。 */
+  /* 工程定位走环境变量 CG_APP_DIR（绝对路径），不进 cmd 命令行——
+   * 路径里的引号经 node→cmd 转义会变成 \"...\"，%~1 剥不干净。
+   * 根必须是带 runtime 的那份：相对根不可达（空/越界/在别的盘）时，
+   * 就地把工程父目录自举成工作区（便携单文件最常见）。 */
   const rel = path.relative(root, appDir);
-  if (!rel || rel.startsWith("..")) {
-    return fail(`工程目录不在项目根 ${root} 里，无法编译。\n当前文件在：${appDir}`);
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) {
+    const candidate = path.dirname(appDir);
+    const usable =
+      candidate !== root &&
+      (existsSync(path.join(candidate, "build-app.bat")) || (await ensureWorkspace(candidate)));
+    if (!usable) {
+      return fail(`工程目录不在项目根 ${root} 里，无法编译。\n当前文件在：${appDir}`);
+    }
+    root = candidate;
   }
   const name = path.basename(appDir);
-  const batArg = rel.split(path.sep).join("\\");
   if (!existsSync(path.join(appDir, "main.c"))) {
     return fail(`${appDir} 里没有 main.c。\n先点「导出 C 骨架」生成 C 代码，再运行。`);
   }
 
   runBusy = true;
-  send("run:output", { kind: "line", text: `$ build-app.bat ${batArg}` });
+  send("run:output", { kind: "line", text: `$ build-app.bat ${name}` });
 
   /* chcp 65001：让批处理里的中文输出走 UTF-8，渲染进程不用再转码 */
   let exitCode = -1;
   await new Promise((resolve) => {
-    const child = spawn("cmd.exe", ["/d", "/s", "/c", `chcp 65001 >nul & build-app.bat "${batArg}"`], { cwd: root });
+    const child = spawn("cmd.exe", ["/d", "/s", "/c", "chcp 65001 >nul & build-app.bat"], {
+      cwd: root,
+      env: { ...process.env, CG_APP_DIR: appDir },
+    });
     const push = (buf) => {
       for (const line of String(buf).split(/\r?\n/)) {
         if (line.trim()) send("run:output", { kind: "line", text: line });
@@ -480,28 +489,38 @@ ipcMain.handle("publish:project", async (_e, { filePath }) => {
   const appDir = path.dirname(path.resolve(filePath));
   const fileRoot = findProjectRootUpwards(appDir);
   if (fileRoot && fileRoot !== projectRootCache) await rememberProjectRoot(fileRoot);
-  const root = fileRoot || (await resolveProjectRoot());
+  let root = fileRoot || (await resolveProjectRoot());
   if (!root) {
     return fail("还没找到 CStackGUI 项目根。点工具条上的「定位项目根」，\n选含 runtime\\、apps\\ 的那一层目录。");
   }
   /* 与运行入口同一套规则：工程可以是根下任意子目录（便携工作区不强制 apps\examples） */
+  /* 与运行入口同一套规则：CG_APP_DIR 环境变量传工程目录，根不可达就自举 */
   const rel = path.relative(root, appDir);
-  if (!rel || rel.startsWith("..")) {
-    return fail(`工程目录不在项目根 ${root} 里，无法编译。\n当前文件在：${appDir}`);
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) {
+    const candidate = path.dirname(appDir);
+    const usable =
+      candidate !== root &&
+      (existsSync(path.join(candidate, "build-app.bat")) || (await ensureWorkspace(candidate)));
+    if (!usable) {
+      return fail(`工程目录不在项目根 ${root} 里，无法编译。\n当前文件在：${appDir}`);
+    }
+    root = candidate;
   }
   const name = path.basename(appDir);
-  const batArg = rel.split(path.sep).join("\\");
   if (!existsSync(path.join(appDir, "main.c"))) {
     return fail(`${appDir} 里没有 main.c。\n先点「导出 C 骨架」生成 C 代码，再发布。`);
   }
 
   runBusy = true;
-  send("run:output", { kind: "line", text: `$ build-app.bat ${batArg} --release` });
+  send("run:output", { kind: "line", text: `$ build-app.bat ${name} --release` });
 
   /* 1) release 编译（-mwindows：无控制台窗口，适合分发） */
   let exitCode = -1;
   await new Promise((resolve) => {
-    const child = spawn("cmd.exe", ["/d", "/s", "/c", `chcp 65001 >nul & build-app.bat "${batArg}" --release`], { cwd: root });
+    const child = spawn("cmd.exe", ["/d", "/s", "/c", "chcp 65001 >nul & build-app.bat --release"], {
+      cwd: root,
+      env: { ...process.env, CG_APP_DIR: appDir },
+    });
     const push = (buf) => {
       for (const line of String(buf).split(/\r?\n/)) {
         if (line.trim()) send("run:output", { kind: "line", text: line });

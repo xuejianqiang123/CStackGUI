@@ -17,6 +17,9 @@ set PATH=%MINGW%;%PATH%
 cd /d "%~dp0"
 
 set APP=%~1
+rem The designer passes the project directory via CG_APP_DIR (env, not argv:
+rem cmd quoting of paths inside spawn gets mangled). Manual use stays %1.
+if "%APP%"=="" if not "%CG_APP_DIR%"=="" set "APP=%CG_APP_DIR%"
 if "%APP%"=="" set APP=hello
 set MODE=%~2
 
