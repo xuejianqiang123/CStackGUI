@@ -79,10 +79,14 @@ static void build_tree(HWND h, cg_widget_t *w)
         ins.item.mask = TVIF_TEXT;
         ins.item.pszText = wt ? wt : L"";
         w->item_map[i] = (void *)SendMessageW(h, TVM_INSERTITEMW, 0, (LPARAM)&ins);
-        if (wt && w->tree[i].expanded) {
+        free(wt);
+    }
+    /* 展开必须等所有节点都插完再做：对一个"还没有子节点"的节点调 TVM_EXPAND 是空操作，
+     * 所以原来在插入循环里顺手展开，等于 .cgui 里的 "expanded": true 永远不生效。 */
+    for (int i = 0; i < w->ntree; i++) {
+        if (w->tree[i].expanded && w->item_map[i]) {
             SendMessageW(h, TVM_EXPAND, TVE_EXPAND, (LPARAM)w->item_map[i]);
         }
-        free(wt);
     }
     SendMessageW(h, WM_SETREDRAW, TRUE, 0);
     if (w->tree_sel >= 0 && w->tree_sel < w->item_map_n) {
@@ -469,7 +473,10 @@ static void sync_widget_body(cg_widget_t *w)
                     free(wt);
                 }
             }
-            SendMessageW(h, CB_SETCURSEL, 0, 0);
+            /* 选中项跟 .cgui 的 value 走（越界退回第 0 项）：每次都跳回第一项
+             * 会让"程序设了初始选择"失效。 */
+            SendMessageW(h, CB_SETCURSEL,
+                         (WPARAM)((w->value > 0 && w->value < w->nitems) ? w->value : 0), 0);
         } else if (!strcmp(w->type, "tabs")) {
             build_tabs(h, w);
         } else if (!strcmp(w->type, "tree")) {
@@ -526,6 +533,10 @@ static void sync_widget_body(cg_widget_t *w)
         SendMessageW(h, TCM_SETCURSEL, (WPARAM)w->value, 0);
     } else if (!strcmp(w->type, "listbox") && !w->items_dirty) {
         SendMessageW(h, LB_SETCURSEL, (WPARAM)w->value, 0);
+    } else if (!strcmp(w->type, "combo") && !w->items_dirty) {
+        /* 代码里 cg_widget_set_value(combo, i) 也要能改当前选中项 */
+        SendMessageW(h, CB_SETCURSEL,
+                     (WPARAM)((w->value > 0 && w->value < w->nitems) ? w->value : 0), 0);
     } else if (!strcmp(w->type, "table") && w->table_sel >= 0) {
         LVITEMW it;
         memset(&it, 0, sizeof(it));

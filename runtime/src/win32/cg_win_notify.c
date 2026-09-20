@@ -102,6 +102,20 @@ void cgw_notify_body(cg_app_t *app, cg_widget_t *w, HWND hwnd, int code, int cmd
         }
         return;
     }
+    if (!strcmp(w->type, "combo")) {
+        /* 下拉框（CBS_DROPDOWNLIST）的选择变化走 WM_COMMAND 的 CBN_SELCHANGE。
+         * value 直接写、不走 cg_widget_set_value：那个会按 min/max 夹到区间里，
+         * 而这里存的是条目下标，条目数可以超过 100（夹了就永远选不中后面那些）。 */
+        if (code == CBN_SELCHANGE) {
+            LRESULT sel = SendMessageW(hwnd, CB_GETCURSEL, 0, 0);
+            if (sel != CB_ERR) {
+                w->value = (int)sel;
+                if (w->node) w->node->value = (int)sel;
+                cg_dispatch(w, CG_EVENT_SELECT);
+            }
+        }
+        return;
+    }
     /* 复选/单选：owner-draw 不会自动 toggle，这里手动翻状态并派发 change。
      * 单选还要把同组（同 parent）其它 radio 取消选中。 */
     if (!strcmp(w->type, "checkbox") || !strcmp(w->type, "radio")) {
