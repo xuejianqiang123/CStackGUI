@@ -2979,6 +2979,28 @@ static void browser_recreate(cg_widget_t *w)
     w->native = h;
 }
 
+/** @brief 原生控件当前文本是否已经是 wt
+ *  @return int 1 = 一致（调用方就别再 SetWindowText 了）
+ *  @details EDIT 收到 WM_SETTEXT 会把选区/光标清回 0，所以"内容没变还写一遍"这种
+ *           冗余同步必须避免：`EN_CHANGE` 里 pull 文本再 sync 就会踩到它。
+ */
+static int hwnd_text_is(HWND h, const wchar_t *wt)
+{
+    int n;
+    wchar_t *cur;
+    int same;
+
+    if (!wt) return 1;
+    n = GetWindowTextLengthW(h);
+    if (n != (int)wcslen(wt)) return 0;
+    cur = (wchar_t *)malloc(((size_t)n + 1) * sizeof(wchar_t));
+    if (!cur) return 0;
+    GetWindowTextW(h, cur, n + 1);
+    same = (wcscmp(cur, wt) == 0);
+    free(cur);
+    return same;
+}
+
 /** @brief 把控件逻辑状态同步到原生控件（位置/文字/字体/条目/值/显隐），不做防重入 */
 static void sync_widget_body(cg_widget_t *w)
 {
@@ -3035,14 +3057,24 @@ static void sync_widget_body(cg_widget_t *w)
         !strcmp(w->type, "group") || !strcmp(w->type, "box") ||
         is_editlike(w)) {
         wchar_t *wt = wc_from_utf8(w->text);
-        if (wt) { SetWindowTextW(h, wt); free(wt); }
+        if (wt) {
+            /* 内容已经一样就不要再 SetWindowText —— EDIT 收到 WM_SETTEXT 会把选区/光标
+             * 清回 0。而 EN_CHANGE 里会 pull 一次输入框文本再 sync（见 pull_edit_text），
+             * 于是每敲一个字光标都回 0、下一个字插到最前面（输入 1234 得到 4321）。 */
+            if (!hwnd_text_is(h, wt)) SetWindowTextW(h, wt);
+            free(wt);
+        }
     }
 
-    /* 字体（链接默认带下划线，像链接该有的样子） */
+    /* 字体（链接默认带下划线，像链接该有的样子）。同样的字体也别重设：
+     * WM_SETFONT 会让控件重排（输入框子类里还会重设边距），同样会动到光标。 */
     {
         int underline = is_t(w, "link") ? 1 : 0;
         HFONT f = font_for(app, w->style.font, w->style.size, w->style.bold, underline);
-        SendMessageW(h, WM_SETFONT, (WPARAM)(f ? f : GetStockObject(DEFAULT_GUI_FONT)), TRUE);
+        HFONT use = f ? f : (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+        if ((HFONT)SendMessageW(h, WM_GETFONT, 0, 0) != use) {
+            SendMessageW(h, WM_SETFONT, (WPARAM)use, TRUE);
+        }
     }
 
     /* 条目内容 */
