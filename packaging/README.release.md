@@ -54,7 +54,11 @@ runtime\
   lib\cstackgui_res.o  资源对象（v6 通用控件清单 + 版本信息 + 图标）
   res\                 manifest / 默认图标（工程的 <名字>.rc 会引用这里的清单）
 examples\
+  lesson01_edit_button\ ~ lesson05_todo\
+                       教学示例：五课从"编辑框+按钮"学到"菜单+文件+配置"的小工具
+  教学使用说明.md       上面那五课怎么学（先读它）
   gallery\             示例：控件陈列室·三合一（67 个控件，全部控件+事件都用上了）
+  notepad\             示例：真实小工具·记事本（菜单 / 文件 / 编码 / cg_kit 全套）
 apps\                  你自己导出的工程会放在这里（现在还没有）
 build\                 本包的中间产物（可随时删）
 .codebuddy\
@@ -282,11 +286,14 @@ tools\check-kit.bat                                              :: 用到 cg_ki
 
 发布包里带两个示例：
 
+- `examples\lesson01_edit_button` ~ `lesson05_todo` —— **五课教学示例**：从"编辑框 + 按钮"到
+  "菜单 + 文件 + 配置"的小工具，每课只讲一个主题。**第一次用就从这里开始**，
+  路线图与逐课详解见 `examples\教学使用说明.md`。
 - `examples\gallery\` —— **控件陈列室**：67 个控件、47 个回调，三页标签页，当"控件用法字典"翻。
 - `examples\notepad\` —— **真实小工具范例（记事本）**：菜单分发、状态栏刷新、文件读写、
   GBK/UTF-8 识别、INI 记住上次文件与窗口尺寸、关闭前拦截。想写"真东西"时照它抄结构最省事。
 
-两个都能直接编译运行：`build-app.bat gallery` / `build-app.bat notepad`。
+都能直接编译运行：`build-app.bat lesson01_edit_button` / `build-app.bat gallery` / `build-app.bat notepad`。
 
 ```bat
 build-app.bat gallery

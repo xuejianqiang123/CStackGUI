@@ -49,10 +49,13 @@ tick / check / gotfocus / lostfocus`（+ 窗口级 `close`）。
 读写注册表（做开机自启）、写日志。**所以业务代码从头到尾只 include `cstackgui.h`**，
 不用为了读个配置去 include `windows.h`。这 30 个函数的用法在画布「支持库」页签里一查就有。
 
-仓库自带两个示例，分工不同：
+仓库自带三类示例，分工不同：
 
+- `examples\lesson01_edit_button` ~ `examples\lesson05_todo` —— **五课教学示例**，从"编辑框 + 按钮"
+  一路学到"菜单 + 文件 + 配置"的小工具，每课只讲一个主题、都能单独编译运行。
+  **入门从这里开始**，路线图与逐课详解见 [examples\教学使用说明.md](examples/教学使用说明.md)。
 - `examples\gallery\` —— **控件陈列室（三合一）**：顶层标签页分「基础闭环 / 控件陈列 / 新特性」
-  三页，67 个控件、47 个回调，**讲"控件怎么用"**。
+  三页，67 个控件、47 个回调，**讲"控件怎么用"**（当"控件字典"翻）。
 - `examples\notepad\` —— **真实小工具范例（记事本）**：菜单分发、脏标记、状态栏刷新、
   文件读写、GBK/UTF-8 识别、INI 记住上次文件与窗口尺寸、关闭前拦截。**讲"一个工具该怎么组织"**，
   也是 `cg_kit` 基础能力库的活例子（全程没有 include 任何 Windows 头）。
@@ -146,7 +149,7 @@ tick / check / gotfocus / lostfocus`（+ 窗口级 `close`）。
 :: 编译（项目根目录执行）
 build-app.bat myapp              :: 刷新运行时库 + 编译 apps\myapp\（带控制台）
 build-app.bat myapp --release    :: 发布版：-mwindows，没有控制台窗口
-build-all.bat                    :: 运行时 + examples\ 下所有示例，一条命令
+build-all.bat                    :: 运行时 + examples\ 下所有示例（每个都跑一遍 --selftest）
 build-runtime.bat                :: 只编译运行时库（build-app 会先跑它）
 
 :: 验证（改了 .cgui 字段或控件类型后必跑）
@@ -268,6 +271,12 @@ CStackGUI\
       cg_kit.c                 基础能力 API（cg_kit）：业务代码不必 include windows.h
     res\                       清单（v6 通用控件 + 高 DPI）与版本信息
   examples\                    仓库自带的示例
+    lesson01_edit_button\      教学示例 01：编辑框和按钮（最小闭环）
+    lesson02_controls\         教学示例 02：常用输入控件（表单 / 容器）
+    lesson03_events\           教学示例 03：窗口事件 / 时钟 / 键盘 / 鼠标 / 关闭拦截
+    lesson04_data\             教学示例 04：列表框 / 树 / 表格
+    lesson05_todo\             教学示例 05：综合练习·待办清单（菜单 + 文件 + cg_kit）
+    教学使用说明.md             五课路线图 + 每课详解 + 通用知识（学这套示例先读它）
     gallery\                   控件陈列室·三合一（gallery.cgui / main.c / assets\ / 产物）
     notepad\                   真实小工具范例：记事本（菜单/文件/配置/cg_kit 全套）
   apps\                        你自己的工程（画布导出的默认位置）
