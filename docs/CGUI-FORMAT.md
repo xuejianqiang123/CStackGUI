@@ -455,6 +455,8 @@ int main(void)
 ## 6. C API 速查
 
 完整声明见 `runtime/include/cstackgui.h`。
+画布右侧的「支持库」页签是这张表的**可搜索版本**（带中文说明与示例，双击复制调用代码），
+数据在 `designer/src/supportlib.ts`，由 `tools/check-support.mjs` 保证它和 `cstackgui.h` 不漂移。
 
 ```c
 /* 启动 */

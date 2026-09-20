@@ -88,6 +88,8 @@ tick / check / gotfocus / lostfocus`（+ 窗口级 `close`）。
    位置尺寸、字体颜色、初始状态。
 3. **绑事件**：右侧「事件」页签给控件填 **C 函数名**（「自动」按钮按 `on_<id>_<事件>` 生成）。
    一个函数名可被多个控件共用；绑了不支持的事件，运行时会警告、`--selftest` 会报错。
+   不知道回调里能写什么？右侧第 4 个页签「**支持库**」按用途列出了全部 C 函数（附说明与示例，
+   双击即复制调用代码）——新手从这里抄第一段代码最快。
 4. **保存**：`Ctrl+S` 存成 `.cgui`（例如 `apps\myapp\myapp.cgui`）。
 5. **导出 C 骨架**：工具条「导出 C 骨架」→ 选 `apps\` 目录。生成 5 个文件：
    `<名字>.cgui`（画布产物）、`<名字>_ui_events.h/.c`（**.c 是你的代码，主要改它**）、
@@ -197,6 +199,7 @@ AI：piv-run-full-loop → 画布建界面（.cgui）→ 生成回调骨架 → 
 build-all.bat                                  :: 运行时 + 所有示例编译通过
 examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui   :: 回 0 才算事件闭环
 tools\check-format.bat                         :: 画布写的 .cgui 必须被 C 侧读懂（改格式/控件时）
+                                               :: 顺带查「支持库」表与 cstackgui.h 是否还一致
 cd designer && npx tsc --noEmit && npx vite build   :: 改了画布时
 ```
 
@@ -224,6 +227,7 @@ CStackGUI\
   docs\CGUI-FORMAT.md          .cgui 字段规范 + C API 速查
   designer\                    画布源码（Electron + React + TS）
     src\model.ts               .cgui 数据模型 + KIND_EVENTS 事件表（与 cg_doc.c 对应）
+    src\supportlib.ts          「支持库」页签的数据：C API 中文索引（与 cstackgui.h 对齐）
     src\codegen.ts             导出 C 骨架
     electron\main.mjs          文件读写、导出、菜单、项目根记忆（便携版自动识别）
   runtime\                     C 运行时库
