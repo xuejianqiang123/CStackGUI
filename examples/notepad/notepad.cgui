@@ -1,0 +1,61 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "记事本",
+    "width": 760,
+    "height": 560,
+    "bg": "#F3EDF7",
+    "info": {
+      "product": "CStackGUI 记事本示例",
+      "desc": "用画布 + cg_kit 写的真实小工具：打开/保存/编码转换/配置记忆",
+      "version": "1.0.0.0",
+      "author": "CStackGUI"
+    },
+    "events": { "close": "on_close", "size": "on_window_size" }
+  },
+  "widgets": [
+    {
+      "id": "menu_main",
+      "type": "menu",
+      "events": { "click": "on_menu_click" },
+      "nodes": [
+        {
+          "text": "文件",
+          "children": [
+            { "text": "新建", "id": "m_new" },
+            { "text": "打开...", "id": "m_open" },
+            { "text": "保存", "id": "m_save" },
+            { "text": "另存为...", "id": "m_save_as" },
+            { "text": "-" },
+            { "text": "退出", "id": "m_quit" }
+          ]
+        },
+        {
+          "text": "编辑",
+          "children": [
+            { "text": "复制全部", "id": "m_copy" },
+            { "text": "粘贴", "id": "m_paste" },
+            { "text": "清空", "id": "m_clear" }
+          ]
+        },
+        {
+          "text": "帮助",
+          "children": [{ "text": "关于", "id": "m_about" }]
+        }
+      ]
+    },
+    {
+      "id": "edt_body",
+      "type": "multiedit",
+      "rect": { "x": 12, "y": 12, "w": 736, "h": 500 },
+      "style": { "font": "Microsoft YaHei UI", "size": 10 },
+      "events": { "change": "on_body_change" }
+    },
+    {
+      "id": "sb_main",
+      "type": "statusbar",
+      "rect": { "x": 0, "y": 536, "w": 760, "h": 24 },
+      "items": ["未命名", "0 字", "行 1"]
+    }
+  ]
+}
