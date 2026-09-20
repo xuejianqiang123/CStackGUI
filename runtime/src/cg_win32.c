@@ -405,8 +405,12 @@ unsigned cg_win_behind_rgb(cg_app_t *app, void *hwnd)
         if (v == 0 || v > (ULONG_PTR)(COLOR_ENDCOLORS + 1)) return rgb_of(st->bg_color);
         return rgb_of(GetSysColor((int)v - 1));
     }
-    /* 标签页等系统容器：让页体自己把"背后那块"画出来取色（什么主题都对得上） */
-    if (pw && is_t(pw, "tabs")) return parent_body_rgb(parent, child);
+    /* 标签页等系统容器：设了背景色就用它（FocusProc 会把页体填成这个色），
+     * 没设才让页体自己把"背后那块"画出来取色（什么主题都对得上） */
+    if (pw && is_t(pw, "tabs")) {
+        if (pw->style.bg != CG_COLOR_NONE) return pw->style.bg;
+        return parent_body_rgb(parent, child);
+    }
 
     return rgb_of(st->bg_color);
 }
@@ -671,6 +675,24 @@ static LRESULT CALLBACK FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
         break;
     default:
         break;
+    }
+
+    if (msg == WM_PAINT) {
+        /* 标签页的页体是系统按主题画的；设了「背景色」就把页体矩形（不含标签行）重填一遍。
+         * 子控件是独立窗口、且标签页有 WS_CLIPCHILDREN，所以这一填不会盖到子控件上。 */
+        LRESULT r = DefSubclassProc(hwnd, msg, wp, lp);
+        cg_widget_t *tw = s_app ? widget_by_hwnd(s_app, hwnd) : NULL;
+        if (tw && is_t(tw, "tabs") && tw->style.bg != CG_COLOR_NONE) {
+            HDC dc = GetDC(hwnd);
+            if (dc) {
+                RECT rc;
+                GetClientRect(hwnd, &rc);
+                SendMessageW(hwnd, TCM_ADJUSTRECT, FALSE, (LPARAM)&rc);
+                FillRect(dc, &rc, brush_for(tw->style.bg));
+                ReleaseDC(hwnd, dc);
+            }
+        }
+        return r;
     }
 
     if (!s_in_notify && s_app) {
@@ -980,7 +1002,7 @@ static LRESULT CALLBACK ImageProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             SelectObject(mem, old);
             DeleteDC(mem);
         } else {
-            COLORREF face = GetSysColor(COLOR_BTNFACE);
+            COLORREF face = to_colorref(cg_win_behind_rgb(w->app, w->native));
             HBRUSH br = CreateSolidBrush(face);
             HGDIOBJ oldbr = SelectObject(dc, br);
             HPEN pen = CreatePen(PS_DASH, 1, RGB(120, 120, 128));
@@ -1062,9 +1084,10 @@ static void draw_ring(HDC dc, const cg_widget_t *w, const RECT *rc)
     if (val < w->vmin) val = w->vmin;
     if (val > w->vmax) val = w->vmax;
 
-    /* 底 */
-    bg = CreateSolidBrush((w->style.bg != CG_COLOR_NONE) ? to_colorref(w->style.bg)
-                                                         : GetSysColor(COLOR_BTNFACE));
+    /* 底：没设背景色就填"背后"的颜色（分组框/标签页里的控件不能一律填系统面色） */
+    bg = CreateSolidBrush((w->style.bg != CG_COLOR_NONE)
+                              ? to_colorref(w->style.bg)
+                              : to_colorref(cg_win_behind_rgb(w->app, w->native)));
     oldbr = SelectObject(dc, bg);
     oldpen = SelectObject(dc, GetStockObject(NULL_PEN));
     Rectangle(dc, rc->left, rc->top, rc->right, rc->bottom);
@@ -1776,8 +1799,9 @@ static void draw_icon_button(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
     int    box_w = rc.right - rc.left;
     int    box_h = rc.bottom - rc.top;
 
-    bg = CreateSolidBrush((w->style.bg != CG_COLOR_NONE) ? to_colorref(w->style.bg)
-                                                         : GetSysColor(COLOR_BTNFACE));
+    bg = CreateSolidBrush((w->style.bg != CG_COLOR_NONE)
+                              ? to_colorref(w->style.bg)
+                              : to_colorref(cg_win_behind_rgb(w->app, w->native)));
     FillRect(dc, &rc, bg);
     DeleteObject(bg);
 
@@ -1940,7 +1964,7 @@ static void draw_pagination(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
     wchar_t mid[32];
     swprintf(mid, 32, L"%d / %d", w->value - w->vmin + 1, w->vmax - w->vmin + 1);
 
-    FillRect(dis->hDC, &rc, (HBRUSH)(COLOR_BTNFACE + 1));
+    FillRect(dis->hDC, &rc, brush_for(cg_win_behind_rgb(w->app, w->native)));
     {
         RECT l = rc, r = rc;
         wchar_t *lt = wc_from_utf8(w->value <= w->vmin ? "" : "<");
