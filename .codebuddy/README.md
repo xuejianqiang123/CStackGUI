@@ -1,6 +1,9 @@
-# CodeBuddy 嵌入式固件开发配置指南（v0.1）
+# CodeBuddy AI 开发配置指南（v0.1）
 
-> **项目**：ESP32/固件开发
+> **项目**：CStackGUI（画布 + C 运行时）。下面这套体系源自嵌入式固件模板：14 个专项审查技能
+> 里只有一部分对本工程有意义（`firmware_code_style`、`buffer_overflow_check`、`memory_leak_check`、
+> `stack_overflow_check`、`error_handling_check`、`struct_best_practice_check`），其余针对 ESP32/RTOS/外设，
+> 本工程用不到。本工程自己的技能是 `designer-modify`（改画布）、`git-commit-style`（提交格式）等。
 > **用途**：AI 辅助编程的完整工作流体系 = 代码审查（14个专项技能）+ 开发流程（14个PIV循环技能）+ 辅助工具（5个）+ 社区引入（4个），共 37 个技能
 > **核心价值**：质量门禁前置 + 端到端自动化 + 可追溯产出
 > **维护**：请勿随意删除此文件夹，包含项目级配置、审查规则和工作流定义
@@ -84,11 +87,14 @@
     │       ├── caveman/                 # 输出侧压缩：少说（山顶洞人，lite/full/ultra/文言文，默认常驻）
     │       ├── tokenzero/               # 输入侧压缩：少喂（本地 npm CLI：pack/compress/json/analyze，无损省输入 Token，手动触发）
     │       └── ponytail/                # 生成侧压缩：少写（决策梯子/YAGNI，默认 full 档，嵌入式禁 ultra、红线不砍）
-    └── [社区技能] 外部引入（2026-08-23，保留上游原结构，可直接运行）
-        ├── advise-project-approach/  # 项目策略咨询：动手前/中/后研究最佳路径，输出带证据的决策报告
-        ├── neuroarxiv/               # 新架构前查 arXiv 先例（prior art），避免重复造轮子
-        ├── using-codegraph/          # 本地 tree-sitter 代码知识图谱（SQLite 亚毫秒查询/改动影响面）
-        └── wavedrom-gen/             # 时序描述 → WaveJSON → SVG/PNG/HTML（Datasheet 级 setup/hold 标注）
+    ├── [社区技能] 外部引入（2026-08-23，保留上游原结构，可直接运行）
+    │   ├── advise-project-approach/  # 项目策略咨询：动手前/中/后研究最佳路径，输出带证据的决策报告
+    │   ├── neuroarxiv/               # 新架构前查 arXiv 先例（prior art），避免重复造轮子
+    │   ├── using-codegraph/          # 本地 tree-sitter 代码知识图谱（SQLite 亚毫秒查询/改动影响面）
+    │   └── wavedrom-gen/             # 时序描述 → WaveJSON → SVG/PNG/HTML（Datasheet 级 setup/hold 标注）
+    └── [本工程专属] CStackGUI 自己的技能
+        ├── designer-modify/          # 改画布 designer/ 的说明书（.cgui 契约、新增控件的 7~8 处、验证门禁）
+        └── git-commit-style/         # 提交规范：[类型][模块] 描述（禁用 conventional-commit）
 ```
 
 ---
@@ -639,7 +645,7 @@ for (int i = 0; i < 16; i++) {
 
 #### 4. ESP32 平台深度适配
 - **ESP32 系列**：ESP-IDF、FreeRTOS、NVS、OTA、heap_caps_malloc、分区表、加密烧录
-- 支持多芯片：ESP32-P4、ESP32-C2（本项目实际使用的芯片型号）
+- 支持多芯片示例：ESP32-P4、ESP32-C2（审查技能里保留的示例，与本工程无关）
 
 ### 📚 关键改进方法论
 

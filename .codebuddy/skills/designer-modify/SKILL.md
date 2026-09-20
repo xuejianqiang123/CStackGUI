@@ -13,8 +13,8 @@ argument-hint: [要改的东西，可以用日常语言，例如 "画布选中�
 
 ## 核心原则
 
-1. **`runtime/src/cg_doc.c` 是 .cgui 的真相**：画布的 `model.ts` 必须跟着它走，不是反过来。
-2. **控件类型表有两份**：`model.ts::KINDS`（+`KIND_EVENTS`）与 `runtime/src/cg_doc.c::k_kinds`。加一个 = 各加一行 + 多处补分支（清单见下）。
+1. **`runtime/src/core/cg_doc.c` 是 .cgui 的真相**：画布的 `model.ts` 必须跟着它走，不是反过来。
+2. **控件类型表有两份**：`model.ts::KINDS`（+`KIND_EVENTS`）与 `runtime/src/core/cg_doc_kind.c::k_kinds`。加一个 = 各加一行 + 多处补分支（清单见下）。
 3. **doc 是唯一真相**：所有编辑都是「structuredClone → 改 → 放回」，禁止在原对象上直接改。
 
 ## 文件地图（`designer/`）
@@ -46,7 +46,7 @@ argument-hint: [要改的东西，可以用日常语言，例如 "画布选中�
 - `events{<事件名>: <C 函数名>}`；窗口级 `close` 只存在于 `app.events`
 - 状态（`cleanDoc` 里**等于默认值就不写**）：`visible`(默认 true)、`enabled`(默认 true)、`checked`(默认 false)；`value/min/max` 仅在 `KIND_MAP[type].ranged` 时写
 - 内容：`items`（listbox/combo/tabs/statusbar/toolbar）、`nodes`（tree/menu/menubutton）、`columns[{title,w}]`+`rows[][]`（table）、`src`（image/iconbutton）、`format`（datepicker）、`page`（tabs 子控件归属第几页，>0 才写）
-- `children`（仅容器 `group`/`box`/`tabs`；非容器带 children 读入时被挂到同级，不丢）
+- `children`（仅容器 `group`/`box`/`card`/`tabs`；非容器带 children 读入时被挂到同级，不丢）
 
 读入（`parseDoc`/`coerceNode`）宽容：脏数据按默认值兜底、`type` 不认识降级成 `label`、兼容扁平 `x/y/w/h` 和 `state{}` 旧写法、`cgui > 1` 直接报错。
 结构化内容的**文本 DSL**（Inspector 用多行 textarea 编辑，务必保持这套格式）：
@@ -138,7 +138,7 @@ argument-hint: [要改的东西，可以用日常语言，例如 "画布选中�
 
 - [ ] `model.ts::CG_EVENTS` 加名字 → `EVENT_LABEL` + `EVENT_HINT` 补中文
 - [ ] `model.ts::KIND_EVENTS`：给**真正该有**这个事件的控件加上（原则：标签没交互、进度条只能被程序写、只有树有展开折叠）
-- [ ] **同步 C 侧**（`runtime/include/cstackgui.h` 的 `cg_event_t`、`cg_doc.h` 的 `CG_EV_*` 宏、`cg_doc.c::k_kinds[].events`）
+- [ ] **同步 C 侧**（`runtime/include/cstackgui.h` 的 `cg_event_t`、`runtime/src/core/cg_doc.h` 的 `CG_EV_*` 宏、`runtime/src/core/cg_doc_kind.c::k_kinds[].events`）
 - [ ] 注意：窗口 `close` 不进 `CG_EVENTS`，它是 `app.events.close` 伪控件 `CG_WINDOW_ID="__window"`
 - [ ] `EventPanel.tsx` 无需改（它只读 `eventsOf(type)`）
 
@@ -156,10 +156,10 @@ argument-hint: [要改的东西，可以用日常语言，例如 "画布选中�
 
 运行时侧（**不同步 = 画布存了运行时读不懂**）：
 
-- [ ] `runtime/src/cg_doc.h::cg_kind_t` 加枚举
-- [ ] `runtime/src/cg_doc.c::k_kinds` 加一行（名字/枚举/是否容器/默认宽高/默认文本/`CG_EV_*` 位掩码）
-- [ ] `runtime/src/cg_win32.c`：`class_of()` + `style_of()`（必要时 `exstyle_of`、`create_native` 特殊处理）
-- [ ] 有结构化内容 → `cg_doc.c` 的 `parse_*` 和 `cg_app.c` 的 `build_node` 补字段
+- [ ] `runtime/src/core/cg_doc.h::cg_kind_t` 加枚举
+- [ ] `runtime/src/core/cg_doc_kind.c::k_kinds` 加一行（名字/枚举/是否容器/默认宽高/默认文本/`CG_EV_*` 位掩码）
+- [ ] `runtime/src/win32/cg_win_ctl.c`：`cgw_class_of()` + `cgw_style_of()`（必要时 `cgw_exstyle_of`、`cgw_create_native` 特殊处理）
+- [ ] 有结构化内容 → `runtime/src/core/cg_doc.c` 的 `parse_*` 和 `runtime/src/core/cg_widget.c` 的 `build_node` 补字段
 - [ ] 别在 C 里复制事件名表，用 `cg_event_name()`；`k_kinds`/`cg_kind_info()` 按 kind 字段线性查，**别用数组下标当枚举值**
 
 ### 步骤 4：改导出 / IPC / 运行
@@ -200,7 +200,7 @@ examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui   :: 回 0
 
 - 改了 `model.ts` 的字段却忘了 `cleanNode` → 字段永远存不进 `.cgui`
 - 只改 `coerceNode` 不改 `cleanNode`（或反之）→ 存/读不对称，`.cgui` 语义漂移
-- `KINDS` 加了、`cg_doc.c::k_kinds` 没加 → 画布能画，运行时静默丢控件
+- `KINDS` 加了、`cg_doc_kind.c::k_kinds` 没加 → 画布能画，运行时静默丢控件
 - `KIND_EVENTS` 与 `k_kinds[].events` 不一致 → 绑了不支持的事件，运行时警告、`--selftest` 返回 5
 - 新 IPC 没写浏览器降级分支 → 浏览器模式下 `bridge` 缺方法崩
 - 绘制时对 `node.children` 直接递归忘了 tabs 的 `page` 过滤 → 画布显示与运行时不符

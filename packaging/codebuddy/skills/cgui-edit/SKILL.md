@@ -33,11 +33,11 @@ description: 手工编辑 .cgui 界面文件（JSON）。触发条件：用户�
 - 事件：`events: { "<事件名>": "<C 函数名>" }`；函数名写错编译不报错，selftest 会揪出来
 - 状态（等于默认值就**不要写**）：`visible`(true)、`enabled`(true)、`checked`(false)；
   `value/min/max` 只给数值型控件（slider/progress/progressring/spinner）
-- 容器只有 `group`/`box`/`tabs` 能带 `children`（非容器带了会被挪到同级）；tabs 的子控件用 `page` 标归属第几页（0 起）
+- 容器只有 `group`/`box`/`card`/`tabs` 能带 `children`（非容器带了会被挪到同级）；tabs 的子控件用 `page` 标归属第几页（0 起）
 
 ## 按类型的专有字段
 
-| type（28 种全表） | 专有字段 |
+| type（39 种全表） | 专有字段 |
 | --- | --- |
 | button / iconbutton / label / link / edit / multiedit / checkbox / radio / richtext / monthcal / separator / group / box | `text`（checkbox/radio/switch 另有 `checked`） |
 | switch | `text`、`checked` |
@@ -50,6 +50,11 @@ description: 手工编辑 .cgui 界面文件（JSON）。触发条件：用户�
 | table | `columns: [{title, w}]`、`rows: [["a","b"], ...]` |
 | image / iconbutton | `src`（相对 .cgui 所在目录，png/jpg/bmp/gif） |
 | datepicker | `format`: date / time / datetime（date 可省略），当前值在 `text`（2026-09-19 / 14:30） |
+| colorpicker | 当前颜色在 `value`（`0xRRGGBB`），点击弹系统取色器 |
+| timer | `period`（毫秒一跳，触发 `tick`） |
+| rate / pagination | `value` / `min` / `max`（rate 星数 = `max-min`，上限 10；pagination 页数 = `max-min+1`） |
+| card | 容器，可带 `children`（坐标相对卡片客户区） |
+| canvas / browser / shape / badge / tag | 无专有字段（`text` 为主；canvas 用 `cg_canvas_*` 运行时画） |
 
 ## 读入容错（写错不会崩，但别指望生效）
 
