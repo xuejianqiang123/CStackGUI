@@ -12,6 +12,7 @@
 #define _UNICODE
 
 #include "cg_internal.h"
+#include "cg_skin.h"   /* M3 自绘外观层：owner-draw 按钮走这里画 */
 
 #include <windows.h>
 #include <commctrl.h>
@@ -56,6 +57,7 @@ typedef struct {
 #define CG_PANEL_CLASS L"CStackGUIPanel"
 #define CG_IMAGE_CLASS L"CStackGUIImage"
 #define CG_RING_CLASS  L"CStackGUIRing"
+#define CG_PROGRESS_CLASS L"CStackGUIProgress"
 #define CG_CANVAS_CLASS L"CStackGUICanvas"
 #define CG_TIMER_ID    1
 
@@ -125,41 +127,42 @@ static int s_atl_ok = 0;
 /** @brief 控件 -> Win32 窗口类名（group/box/card/shape 走自注册 Panel 类） */
 static const wchar_t *class_of(const cg_widget_t *w)
 {
-    if (!strcmp(w->type, "button"))    return L"BUTTON";
-    if (!strcmp(w->type, "menubutton"))return L"BUTTON";
-    if (!strcmp(w->type, "iconbutton"))return L"BUTTON";      /* BS_OWNERDRAW 画图标 */
-    if (!strcmp(w->type, "label"))     return L"STATIC";
+    if (!strcmp(w->type, "button"))    return L"BUTTON";      /* 自绘：BS_OWNERDRAW（cg_skin 画 M3 圆角） */
+    if (!strcmp(w->type, "menubutton"))return L"BUTTON";      /* 普通按钮，点一下弹菜单 */
+    if (!strcmp(w->type, "iconbutton"))return L"BUTTON";      /* BS_OWNERDRAW：画图标 */
+    if (!strcmp(w->type, "label"))     return L"STATIC";      /* 静态文本，SS_* 决定对齐 */
     if (!strcmp(w->type, "link"))      return L"STATIC";      /* SS_NOTIFY 才有 STN_CLICKED */
-    if (!strcmp(w->type, "edit"))      return L"EDIT";
-    if (!strcmp(w->type, "multiedit")) return L"EDIT";
-    if (!strcmp(w->type, "richtext"))  return s_richedit_class ? s_richedit_class : L"EDIT";
-    if (!strcmp(w->type, "checkbox"))  return L"BUTTON";
-    if (!strcmp(w->type, "radio"))     return L"BUTTON";
-    if (!strcmp(w->type, "switch"))    return L"BUTTON";      /* BS_OWNERDRAW 自绘 */
-    if (!strcmp(w->type, "listbox"))   return L"LISTBOX";
-    if (!strcmp(w->type, "combo"))     return L"COMBOBOX";
-    if (!strcmp(w->type, "slider"))    return TRACKBAR_CLASSW;
-    if (!strcmp(w->type, "progress"))  return PROGRESS_CLASSW;
-    if (!strcmp(w->type, "separator")) return L"STATIC";
-    if (!strcmp(w->type, "image"))     return CG_IMAGE_CLASS;
-    if (!strcmp(w->type, "tabs"))      return WC_TABCONTROLW;
-    if (!strcmp(w->type, "tree"))      return WC_TREEVIEWW;
-    if (!strcmp(w->type, "table"))     return WC_LISTVIEWW;
-    if (!strcmp(w->type, "statusbar")) return STATUSCLASSNAMEW;
-    if (!strcmp(w->type, "spinner"))   return L"EDIT";        /* 箭头是 native2 */
-    if (!strcmp(w->type, "datepicker"))return DATETIMEPICK_CLASSW;
-    if (!strcmp(w->type, "toolbar"))   return TOOLBARCLASSNAMEW;
-    if (!strcmp(w->type, "monthcal"))  return MONTHCAL_CLASSW;
-    if (!strcmp(w->type, "progressring")) return CG_RING_CLASS;   /* 自绘圆环 */
+    if (!strcmp(w->type, "edit"))      return L"EDIT";        /* 单行输入框（运行时做圆角） */
+    if (!strcmp(w->type, "multiedit")) return L"EDIT";        /* 多行输入框（运行时做圆角） */
+    if (!strcmp(w->type, "richtext"))  return s_richedit_class ? s_richedit_class : L"EDIT";  /* 富文本，Msftedit 降级到 EDIT */
+    if (!strcmp(w->type, "checkbox"))  return L"BUTTON";      /* 自绘：BS_OWNERDRAW（cg_skin 画勾选框） */
+    if (!strcmp(w->type, "radio"))     return L"BUTTON";      /* 自绘：BS_OWNERDRAW（cg_skin 画单选圆） */
+    if (!strcmp(w->type, "switch"))    return L"BUTTON";      /* BS_OWNERDRAW 自绘开关 */
+    if (!strcmp(w->type, "listbox"))   return L"LISTBOX";     /* 列表框 */
+    if (!strcmp(w->type, "combo"))     return L"COMBOBOX";    /* 下拉选择（CBS_DROPDOWNLIST） */
+    if (!strcmp(w->type, "slider"))    return TRACKBAR_CLASSW; /* 滑块：NM_CUSTOMDRAW 自绘轨道/滑块 */
+    /* progress 走自绘类 CG_PROGRESS_CLASS（见 progressring 行后面）：原生进度条不支持 custom draw */
+    if (!strcmp(w->type, "separator")) return L"STATIC";      /* SS_ETCHEDHORZ 横线 */
+    if (!strcmp(w->type, "image"))     return CG_IMAGE_CLASS; /* 自绘图片控件 */
+    if (!strcmp(w->type, "tabs"))      return WC_TABCONTROLW;  /* 标签页 */
+    if (!strcmp(w->type, "tree"))      return WC_TREEVIEWW;   /* 树形视图 */
+    if (!strcmp(w->type, "table"))     return WC_LISTVIEWW;    /* 列表视图（报表模式） */
+    if (!strcmp(w->type, "statusbar")) return STATUSCLASSNAMEW;/* 状态栏 */
+    if (!strcmp(w->type, "spinner"))   return L"EDIT";        /* 数字框：edit + 箭头 native2 */
+    if (!strcmp(w->type, "datepicker"))return DATETIMEPICK_CLASSW; /* 日期/时间选择 */
+    if (!strcmp(w->type, "toolbar"))   return TOOLBARCLASSNAMEW;  /* 工具栏 */
+    if (!strcmp(w->type, "monthcal"))  return MONTHCAL_CLASSW;   /* 月历 */
+    if (!strcmp(w->type, "progressring")) return CG_RING_CLASS;   /* 自绘圆环（进度环） */
+    if (!strcmp(w->type, "progress")) return CG_PROGRESS_CLASS;   /* 自绘进度条（原生的不支持 custom draw） */
     if (!strcmp(w->type, "canvas"))    return CG_CANVAS_CLASS;    /* 自绘画板 */
     if (!strcmp(w->type, "colorpicker")) return L"BUTTON";        /* BS_OWNERDRAW 色块 */
     if (!strcmp(w->type, "badge"))     return L"BUTTON";          /* BS_OWNERDRAW 小圆片 */
     if (!strcmp(w->type, "tag"))       return L"BUTTON";          /* BS_OWNERDRAW 标签片 */
     if (!strcmp(w->type, "rate"))      return L"BUTTON";          /* BS_OWNERDRAW 五角星 */
     if (!strcmp(w->type, "pagination"))return L"BUTTON";          /* BS_OWNERDRAW 分页 */
-    if (!strcmp(w->type, "browser"))   return s_atl_ok ? L"AtlAxWin" : L"STATIC";
+    if (!strcmp(w->type, "browser"))   return s_atl_ok ? L"AtlAxWin" : L"STATIC"; /* IE/WebBrowser 嵌入 */
     if (!strcmp(w->type, "timer"))     return L"STATIC";          /* 无窗口，create_native 会跳过 */
-    if (!strcmp(w->type, "card") || !strcmp(w->type, "shape")) return CG_PANEL_CLASS;
+    if (!strcmp(w->type, "card") || !strcmp(w->type, "shape")) return CG_PANEL_CLASS; /* 容器面板 */
     return CG_PANEL_CLASS;   /* group / box */
 }
 
@@ -178,7 +181,7 @@ static int is_datetime(const cg_widget_t *w)
 /** @brief 控件 -> WS 样式位（table 按 multi 决定单/多选） */
 static DWORD style_of(const cg_widget_t *w)
 {
-    if (!strcmp(w->type, "button"))    return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON;
+    if (!strcmp(w->type, "button"))    return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;  /* M3 圆角自绘 */
     if (!strcmp(w->type, "menubutton"))return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON;
     if (!strcmp(w->type, "iconbutton"))return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;
     if (!strcmp(w->type, "link"))      return WS_CHILD | WS_VISIBLE | SS_NOTIFY | SS_LEFTNOWORDWRAP;
@@ -197,8 +200,8 @@ static DWORD style_of(const cg_widget_t *w)
     }
     if (!strcmp(w->type, "edit"))      return WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_LEFT;
     if (!strcmp(w->type, "multiedit")) return WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_WANTRETURN;
-    if (!strcmp(w->type, "checkbox"))  return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX;
-    if (!strcmp(w->type, "radio"))     return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTORADIOBUTTON | WS_GROUP;
+    if (!strcmp(w->type, "checkbox"))  return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;  /* 自绘勾选框 */
+    if (!strcmp(w->type, "radio"))     return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW | WS_GROUP;  /* 自绘单选圆，WS_GROUP 标记组首 */
     if (!strcmp(w->type, "listbox"))   return WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY;
     if (!strcmp(w->type, "combo"))     return WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST;
     if (!strcmp(w->type, "slider"))    return WS_CHILD | WS_VISIBLE | WS_TABSTOP | TBS_HORZ | TBS_NOTICKS;
@@ -227,8 +230,10 @@ static DWORD style_of(const cg_widget_t *w)
 /** @brief 控件 -> 扩展样式位（输入类控件给立体边框） */
 static DWORD exstyle_of(const cg_widget_t *w)
 {
-    if (!strcmp(w->type, "edit"))    return WS_EX_CLIENTEDGE;
-    if (!strcmp(w->type, "multiedit")) return WS_EX_CLIENTEDGE;
+    /* edit/multiedit 的边框由 cg_skin 自绘（灰圆角+聚焦紫），
+     * WS_EX_CLIENTEDGE 的凹陷立体边和圆角裁切叠加会把内容切没 */
+    if (!strcmp(w->type, "edit"))    return 0;
+    if (!strcmp(w->type, "multiedit")) return 0;
     if (!strcmp(w->type, "richtext")) return WS_EX_CLIENTEDGE;
     if (!strcmp(w->type, "listbox")) return WS_EX_CLIENTEDGE;
     return 0;
@@ -465,10 +470,20 @@ static LRESULT CALLBACK FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     case WM_COMMAND:
     case WM_NOTIFY:
     case WM_DRAWITEM:
-    case WM_HSCROLL:
-    case WM_VSCROLL:
         if (s_app && s_app->hwnd && (HWND)s_app->hwnd != hwnd) {
             return SendMessageW((HWND)s_app->hwnd, msg, wp, lp);
+        }
+        break;
+    case WM_HSCROLL:
+    case WM_VSCROLL:
+        /* 只转发滑块/微调的滚动通知（它们要送回主窗口换算成值）。
+         * listbox / tree / table 的滚动条消息是发给控件自己、由控件自己处理的，
+         * 无条件转发会把这些消息劫走——表现为滚动条拖了没反应。 */
+        if (s_app && s_app->hwnd && (HWND)s_app->hwnd != hwnd) {
+            cg_widget_t *sw = widget_by_hwnd(s_app, (HWND)lp);
+            if (sw && (is_t(sw, "slider") || is_t(sw, "spinner"))) {
+                return SendMessageW((HWND)s_app->hwnd, msg, wp, lp);
+            }
         }
         break;
     default:
@@ -485,9 +500,31 @@ static LRESULT CALLBACK FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
                     cg_dispatch(w, ev);
                     s_in_notify = 0;
                 }
-            } else if (msg == WM_LBUTTONUP &&
-                       (is_t(w, "rate") || is_t(w, "pagination"))) {
+            }
+            if (msg == WM_LBUTTONUP &&
+                (is_t(w, "rate") || is_t(w, "pagination"))) {
                 rate_or_pag_click(w, hwnd, (short)LOWORD(lp));
+            }
+            /* 自绘按钮：悬停/按下只影响外观，不派发事件（点击仍走 BN_CLICKED） */
+            if (is_t(w, "button") || is_t(w, "checkbox") || is_t(w, "radio")) {
+                if (msg == WM_LBUTTONDOWN) {
+                    w->pressed = 1; InvalidateRect(hwnd, NULL, TRUE);
+                } else if (msg == WM_LBUTTONUP) {
+                    w->pressed = 0; InvalidateRect(hwnd, NULL, TRUE);
+                } else if (msg == WM_MOUSEMOVE) {
+                    if (!w->hot) {
+                        w->hot = 1;
+                        TRACKMOUSEEVENT tme;
+                        memset(&tme, 0, sizeof(tme));
+                        tme.cbSize = sizeof(tme);
+                        tme.dwFlags = TME_LEAVE;
+                        tme.hwndTrack = hwnd;
+                        TrackMouseEvent(&tme);
+                        InvalidateRect(hwnd, NULL, TRUE);
+                    }
+                } else if (msg == WM_MOUSELEAVE) {
+                    w->hot = 0; w->pressed = 0; InvalidateRect(hwnd, NULL, TRUE);
+                }
             }
         }
     }
@@ -579,6 +616,7 @@ static ULONG_PTR s_gdip_token = 0;   /* GDI+ 的启动令牌，0 表示没起来
 
 /* 本文件里几处互相调用（切页要同步子控件、建控件后要同步），先声明 */
 static void sync_widget(cg_widget_t *w);
+static void sync_tabs_pages(cg_widget_t *tabs);
 
 /** @brief 文件是否存在 */
 static int file_exists(const char *path)
@@ -860,6 +898,51 @@ static void register_ring_class(void)
     wc.hInstance = GetModuleHandleW(NULL);
     wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
     wc.lpszClassName = CG_RING_CLASS;
+    RegisterClassExW(&wc);
+    done = 1;
+}
+
+/** @brief 进度条窗口过程（自绘，无交互）。原生的 PROGRESS_CLASS
+ *  不管主题开没开都不发 NM_CUSTOMDRAW，只能整个换成自己的类。 */
+static LRESULT CALLBACK ProgressProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    cg_app_t *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+
+    switch (msg) {
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC dc = BeginPaint(hwnd, &ps);
+        RECT rc;
+        cg_widget_t *w = widget_by_hwnd(app, hwnd);
+        GetClientRect(hwnd, &rc);
+        if (w) {
+            cg_skin_draw_progress(w, dc, &rc);
+        } else {
+            FillRect(dc, &rc, (HBRUSH)(COLOR_BTNFACE + 1));
+        }
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    default:
+        break;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+/** @brief 注册进度条的自绘窗口类（整进程一次） */
+static void register_progress_class(void)
+{
+    static int done = 0;
+    WNDCLASSEXW wc;
+    if (done) return;
+    memset(&wc, 0, sizeof(wc));
+    wc.cbSize = sizeof(wc);
+    wc.lpfnWndProc = ProgressProc;
+    wc.hInstance = GetModuleHandleW(NULL);
+    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
+    wc.lpszClassName = CG_PROGRESS_CLASS;
     RegisterClassExW(&wc);
     done = 1;
 }
@@ -1175,14 +1258,6 @@ static void notify_body(cg_app_t *app, cg_widget_t *w, HWND hwnd, int code, int 
         }
         return;
     }
-    if (!strcmp(w->type, "checkbox") || !strcmp(w->type, "radio")) {
-        /* 这两种是 BS_CHECKBOX/BS_RADIOBUTTON：点击时 BUTTON 自己 toggle 过
-         * 内部 check 状态，读回来就是新值。 */
-        LRESULT st = SendMessageW(hwnd, BM_GETCHECK, 0, 0);
-        cg_widget_set_checked(w, st == BST_CHECKED);
-        cg_dispatch(w, CG_EVENT_CHANGE);
-        return;
-    }
     if (!strcmp(w->type, "switch")) {
         /* switch 是 BS_OWNERDRAW 按钮：点击时 BUTTON 不会 toggle check 状态
          * （BM_SETCHECK/BM_GETCHECK 只对 checkbox/radio 有定义），读 BM_GETCHECK
@@ -1200,6 +1275,24 @@ static void notify_body(cg_app_t *app, cg_widget_t *w, HWND hwnd, int code, int 
             }
         } else if (code == LBN_DBLCLK) {
             cg_dispatch(w, CG_EVENT_DBLCLICK);
+        }
+        return;
+    }
+    /* 复选/单选：owner-draw 不会自动 toggle，这里手动翻状态并派发 change。
+     * 单选还要把同组（同 parent）其它 radio 取消选中。 */
+    if (!strcmp(w->type, "checkbox") || !strcmp(w->type, "radio")) {
+        if (code == BN_CLICKED) {
+            if (!strcmp(w->type, "radio")) {
+                for (cg_widget_t *r = app->widgets; r; r = r->next) {
+                    if (r != w && !strcmp(r->type, "radio") && r->parent == w->parent) {
+                        cg_widget_set_checked(r, 0);
+                        if (r->native) InvalidateRect((HWND)r->native, NULL, TRUE);
+                    }
+                }
+            }
+            cg_widget_set_checked(w, !w->checked);
+            cg_dispatch(w, CG_EVENT_CHANGE);
+            InvalidateRect((HWND)w->native, NULL, TRUE);
         }
         return;
     }
@@ -1236,12 +1329,15 @@ static void notify_body(cg_app_t *app, cg_widget_t *w, HWND hwnd, int code, int 
 }
 
 /** WM_NOTIFY：标签页 / 树 / 表格 / 微调 的富通知都从这条路进来 */
-static void notify_common(cg_app_t *app, const NMHDR *hdr)
+static LRESULT notify_common(cg_app_t *app, const NMHDR *hdr)
 {
     cg_widget_t *w = widget_by_hwnd(app, hdr->hwndFrom);
 
-    if (!w) return;
-    if (s_in_notify) return;
+    if (!w) return 0;
+    /* 自绘滑块：NM_CUSTOMDRAW 是绘制查询，要在 s_in_notify 之前返回，否则会卡住重入 */
+    if (hdr->code == NM_CUSTOMDRAW && !strcmp(w->type, "slider"))
+        return cg_skin_draw_slider_notify(app, hdr);
+    if (s_in_notify) return 0;
     s_in_notify = 1;
 
     switch (hdr->code) {
@@ -1250,7 +1346,8 @@ static void notify_common(cg_app_t *app, const NMHDR *hdr)
         if (sel >= 0) {
             w->value = (int)sel;
             if (w->node) w->node->value = (int)sel;
-            sync_widget(w);          /* 切页：子控件按 page 显隐 */
+            sync_widget(w);          /* tabs 自己（含 TCM_SETCURSEL 同步） */
+            sync_tabs_pages(w);      /* 后代按 page 重刷显隐——只 sync tabs 本身是不够的 */
             cg_dispatch(w, CG_EVENT_SELECT);
         }
         break;
@@ -1331,6 +1428,7 @@ static void notify_common(cg_app_t *app, const NMHDR *hdr)
         break;
     }
     s_in_notify = 0;
+    return 0;
 }
 
 /** 图标按钮：把 src 图片按比例居中画在按钮里（没有图就画个占位框） */
@@ -1535,6 +1633,8 @@ static void draw_own_item(cg_app_t *app, const DRAWITEMSTRUCT *dis)
     wchar_t *label = NULL;
 
     if (!w) return;
+    if (is_t(w, "button")) { cg_skin_draw_button(app, dis); return; }  /* M3 圆角自绘 */
+    if (is_t(w, "checkbox") || is_t(w, "radio")) { cg_skin_draw_check(app, dis); return; }  /* M3 勾选/单选自绘 */
     if (is_t(w, "iconbutton")) {
         draw_icon_button(w, dis);
         return;
@@ -1691,8 +1791,7 @@ static LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             }
             return 0;
         }
-        notify_common(app, (const NMHDR *)lp);
-        return 0;
+        return notify_common(app, (const NMHDR *)lp);
     }
     case WM_DRAWITEM: {
         if (!app) break;
@@ -1926,6 +2025,7 @@ static void create_native(cg_widget_t *w)
     if (!strcmp(type, "group") || !strcmp(type, "box")) register_panel_class();
     if (!strcmp(type, "image")) register_image_class();
     if (!strcmp(type, "progressring")) register_ring_class();
+    if (!strcmp(type, "progress")) register_progress_class();
     if (!strcmp(type, "canvas")) register_canvas_class();
 
     /* browser 的窗口名就是起始地址（AtlAxWin 的约定） */
@@ -1947,9 +2047,14 @@ static void create_native(cg_widget_t *w)
     }
     w->native = h;
 
+    /* 输入框圆角：用窗口区域裁成圆角（Subclass 在 resize 时重裁），Win32 原生 EDIT 不支持 owner-draw */
+    if (!strcmp(type, "edit") || !strcmp(type, "multiedit"))
+        cg_skin_apply_edit(w);
+
     if (!strcmp(type, "group") || !strcmp(type, "box") ||
         !strcmp(type, "card") || !strcmp(type, "shape") ||
         !strcmp(type, "image") || !strcmp(type, "progressring") ||
+        !strcmp(type, "progress") ||
         !strcmp(type, "canvas")) {
         SetWindowLongPtrW(h, GWLP_USERDATA, (LONG_PTR)app);
     }
@@ -2038,6 +2143,38 @@ static int page_visible(const cg_widget_t *w)
     const cg_widget_t *p = w->parent;
     if (!p || !is_t(p, "tabs")) return 1;
     return w->page == p->value;
+}
+
+/** 按 page / visible 规则应用单个控件的显隐（sync_widget_body 与切页共用） */
+static void apply_visible(cg_widget_t *w)
+{
+    HWND h = (HWND)w->native;
+    if (!h) return;
+    if (w->parent && is_t(w->parent, "tabs") && !page_visible(w)) {
+        ShowWindow(h, SW_HIDE);
+        if (w->native2) ShowWindow((HWND)w->native2, SW_HIDE);
+    } else {
+        ShowWindow(h, w->visible ? SW_SHOWNA : SW_HIDE);
+        if (w->native2) ShowWindow((HWND)w->native2, w->visible ? SW_SHOWNA : SW_HIDE);
+    }
+}
+
+/** 切页后把 tabs 的所有后代按新的 value 重刷显隐。
+ *  只 sync tabs 本身是不够的——page 显隐是每个子控件各自的事，
+ *  嵌套 tabs 的内层页也按各自的 value 决定，逐个套规则即可。 */
+static void sync_tabs_pages(cg_widget_t *tabs)
+{
+    cg_app_t *app = tabs->app;
+    if (!app) return;
+    for (cg_widget_t *x = app->widgets; x; x = x->next) {
+        cg_widget_t *p;
+        int under = 0;
+        for (p = x->parent; p; p = p->parent) {
+            if (p == tabs) { under = 1; break; }
+        }
+        if (!under) continue;
+        apply_visible(x);
+    }
 }
 
 /** 重建树：逻辑下标 -> HTREEITEM 的映射存在 w->item_map 里 */
@@ -2435,15 +2572,15 @@ static void sync_widget_body(cg_widget_t *w)
 
     /* 值 */
     if (!strcmp(w->type, "progress")) {
-        SendMessageW(h, PBM_SETRANGE32, (WPARAM)w->vmin, (LPARAM)w->vmax);
-        SendMessageW(h, PBM_SETPOS, (WPARAM)w->value, 0);
+        /* 自绘类直接读 w->value 画，只需触发重绘 */
+        InvalidateRect(h, NULL, TRUE);
     } else if (!strcmp(w->type, "slider")) {
         SendMessageW(h, TBM_SETRANGE, TRUE, MAKELPARAM(w->vmin, w->vmax));
         SendMessageW(h, TBM_SETPOS, TRUE, w->value);
     } else if (!strcmp(w->type, "checkbox") || !strcmp(w->type, "radio")) {
-        /* switch 走 WM_DRAWITEM 自绘（按 w->checked 画），不用 BM_SETCHECK：
-         * 那对 BS_OWNERDRAW 按钮没有定义，只会留下一个误导人的内部状态。 */
-        SendMessageW(h, BM_SETCHECK, w->checked ? BST_CHECKED : BST_UNCHECKED, 0);
+        /* 自绘勾选/单选按 w->checked 画（cg_skin_draw_check），这里只需触发重绘；
+         * BM_SETCHECK 对 BS_OWNERDRAW 按钮没有视觉效果，是无效调用。 */
+        InvalidateRect(h, NULL, TRUE);
     } else if (!strcmp(w->type, "spinner")) {
         HWND up = (HWND)w->native2;
         if (up) {
@@ -2485,16 +2622,8 @@ static void sync_widget_body(cg_widget_t *w)
 
     EnableWindow(h, w->enabled ? TRUE : FALSE);
 
-    /* 标签页的子控件要按当前页显隐。
-     * spinner / datetime 是两个 HWND 拼的控件：native2（箭头 / 时间框）
-     * 必须跟 native 同进同退，否则切页/隐藏时会漏出半个控件。 */
-    if (w->parent && is_t(w->parent, "tabs") && !page_visible(w)) {
-        ShowWindow(h, SW_HIDE);
-        if (w->native2) ShowWindow((HWND)w->native2, SW_HIDE);
-    } else {
-        ShowWindow(h, w->visible ? SW_SHOWNA : SW_HIDE);
-        if (w->native2) ShowWindow((HWND)w->native2, w->visible ? SW_SHOWNA : SW_HIDE);
-    }
+    /* 标签页的子控件要按当前页显隐（spinner/datetime 的 native2 同进同退） */
+    apply_visible(w);
     InvalidateRect(h, NULL, TRUE);
 }
 
@@ -2609,6 +2738,20 @@ static int win_init(cg_app_t *app)
     if (!hwnd) return -1;
 
     app->hwnd = hwnd;
+
+    /* 整窗圆角（M3 观感）。dwmapi 动态加载：老系统无此 API 时自动跳过，零链接依赖。 */
+    {
+        HMODULE dwm = LoadLibraryW(L"dwmapi.dll");
+        if (dwm) {
+            typedef HRESULT (WINAPI *dwma_t)(HWND, DWORD, LPCVOID, DWORD);
+            dwma_t set_attr = (dwma_t)(void *)GetProcAddress(dwm, "DwmSetWindowAttribute");
+            if (set_attr) {
+                int pref = 2;  /* DWMWCP_ROUND */
+                set_attr(hwnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, &pref, sizeof(int));
+            }
+            FreeLibrary(dwm);
+        }
+    }
 
     /* DPI 缩放系数（百分比） */
     {

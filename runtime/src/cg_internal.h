@@ -57,6 +57,8 @@ struct cg_widget {
 
     int          x, y, w, h;
     int          visible, enabled, checked, value, vmin, vmax;
+    int          hot;        /* 鼠标悬停中（自绘外观用，FocusProc 维护） */
+    int          pressed;    /* 鼠标按下中（自绘外观用，FocusProc 维护） */
     cg_style_t   style;
 
     void        *user;
@@ -181,6 +183,9 @@ int cg_dispatch_menu_cmd(cg_app_t *app, int cmd);
 cg_widget_t *cg_widget_by_id(cg_app_t *app, const char *id);
 /** 按 Win32 控件 ID 找控件；找不到返回 NULL */
 cg_widget_t *cg_widget_by_ctrl_id(cg_app_t *app, int ctrl_id);
+/** 按原生窗口句柄（HWND，以 void* 传入）反查控件；同时比对 native 与 native2；
+ *  找不到返回 NULL。自绘外观层（cg_skin.c）用它把 WM_DRAWITEM 的 hwndItem 映射到控件。 */
+cg_widget_t *cg_widget_by_hwnd(cg_app_t *app, void *hwnd);
 
 /** 由文档树构建运行时控件树（不含原生句柄），失败返回 NULL */
 cg_widget_t *cg_build_widgets(cg_app_t *app);

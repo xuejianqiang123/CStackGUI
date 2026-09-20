@@ -27,7 +27,7 @@ if not exist build\obj mkdir build\obj
 if not exist build\lib mkdir build\lib
 
 set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include -Iruntime\src
-set SRC=cg_json cg_doc cg_app cg_timer cg_win32
+set SRC=cg_json cg_doc cg_app cg_timer cg_win32 cg_skin
 
 for %%f in (%SRC%) do (
     echo   CC runtime\src\%%f.c
@@ -39,7 +39,7 @@ echo   RC runtime\res\cstackgui.rc
 windres --include-dir=runtime\res -O coff runtime\res\cstackgui.rc -o build\obj\cstackgui_res.o
 if errorlevel 1 goto :fail
 
-ar rcs build\lib\libcstackgui.a build\obj\cg_json.o build\obj\cg_doc.o build\obj\cg_app.o build\obj\cg_timer.o build\obj\cg_win32.o build\obj\cstackgui_res.o
+ar rcs build\lib\libcstackgui.a build\obj\cg_json.o build\obj\cg_doc.o build\obj\cg_app.o build\obj\cg_timer.o build\obj\cg_win32.o build\obj\cg_skin.o build\obj\cstackgui_res.o
 if errorlevel 1 goto :fail
 
 echo [ok] build\lib\libcstackgui.a

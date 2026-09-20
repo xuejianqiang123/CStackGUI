@@ -383,6 +383,16 @@ cg_widget_t *cg_widget_by_ctrl_id(cg_app_t *app, int ctrl_id)
     return NULL;
 }
 
+/** @brief 按原生窗口句柄反查控件（同时比对 native 与 native2，spinner 有两个 HWND）；找不到返回 NULL */
+cg_widget_t *cg_widget_by_hwnd(cg_app_t *app, void *hwnd)
+{
+    if (!app || !hwnd) return NULL;
+    for (cg_widget_t *w = app->widgets; w; w = w->next) {
+        if (w->native == hwnd || w->native2 == hwnd) return w;
+    }
+    return NULL;
+}
+
 /** @brief 按 id 找控件（cg_widget_by_id 的对外别名） */
 cg_widget_t *cg_find(cg_app_t *app, const char *id) { return cg_widget_by_id(app, id); }
 
