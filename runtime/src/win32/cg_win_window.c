@@ -238,7 +238,7 @@ int cgw_win_init(cg_app_t *app)
             }
         }
         if (mw) {
-            HMENU hm = cgw_menu_build(mw);
+            HMENU hm = cgw_menu_build(mw, 1);   /* 1 = 菜单栏（CreateMenu） */
             if (hm && mw->nmenu > 0) {
                 SetMenu(hwnd, hm);
                 DrawMenuBar(hwnd);

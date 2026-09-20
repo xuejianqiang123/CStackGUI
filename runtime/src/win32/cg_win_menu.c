@@ -13,7 +13,7 @@ void cgw_popup_menu_for(cg_app_t *app, cg_widget_t *w, HWND hwnd)
     int   cmd;
     int   saved = g_win_in_notify;
 
-    hm = cgw_menu_build(w);
+    hm = cgw_menu_build(w, 0);
     if (!hm || w->nmenu == 0) {
         if (hm) DestroyMenu(hm);
         return;
@@ -36,14 +36,17 @@ void cgw_popup_menu_for(cg_app_t *app, cg_widget_t *w, HWND hwnd)
 /**
  * @brief 按运行时行表建 HMENU（行表里父项下标一定小于子项，一遍扫过去就够）
  * @param w menu / menubutton 控件
+ * @param as_bar 1 = 菜单栏（CreateMenu，给 SetMenu 用）；0 = 弹出菜单（CreatePopupMenu）
  * @return HMENU 菜单句柄（调用方挂载或 DestroyMenu）
  */
-HMENU cgw_menu_build(const cg_widget_t *w)
+HMENU cgw_menu_build(const cg_widget_t *w, int as_bar)
 {
     HMENU  root;
     HMENU *subs;
 
-    root = CreatePopupMenu();
+    /* 顶层容器：挂到窗口上当菜单栏必须用 CreateMenu；弹出菜单必须用 CreatePopupMenu。
+     * 用错的话 SetMenu 会静默失败——窗口上根本看不到菜单栏（这个坑真实踩过）。 */
+    root = as_bar ? CreateMenu() : CreatePopupMenu();
     if (!root || w->nmenu <= 0) return root;
 
     subs = (HMENU *)calloc((size_t)w->nmenu, sizeof(HMENU));
