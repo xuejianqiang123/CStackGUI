@@ -118,6 +118,13 @@ static HFONT font_for(cg_app_t *app, const char *family, int size_pt, int bold, 
                                   wf ? wf : L"Microsoft YaHei UI");
         free(wf);
     }
+    if (!node->key || !node->hfont) {
+        /* 分配失败就丢给系统字体，别缓存一个戳不上的 key（strcmp 会崩） */
+        HFONT hf = node->hfont;
+        free(node->key);
+        free(node);
+        return hf ? hf : NULL;
+    }
     node->next = st->fonts;
     st->fonts = node;
     return node->hfont;
@@ -261,13 +268,13 @@ static COLORREF to_colorref(unsigned c) { return RGB((c >> 16) & 0xFF, (c >> 8) 
 /** 一组小画刷缓存，给 WM_CTLCOLOR* 返回用；颜色数量有限，链表足够 */
 static HBRUSH brush_for(unsigned rgb)
 {
-    static struct { unsigned rgb; HBRUSH br; } cache[16];
+    static struct { unsigned rgb; HBRUSH br; } cache[64];
     static int used = 0;
 
     for (int i = 0; i < used; i++) {
         if (cache[i].rgb == rgb) return cache[i].br;
     }
-    if (used < 16) {
+    if (used < (int)(sizeof(cache) / sizeof(cache[0]))) {
         cache[used].br = CreateSolidBrush(to_colorref(rgb));
         cache[used].rgb = rgb;
         return cache[used++].br;
@@ -1514,6 +1521,8 @@ static void register_panel_class(void)
 
 /* ------------------------------------------------------------ 事件映射 */
 
+static int hwnd_text_is(HWND h, const wchar_t *wt);   /* 定义在 sync_widget_body 前 */
+
 /** 把编辑框里的当前文字读回控件模型 */
 static void pull_edit_text(cg_widget_t *w, HWND hwnd)
 {
@@ -1636,18 +1645,33 @@ static void notify_body(cg_app_t *app, cg_widget_t *w, HWND hwnd, int code, int 
     if (is_editlike(w)) {
         if (code == EN_CHANGE) {
             if (strcmp(w->type, "spinner") == 0) {
-                /* 微调框要让 value 跟上手输的数字 */
-                char buf[64];
+                /* 微调框要让 value 跟上手输的数字。
+                 * 顺序是关键：先把文本算成 int 落进 w->value / updown 内部位置，
+                 * 最后再 pull_edit_text —— pull 会经 cg_widget_set_text 触发一次 sync，
+                 * sync 按 w->value 重写 buddy 文本；若 value 还是旧值（如 1），
+                 * 用户刚敲进去的 13 会被刷回 1（"明明 13 了还显示 1"）。 */
+                int  len = GetWindowTextLengthW(hwnd);
+                int  v = w->value;
                 HWND up = (HWND)w->native2;
-                int  v;
-                pull_edit_text(w, hwnd);
-                snprintf(buf, sizeof(buf), "%s", w->text ? w->text : "0");
-                v = atoi(buf);
+                wchar_t *buf = (wchar_t *)malloc(((size_t)len + 1) * sizeof(wchar_t));
+                if (buf) {
+                    GetWindowTextW(hwnd, buf, len + 1);
+                    v = (int)wcstol(buf, NULL, 10);
+                    free(buf);
+                }
                 if (v < w->vmin) v = w->vmin;
                 if (v > w->vmax) v = w->vmax;
                 w->value = v;
                 if (w->node) w->node->value = v;
-                if (up) SendMessageW(up, UDM_SETPOS32, 0, (LPARAM)v);
+                if (up) {
+                    BOOL err = FALSE;
+                    int cur = (int)SendMessageW(up, UDM_GETPOS32, 0, (LPARAM)&err);
+                    if (err || cur != v)
+                        SendMessageW(up, UDM_SETPOS32, 0, (LPARAM)v);
+                }
+                /* value 已就位：pull 触发的 sync 用新 value 比对文本，一致就不重写、
+                 * 光标保持在点击处；超界输入会被 clamp 成 vmin/vmax 显示。 */
+                pull_edit_text(w, hwnd);
             } else {
                 pull_edit_text(w, hwnd);
             }
@@ -1693,9 +1717,8 @@ static LRESULT notify_common(cg_app_t *app, const NMHDR *hdr)
         }
         break;
     }
-    case TVN_FIRST - 1:                     /* TVN_DBLCLK，有些 SDK 头没定义名字 */
-        cg_dispatch(w, CG_EVENT_DBLCLICK);
-        break;
+    /* 注：树控件没有 TVN_DBLCLK 这个码，双击统一由 NM_DBLCLK 派发；
+     * TVN_FIRST-1 是 TVN_SELCHANGINGA（ANSI 选中前），别在这里误用。 */
     case LVN_ITEMCHANGED: {
         const NMLISTVIEW *nlv = (const NMLISTVIEW *)hdr;
         /* 勾选列：状态位图（高 4 位）变了才是勾选切换，别和选中混在一起 */
@@ -1716,7 +1739,7 @@ static LRESULT notify_common(cg_app_t *app, const NMHDR *hdr)
     case NM_DBLCLK:
         cg_dispatch(w, CG_EVENT_DBLCLICK);
         break;
-    case TVN_FIRST - 11: {                  /* TVN_ITEMEXPANDEDW，有些 SDK 头没定义名字 */
+    case TVN_ITEMEXPANDEDW: {               /* TVN_ITEMEXPANDEDW = TVN_FIRST-55（Unicode） */
         const NMTREEVIEWW *ntv = (const NMTREEVIEWW *)hdr;
         for (int i = 0; i < w->item_map_n; i++) {
             if ((HTREEITEM)w->item_map[i] != ntv->itemNew.hItem) continue;
@@ -1746,13 +1769,26 @@ static LRESULT notify_common(cg_app_t *app, const NMHDR *hdr)
     }
     case UDN_DELTAPOS: {
         const NMUPDOWN *nud = (const NMUPDOWN *)hdr;
+        HWND buddy = (HWND)w->native;
         int v = nud->iPos + nud->iDelta;
         if (v < w->vmin) v = w->vmin;
         if (v > w->vmax) v = w->vmax;
         w->value = v;
         if (w->node) w->node->value = v;
+        /* 手动把新值写进 buddy 并把光标放到文本末尾，然后返回 1 拦住 updown 自动更新：
+         * 若带 UDS_SETBUDDYINT，updown 自己 SetWindowText 会把光标/选区清回 0
+         * —— 点完箭头光标总停在前面的元凶。文本自此由我们接管。 */
+        {
+            wchar_t wbuf[32];
+            swprintf(wbuf, 32, L"%d", v);
+            if (!hwnd_text_is(buddy, wbuf)) SetWindowTextW(buddy, wbuf);
+            SendMessageW(buddy, EM_SETSEL, (WPARAM)(wcslen(wbuf)), (LPARAM)(wcslen(wbuf)));
+        }
+        if (w->native2)
+            SendMessageW((HWND)w->native2, UDM_SETPOS32, 0, (LPARAM)v);
         cg_dispatch(w, CG_EVENT_CHANGE);
-        break;
+        s_in_notify = 0;
+        return 1;    /* 已自管内部位置与 buddy 文本，别让 updown 再算一遍 */
     }
     default:
         break;
@@ -2578,16 +2614,22 @@ static void create_native(cg_widget_t *w)
         }
     }
 
-    /* 数字微调：输入框 + 右侧上下箭头，是两个原生窗口拼出来的一个控件 */
+    /* 数字微调：输入框 + 右侧上下箭头，是两个原生窗口拼出来的一个控件。
+     * 不用 UDS_SETBUDDYINT：那个样式会在内部位置一变就用 SetWindowText 重写 buddy
+     * 文本、把光标/选区清回 0（点箭头或敲数字后光标总在最前面）。文本由我们自管。 */
     if (!strcmp(type, "spinner")) {
         HWND up = CreateWindowExW(0, UPDOWN_CLASSW, L"",
-                                  WS_CHILD | WS_VISIBLE | UDS_ALIGNRIGHT | UDS_ARROWKEYS | UDS_SETBUDDYINT | UDS_NOTHOUSANDS,
+                                  WS_CHILD | WS_VISIBLE | UDS_ALIGNRIGHT | UDS_ARROWKEYS | UDS_NOTHOUSANDS,
                                   0, 0, 0, 0, parent, NULL, GetModuleHandleW(NULL), NULL);
         if (up) {
+            wchar_t wbuf[32];
             SendMessageW(up, UDM_SETBUDDY, (WPARAM)h, 0);
             SendMessageW(up, UDM_SETRANGE32, (WPARAM)w->vmin, (LPARAM)w->vmax);
             SendMessageW(up, UDM_SETPOS32, 0, (LPARAM)w->value);
             w->native2 = up;
+            /* 无 SETBUDDYINT 时 SETPOS32 不写 buddy 文本，初始值要自己写一遍 */
+            swprintf(wbuf, 32, L"%d", w->value);
+            SetWindowTextW(h, wbuf);
             /* UDS_ALIGNRIGHT 的箭头会给 buddy 重设边距、把我们的左边距清成 0（文字顶到
              * 圆角边框上）。这里重设左边距；右边距留给箭头，别覆盖。 */
             SendMessageW(h, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(CG_EDIT_TEXT_MARGIN, 0));
@@ -3056,13 +3098,20 @@ static void sync_widget_body(cg_widget_t *w)
         !strcmp(w->type, "checkbox") || !strcmp(w->type, "radio") ||
         !strcmp(w->type, "group") || !strcmp(w->type, "box") ||
         is_editlike(w)) {
-        wchar_t *wt = wc_from_utf8(w->text);
-        if (wt) {
-            /* 内容已经一样就不要再 SetWindowText —— EDIT 收到 WM_SETTEXT 会把选区/光标
-             * 清回 0。而 EN_CHANGE 里会 pull 一次输入框文本再 sync（见 pull_edit_text），
-             * 于是每敲一个字光标都回 0、下一个字插到最前面（输入 1234 得到 4321）。 */
-            if (!hwnd_text_is(h, wt)) SetWindowTextW(h, wt);
-            free(wt);
+        /* spinner 的显示文本 = value（.cgui 的 text 字段一般是空的） */
+        if (!strcmp(w->type, "spinner")) {
+            wchar_t wbuf[32];
+            swprintf(wbuf, 32, L"%d", w->value);
+            if (!hwnd_text_is(h, wbuf)) SetWindowTextW(h, wbuf);
+        } else {
+            wchar_t *wt = wc_from_utf8(w->text);
+            if (wt) {
+                /* 内容已经一样就不要再 SetWindowText —— EDIT 收到 WM_SETTEXT 会把选区/光标
+                 * 清回 0。而 EN_CHANGE 里会 pull 一次输入框文本再 sync（见 pull_edit_text），
+                 * 于是每敲一个字光标都回 0、下一个字插到最前面（输入 1234 得到 4321）。 */
+                if (!hwnd_text_is(h, wt)) SetWindowTextW(h, wt);
+                free(wt);
+            }
         }
     }
 

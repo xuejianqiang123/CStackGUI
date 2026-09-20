@@ -934,6 +934,7 @@ void cg_table_rows_grow(cg_widget_t *w, int want)
     if (want > w->row_cap) {
         unsigned char *nc = (unsigned char *)realloc(w->row_checked, (size_t)want);
         int *nv = (int *)realloc(w->row_val, (size_t)want * sizeof(int));
+        if (!nc && !nv) return;   /* 内存不足：两个都没长成，保持原状，别把 row_cap 抬上去 */
         if (nc) {
             memset(nc + w->row_cap, 0, (size_t)(want - w->row_cap));
             w->row_checked = nc;
