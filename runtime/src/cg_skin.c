@@ -541,6 +541,14 @@ void cg_skin_draw_progress(cg_widget_t *w, HDC hdc, const RECT *rc)
     hp = rc->bottom - rc->top;
     if (wp <= 0 || hp <= 0) return;
 
+    /* 先按规则清底（设了背景色用它，否则用"背后"的颜色）：圆角外的残留才对得上 */
+    {
+        HBRUSH bb = CreateSolidBrush(sk_colorref((w->style.bg != CG_COLOR_NONE)
+                                                     ? w->style.bg : sk_behind(w)));
+        FillRect(hdc, rc, bb);
+        DeleteObject(bb);
+    }
+
     rad = 3;
     if (rad > hp / 2) rad = hp / 2;
     frac = (w->vmax > w->vmin)

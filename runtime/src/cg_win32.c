@@ -423,6 +423,15 @@ static HBRUSH transparent_bg_for(cg_app_t *app, HWND child)
     return brush_for(cg_win_behind_rgb(app, child));
 }
 
+/** @brief 自绘控件画自己的内容前，先把整块填成"背后"的颜色
+ *  @details owner-draw 按钮/自绘控件默认会铺一层系统面色（BTNFACE），不清掉就是一块灰底；
+ *           徽章 / 标签片 / 评分这类"只在中间画一块"的控件必须清，"背后"是什么就填什么。
+ */
+static void clear_to_behind(cg_widget_t *w, HDC dc, const RECT *rc)
+{
+    FillRect(dc, rc, brush_for(cg_win_behind_rgb(w->app, w->native)));
+}
+
 /** @brief WM_CTLCOLOR* 的共用处理：决定控件文字/背景色该用哪个画刷
  *  @param app 所属应用；wp 目标 DC；lp 那个控件窗口
  *  @return HBRUSH NULL = 不处理（交给系统默认），否则返回值该直接当 LRESULT 返回
@@ -675,6 +684,21 @@ static LRESULT CALLBACK FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
         break;
     default:
         break;
+    }
+
+    if (msg == WM_ERASEBKGND && s_app) {
+        /* 静态类控件（标签 / 链接 / 分割线）自己不管底色：尤其分割线，系统的 SS_ETCHEDHORZ
+         * 连 WM_CTLCOLORSTATIC 都不发，它那块像素还是创建时留下的（窗口底色），
+         * 放进带底色的分组框就是一块窗口色。这里统一按规则擦一遍。 */
+        cg_widget_t *ew = widget_by_hwnd(s_app, hwnd);
+        if (ew && (is_t(ew, "label") || is_t(ew, "link") || is_t(ew, "separator"))) {
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+            FillRect((HDC)wp, &rc, (ew->style.bg != CG_COLOR_NONE)
+                                      ? brush_for(ew->style.bg)
+                                      : brush_for(cg_win_behind_rgb(s_app, hwnd)));
+            return 1;
+        }
     }
 
     if (msg == WM_PAINT) {
@@ -1159,7 +1183,7 @@ static LRESULT CALLBACK RingProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (w) {
             draw_ring(dc, w, &rc);
         } else {
-            FillRect(dc, &rc, (HBRUSH)(COLOR_BTNFACE + 1));
+            FillRect(dc, &rc, brush_for(cg_win_behind_rgb(app, hwnd)));
         }
         EndPaint(hwnd, &ps);
         return 0;
@@ -1204,7 +1228,7 @@ static LRESULT CALLBACK ProgressProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (w) {
             cg_skin_draw_progress(w, dc, &rc);
         } else {
-            FillRect(dc, &rc, (HBRUSH)(COLOR_BTNFACE + 1));
+            FillRect(dc, &rc, brush_for(cg_win_behind_rgb(app, hwnd)));
         }
         EndPaint(hwnd, &ps);
         return 0;
@@ -1248,8 +1272,9 @@ static int canvas_scale(const cg_widget_t *w, int logical)
  */
 static void draw_canvas(HDC dc, cg_widget_t *w, const RECT *rc)
 {
-    COLORREF bgc = (w->style.bg != CG_COLOR_NONE) ? to_colorref(w->style.bg)
-                                                  : GetSysColor(COLOR_WINDOW);
+    COLORREF bgc = (w->style.bg != CG_COLOR_NONE)
+                       ? to_colorref(w->style.bg)
+                       : to_colorref(cg_win_behind_rgb(w->app, w->native));
     HBRUSH bg = CreateSolidBrush(bgc);
     FillRect(dc, rc, bg);
     DeleteObject(bg);
@@ -1323,7 +1348,7 @@ static LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (w) {
             draw_canvas(dc, w, &rc);
         } else {
-            FillRect(dc, &rc, (HBRUSH)(COLOR_WINDOW + 1));
+            FillRect(dc, &rc, brush_for(cg_win_behind_rgb(app, hwnd)));
         }
         EndPaint(hwnd, &ps);
         return 0;
@@ -1871,8 +1896,11 @@ static void draw_color_swatch(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 static void draw_badge(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 {
     RECT rc = dis->rcItem;
-    HBRUSH br = CreateSolidBrush((w->style.bg != CG_COLOR_NONE) ? to_colorref(w->style.bg)
-                                                                : RGB(0xB3, 0x26, 0x1E));
+    HBRUSH br;
+
+    clear_to_behind(w, dis->hDC, &rc);   /* 先清掉 owner-draw 默认灰底 */
+    br = CreateSolidBrush((w->style.bg != CG_COLOR_NONE) ? to_colorref(w->style.bg)
+                                                        : RGB(0xB3, 0x26, 0x1E));
     HGDIOBJ oldbr = SelectObject(dis->hDC, br);
     HGDIOBJ oldpen = SelectObject(dis->hDC, GetStockObject(NULL_PEN));
     RoundRect(dis->hDC, rc.left, rc.top, rc.right, rc.bottom, rc.bottom - rc.top, rc.bottom - rc.top);
@@ -1894,8 +1922,11 @@ static void draw_badge(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 static void draw_tag(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 {
     RECT rc = dis->rcItem;
-    HBRUSH br = CreateSolidBrush((w->style.bg != CG_COLOR_NONE) ? to_colorref(w->style.bg)
-                                                                : RGB(0xE8, 0xDE, 0xF8));
+    HBRUSH br;
+
+    clear_to_behind(w, dis->hDC, &rc);   /* 先清掉 owner-draw 默认灰底 */
+    br = CreateSolidBrush((w->style.bg != CG_COLOR_NONE) ? to_colorref(w->style.bg)
+                                                        : RGB(0xE8, 0xDE, 0xF8));
     HPEN pen = CreatePen(PS_SOLID, 1, to_colorref(widget_fg_or(w, 0x6750A4)));
     HGDIOBJ oldbr = SelectObject(dis->hDC, br);
     HGDIOBJ oldpen = SelectObject(dis->hDC, pen);
@@ -1932,13 +1963,22 @@ static void draw_rate(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 
     filled = val;
     empty = stars - filled;
+
+    /* 先清底：设了背景色用它，否则用"背后"的颜色（owner-draw 默认是系统面色） */
+    FillRect(dis->hDC, &rc, (w->style.bg != CG_COLOR_NONE)
+                                ? brush_for(w->style.bg)
+                                : brush_for(cg_win_behind_rgb(w->app, w->native)));
     {
-        HFONT f = font_for(w->app, w->style.font, w->style.size > 0 ? w->style.size : 12, 0, 0);
+        /* ★☆ 要用符号字体：正文默认字体（雅黑之类）没有这两个字形，GDI 又不做字体回退，
+         * 画出来就是一排方块（浏览器会自动回退，所以画布上是好的、运行时是方块）。
+         * 这里固定用 Segoe UI Symbol（系统自带），保留用户设的字号。 */
+        HFONT f = font_for(w->app, "Segoe UI Symbol", w->style.size > 0 ? w->style.size : 12, 0, 0);
         HFONT oldf = (HFONT)SelectObject(dis->hDC, f ? f : GetStockObject(DEFAULT_GUI_FONT));
         SetBkMode(dis->hDC, TRANSPARENT);
         if (filled > 0) {
             RECT fr = rc;
-            swprintf(buf, 32, L"%.*s", filled, L"★★★★★★★★★★");
+            /* 注意 swprintf 里 %s 是"多字节串"、宽串必须写 %ls（写错会把宽字面量当 char* 读，出方块） */
+            swprintf(buf, 32, L"%.*ls", filled, L"★★★★★★★★★★");
             SetTextColor(dis->hDC, to_colorref(widget_fg_or(w, 0xF2B219)));
             DrawTextW(dis->hDC, buf, filled, &fr, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
         }
@@ -1949,7 +1989,7 @@ static void draw_rate(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
             wchar_t one = L'★';
             GetTextExtentPoint32W(dis->hDC, &one, 1, &sz);
             er.left += sz.cx * filled;
-            swprintf(buf, 32, L"%.*s", empty, L"☆☆☆☆☆☆☆☆☆☆");
+            swprintf(buf, 32, L"%.*ls", empty, L"☆☆☆☆☆☆☆☆☆☆");
             SetTextColor(dis->hDC, RGB(0xC4, 0xC7, 0xCC));
             DrawTextW(dis->hDC, buf, empty, &er, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
         }
@@ -2212,7 +2252,7 @@ static LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                 static wchar_t tip_buf[256];
                 wchar_t *wt = wc_from_utf8(tw->hint);
                 if (wt) {
-                    _snwprintf(tip_buf, 256, L"%s", wt);
+                    _snwprintf(tip_buf, 256, L"%ls", wt);   /* 宽串必须 %ls（见 build_rate 那条注释） */
                     tip_buf[255] = L'\0';
                     free(wt);
                 } else {
@@ -3650,7 +3690,7 @@ void cg_tray_set(cg_app_t *app, const char *ico_path, const char *tip)
 
     wt = wc_from_utf8((tip && *tip) ? tip : app->doc.title);
     if (wt) {
-        _snwprintf(nid.szTip, 128, L"%s", wt);
+        _snwprintf(nid.szTip, 128, L"%ls", wt);
         nid.szTip[127] = L'\0';
         free(wt);
     }
@@ -3690,9 +3730,9 @@ void cg_tray_balloon(cg_app_t *app, const char *tip_title, const char *text)
     nid.dwInfoFlags = NIIF_INFO;
 
     wt = wc_from_utf8(tip_title);
-    if (wt) { _snwprintf(nid.szInfoTitle, 64, L"%s", wt); nid.szInfoTitle[63] = L'\0'; free(wt); }
+    if (wt) { _snwprintf(nid.szInfoTitle, 64, L"%ls", wt); nid.szInfoTitle[63] = L'\0'; free(wt); }
     wb = wc_from_utf8(text);
-    if (wb) { _snwprintf(nid.szInfo, 256, L"%s", wb); nid.szInfo[255] = L'\0'; free(wb); }
+    if (wb) { _snwprintf(nid.szInfo, 256, L"%ls", wb); nid.szInfo[255] = L'\0'; free(wb); }
 
     Shell_NotifyIconW(NIM_MODIFY, &nid);
 }
