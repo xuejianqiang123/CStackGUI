@@ -10,6 +10,7 @@ import Inspector from "./components/Inspector";
 import InfoDialog from "./components/InfoDialog";
 import LayerTree from "./components/LayerTree";
 import Palette from "./components/Palette";
+import SupportPanel from "./components/SupportPanel";
 import Toolbar from "./components/Toolbar";
 import WindowPanel from "./components/WindowPanel";
 import { getBridge } from "./bridge";
@@ -30,7 +31,7 @@ import {
   type CgNode,
 } from "./model";
 
-type Tab = "props" | "events" | "doc";
+type Tab = "props" | "events" | "doc" | "support";
 
 /** F5 一键运行的输出面板：把 build-app.bat 的输出流式显示出来 */
 function RunPanel({ lines, running, onClose }: { lines: string[]; running: boolean; onClose: () => void }) {
@@ -580,6 +581,9 @@ export default function App() {
             <button className={tab === "doc" ? "tab on" : "tab"} onClick={() => setTab("doc")}>
               文档
             </button>
+            <button className={tab === "support" ? "tab on" : "tab"} onClick={() => setTab("support")}>
+              支持库
+            </button>
           </div>
           <div className="tab-body">
             {tab === "props" ? (
@@ -602,6 +606,7 @@ export default function App() {
             {tab === "events" ? (
               <EventPanel doc={doc} node={selected} onBeginHistory={onBeginHistory} onApply={onApply} />
             ) : null}
+            {tab === "support" ? <SupportPanel onSay={say} /> : null}
             {tab === "doc" ? (
               <div className="panel-body">
                 <div className="insp-section">概览</div>
@@ -651,15 +656,17 @@ export default function App() {
                 )}
 
                 <div className="insp-section">接口速查</div>
+                <p className="muted small">
+                  「支持库」页签里按用途列出了全部 C API（带说明和示例，双击即复制）。
+                </p>
                 <pre className="code-block">{`/* 每个回调长这样 */
 void on_按钮事件(cg_widget_t *self, cg_event_t ev, void *user);
 
-/* 常见读写 */
-cg_find(cg_app_of(self), "控件id")        /* 找别的控件 */
-cg_widget_set_text(w, "文本")             /* 改文字 */
-cg_widget_checked(w) / cg_widget_value(w) /* 读状态 */
-cg_widget_list_addf(log, "日志 %d", n)    /* 往列表框写日志 */
-cg_set_timer(app, 1000, 回调, user)       /* 延迟做一件事 */`}</pre>
+/* 最常用的四句 */
+cg_widget_t *w = cg_find(cg_app_of(self), "控件id");  /* 找别的控件 */
+cg_widget_set_text(w, "文本");                        /* 改文字 */
+cg_widget_checked(w) / cg_widget_value(w);            /* 读状态 */
+cg_set_timer(cg_app_of(self), 1000, 回调, user);       /* 延迟做一件事 */`}</pre>
 
                 <div className="insp-section">当前选区</div>
                 {selected ? (

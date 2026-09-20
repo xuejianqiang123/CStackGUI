@@ -1723,3 +1723,144 @@ button.icon-pick svg {
   flex: 0 0 auto;
   padding: 7px 22px;
 }
+
+/* ------------------------------------------------------------ 支持库
+ * 面向新手的运行时 API 索引：上面是可折叠的分类树（虚线导引线看层级），
+ * 下面是选中命令的帮助卡片（说明 → 参数 → 返回 → 示例）。 */
+.sup {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.sup-search {
+  padding: 8px 12px 6px;
+  border-bottom: 1px solid var(--outline);
+}
+.sup-tip {
+  margin-top: 5px;
+}
+.sup-tree {
+  flex: 1 1 52%;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 6px 10px;
+  font-size: 12px;
+}
+.sup-empty {
+  padding: 10px 8px;
+}
+.sup-list {
+  list-style: none;
+  margin: 0;
+  padding-left: 11px;
+  border-left: 1px dashed var(--outline-strong);
+}
+.sup-list.sup-root {
+  border-left: none;
+  padding-left: 2px;
+}
+.sup-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+.sup-row:hover {
+  background: var(--surface-2);
+}
+.sup-caret {
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  border-left: 4px solid var(--on-surface-var);
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  transition: transform 0.12s ease;
+}
+.sup-caret.open {
+  transform: rotate(90deg);
+}
+.sup-label {
+  font-weight: 600;
+}
+.sup-lib > .sup-label {
+  color: var(--seed);
+}
+.sup-group > .sup-label {
+  font-weight: 500;
+  color: var(--on-surface);
+}
+.sup-count {
+  margin-left: auto;
+  color: var(--on-surface-var);
+  font-size: 10.5px;
+}
+.sup-lib-hint {
+  padding: 0 6px 4px 21px;
+}
+.sup-cmd {
+  align-items: baseline;
+}
+.sup-cmd.on {
+  background: var(--seed-weak);
+}
+.sup-fn {
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.sup-cmd.on .sup-fn {
+  color: #21005d;
+  font-weight: 600;
+}
+.sup-cname {
+  color: var(--on-surface-var);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sup-help {
+  flex: 1 1 48%;
+  min-height: 0;
+  overflow: auto;
+  border-top: 1px solid var(--outline);
+  background: var(--surface-2);
+  padding: 10px 12px 12px;
+}
+.sup-help-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sup-help-name {
+  font-weight: 700;
+  color: var(--seed);
+}
+.sup-help-head .mini {
+  margin-left: auto;
+}
+.sup-help-fn {
+  display: block;
+  margin: 4px 0 6px;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  color: #21005d;
+  word-break: break-all;
+}
+.sup-decl {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.sup-sample {
+  white-space: pre;
+  max-height: 260px;
+}
+.sup-brief {
+  margin: 6px 0 0;
+  line-height: 1.6;
+}
