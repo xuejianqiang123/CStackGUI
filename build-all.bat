@@ -21,11 +21,19 @@ rem 运行时只编一次，后面的 build-app 就不要再各刷一遍了
 set CSTACKGUI_SKIP_RUNTIME=1
 set FAIL=0
 
+rem Build every example, then run its --selftest: compiling only proves the
+rem syntax is fine, the selftest is what proves event names match C functions.
 for /d %%a in (examples\*) do (
     echo.
     echo == 示例 %%a ==
     call build-app.bat %%~nxa %~1
-    if errorlevel 1 set FAIL=1
+    if errorlevel 1 (
+        set FAIL=1
+    ) else (
+        echo   SELFTEST %%~nxa
+        "%%a\%%~nxa.exe" --selftest "%%a\%%~nxa.cgui"
+        if errorlevel 1 set FAIL=1
+    )
 )
 
 echo.
