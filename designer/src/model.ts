@@ -1,11 +1,11 @@
 /* model.ts -- .cgui 文档模型
  *
- * 这里的类型必须和 runtime/src/cg_doc.c 的解析逻辑一一对应：
+ * 这里的类型必须和 runtime/src/core/cg_doc.c 的解析逻辑一一对应：
  * 改这里就要同步改那边，否则「画布能存、运行时读不了」。
  */
 
 /* 事件名一份总表：控件事件 + 窗口事件。
- * 必须和 runtime/src/cg_app.c 的 k_ev_names[] 一一对应（名字写错 C 侧不报错、只是不触发）。 */
+ * 必须和 runtime/src/core/cg_event.c 的 k_ev_names[] 一一对应（名字写错 C 侧不报错、只是不触发）。 */
 export const CG_EVENTS = [
   /* --- 控件事件 --- */
   "click", "dblclick", "change", "submit", "select", "release",
@@ -18,7 +18,7 @@ export const CG_EVENTS = [
 ] as const;
 export type CgEvent = (typeof CG_EVENTS)[number];
 
-/** 窗口支持的事件（必须和 runtime/src/cg_doc.c 里 "window" 那行的位掩码一致）。
+/** 窗口支持的事件（必须和 runtime/src/core/cg_doc_kind.c 里 "window" 那行的位掩码一致）。
  *  gotfocus/lostfocus/dblclick 是和控件共用的名字。 */
 export const WINDOW_EVENTS: CgEvent[] = [
   "ready", "close", "closequery", "destroy", "move", "size",
@@ -102,7 +102,7 @@ export const EVENT_HINT: Record<CgEvent, string> = {
   wheel: "滚轮滚动；cg_event_delta 给滚动量（正数向上）",
 };
 
-/** 每种控件支持哪些事件 —— 必须和 runtime/src/cg_doc.c 的 k_kinds 表一一对应。
+/** 每种控件支持哪些事件 —— 必须和 runtime/src/core/cg_doc_kind.c 的 k_kinds 表一一对应。
  *  事件是按控件特性设计的：标签没有交互、进度条只能被程序写、只有树有展开折叠。
  *  画布只列这里声明的事件；C 侧也会校验，绑错了启动时会警告。 */
 export const KIND_EVENTS: Record<string, CgEvent[]> = {
@@ -335,7 +335,7 @@ export type KindInfo = {
   listLike?: boolean;
 };
 
-/* 顺序与分组要和 runtime/src/cg_doc.c 的 k_kinds 表保持一致 */
+/* 顺序与分组要和 runtime/src/core/cg_doc_kind.c 的 k_kinds 表保持一致 */
 export const KINDS: KindInfo[] = [
   { type: "button", label: "按钮", group: "基础", container: false, w: 120, h: 40, text: "按钮" },
   { type: "iconbutton", label: "图标按钮", group: "基础", container: false, w: 48, h: 48, text: "" },
