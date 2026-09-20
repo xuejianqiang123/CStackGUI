@@ -27,7 +27,8 @@ rem 国内网络直连 GitHub 下载二进制（electron zip / winCodeSign 等�
 rem 走 npmmirror 镜像；缓存已齐全时这些变量不起作用。
 set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
 set ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
-call npx electron-builder --win portable
+rem --win 一次出齐 portable + nsis 两个产物，图标/版本保持一致
+call npx electron-builder --win
 if errorlevel 1 (
     popd
     echo [fail] 画布打包失败
@@ -60,9 +61,15 @@ rem 示例目录里那份 lib 是用系统路径链接的，发布包里统一�
 for /d %%a in (release\examples\*) do rmdir /s /q "%%a\lib" 2>nul
 copy /y packaging\build-app.bat release\build-app.bat >nul
 copy /y packaging\README.release.md release\README.md >nul
+echo == 3.5 画布安装包（便携每次启动要解包，装一次能常驻，日常用快很多）==
 copy /y designer\release\CStackGUI.exe release\CStackGUI.exe >nul
 if errorlevel 1 (
     echo [fail] 复制画布失败
+    exit /b 1
+)
+copy /y designer\release\CStackGUI-Setup.exe release\CStackGUI-Setup.exe >nul
+if errorlevel 1 (
+    echo [fail] 复制画布安装包失败（先跑一次 designer 打包）
     exit /b 1
 )
 
