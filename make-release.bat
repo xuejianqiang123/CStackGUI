@@ -84,6 +84,9 @@ copy /y packaging\check-format.bat release\tools\check-format.bat >nul
 copy /y tools\gen-cc.mjs release\tools\ >nul
 copy /y tools\format-roundtrip.mjs release\tools\ >nul
 copy /y tools\shot.ps1 release\tools\ >nul
+rem cg_kit 冒烟测试也带上：发布包里那份预编译库要能真跑通文件/配置/编码
+copy /y tools\check-kit.bat release\tools\ >nul
+copy /y tools\kit-test.c release\tools\ >nul
 
 rem AI 编程助手（CodeBuddy 等）的项目级技能：用户用 AI 写 C 回调 / 手改 .cgui 时自动加载
 xcopy /e /i /q /y packaging\codebuddy release\.codebuddy >nul
@@ -121,10 +124,29 @@ if errorlevel 1 (
     echo [fail] 发布包里编译出来的示例自检没过
     exit /b 1
 )
+rem 记事本示例用到 cg_kit（文件/配置/编码），顺带验证发布包的运行时库
+call build-app.bat notepad
+if errorlevel 1 (
+    popd
+    echo [fail] 发布包里编译 cg_kit 示例失败
+    exit /b 1
+)
+examples\notepad\notepad.exe --selftest examples\notepad\notepad.cgui
+if errorlevel 1 (
+    popd
+    echo [fail] 发布包里记事本示例自检没过
+    exit /b 1
+)
 call tools\check-format.bat
 if errorlevel 1 (
     popd
     echo [fail] 发布包里的格式契约检查没过
+    exit /b 1
+)
+call tools\check-kit.bat
+if errorlevel 1 (
+    popd
+    echo [fail] 发布包里的 cg_kit 冒烟测试没过
     exit /b 1
 )
 popd

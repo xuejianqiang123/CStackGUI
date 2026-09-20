@@ -35,8 +35,13 @@ const commonFlags = [
 function extraFlags(file) {
   const flags = [];
   if (file.includes(`${path.sep}runtime${path.sep}src${path.sep}`)) {
-    /* 与 build-runtime.bat 的 CFLAGS 一致：三层目录各自在 include 路径上 */
-    flags.push("-Iruntime/src/core", "-Iruntime/src/win32", "-Iruntime/src/skin");
+    /* 与 build-runtime.bat 的 CFLAGS 一致：各层目录都在 include 路径上 */
+    flags.push(
+      "-Iruntime/src/core",
+      "-Iruntime/src/win32",
+      "-Iruntime/src/skin",
+      "-Iruntime/src/kit",
+    );
   }
   if (path.basename(file).startsWith("cg_win")) {
     /* Win32 后端子模块都明确走 W 系列 API */
@@ -53,10 +58,10 @@ const list = (base) => {
     .filter((d) => d.isDirectory())
     .map((d) => path.join(dir, d.name));
 };
-/* runtime\src 按分层分子目录（core = 后端无关，win32 = 原生后端，skin = GDI+ 外观层）；
- * 发布包里没有源码（只有预编译库），缺了跳过。
+/* runtime\src 按分层分子目录（core = 后端无关，win32 = 原生后端，skin = GDI+ 外观层，
+ * kit = 平台服务：文件/路径/配置/编码/注册表）；发布包里没有源码（只有预编译库），缺了跳过。
  * apps\ 也要：用户自己的工程同样享受 clangd。 */
-const runtimeSrcDirs = ["core", "win32", "skin"]
+const runtimeSrcDirs = ["core", "win32", "skin", "kit"]
   .map((d) => path.join(root, "runtime", "src", d))
   .filter(existsSync);
 const dirs = [...runtimeSrcDirs, ...list("apps"), ...list("examples")];

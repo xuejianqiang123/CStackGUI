@@ -31,16 +31,17 @@ rem Sources are grouped by layer under runtime\src:
 rem   core\   backend-agnostic: JSON, doc + kind table, widget model, events, lifecycle
 rem   win32\  Win32 backend: window, native controls, message mapping, dialogs, tray
 rem   skin\   GDI+ appearance layer (replace the whole folder to swap in a D2D kernel)
+rem   kit\    platform services that are not UI: files, paths, INI, text/encoding, registry
 rem Each layer is on the include path so the files can include each other by bare name;
 rem runtime\src itself is deliberately NOT on it -- cross-layer includes must be explicit.
-set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include -Iruntime\src\core -Iruntime\src\win32 -Iruntime\src\skin
+set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include -Iruntime\src\core -Iruntime\src\win32 -Iruntime\src\skin -Iruntime\src\kit
 set CHANGED=
 set OBJS=
 
-rem Compile every .c under core\ win32\ skin\ -- no hand-maintained file list to forget.
+rem Compile every .c under core\ win32\ skin\ kit\ -- no hand-maintained file list to forget.
 rem Object name = source basename (build\obj\<name>.o), so two folders must never hold
 rem files with the same name. The naming convention guarantees it:
-rem core = cg_*, backend = cg_win_*, appearance = cg_skin_*.
+rem core = cg_*, backend = cg_win_*, appearance = cg_skin_*, platform services = cg_kit_*.
 rem Incremental: only recompile a source whose .o is missing or not strictly newer
 rem than it. The "YYYY/MM/DD HH:MM" timestamp compares chronologically as a string;
 rem "not strictly newer" counts as stale so a same-minute edit is never missed.
@@ -50,10 +51,10 @@ rem silently link against an old definition. So take the newest header across
 rem runtime\include plus all three layers, and recompile whatever is older.
 set "HDRT=0"
 for %%h in (runtime\include\*.h) do if "%%~th" GTR "!HDRT!" set "HDRT=%%~th"
-for %%d in (core win32 skin) do (
+for %%d in (core win32 skin kit) do (
     for %%h in ("runtime\src\%%d\*.h") do if "%%~th" GTR "!HDRT!" set "HDRT=%%~th"
 )
-for %%d in (core win32 skin) do (
+for %%d in (core win32 skin kit) do (
     for %%f in ("runtime\src\%%d\*.c") do (
         set "SRCF=%%~ff"
         set "OBJ=build\obj\%%~nf.o"
