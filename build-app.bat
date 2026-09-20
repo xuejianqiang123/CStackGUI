@@ -57,6 +57,14 @@ if errorlevel 1 (
     echo [fail] cannot copy runtime lib to %APPDIR%\lib
     exit /b 1
 )
+rem The resource object (manifest + version info) has no code symbols, so the
+rem linker never pulls it out of the static lib -- it must be linked directly,
+rem otherwise the exe gets no v6 common controls (classic ugly tabs/progress).
+copy /y build\obj\cstackgui_res.o "%APPDIR%\lib\cstackgui_res.o" >nul
+if errorlevel 1 (
+    echo [fail] cannot copy resource object to %APPDIR%\lib
+    exit /b 1
+)
 
 rem gdiplus is only used to load images (png/jpg/bmp/gif), shipped with Windows
 rem comdlg32 is used by the common dialogs (open/save file, choose color)
@@ -67,10 +75,10 @@ set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include
 set OUT=%APPDIR%\%APP%.exe
 if "%MODE%"=="--release" (
     echo   LD %OUT% ^(release, no console^)
-    gcc %CFLAGS% -mwindows -o "%OUT%" "%APPDIR%\*.c" "%APPDIR%\lib\libcstackgui.a" %LDFLAGS%
+    gcc %CFLAGS% -mwindows -o "%OUT%" "%APPDIR%\*.c" "%APPDIR%\lib\cstackgui_res.o" "%APPDIR%\lib\libcstackgui.a" %LDFLAGS%
 ) else (
     echo   LD %OUT% ^(debug, with console^)
-    gcc %CFLAGS% -o "%OUT%" "%APPDIR%\*.c" "%APPDIR%\lib\libcstackgui.a" %LDFLAGS%
+    gcc %CFLAGS% -o "%OUT%" "%APPDIR%\*.c" "%APPDIR%\lib\cstackgui_res.o" "%APPDIR%\lib\libcstackgui.a" %LDFLAGS%
 )
 if errorlevel 1 (
     echo [fail] build of %APP% failed
