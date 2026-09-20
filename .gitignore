@@ -1,5 +1,5 @@
-# C 侧构建产物
-build/
+# C 侧构建产物（仅根目录 build\；designer\build\ 存放打包资源 icon.ico，入库）
+/build/
 # 发布包（由 make-release.bat 生成）
 release/
 publish

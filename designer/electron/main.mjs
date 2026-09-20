@@ -9,13 +9,25 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, appendFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEV_URL = process.env.CSTACKGUI_DEV_URL || "";
 const VERSION = "0.1.0";
+
+/* 启动排查探针：设了 CSTACKGUI_LOG=<文件路径> 才写，平时零开销。
+ * 打包后的 GUI exe 抓不到 stdout/stderr，白屏、找不到项目根这类问题全靠它。 */
+const LOG_FILE = process.env.CSTACKGUI_LOG || "";
+function log(...args) {
+  if (!LOG_FILE) return;
+  try {
+    appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${args.join(" ")}\n`);
+  } catch {
+    /* 写日志失败绝不能影响启动 */
+  }
+}
 
 let win = null;
 let currentFile = "";
@@ -42,6 +54,13 @@ let projectRootCache = null;
 
 const isProjectRoot = (dir) => !!dir && existsSync(path.join(dir, "runtime", "include", "cstackgui.h"));
 
+/** exe 自带的 resources\runtime\ 是内嵌的编译资源副本，不是项目根。
+ *  从 __dirname 往上找根时必须排除，否则会把安装目录误认成项目根。 */
+const isBuiltinRuntimeDir = (dir) => {
+  const res = process.resourcesPath || "";
+  return !!res && !!dir && path.resolve(dir) === path.resolve(res);
+};
+
 async function loadConfig() {
   try {
     return JSON.parse(await fs.readFile(configPath(), "utf8"));
@@ -64,7 +83,7 @@ async function saveConfig(patch) {
 function findProjectRootUpwards(from) {
   let dir = from;
   for (let i = 0; i < 8; i++) {
-    if (isProjectRoot(dir)) return dir;
+    if (isProjectRoot(dir) && !isBuiltinRuntimeDir(dir)) return dir;
     const up = path.dirname(dir);
     if (up === dir) break;
     dir = up;
@@ -130,7 +149,10 @@ async function ensureWorkspace(root) {
     const srcH = path.join(res, "runtime", "include", "cstackgui.h");
     const srcA = path.join(res, "runtime", "lib", "libcstackgui.a");
     const srcO = path.join(res, "runtime", "lib", "cstackgui_res.o");
-    if (!existsSync(srcBat) || !existsSync(srcH) || !existsSync(srcA)) return false;
+    if (!existsSync(srcBat) || !existsSync(srcH) || !existsSync(srcA)) {
+      log("ensureWorkspace 内嵌资源缺失", `res=${res} bat=${existsSync(srcBat)} h=${existsSync(srcH)} a=${existsSync(srcA)}`);
+      return false;
+    }
     await fs.mkdir(path.join(root, "runtime", "include"), { recursive: true });
     await fs.mkdir(path.join(root, "runtime", "lib"), { recursive: true });
     await fs.mkdir(path.join(root, "apps"), { recursive: true });
@@ -144,13 +166,20 @@ async function ensureWorkspace(root) {
   }
 }
 
-/** 找不到项目根时的兜底：便携单文件 exe 放在任意目录，把 exe 旁边初始化成工作区 */
+/** 找不到项目根时的兜底：自举一个工作区。
+ *  便携版：PORTABLE_EXECUTABLE_DIR 指向 exe 所在目录，就地自举；
+ *  安装版没有这个环境变量，退回到 ~/CStackGUI，这样装完就有可用的工作区
+ *  （开箱能建工程），用户之后用「定位项目根」可以随时改到别的地方。 */
 async function resolveWorkspaceRoot() {
   const portable = process.env.PORTABLE_EXECUTABLE_DIR;
-  if (portable && existsSync(portable) && (await ensureWorkspace(portable))) {
-    projectRootCache = portable;
-    await saveConfig({ projectRoot: portable });
-    return portable;
+  const target =
+    portable && existsSync(portable) ? portable : path.join(app.getPath("home"), "CStackGUI");
+  const ok = await ensureWorkspace(target);
+  log("resolveWorkspaceRoot", `target=${target} ok=${ok}`);
+  if (ok) {
+    projectRootCache = target;
+    await saveConfig({ projectRoot: target });
+    return target;
   }
   return "";
 }
@@ -176,6 +205,21 @@ function createWindow() {
   } else {
     win.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
+
+  /* 白屏/启动失败时这几个事件能直接说明是加载失败、preload 炸了，还是前端崩了 */
+  const wc = win.webContents;
+  wc.on("did-finish-load", () => log("did-finish-load"));
+  wc.on("did-fail-load", (_e, code, desc, url) => log("did-fail-load", code, desc, url));
+  wc.on("preload-error", (_e, file, err) => log("preload-error", file, String(err)));
+  wc.on("render-process-gone", (_e, details) => log("render-process-gone", JSON.stringify(details)));
+  /* Electron 38 起 console-message 改传 details 对象；两种签名都兜住 */
+  wc.on("console-message", (_e, ...rest) => {
+    const d =
+      rest.length === 1 && typeof rest[0] === "object" && rest[0] !== null
+        ? rest[0]
+        : { level: rest[0], message: rest[1], lineNumber: rest[2], sourceId: rest[3] };
+    log("console", `level=${d.level} ${d.message} (${d.sourceId}:${d.lineNumber})`);
+  });
   win.on("closed", () => {
     win = null;
   });
@@ -192,11 +236,11 @@ function send(channel, payload) {
 
 /* ------------------------------------------------------------ IPC */
 
-ipcMain.handle("app:info", async () => ({
-  version: VERSION,
-  projectRoot: await resolveProjectRoot(),
-  currentFile,
-}));
+ipcMain.handle("app:info", async () => {
+  const projectRoot = await resolveProjectRoot();
+  log("app:info", `projectRoot=${projectRoot || "(none)"} file=${currentFile || "(none)"}`);
+  return { version: VERSION, projectRoot, currentFile };
+});
 
 /** 渲染进程挂载后来问：命令行有没有指定要打开的界面文件 */
 ipcMain.handle("app:initialFile", async () => {
