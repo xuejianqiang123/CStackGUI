@@ -20,9 +20,12 @@ set APP=%~1
 if "%APP%"=="" set APP=hello
 set MODE=%~2
 
+rem %APP% is a bare project name (apps\<name> / examples\<name>) or a path
+rem relative to this root -- the designer passes e.g. "apps\gallery".
 set APPDIR=
 if exist "apps\%APP%\"     set APPDIR=apps\%APP%
 if not defined APPDIR if exist "examples\%APP%\" set APPDIR=examples\%APP%
+if not defined APPDIR if exist "%APP%\" set APPDIR=%APP%
 if not defined APPDIR (
     echo [fail] project "%APP%" not found
     echo.
@@ -72,7 +75,9 @@ set LDFLAGS=-lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32
 rem Callbacks have fixed signatures; unused self/ev/user args must not warn
 set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include
 
-set OUT=%APPDIR%\%APP%.exe
+rem exe name = project folder name (basename of %APP%)
+for %%I in ("%APP%") do set NAME=%%~nxI
+set OUT=%APPDIR%\%NAME%.exe
 if "%MODE%"=="--release" (
     echo   LD %OUT% ^(release, no console^)
     gcc %CFLAGS% -mwindows -o "%OUT%" "%APPDIR%\*.c" "%APPDIR%\lib\cstackgui_res.o" "%APPDIR%\lib\libcstackgui.a" %LDFLAGS%

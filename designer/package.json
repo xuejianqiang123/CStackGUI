@@ -37,6 +37,24 @@
       "dist/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "../runtime/include/cstackgui.h",
+        "to": "runtime/include/cstackgui.h"
+      },
+      {
+        "from": "../build/lib/libcstackgui.a",
+        "to": "runtime/lib/libcstackgui.a"
+      },
+      {
+        "from": "../build/obj/cstackgui_res.o",
+        "to": "runtime/lib/cstackgui_res.o"
+      },
+      {
+        "from": "../packaging/build-app.bat",
+        "to": "build-app.bat"
+      }
+    ],
     "win": {
       "target": [
         {

@@ -64,7 +64,7 @@ export default function Toolbar(p: Props) {
           className="run-btn"
           disabled={p.running}
           onClick={p.onRun}
-          title="F5：保存 → build-app.bat 编译 → 启动 exe（工程要在 apps\\ 下且已导出 C 骨架）"
+          title="F5：保存 → build-app.bat 编译 → 启动 exe（工程放在项目根下任意子目录，且已导出 C 骨架）"
         >
           {p.running ? "编译中…" : "▶ 运行"}
         </button>

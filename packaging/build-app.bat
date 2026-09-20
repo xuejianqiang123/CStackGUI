@@ -23,9 +23,13 @@ set APP=%~1
 if "%APP%"=="" set APP=gallery
 set MODE=%~2
 
+rem %APP% is either a bare project name (apps\<name> / examples\<name>, old
+rem convention) or a path relative to the package root (any folder the user
+rem put their project in, e.g. "main" or "work\demo").
 set APPDIR=
 if exist "apps\%APP%\"     set APPDIR=apps\%APP%
 if not defined APPDIR if exist "examples\%APP%\" set APPDIR=examples\%APP%
+if not defined APPDIR if exist "%APP%\" set APPDIR=%APP%
 if not defined APPDIR (
     echo [fail] project "%APP%" not found
     echo.
@@ -33,6 +37,13 @@ if not defined APPDIR (
     dir /b /ad apps 2>nul
     echo        bundled examples:
     dir /b /ad examples 2>nul
+    exit /b 1
+)
+
+rem exe name = project folder name (basename of %APP%)
+for %%I in ("%APP%") do set NAME=%%~nxI
+if not defined NAME (
+    echo [fail] cannot derive exe name from "%APP%"
     exit /b 1
 )
 
@@ -55,7 +66,7 @@ set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include
 rem The resource object (manifest + version info) has no code symbols, so the
 rem linker never pulls it out of the static lib -- link it directly so the exe
 rem gets the v6 common controls manifest (modern tabs/progress).
-set OUT=%APPDIR%\%APP%.exe
+set OUT=%APPDIR%\%NAME%.exe
 if "%MODE%"=="--release" (
     echo   LD %OUT% ^(release, no console^)
     gcc %CFLAGS% -mwindows -o "%OUT%" "%APPDIR%\*.c" "runtime\lib\cstackgui_res.o" "runtime\lib\libcstackgui.a" %LDFLAGS%

@@ -101,8 +101,10 @@ async function resolveProjectRoot() {
   if (found) {
     projectRootCache = found;
     await saveConfig({ projectRoot: found });
+    return found;
   }
-  return found;
+  /* 兜底：便携单文件 exe 放在任意目录 → 把 exe 旁边自举成工作区 */
+  return await resolveWorkspaceRoot();
 }
 
 async function rememberProjectRoot(dir) {
@@ -110,6 +112,42 @@ async function rememberProjectRoot(dir) {
   projectRootCache = dir;
   await saveConfig({ projectRoot: dir });
   return true;
+}
+
+/** 把 exe 内嵌的编译资源释放成一个可用的 CStackGUI 工作区（便携单文件场景）：
+ *  runtime\include\cstackgui.h、runtime\lib\{libcstackgui.a,cstackgui_res.o}、
+ *  build-app.bat。库文件每次都覆盖——保证跟这个 exe 的版本一致。
+ *  非打包环境（resourcesPath 里没有这些文件）返回 false。 */
+async function ensureWorkspace(root) {
+  try {
+    const res = process.resourcesPath || "";
+    const srcBat = path.join(res, "build-app.bat");
+    const srcH = path.join(res, "runtime", "include", "cstackgui.h");
+    const srcA = path.join(res, "runtime", "lib", "libcstackgui.a");
+    const srcO = path.join(res, "runtime", "lib", "cstackgui_res.o");
+    if (!existsSync(srcBat) || !existsSync(srcH) || !existsSync(srcA)) return false;
+    await fs.mkdir(path.join(root, "runtime", "include"), { recursive: true });
+    await fs.mkdir(path.join(root, "runtime", "lib"), { recursive: true });
+    await fs.mkdir(path.join(root, "apps"), { recursive: true });
+    await fs.copyFile(srcH, path.join(root, "runtime", "include", "cstackgui.h"));
+    await fs.copyFile(srcA, path.join(root, "runtime", "lib", "libcstackgui.a"));
+    if (existsSync(srcO)) await fs.copyFile(srcO, path.join(root, "runtime", "lib", "cstackgui_res.o"));
+    await fs.copyFile(srcBat, path.join(root, "build-app.bat"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** 找不到项目根时的兜底：便携单文件 exe 放在任意目录，把 exe 旁边初始化成工作区 */
+async function resolveWorkspaceRoot() {
+  const portable = process.env.PORTABLE_EXECUTABLE_DIR;
+  if (portable && existsSync(portable) && (await ensureWorkspace(portable))) {
+    projectRootCache = portable;
+    await saveConfig({ projectRoot: portable });
+    return portable;
+  }
+  return "";
 }
 
 function createWindow() {
@@ -179,13 +217,19 @@ ipcMain.handle("app:locateProject", async () => {
 
   const chosen = res.filePaths[0];
   // 用户可能选中了子目录，往上找一层也行
-  const root = (await rememberProjectRoot(chosen)) ? chosen : findProjectRootUpwards(chosen);
+  let root = (await rememberProjectRoot(chosen)) ? chosen : findProjectRootUpwards(chosen);
   if (!root) {
-    dialog.showErrorBox(
-      "这里不是 CStackGUI 项目根",
-      `在 "${chosen}" 里没找到 runtime\\include\\cstackgui.h。\n请选择包含 runtime\\ 和 apps\\ 的那一层目录。`,
-    );
-    return { canceled: true };
+    /* 便携单文件场景：用户选的目录不是项目根也没关系——就地自举一个工作区
+     * （释放内嵌的 runtime 库和编译脚本），以后这个目录就是他的项目根。 */
+    if (await ensureWorkspace(chosen)) {
+      root = chosen;
+    } else {
+      dialog.showErrorBox(
+        "这里不是 CStackGUI 项目根",
+        `在 "${chosen}" 里没找到 runtime\\include\\cstackgui.h。\n请选择包含 runtime\\ 和 apps\\ 的那一层目录。`,
+      );
+      return { canceled: true };
+    }
   }
   await rememberProjectRoot(root);
   return { canceled: false, projectRoot: root };
@@ -359,36 +403,27 @@ ipcMain.handle("run:buildAndLaunch", async (_e, { filePath }) => {
     return fail("还没找到 CStackGUI 项目根。点工具条上的「定位项目根」，\n选含 runtime\\、apps\\ 的那一层目录。");
   }
 
-  /* build-app.bat 的参数是「工程目录名」，不是界面文件名：
+  /* build-app.bat 的定位参数是「工程目录相对根的路径」，不是界面文件名：
    * main.cgui 放在 examples\test\ 里时，要编译的是 examples\test，
-   * 按「main」找工程会错编 apps\main（同名文件不同目录的工程会互相串）。 */
-  const name = safeName(path.basename(path.dirname(path.resolve(filePath))));
-  if (!name) {
-    return fail(
-      `工程目录名要只用英文/数字/下划线（当前目录名无法用作编译参数）。\n` +
-        `当前文件在：${appDir}`,
-    );
+   * 按「main」找工程会错编 apps\main（同名文件不同目录的工程会互相串）。
+   * 便携工作区里工程可以放在根下任意子目录（不强制 apps\examples）。 */
+  const rel = path.relative(root, appDir);
+  if (!rel || rel.startsWith("..")) {
+    return fail(`工程目录不在项目根 ${root} 里，无法编译。\n当前文件在：${appDir}`);
   }
-  const under = [path.join(root, "apps"), path.join(root, "examples")]
-    .some((base) => appDir.toLowerCase().startsWith(base.toLowerCase() + path.sep));
-  if (!under) {
-    return fail(
-      `工程要放在项目根的 apps\\ 或 examples\\ 下才能编译。\n` +
-      `当前文件在：${appDir}\n` +
-      `用「导出 C 骨架」把工程放进 ${path.join(root, "apps")} 即可。`,
-    );
-  }
+  const name = path.basename(appDir);
+  const batArg = rel.split(path.sep).join("\\");
   if (!existsSync(path.join(appDir, "main.c"))) {
     return fail(`${appDir} 里没有 main.c。\n先点「导出 C 骨架」生成 C 代码，再运行。`);
   }
 
   runBusy = true;
-  send("run:output", { kind: "line", text: `$ build-app.bat ${name}` });
+  send("run:output", { kind: "line", text: `$ build-app.bat ${batArg}` });
 
   /* chcp 65001：让批处理里的中文输出走 UTF-8，渲染进程不用再转码 */
   let exitCode = -1;
   await new Promise((resolve) => {
-    const child = spawn("cmd.exe", ["/d", "/s", "/c", `chcp 65001 >nul & build-app.bat ${name}`], { cwd: root });
+    const child = spawn("cmd.exe", ["/d", "/s", "/c", `chcp 65001 >nul & build-app.bat "${batArg}"`], { cwd: root });
     const push = (buf) => {
       for (const line of String(buf).split(/\r?\n/)) {
         if (line.trim()) send("run:output", { kind: "line", text: line });
@@ -449,30 +484,24 @@ ipcMain.handle("publish:project", async (_e, { filePath }) => {
   if (!root) {
     return fail("还没找到 CStackGUI 项目根。点工具条上的「定位项目根」，\n选含 runtime\\、apps\\ 的那一层目录。");
   }
-  const name = safeName(path.basename(path.dirname(path.resolve(filePath))));
-  if (!name) {
-    return fail(`工程目录名要只用英文/数字/下划线（当前目录名无法用作编译参数）。\n当前文件在：${appDir}`);
+  /* 与运行入口同一套规则：工程可以是根下任意子目录（便携工作区不强制 apps\examples） */
+  const rel = path.relative(root, appDir);
+  if (!rel || rel.startsWith("..")) {
+    return fail(`工程目录不在项目根 ${root} 里，无法编译。\n当前文件在：${appDir}`);
   }
-  const under = [path.join(root, "apps"), path.join(root, "examples")]
-    .some((base) => appDir.toLowerCase().startsWith(base.toLowerCase() + path.sep));
-  if (!under) {
-    return fail(
-      `工程要放在项目根的 apps\\ 或 examples\\ 下才能编译。\n` +
-      `当前文件在：${appDir}\n` +
-      `用「导出 C 骨架」把工程放进 ${path.join(root, "apps")} 即可。`,
-    );
-  }
+  const name = path.basename(appDir);
+  const batArg = rel.split(path.sep).join("\\");
   if (!existsSync(path.join(appDir, "main.c"))) {
     return fail(`${appDir} 里没有 main.c。\n先点「导出 C 骨架」生成 C 代码，再发布。`);
   }
 
   runBusy = true;
-  send("run:output", { kind: "line", text: `$ build-app.bat ${name} --release` });
+  send("run:output", { kind: "line", text: `$ build-app.bat ${batArg} --release` });
 
   /* 1) release 编译（-mwindows：无控制台窗口，适合分发） */
   let exitCode = -1;
   await new Promise((resolve) => {
-    const child = spawn("cmd.exe", ["/d", "/s", "/c", `chcp 65001 >nul & build-app.bat ${name} --release`], { cwd: root });
+    const child = spawn("cmd.exe", ["/d", "/s", "/c", `chcp 65001 >nul & build-app.bat "${batArg}" --release`], { cwd: root });
     const push = (buf) => {
       for (const line of String(buf).split(/\r?\n/)) {
         if (line.trim()) send("run:output", { kind: "line", text: line });
