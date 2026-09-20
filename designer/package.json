@@ -60,7 +60,7 @@
       }
     ],
     "win": {
-      "icon": "build/icon.ico",
+      "icon": "../runtime/res/cstackgui.ico",
       "target": [
         {
           "target": "nsis",
