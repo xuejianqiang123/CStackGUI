@@ -600,20 +600,23 @@ typedef struct {
     int      single;   /* 单行（edit / spinner）：需要垂直居中；multiedit 保持顶部对齐 */
     int      pad;      /* 上方让出的像素（= (控件高 - 文字高) / 2） */
     int      text_h;   /* 当前字体的文字高度（换字号时对比，变了才重排） */
-    int      w, h;     /* 控件整块尺寸（比客户区高，含让出来的上边距） */
+    int      w, h;     /* 控件整块尺寸（比客户区大，含边框与让出来的上边距） */
+    int      bw;       /* 边框宽度：客户区四边各内缩这么多 */
     int      left;     /* 左边距（EM_SETMARGINS）；箭头/换字体后会被清，要按它重设 */
     COLORREF bg;       /* 补上边距用的底色（白或 style.bg） */
 } sk_edit_sub_t;
 
-/** 画整块的底 + 圆角边框（聚焦时主题紫）；用整窗 DC 才能覆盖让出来的上边距 */
+/** 画上边距的底 + 圆角边框（聚焦时主题紫）。
+ *  边框画在客户区之外（客户区已由 WM_NCCALCSIZE 四边内缩 bw），所以控件怎么重绘都盖不掉它。 */
 static void sk_edit_box(HWND hwnd, const sk_edit_sub_t *s, int focus)
 {
     HDC dc;
     HPEN pn, op;
     HBRUSH ob;
     COLORREF col = focus ? 0x6750A4 : 0xB8B2BD;
+    int half = s->bw / 2;
 
-    if (s->w <= 2 || s->h <= 2) return;
+    if (s->w <= 2 * s->bw || s->h <= 2 * s->bw) return;
     dc = GetWindowDC(hwnd);
     if (!dc) return;
 
@@ -627,10 +630,11 @@ static void sk_edit_box(HWND hwnd, const sk_edit_sub_t *s, int focus)
         DeleteObject(fb);
     }
 
-    pn = CreatePen(PS_SOLID, 2, col);
+    /* 路径从 half 起，2px 笔正好压在 [0, bw) 上（贴边画会被窗口区域裁掉一半） */
+    pn = CreatePen(PS_SOLID, s->bw, col);
     op = (HPEN)SelectObject(dc, pn);
     ob = (HBRUSH)SelectObject(dc, GetStockObject(NULL_BRUSH));
-    RoundRect(dc, 0, 0, s->w, s->h, s->rad * 2 + 4, s->rad * 2 + 4);
+    RoundRect(dc, half, half, s->w - half, s->h - half, s->rad * 2, s->rad * 2);
     SelectObject(dc, ob);
     SelectObject(dc, op);
     DeleteObject(pn);
@@ -684,18 +688,26 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
         NCCALCSIZE_PARAMS *p = (NCCALCSIZE_PARAMS *)lp;
         int win_w = p->rgrc[0].right - p->rgrc[0].left;
         int win_h = p->rgrc[0].bottom - p->rgrc[0].top;
+        int bw = s->bw;
         LRESULT r = DefSubclassProc(hwnd, msg, wp, lp);
+
+        if (bw * 2 >= win_w || bw * 2 >= win_h) bw = 0;   /* 控件太小就别内缩 */
+        s->w = win_w;
+        s->h = win_h;
+        /* 客户区四边内缩出边框宽度：边框画在客户区之外，控件重绘（选中/滚动/闪烁）盖不掉 */
+        p->rgrc[0].left += bw;
+        p->rgrc[0].right -= bw;
+        p->rgrc[0].bottom -= bw;
         if (s->single) {
             int th = sk_edit_text_height(hwnd);
-            int pad = (th > 0) ? (win_h - th) / 2 : 0;
+            int pad = (th > 0) ? (win_h - 2 * bw - th) / 2 : 0;
             if (pad < 0) pad = 0;
-            if (pad > win_h - 2) pad = win_h - 2;
             s->text_h = th;
-            s->pad = pad;
-            s->w = win_w;
-            s->h = win_h;
-            p->rgrc[0].top += pad;   /* 让出上边距 -> 文字垂直居中 */
+            s->pad = bw + pad;                 /* 上边距 = 边框 + 居中量 */
+        } else {
+            s->pad = bw;
         }
+        p->rgrc[0].top += s->pad;              /* 让出上边距 -> 文字垂直居中 */
         return r;
     }
     if (msg == WM_SETFONT) {
@@ -745,16 +757,17 @@ void cg_skin_apply_edit(cg_widget_t *w)
     memset(s, 0, sizeof(*s));
     s->rad = r;
     s->single = multiline ? 0 : 1;
-    s->left = CG_EDIT_LEFT_MARGIN;
+    s->bw = CG_EDIT_BORDER;
+    s->left = CG_EDIT_TEXT_MARGIN;
     s->bg = (w->style.bg != CG_COLOR_NONE)
               ? RGB((w->style.bg >> 16) & 0xFF, (w->style.bg >> 8) & 0xFF, w->style.bg & 0xFF)
               : GetSysColor(COLOR_WINDOW);
 
     sk_edit_resize(hw, s);   /* 初始尺寸 + 圆角区域 */
-    /* 左右留边距：文字别怼到圆角边框上（垂直居中见 WM_NCCALCSIZE）。
+    /* 左右留边距：文字别怼到圆角边框上（边框在客户区外，垂直居中见 WM_NCCALCSIZE）。
      * spinner 的箭头稍后会重设边距，WM_SETFONT/WM_SIZE 里会按 s->left 再补。 */
     SendMessageW(hw, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN,
-                 MAKELPARAM(CG_EDIT_LEFT_MARGIN, CG_EDIT_RIGHT_MARGIN));
+                 MAKELPARAM(CG_EDIT_TEXT_MARGIN, CG_EDIT_TEXT_MARGIN));
     SetWindowSubclass(hw, sk_edit_sub, 1, (DWORD_PTR)s);
     /* 挂上子类后强制一次布局：立刻按当前字体算好垂直居中量 */
     SetWindowPos(hw, NULL, 0, 0, 0, 0,

@@ -193,7 +193,7 @@ static DWORD style_of(const cg_widget_t *w)
     if (!strcmp(w->type, "button"))    return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;  /* M3 圆角自绘 */
     if (!strcmp(w->type, "menubutton"))return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON;
     if (!strcmp(w->type, "iconbutton"))return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;
-    if (!strcmp(w->type, "link"))      return WS_CHILD | WS_VISIBLE | SS_NOTIFY | SS_LEFTNOWORDWRAP;
+    if (!strcmp(w->type, "link"))      return WS_CHILD | WS_VISIBLE | SS_NOTIFY | SS_LEFTNOWORDWRAP | SS_CENTERIMAGE;
     if (!strcmp(w->type, "monthcal"))  return WS_CHILD | WS_VISIBLE | WS_TABSTOP | MCS_NOTODAYCIRCLE;
     if (!strcmp(w->type, "progressring")) return WS_CHILD | WS_VISIBLE;
     if (!strcmp(w->type, "richtext"))  return WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN | WS_VSCROLL;
@@ -202,7 +202,8 @@ static DWORD style_of(const cg_widget_t *w)
     if (!strcmp(w->type, "toolbar"))   return WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN |
                                               TBSTYLE_FLAT | TBSTYLE_LIST | TBSTYLE_TRANSPARENT | CCS_NODIVIDER;
     if (!strcmp(w->type, "label")) {
-        DWORD s = WS_CHILD | WS_VISIBLE | SS_NOPREFIX;
+        /* SS_CENTERIMAGE：单行文本垂直居中（水平仍按 align，默认左对齐）——和画布一致 */
+        DWORD s = WS_CHILD | WS_VISIBLE | SS_NOPREFIX | SS_CENTERIMAGE;
         s |= (w->style.align == CG_ALIGN_CENTER) ? SS_CENTER
            : (w->style.align == CG_ALIGN_RIGHT)  ? SS_RIGHT : SS_LEFT;
         return s;
@@ -294,6 +295,88 @@ static int is_editlike(const cg_widget_t *w)
 #define COLOR_ENDCOLORS 30
 #endif
 
+/* ---- 让父容器"自己画"出背后那一小块，取它的真实颜色 ----
+ * 标签页的页体是主题画的（本机 #F9F9F9）：既不是类背景刷（BTNFACE 灰）也不是
+ * COLOR_WINDOW（纯白），而且它裁掉子窗口（子控件下面什么都没画，所以不能"不画背景"）。
+ * 与其猜颜色（uxtheme 的 GetThemeColor 对 TAB 返回的是没用的高亮色），不如让父窗口
+ * 把子控件中心那一小块画进 1x1 位图、读像素 —— 什么主题、什么渐变都对得上。
+ * 结果按父窗口缓存，一个容器只采样一次。 */
+static int parent_paint_point(HWND parent, HWND child, COLORREF *out)
+{
+    RECT disp;
+    POINT cand[6];
+    HDC dc;
+    int i;
+
+    GetClientRect(parent, &disp);
+    SendMessageW(parent, TCM_ADJUSTRECT, FALSE, (LPARAM)&disp);   /* 去掉标签行 -> 页体矩形 */
+    if (disp.right - disp.left < 8 || disp.bottom - disp.top < 8) return 0;
+
+    /* 候选点：页体四角往里缩一点（这些位置基本没有子控件），避开子控件区域采样 */
+    cand[0].x = disp.left + 3;                cand[0].y = disp.bottom - 3;
+    cand[1].x = disp.right - 4;               cand[1].y = disp.bottom - 3;
+    cand[2].x = disp.right - 4;               cand[2].y = disp.top + 3;
+    cand[3].x = disp.left + 3;                cand[3].y = disp.top + 3;
+    cand[4].x = (disp.left + disp.right) / 2; cand[4].y = disp.bottom - 3;
+    cand[5].x = (disp.left + disp.right) / 2; cand[5].y = disp.top + 3;
+
+    dc = GetDC(parent);   /* 父窗口的 DC：能直接读到它已经画好的页体像素 */
+    if (!dc) return 0;
+    for (i = 0; i < 6; i++) {
+        HWND c;
+        int covered = 0;
+        for (c = GetWindow(parent, GW_CHILD); c; c = GetWindow(c, GW_HWNDNEXT)) {
+            RECT wr;
+            if (c == child || !IsWindowVisible(c)) continue;
+            GetWindowRect(c, &wr);
+            MapWindowPoints(NULL, parent, (POINT *)&wr, 2);
+            if (cand[i].x >= wr.left && cand[i].x < wr.right &&
+                cand[i].y >= wr.top && cand[i].y < wr.bottom) {
+                covered = 1;
+                break;
+            }
+        }
+        if (!covered) {
+            COLORREF c2 = GetPixel(dc, cand[i].x, cand[i].y);
+            if (c2 != CLR_INVALID) {
+                ReleaseDC(parent, dc);
+                *out = c2;
+                return 1;
+            }
+        }
+    }
+    ReleaseDC(parent, dc);
+    return 0;
+}
+
+/** @brief 某个父容器"背后"的颜色（按父窗口缓存，一个容器只采样一次）
+ *  @return unsigned 0xRRGGBB；采样失败退回纯白
+ */
+static unsigned parent_body_rgb(HWND parent, HWND child)
+{
+    static struct { HWND parent; unsigned rgb; } cache[8];
+    static int used = 0;
+    COLORREF c;
+    unsigned rgb;
+    int i;
+
+    for (i = 0; i < used; i++) {
+        if (cache[i].parent == parent) return cache[i].rgb;
+    }
+    rgb = 0xFFFFFF;
+    if (parent_paint_point(parent, child, &c)) {
+        rgb = ((unsigned)GetRValue(c) << 16) |
+              ((unsigned)GetGValue(c) << 8) |
+              (unsigned)GetBValue(c);
+    }
+    if (used < 8) {
+        cache[used].parent = parent;
+        cache[used].rgb = rgb;
+        used++;
+    }
+    return rgb;
+}
+
 /** @brief 无底色标签该用什么颜色和"背后"融为一体
  *  @param app 所属应用（读窗口底色刷）；child 那个标签窗口
  *  @return HBRUSH 该用的背景刷（可能为 NULL，调用方自己兜底）
@@ -319,8 +402,11 @@ static HBRUSH transparent_bg_for(cg_app_t *app, HWND child)
         if (v == 0 || v > (ULONG_PTR)(COLOR_ENDCOLORS + 1)) return (HBRUSH)GetStockObject(NULL_BRUSH);
         return GetSysColorBrush((int)v - 1);
     }
-    /* 其它系统控件当容器（标签页等）：页体是主题画的、近白色，
-     * 类背景刷（BTNFACE 灰）并不是它背后的颜色，所以这里用 COLOR_WINDOW。 */
+    /* 标签页等系统容器：让页体自己把"背后那块"画出来取色（什么主题都对得上） */
+    if (pw && is_t(pw, "tabs")) {
+        return brush_for(parent_body_rgb(parent, child));
+    }
+    (void)v;
     return GetSysColorBrush(COLOR_WINDOW);
 }
 
@@ -2414,7 +2500,7 @@ static void create_native(cg_widget_t *w)
             w->native2 = up;
             /* UDS_ALIGNRIGHT 的箭头会给 buddy 重设边距、把我们的左边距清成 0（文字顶到
              * 圆角边框上）。这里重设左边距；右边距留给箭头，别覆盖。 */
-            SendMessageW(h, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(CG_EDIT_LEFT_MARGIN, 0));
+            SendMessageW(h, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(CG_EDIT_TEXT_MARGIN, 0));
         }
     }
 
@@ -2433,7 +2519,7 @@ static void create_native(cg_widget_t *w)
 
     /* 字体/箭头设置都可能把 spinner 的 buddy 边距清掉：全部就位后再补一次左边距 */
     if (!strcmp(type, "spinner"))
-        SendMessageW(h, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(CG_EDIT_LEFT_MARGIN, 0));
+        SendMessageW(h, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(CG_EDIT_TEXT_MARGIN, 0));
 }
 
 /** 递归建原生控件：父先于子 */
