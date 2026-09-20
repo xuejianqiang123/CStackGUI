@@ -204,6 +204,27 @@ unsigned cg_win_behind_rgb(cg_app_t *app, void *hwnd);
 /** 由文档树构建运行时控件树（不含原生句柄），失败返回 NULL */
 cg_widget_t *cg_build_widgets(cg_app_t *app);
 
+/* ---------------------------------------------- 日志与诊断（cg_log.c / cg_win_diag.c）
+ * GUI 版没有控制台，光 fprintf(stderr, ...) 用户看不到，所以要有文件日志与错误弹窗。 */
+
+/** 打开日志文件（追加）；path 为空表示只写 stderr。后端启动时调 */
+void cg_log_open(const char *path);
+/** 关闭日志文件（进程收尾） */
+void cg_log_close(void);
+/** 当前日志文件路径；没打开返回 NULL（弹窗里用它告诉用户日志在哪） */
+const char *cg_log_file(void);
+
+/** 起始诊断（win32 实现）：定位日志文件、轮转、装未处理异常过滤器。
+ *  cg_app_run / cg_app_selftest 一开始就调，这样"找不到界面文件"也留得下记录。 */
+void cg_diag_init(void);
+/** 弹一个阻塞式错误框（win32 实现）。只在 cg_app_run（有界面）里用，自检别弹 */
+void cg_fatal_dialog(const char *title, const char *text);
+
+/** 启动期"回调名没在 C 侧登记"的收集（cg_event.c）：cg_app_run 汇总弹一次。
+ *  名字写错不编译报错，是新手最容易卡住的地方，光在 stderr 飘一行不够。 */
+int cg_unresolved_count(void);
+const char *cg_unresolved_name(int i);
+
 /* -------------------------------------------------- 后端接口 */
 
 typedef struct cg_backend {

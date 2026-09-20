@@ -12,6 +12,37 @@
 
 const cg_backend_t *cg_backend_active = NULL;
 
+/* ------------------------------------------------------------ 启动期错误可见化
+ * 发布版是 -mwindows（没有控制台）：致命错误必须弹窗 + 落日志，
+ * 否则用户看到的就是"双击 exe 什么都没发生"。自检（allow_ui=0）只写日志不弹窗。 */
+static char s_fatal[1024];
+
+/** @brief 往 s_fatal 追加一段（截断安全） */
+static void fatal_add(const char *fmt, ...)
+{
+    size_t  used = strlen(s_fatal);
+    va_list ap;
+
+    if (used + 1 >= sizeof(s_fatal)) return;
+    va_start(ap, fmt);
+    vsnprintf(s_fatal + used, sizeof(s_fatal) - used, fmt, ap);
+    va_end(ap);
+}
+
+/** @brief 报一个致命错误：写日志；allow_ui 时弹窗（附日志文件位置） */
+static void fatal_report(int allow_ui, const char *title, const char *text)
+{
+    cg_log(CG_LOG_ERROR, "%s：%s", title, text ? text : "");
+    if (!allow_ui) return;
+    {
+        char        buf[1500];
+        const char *log = cg_log_file();
+        if (log && *log) snprintf(buf, sizeof(buf), "%s\n\n日志文件：\n%s", text ? text : "", log);
+        else             snprintf(buf, sizeof(buf), "%s", text ? text : "");
+        cg_fatal_dialog(title, buf);
+    }
+}
+
 
 /* ------------------------------------------------------------ 程序配置 */
 
@@ -64,7 +95,7 @@ static const char *path_base(const char *path)
     return s1 ? s1 + 1 : path;
 }
 
-/** @brief 取路径的目录部分（无目录时写 "."） */
+/** @brief 取路径的目录部分（无目录时写 "."；不带末尾分隔符，盘符根 "C:\\" 除外） */
 static void path_dir(const char *path, char *out, size_t size)
 {
     const char *b = path_base(path);
@@ -73,6 +104,11 @@ static void path_dir(const char *path, char *out, size_t size)
     if (n == 0) {
         snprintf(out, size, ".");
         return;
+    }
+    /* 不削掉末尾分隔符的话，拼出来的候选路径会变成 "...\gallery\\xx.cgui" */
+    while (n > 1 && (path[n - 1] == '\\' || path[n - 1] == '/')) {
+        if (n == 3 && path[1] == ':') break;
+        n--;
     }
     if (n > size - 1) n = size - 1;
     memcpy(out, path, n);
@@ -102,12 +138,14 @@ static char *open_cgui_text(const cg_app_desc_t *desc, char *found, size_t found
             return json;
         }
         if (!desc->auto_locate_cgui) {
-            fprintf(stderr, "[cstackgui] 读不到界面文件: %s\n", desc->cgui_path);
-            return NULL;
+            s_fatal[0] = '\0';
+            fatal_add("这个文件打不开：\n    %s\n", desc->cgui_path);
+            return NULL;      /* 日志与弹窗由 app_open 的 fatal_report 统一处理 */
         }
-        fprintf(stderr, "[cstackgui] 读不到 %s，在 exe 附近找找看\n", desc->cgui_path);
+        cg_log(CG_LOG_WARN, "读不到 %s，在 exe 附近找找看", desc->cgui_path);
     } else if (!desc->auto_locate_cgui) {
-        fprintf(stderr, "[cstackgui] 没有提供 cgui_path 或 cgui_text\n");
+        s_fatal[0] = '\0';
+        fatal_add("没有提供 cgui_path 或 cgui_text，也没有打开自动查找。\n");
         return NULL;
     }
 
@@ -141,11 +179,14 @@ static char *open_cgui_text(const cg_app_desc_t *desc, char *found, size_t found
         if (json) { fprintf(stderr, "[cstackgui] 界面文件: %s\n", cand); if (found) snprintf(found, found_size, "%s", cand); return json; }
     }
 
-    fprintf(stderr, "[cstackgui] 找不到界面文件，试过这些位置：\n");
-    if (desc->cgui_path) fprintf(stderr, "    %s\n", desc->cgui_path);
-    if (base[0]) fprintf(stderr, "    %s\\%s\n", dir, base);
-    fprintf(stderr, "    %s\\..\\apps\\%s\\%s.cgui\n", dir, stem, stem);
-    fprintf(stderr, "  用法: %s <界面文件.cgui>\n", exe_name);
+    s_fatal[0] = '\0';
+    fatal_add("程序按顺序找过这些位置：\n");
+    if (desc->cgui_path) fatal_add("    %s\n", desc->cgui_path);
+    if (base[0])         fatal_add("    %s\\%s\n", dir, base);
+    fatal_add("    %s\\..\\apps\\%s\\%s.cgui\n", dir, stem, stem);
+    fatal_add("    %s\\..\\examples\\%s\\%s.cgui\n", dir, stem, stem);
+    fatal_add("\n把 .cgui 和 exe 放在同一个目录即可；"
+              "也可以用命令行指定：%s <界面文件.cgui>", exe_name);
     return NULL;
 }
 
@@ -166,7 +207,11 @@ static int app_open(cg_app_t *app, const cg_app_desc_t *desc, int allow_ui)
     app->dblclick_suppress_click = desc ? desc->dblclick_suppress_click : 0;
 
     json = desc ? open_cgui_text(desc, resolved, sizeof(resolved)) : NULL;
-    if (!json) return 2;
+    if (!json) {
+        fatal_report(allow_ui, "CStackGUI：找不到界面文件",
+                     s_fatal[0] ? s_fatal : "没有提供 .cgui 界面文件。");
+        return 2;
+    }
 
     /* 记住界面文件在哪：image 的相对路径按它所在目录解释，符合直觉 */
     if (resolved[0]) {
@@ -188,7 +233,7 @@ static int app_open(cg_app_t *app, const cg_app_desc_t *desc, int allow_ui)
         cg_doc_t *doc = cg_doc_parse(json, err, sizeof(err));
         free(json);
         if (!doc) {
-            fprintf(stderr, "[cstackgui] 解析 .cgui 失败: %s\n", err);
+            fatal_report(allow_ui, "CStackGUI：界面文件（.cgui）格式有误", err);
             return 3;
         }
         app->doc = *doc;
@@ -239,14 +284,19 @@ static void app_close(cg_app_t *app)
 int cg_app_run(const cg_app_desc_t *desc)
 {
     cg_app_t app;
-    int rc = app_open(&app, desc, 1);
+    int rc;
 
+    cg_diag_init();     /* 日志 + 崩溃兜底：后面任何失败都要留下痕迹（GUI 版看不到 stderr） */
+
+    rc = app_open(&app, desc, 1);
     if (rc != 0) return rc;
 
     cg_backend_active = &cg_backend_win32;
     if (cg_backend_active->init(&app) != 0) {
-        fprintf(stderr, "[cstackgui] 创建窗口失败\n");
+        fatal_report(1, "CStackGUI：创建窗口失败",
+                     "窗口没能建起来（可能是桌面会话、DPI 或系统控件异常）。\n");
         app_close(&app);
+        cg_backend_active = NULL;
         return 4;
     }
     /* 建好原生控件后再同步一次初始状态 */
@@ -254,11 +304,31 @@ int cg_app_run(const cg_app_desc_t *desc)
         if (w->native && cg_backend_active->sync) cg_backend_active->sync(w);
     }
 
+    /* 名字写错不会编译报错 —— 新手最常卡在这里：汇总弹一次，并写进日志 */
+    {
+        int n = cg_unresolved_count();
+        if (n > 0) {
+            char   msg[1200];
+            size_t used = (size_t)snprintf(msg, sizeof(msg),
+                                           "有 %d 个事件绑的函数名在 C 代码里找不到，这些事件不会触发：\n\n", n);
+            for (int i = 0; i < n && i < 8; i++) {
+                int wrote = snprintf(msg + used, sizeof(msg) - used, "    %s\n", cg_unresolved_name(i));
+                if (wrote < 0) break;
+                used += (size_t)wrote;
+                if (used >= sizeof(msg) - 1) { used = sizeof(msg) - 1; break; }
+            }
+            if (n > 8) snprintf(msg + used, sizeof(msg) - used, "    …（还有 %d 个，见日志）\n", n - 8);
+            fatal_report(1, "CStackGUI：有事件绑定找不到函数", msg);
+        }
+    }
+
     if (desc && desc->on_ready) desc->on_ready(&app, desc->ready_user);
 
     rc = cg_backend_active->run(&app);
     app_close(&app);
     cg_backend_active = NULL;
+    cg_log(CG_LOG_INFO, "结束：退出码 %d", rc);
+    cg_log_close();
     return rc;
 }
 
@@ -283,9 +353,9 @@ static void selftest_walk(cg_app_t *app, cg_widget_t *w, selftest_stat_t *st, in
             if (!w->node || !w->node->ev[i]) continue;
             if (!cg_kind_supports_event(w->type, (cg_event_t)i)) continue;
             if (w->handlers[i]) continue;
-            fprintf(stderr, "  [FAIL] %-10s #%-14s %-13s 绑定 \"%s\" 未在 C 侧登记\n",
-                    "window", w->id ? w->id : "-",
-                    cg_event_name((cg_event_t)i), w->node->ev[i]);
+            cg_log(CG_LOG_ERROR, "  [FAIL] %-10s #%-14s %-13s 绑定 \"%s\" 未在 C 侧登记",
+                   "window", w->id ? w->id : "-",
+                   cg_event_name((cg_event_t)i), w->node->ev[i]);
             st->unresolved++;
         }
         for (size_t i = 0; i < w->nchildren; i++) selftest_walk(app, w->children[i], st, depth);
@@ -298,9 +368,9 @@ static void selftest_walk(cg_app_t *app, cg_widget_t *w, selftest_stat_t *st, in
         if (!w->node || !w->node->ev[i]) continue;
         if (!cg_kind_supports_event(w->type, (cg_event_t)i)) continue;  /* 不支持的事件上面已报过 */
         if (!w->handlers[i]) {
-            fprintf(stderr, "  [FAIL] %-10s #%-14s %-9s 绑定 \"%s\" 未在 C 侧登记\n",
-                    w->type ? w->type : "-", w->id ? w->id : "-",
-                    cg_event_name((cg_event_t)i), w->node->ev[i]);
+            cg_log(CG_LOG_ERROR, "  [FAIL] %-10s #%-14s %-9s 绑定 \"%s\" 未在 C 侧登记",
+                   w->type ? w->type : "-", w->id ? w->id : "-",
+                   cg_event_name((cg_event_t)i), w->node->ev[i]);
             st->unresolved++;
             continue;
         }
@@ -327,6 +397,7 @@ int cg_app_selftest(const cg_app_desc_t *desc)
 
     /* 树/事件名输出里有中文（UTF-8 字节），控制台默认代码页会显示成乱码 */
     cg_win_console_utf8();
+    cg_diag_init();     /* 自检结果也写进日志（GUI 版看不到 stderr，CI 里两者都有） */
 
     /* app_open 里会调 cg_ticks()，后端在自检模式下不参与，这里给个空后端 */
     rc = app_open(&app, desc, 0);
@@ -349,8 +420,15 @@ int cg_app_selftest(const cg_app_desc_t *desc)
     {
         int bad = st.unresolved + app.unsupported_events;
         app_close(&app);
-        if (bad) return 5;
+        if (bad) {
+            cg_log(CG_LOG_ERROR, "自检失败：未登记回调 %d 个，绑了不支持的事件 %d 个",
+                   st.unresolved, app.unsupported_events);
+            cg_log_close();
+            return 5;
+        }
     }
+    cg_log(CG_LOG_INFO, "自检通过：控件 %d 个，触发回调 %d 次", st.total, st.fired);
+    cg_log_close();
     printf("selftest OK\n");
     return 0;
 }

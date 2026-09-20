@@ -402,6 +402,103 @@ void cg_canvas_text(cg_widget_t *w, int x, int y, const char *text);
 /** 让 browser 控件打开一个地址（http/https/本地文件路径均可）；实验性功能 */
 void cg_browser_navigate(cg_widget_t *w, const char *url);
 
+/* ------------------------------------------------------------ 日志
+ * 为什么需要它：GUI 版（-mwindows）没有控制台，printf / stderr 用户一个字都看不见。
+ * 运行时启动时会自己开一份日志（%LOCALAPPDATA%\<exe名>\app.log），这里让业务代码
+ * 也能往同一个文件里补记录 —— 用户报"点了没反应"时，让他把日志发过来就能查。
+ */
+#define CG_LOG_INFO  0
+#define CG_LOG_WARN  1
+#define CG_LOG_ERROR 2
+
+/** 写一条日志（printf 风格）。始终镜像到 stderr，并追加到日志文件。 */
+void cg_log(int level, const char *fmt, ...);
+/** 只记 >= level 的条目（默认 CG_LOG_INFO）。 */
+void cg_log_set_level(int level);
+
+/* ------------------------------------------------------------ 基础能力（cg_kit）
+ * 和界面无关，但做真工具一定会用到：读写文件、配置持久化、文本与编码、剪贴板、
+ * 打开外部程序、注册表。**凡是返回 char* 的函数都是堆内存，用完请 cg_free()**。
+ * 这样业务代码不必 include windows.h / stdlib.h，仍然只认本头文件。
+ */
+
+/** 释放上面这些函数返回的堆内存（等价 free()，省得业务代码去 include stdlib.h） */
+void cg_free(void *p);
+
+/* ---- 文件 ---- */
+/** 文件是否存在（目录不算） */
+int   cg_file_exists(const char *path);
+/** 读整个文件成字符串（去掉 UTF-8 BOM；二进制文件也是原样返回）；失败 NULL */
+char *cg_file_read(const char *path);
+/** 覆盖写文件（UTF-8 文本）；成功返回 0 */
+int   cg_file_write(const char *path, const char *text);
+/** 追加到文件末尾（文件不存在就新建）；成功返回 0 */
+int   cg_file_append(const char *path, const char *text);
+/** 删文件；成功返回 0 */
+int   cg_file_delete(const char *path);
+/** 拷文件（覆盖已存在的）；成功返回 0 */
+int   cg_file_copy(const char *from, const char *to);
+/** 目录是否存在 */
+int   cg_dir_exists(const char *path);
+/** 建目录（父目录必须已存在）；成功返回 0 */
+int   cg_dir_create(const char *path);
+/** 枚举目录：index 从 0 递增，返回 1 = 拿到一个名字（写进 out），0 = 没有了。
+ *  filter 传 NULL 或 "*" 表示所有文件；不返回 "." 与 ".." */
+int   cg_dir_list(const char *dir, const char *filter, int index, char *out, int out_size);
+
+/* ---- 路径 ---- */
+/** 拼路径（自动补一个分隔符） */
+char *cg_path_join(const char *a, const char *b);
+/** 取目录部分（不含末尾分隔符） */
+char *cg_path_dir(const char *path);
+/** 取文件名部分；返回 path 内部的指针，**不用释放** */
+const char *cg_path_name(const char *path);
+/** 取扩展名（含点，如 ".txt"）；没有扩展名返回 ""。同样不用释放 */
+const char *cg_path_ext(const char *path);
+/** exe 所在目录（写日志、读同目录配置文件用） */
+char *cg_app_dir(void);
+/** 本程序的用户数据目录 %LOCALAPPDATA%\<exe名>（会自动建），存配置/缓存用 */
+char *cg_app_data_dir(void);
+
+/* ---- 配置（INI 文本格式） ---- */
+/** 读 [section] key；文件/节/键不存在时返回 def 的副本 */
+char *cg_ini_read(const char *path, const char *section, const char *key, const char *def);
+/** 写 [section] key=value（文件里其它内容保持不动，没有就新建）；成功返回 0 */
+int   cg_ini_write(const char *path, const char *section, const char *key, const char *value);
+
+/* ---- 文本与编码 ---- */
+/** 拼字符串（printf 风格），返回堆内存 */
+char *cg_str_format(const char *fmt, ...);
+/** 去掉首尾空白（空格 / 制表 / 换行），返回堆内存 */
+char *cg_str_trim(const char *s);
+/** 比较字符串（忽略英文大小写）：相等返回 1 */
+int   cg_str_equal(const char *a, const char *b);
+/** 把 src 里所有 from 换成 to，返回堆内存（from 为空则返回 src 的副本） */
+char *cg_str_replace(const char *src, const char *from, const char *to);
+/** UTF-8 -> GBK（读老式 ANSI 文件后转成界面能显示的） */
+char *cg_utf8_to_gbk(const char *utf8);
+/** GBK -> UTF-8（要把界面里的中文写进老式 ANSI 文件时用） */
+char *cg_gbk_to_utf8(const char *gbk);
+
+/* ---- 剪贴板 / 外部程序 / 时间 ---- */
+/** 取剪贴板文本（没有文本返回 NULL；用完 cg_free） */
+char *cg_clip_get_text(void);
+/** 写剪贴板文本；成功返回 0 */
+int   cg_clip_set_text(const char *text);
+/** 用系统默认程序打开文件 / 文件夹 / 网址；成功返回 0 */
+int   cg_shell_open(const char *path_or_url);
+/** 启动外部程序（cmd_line 是完整命令行）；wait=1 时返回它的退出码，wait=0 返回 0 */
+int   cg_run_process(const char *cmd_line, int wait);
+/** 当前时间字符串；fmt 传 NULL 用 "2026-09-21 02:33:53"（strftime 格式） */
+char *cg_time_now(const char *fmt);
+
+/* ---- 注册表（HKEY_CURRENT_USER） ---- */
+/** 读注册表字符串值；没有返回 def 的副本。subkey 如 "Software\\MyApp" */
+char *cg_reg_read(const char *subkey, const char *name, const char *def);
+/** 写注册表字符串值（没有就新建）；成功返回 0。
+ *  subkey 如 "Software\\Microsoft\\Windows\\CurrentVersion\\Run" 可做开机自启 */
+int   cg_reg_write(const char *subkey, const char *name, const char *value);
+
 /* ------------------------------------------------------------ 动态扩展 */
 
 /** 运行时用代码追加控件（不进 .cgui）。parent 为 NULL 时挂在窗口上。

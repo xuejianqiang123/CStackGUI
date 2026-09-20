@@ -224,8 +224,11 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
 /** @brief 菜单按钮：在按钮下方弹出菜单，选中项直接派发 */
 void cgw_popup_menu_for(cg_app_t *app, cg_widget_t *w, HWND hwnd);
-/** @brief 由控件的菜单项数组建一个 HMENU（调用方 DestroyMenu） */
-HMENU cgw_menu_build(const cg_widget_t *w);
+/** @brief 由控件的菜单项数组建一个 HMENU（调用方 DestroyMenu）。
+ *  as_bar=1 建**菜单栏**（窗口挂载用，必须 CreateMenu）；as_bar=0 建弹出菜单
+ *  （menubutton / TrackPopupMenu 用，必须 CreatePopupMenu）。
+ *  两者不能混：给 SetMenu 传 CreatePopupMenu 的表会静默失败 —— 菜单栏就是不显示。 */
+HMENU cgw_menu_build(const cg_widget_t *w, int as_bar);
 /** @brief 填充工具栏按钮（文字按钮 + BTNS_SHOWTEXT） */
 void cgw_build_toolbar(HWND h, cg_widget_t *w);
 

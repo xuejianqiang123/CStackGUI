@@ -86,22 +86,50 @@ int cg_tray_action(const cg_widget_t *self) { return self ? self->ev_action : 0;
 
 /* ------------------------------------------------------------ 绑定 */
 
+/* 启动期"名字没登记"清单：.cgui 与 C 代码靠名字耦合，名字写错不编译报错。
+ * 这里把名字记下来，cg_app_run 启动后汇总弹一次（比在 stderr 飘一行有用得多）。 */
+#define CG_MAX_UNRESOLVED 64
+
+static const char *s_unresolved[CG_MAX_UNRESOLVED];
+static int         s_unresolved_n;
+
+/** @brief 记下一个没登记的回调名（name 指向文档树，生命周期同 app） */
+static void unresolved_add(const char *name)
+{
+    if (s_unresolved_n >= CG_MAX_UNRESOLVED) return;
+    s_unresolved[s_unresolved_n++] = name;
+}
+
+/** @brief 没登记的回调名个数 */
+int cg_unresolved_count(void)
+{
+    return s_unresolved_n;
+}
+
+/** @brief 第 i 个没登记的回调名；越界返回 NULL */
+const char *cg_unresolved_name(int i)
+{
+    return (i >= 0 && i < s_unresolved_n) ? s_unresolved[i] : NULL;
+}
+
 /**
  * @brief 依名字在绑定表里找函数指针
  * @param app 所属应用；name .cgui 里写的事件回调名
- * @return cg_event_fn 函数指针；找不到打印一次警告并返回 NULL
+ * @return cg_event_fn 函数指针；找不到记一条日志/一条待提示并返回 NULL
  */
 cg_event_fn cg_resolve_binding(cg_app_t *app, const char *name)
 {
     if (!name || !*name) return NULL;
     if (!app || !app->bindings) {
-        fprintf(stderr, "[cstackgui] 警告: 事件绑定了 \"%s\"，但没有提供 bindings 表\n", name);
+        cg_log(CG_LOG_WARN, "事件绑定了 \"%s\"，但没有提供 bindings 表", name);
+        unresolved_add(name);
         return NULL;
     }
     for (const cg_binding_t *b = app->bindings; b->name; b++) {
         if (strcmp(b->name, name) == 0) return b->fn;
     }
-    fprintf(stderr, "[cstackgui] 警告: .cgui 引用了回调 \"%s\"，但 C 代码里没有 CG_BIND 它\n", name);
+    cg_log(CG_LOG_WARN, ".cgui 引用了回调 \"%s\"，但 C 代码里没有 CG_BIND 它", name);
+    unresolved_add(name);
     return NULL;
 }
 
