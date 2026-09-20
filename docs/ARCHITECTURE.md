@@ -142,12 +142,12 @@ void cb(cg_widget_t *self, cg_event_t ev, void *user);
 | `edit` | 单行输入 | 否 | `EDIT` + `ES_AUTOHSCROLL` |
 | `multiedit` | 多行输入 | 否 | `EDIT` + `ES_MULTILINE` |
 | `spinner` | 数字微调 | 否 | `EDIT` + `msctls_updown32`（**一个控件两个 HWND**，见 4.1）|
-| `checkbox` / `radio` | 复选/单选 | 否 | `BUTTON` + `BS_AUTOCHECKBOX` / `BS_AUTORADIOBUTTON` |
+| `checkbox` / `radio` | 复选/单选 | 否 | `BUTTON` + `BS_OWNERDRAW`，父窗口处理 `WM_DRAWITEM` 自绘 |
 | `switch` | 开关 | 否 | `BUTTON` + `BS_OWNERDRAW`，父窗口处理 `WM_DRAWITEM` 自绘药丸 |
 | `listbox` | 列表框 | 否 | `LISTBOX` + `LBS_NOTIFY` |
 | `combo` | 下拉框 | 否 | `COMBOBOX`（下拉列表样式）|
 | `slider` | 滑块 | 否 | `msctls_trackbar32` |
-| `progress` | 进度条 | 否 | `msctls_progress32` |
+| `progress` | 进度条 | 否 | 自绘窗口类 `CG_PROGRESS_CLASS`（原生 `msctls_progress32` 不支持 custom draw）|
 | `tabs` | 标签页 | **是** | `SysTabControl32`；子控件按 `page` 显隐（切页由运行时管）|
 | `tree` | 树 | 否 | `SysTreeView32`；`item_map` 保存 逻辑下标 → `HTREEITEM` |
 | `table` | 表格 | 否 | `SysListView32` 报表模式（列 + 行）|
@@ -157,9 +157,13 @@ void cb(cg_widget_t *self, cg_event_t ev, void *user);
 | `toolbar` | 工具栏 | 否 | `ToolbarWindow32`：文字池 + `BTNS_SHOWTEXT` 做纯文字按钮，点击走 `WM_COMMAND` |
 | `richtext` | 富文本 | 否 | `RICHEDIT50W`（`Msftedit.dll`，缺了就退 `RichEdit20W` 再退普通 `EDIT`）|
 | `datepicker` | 日期时间 | 否 | `SysDateTimePick32`；`datetime` 就是两个 DTP 并排（用 `native2`）|
-| `group` / `box` | 分组框/容器块 | **是** | 自注册窗口类 `CStackGUIPanel`（转发子控件通知、画背景）|
+| `group` / `box` / `card` | 分组框/容器块/卡片 | **是** | 自注册窗口类 `CStackGUIPanel`（转发子控件通知、画背景；组框边框标题完全自绘）|
 | `separator` | 分割线 | 否 | `STATIC` + `SS_ETCHEDHORZ` |
 | `image` | 图片 | 否 | 自注册窗口类 `CStackGUIImage`，GDI+ 读图 + 自绘缩放 |
+
+> 这里只是常用控件的速览。**完整 39 行类型表**（含 `progressring` / `timer` / `canvas` / `colorpicker` /
+> `browser` / `shape` / `badge` / `tag` / `rate` / `pagination`）见
+> [docs/CGUI-FORMAT.md](CGUI-FORMAT.md) 第 4 节。
 
 菜单栏**没有矩形**：它是挂在窗口上的 `HMENU`，所以 `cg_doc` 里 `def_w/def_h` 为 0，
 `create_native` 直接跳过它，改在 `win_init` 里 `SetMenu`，之后再加一次客户区尺寸校准
@@ -257,9 +261,10 @@ runtime/
 3. **一个控件可能有第二个 HWND。** `spinner` = 输入框 + 上下箭头两个窗口，
    所以按控件句柄反查控件要用 `cgw_widget_by_hwnd()`（同时比对 `native` 和 `native2`），
    只按 `GetDlgCtrlID()` 找会漏掉箭头那条消息。
-4. **子窗口的通知先到父窗口。** 控件把 `WM_COMMAND` / `WM_NOTIFY` / `WM_DRAWITEM` / `WM_HSCROLL`
-   发给**直接父窗口**；分组框里的树、表格、开关要靠 `cgw_PanelProc` 把这几种消息转发回主窗口，
-   少转发一种，那种控件在分组框里就会"没反应"。
+4. **子窗口的通知先到父窗口。** 控件把 `WM_COMMAND` / `WM_NOTIFY` / `WM_DRAWITEM` / `WM_HSCROLL` /
+   `WM_VSCROLL` **和 `WM_CTLCOLORSTATIC/EDIT/BTN`** 发给**直接父窗口**；放进分组框（`cgw_PanelProc`）
+   或系统容器如标签页（`cgw_FocusProc`）的控件，这些消息都要被转发回主窗口 —— 少转发一种，
+   那种控件进容器就"没反应"（标签则是露出系统灰底）。
 
 **分层规矩**：`cg_app.c` / `cg_widget*.c` 及以上不知道 Win32 的存在，`cg_win_*.c` 不知道业务的存在。两者之间是 `cg_backend_t` 接口：
 
@@ -284,7 +289,7 @@ typedef struct cg_backend {
 
 | 决定 | 为什么 | 代价 |
 | --- | --- | --- |
-| 运行时用 **Win32 原生控件**，不用 SDL/GTK | 业务 exe 必须是**单文件**、零依赖；原生控件白送输入法、无障碍、系统主题 | `style.radius`（圆角）和自定义配色大多不生效（原生控件不给画）；要 M3 外观得加自绘后端。个别控件（`switch`）用 owner-draw 自绘，算是这条路的样板 |
+| 运行时用 **Win32 原生控件**，不用 SDL/GTK | 业务 exe 必须是**单文件**、零依赖；原生控件白送输入法、无障碍、系统主题 | 系统控件（列表框/树/表格/标签页/月历/下拉框）不给画，自定义外观不生效；要吃圆角与配色得走自绘 —— 已落地为 `runtime/src/skin/` 的 GDI+ 外观层（按钮/开关/勾选/输入框/滑块/进度条/圆环）|
 | 用 **MinGW-w64 + windres** | 免装 Visual Studio，`gcc` 一条命令出 exe；`-mwindows` 就是 GUI 程序 | 需把 `mingw64\bin` 加进 PATH（脚本里已内置默认路径） |
 | `.cgui` 用 **JSON** | 人能读能改、diff 友好、画布侧零解析成本 | C 侧要自带一个 JSON 解析器（约 400 行，已实现） |
 | **绝对坐标**，没有布局引擎 | C 侧实现量小、所见即所得、和 Win32 的心智模型一致 | 窗口拉伸不会自动重排（v1 不做自适应） |
@@ -432,24 +437,30 @@ release/
 
 ---
 
-## 8. v1 的已知限制与下一条路
+## 8. 已落地 / 已知限制 / 下一条路
+
+**已经落地（本节曾列为"下一步"）**
+
+- **自绘外观层**：没走 D2D（本机 MinGW 工具链没有 `d2d1.h` / `dwrite.h`），改用 **GDI+**，
+  整层放在 `runtime/src/skin/`（`cg_skin.{h,c}` + `cg_skin_edit.c`）。按钮/开关/勾选/滑块/进度条/圆环
+  都有 M3 观感，圆角与配色生效；将来换 D2D 内核时整目录替换，上层接入点不动（见 `docs/M3-SKIN.md`）。
+- **画布内一键运行 / 发布**：工具条「运行」（F5）编译并启动工程；「发布」组装 `publish\<名字>\` 并打 zip。
+- **控件补齐到 39 种**：含 `iconbutton`、`monthcal`、`progressring`、`canvas`、`colorpicker`、`browser`、
+  `rate`、`pagination`、`badge`、`tag`、`card`、`shape`、`timer`。
 
 **限制（都是明确取舍，不是没做完）**
 
-- 圆角 / 自定义控件配色在 Win32 后端大多不生效（`label` 能改文字与背景色，`switch` 因为是自绘所以吃配色）；
-  按钮等系统控件不给画。
+- **系统控件不吃自定义外观**：列表框 / 树 / 表格 / 标签页 / 月历 / 下拉框的外观由系统主题决定；
+  只有自绘控件（按钮、开关、勾选、输入框、滑块、进度条、圆环）吃圆角与配色。
 - 窗口大小固定，没有布局引擎，拉伸不重排。
 - 画布是单选，没有多选、组合、对齐工具条（有网格吸附和邻近参考线）。
 - 画布不预览真实图片（只显示 `src` 的文件名），运行时才画。
 - 一键运行（F5）要求工程在项目根的 `apps\`/`examples\` 下且已导出过 C 骨架——
   这是 `build-app.bat` 的查找规则决定的，画布会在不满足时给出明确指引。
 
-**建议的下一步排序**
+**下一步的候选**
 
-1. **画布内运行**：把导出的目录直接编译并启动（或嵌入画布下方看运行结果）。改界面 → 一键看到真实效果，闭环才算真正短。
-2. **自绘后端**（M3 外观）：加 `cg_backend_d2d.c`，实现圆角/波纹/主题色。`switch` 和 `image` 已经走通了
-   自绘 + `WM_DRAWITEM` 这条通路，可以当起点。
-3. **画布体验**：多选/组合、对齐工具条、画布内预览真实图片、`.cgui` 里加 `notes` 字段写行为说明。
-4. **还缺的控件**：图标/图片按钮、树形表格、日历（`SysMonthCal32`）、进度环，
-   以及 Material 那批纯视觉组件（FAB / chip / navRail / loading indicator 等 ——
-   它们必须先有自绘后端才谈得上）。菜单、工具栏、富文本、日期时间已经做完了。
+1. **D2D 外观内核**：拿到带 `d2d1.h` 的工具链后替换 `skin/`，换来波纹/阴影这类真特效。
+2. **画布体验**：多选/组合、对齐工具条、画布内预览真实图片、`.cgui` 里加 `notes` 字段写行为说明。
+3. **树形表格 / 更丰富的表格列**（图标列、进度列）。
+4. **运行时菜单增删 API**（目前菜单是声明式的，运行时只读）。

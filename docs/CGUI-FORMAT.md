@@ -110,10 +110,13 @@
 | `text` | 字符串 | 否 | 显示文字。缺省用类型默认值（按钮 `按钮`、标签 `标签`、分组框 `分组`，输入类为空）|
 | `style` | 对象 | 否 | 见 2.2 |
 | `events` | 对象 | 否 | 见第 3 节 |
-| `children` | 数组 | 否 | 只有容器类型（`group` / `box` / `tabs`）能带；**非容器带 children 会被运行时判为错误** |
+| `children` | 数组 | 否 | 只有容器类型（`group` / `box` / `card` / `tabs`）能带；**非容器带 children 会被运行时判为错误** |
 | `page` | 整数 | 否 | 属于父 `tabs` 的第几页（0 起）。缺省 0 |
 | `src` | 字符串 | 否 | `image` 的图片路径，见 2.4 |
-| `format` | 字符串 | 否 | `datepicker` 的细分格式：`date`（缺省）/ `time` / `datetime` |
+| `format` | 字符串 | 否 | `datepicker` 的细分格式：`date`（缺省）/ `time` / `datetime`；`shape` 的外形：`rect`（缺省）/ `roundrect` / `ellipse` |
+| `hint` | 字符串 | 否 | 鼠标悬停提示（tooltip），**所有控件通用**；不写 / 空 = 无提示 |
+| `period` | 整数 | 否 | `timer` 的触发周期（毫秒）。**不写 = 0 = 不触发**（画布新建时钟时给 1000）|
+| `multi` / `check` | 布尔 | 否 | `table`：`multi` = 允许整行多选，`check` = 显示行首复选框列（配合 `check` 事件）|
 | `items` | 字符串数组 | 否 | `listbox` / `combo` / `tabs`（页签文字）/ `statusbar`（分段文字）/ `toolbar`（按钮文字）的内容 |
 | `nodes` | 对象数组 | 否 | `tree` 的节点树（2.5）或 `menu`/`menubutton` 的菜单项（2.7）|
 | `columns` / `rows` | 数组 | 否 | `table` 的列与行，见 2.6 |
@@ -128,7 +131,7 @@
 | `fg` | 字符串 | 文字色 `#RRGGBB`，也接受 `#RGB` / `#AARRGGBB` / 十进制 |
 | `bg` | 字符串 | 背景色，同上。**`label`/`link`/`separator` 不写 = 透明（透出窗口底色）**；其它控件不写 = 跟随系统 |
 | `align` | `left`\|`center`\|`right` | 文本对齐（`label` 生效）|
-| `radius` | 整数 | 圆角半径。**Win32 后端目前忽略**，留给自绘后端 |
+| `radius` | 整数 | 圆角半径。**自绘控件生效**（按钮/开关/勾选/输入框/进度条等，`runtime/src/skin/`），系统控件忽略；不写用默认值（按钮 6、输入框 2）|
 
 ### 2.3 状态字段
 
@@ -243,13 +246,16 @@ static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
 
 | 事件 | 什么时候发 | 谁支持 |
 | --- | --- | --- |
-| `click` | 点了一下 | 按钮/图标按钮/链接/图片/菜单类 |
-| `dblclick` | 系统双击间隔内点了第二下 | 同上 + 列表/树/表格/月历 |
-| `change` | 文字/勾选/数值变了 | 输入类、开关复选、滑块（拖动中）|
+| `click` | 点了一下 | 按钮/图标按钮/链接/图片/标签片/菜单类 |
+| `dblclick` | 系统双击间隔内点了第二下 | 同上 + 列表/树/表格/月历/画板 |
+| `change` | 文字/勾选/数值/颜色变了 | 输入类、开关复选、滑块（拖动中）、颜色选择、评分、分页 |
 | `submit` | 单行输入框里按了回车 | 只有单行输入 |
 | `select` | 选中项变了 | 列表/下拉/标签页/树/表格/月历 |
 | `release` | 滑块松手（拖完才发一次） | 只有滑块 |
 | `expand` / `collapse` | 树节点展开/折叠 | 只有树 |
+| `tick` | 时钟控件的周期到了（`period` 毫秒一次） | 只有时钟 |
+| `check` | 表格勾选列的行勾选状态变了 | 只有表格（`.cgui` 里开 `check`） |
+| `gotfocus` / `lostfocus` | 控件获得 / 失去键盘焦点 | 有焦点概念的原生控件（输入类、按钮、开关勾选、滑块、列表/下拉/树/表格/标签页）|
 | `close` | 用户点了关闭按钮，窗口关之前 | 只有窗口 |
   不认识的键会被运行时**忽略**（不报错），方便向后兼容。
 - 一个函数名可以被多个控件、多个事件共用。
@@ -263,35 +269,49 @@ static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
 
 | `type` | 中文名 | 容器 | 默认尺寸 | 默认文本 | 支持的 `events` | Win32 实现 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `button` | 按钮 | 否 | 120×40 | `按钮` | `click`、`dblclick` | `BUTTON` |
+| `button` | 按钮 | 否 | 120×40 | `按钮` | `click`、`dblclick` | `BUTTON`+`BS_OWNERDRAW`（M3 自绘）|
 | `iconbutton` | 图标按钮 | 否 | 48×48 | — | `click`、`dblclick` | `BUTTON` 自绘（`src` 指定图片）|
 | `label` | 标签 | 否 | 160×24 | `标签` | **无**（纯显示） | `STATIC` |
 | `link` | 链接 | 否 | 160×24 | `链接` | `click`、`dblclick` | `STATIC`+`SS_NOTIFY`（手型光标、蓝色下划线）|
-| `switch` | 开关 | 否 | 56×32 | — | `change` | `BUTTON` 自绘 |
-| `edit` | 单行输入 | 否 | 200×32 | — | `change`、`submit` | `EDIT` |
-| `multiedit` | 多行输入 | 否 | 240×120 | — | `change` | `EDIT` 多行 |
-| `richtext` | 富文本 | 否 | 320×160 | — | `change` | `RICHEDIT50W`（缺库时降级）|
-| `spinner` | 数字微调 | 否 | 100×28 | — | `change` | `EDIT` + `msctls_updown32` |
-| `datepicker` | 日期时间 | 否 | 140×28 | — | `change` | `SysDateTimePick32`（datetime 用两个）|
+| `switch` | 开关 | 否 | 56×32 | — | `change` | `BUTTON` 自绘（M3 胶囊）|
+| `edit` | 单行输入 | 否 | 200×32 | — | `change`、`submit` | `EDIT`（圆角+垂直居中自绘）|
+| `multiedit` | 多行输入 | 否 | 240×120 | — | `change` | `EDIT` 多行（圆角自绘）|
+| `richtext` | 富文本 | 否 | 320×160 | — | `change` | `RICHEDIT50W`（缺库时降级 EDIT）|
+| `spinner` | 数字微调 | 否 | 100×28 | — | `change` | `EDIT` + `msctls_updown32`（文本自管，不用 `UDS_SETBUDDYINT`）|
+| `datepicker` | 日期时间 | 否 | 140×28 | — | `change` | `SysDateTimePick32`（datetime 用两个 HWND）|
 | `monthcal` | 月历 | 否 | 230×180 | — | `select`、`dblclick` | `SysMonthCal32`（选中日期写回 `text`）|
-| `checkbox` | 复选框 | 否 | 160×28 | `复选` | `change` | `BUTTON` |
-| `radio` | 单选钮 | 否 | 160×28 | `单选` | `change` | `BUTTON` |
+| `checkbox` | 复选框 | 否 | 160×28 | `复选` | `change` | `BUTTON`+`BS_OWNERDRAW`（自绘）|
+| `radio` | 单选钮 | 否 | 160×28 | `单选` | `change` | `BUTTON`+`BS_OWNERDRAW`（自绘，互斥靠兄弟遍历）|
 | `listbox` | 列表框 | 否 | 220×140 | — | `select`、`dblclick` | `LISTBOX` |
 | `combo` | 下拉框 | 否 | 200×200 | — | `select` | `COMBOBOX` |
-| `slider` | 滑块 | 否 | 200×32 | — | `change`、`release` | `msctls_trackbar32` |
-| `progress` | 进度条 | 否 | 200×20 | — | **无**（只被写） | `msctls_progress32` |
-| `progressring` | 圆环进度 | 否 | 120×120 | — | **无**（只被写） | 自绘窗口 |
-| `tabs` | 标签页 | **是** | 320×220 | — | `select` | `SysTabControl32` |
+| `slider` | 滑块 | 否 | 200×32 | — | `change`、`release` | `msctls_trackbar32`+`NM_CUSTOMDRAW`（自绘轨道/滑块）|
+| `progress` | 进度条 | 否 | 200×20 | — | **无**（只被写） | 自绘窗口 `CG_PROGRESS_CLASS`（原生不支持 custom draw）|
+| `progressring` | 圆环进度 | 否 | 120×120 | — | **无**（只被写） | 自绘窗口（GDI+ 轨道 + 圆头弧）|
+| `tabs` | 标签页 | **是** | 320×220 | — | `select` | `SysTabControl32`；子控件按 `page` 显隐 |
 | `tree` | 树 | 否 | 220×180 | — | `select`、`dblclick`、`expand`、`collapse` | `SysTreeView32` |
-| `table` | 表格 | 否 | 360×180 | — | `select`、`dblclick` | `SysListView32` 报表模式 |
+| `table` | 表格 | 否 | 360×180 | — | `select`、`dblclick`、`check` | `SysListView32` 报表模式（`check`/`multi` 开勾选列与多选）|
 | `statusbar` | 状态栏 | 否 | 400×24 | — | **无** | `msctls_statusbar32` |
 | `menu` | 菜单栏 | 否 | 无矩形 | — | `click` | 窗口 `HMENU`（一根窗口一根）|
 | `menubutton` | 菜单按钮 | 否 | 130×32 | `菜单` | `click` | `BUTTON` + `TrackPopupMenu` |
 | `toolbar` | 工具栏 | 否 | 400×34 | — | `click` | `ToolbarWindow32`（纯文字按钮）|
-| `group` | 分组框 | **是** | 260×180 | `分组` | **无** | 自注册面板窗口 |
+| `group` | 分组框 | **是** | 260×180 | `分组` | **无** | 自注册面板窗口（边框+标题完全自绘）|
 | `box` | 容器块 | **是** | 200×120 | — | **无** | 自注册面板窗口 |
-| `separator` | 分割线 | 否 | 200×2 | — | **无** | `STATIC` |
-| `image` | 图片 | 否 | 200×120 | — | `click`、`dblclick` | 自绘窗口（GDI+ 读图） |
+| `card` | 卡片 | **是** | 280×180 | `卡片` | **无** | 自注册面板窗口 |
+| `separator` | 分割线 | 否 | 200×2 | — | **无** | `STATIC` + `SS_ETCHEDHORZ` |
+| `image` | 图片 | 否 | 200×120 | — | `click`、`dblclick` | 自绘窗口（GDI+ 读图）|
+| `shape` | 外形框 | 否 | 120×120 | — | **无** | 自注册面板窗口（自绘外形）|
+| `timer` | 时钟 | 否 | 无矩形 | — | `tick` | **无窗口**，后端 50ms 心跳驱动（`period` 毫秒）|
+| `canvas` | 画板 | 否 | 240×160 | — | `click`、`dblclick` | 自绘窗口（`cg_canvas_*` 画线/矩形/椭圆/文字）|
+| `colorpicker` | 颜色选择 | 否 | 64×28 | — | `change` | `BUTTON` 自绘色块（点击弹系统取色器，值存 `value`）|
+| `browser` | 网页浏览 | 否 | 320×240 | — | **无** | `AtlAxWin` 宿主系统 WebBrowser（起不来降级 `STATIC` 占位；实验性）|
+| `badge` | 徽章 | 否 | 48×24 | `99+` | **无** | `BUTTON` 自绘小圆片 |
+| `tag` | 标签片 | 否 | 72×28 | `标签` | `click` | `BUTTON` 自绘 |
+| `rate` | 评分 | 否 | 140×32 | — | `change` | `BUTTON` 自绘五角星（星数 = `max-min`，上限 10）|
+| `pagination` | 分页 | 否 | 180×32 | — | `change` | `BUTTON` 自绘（页数 = `max-min+1`）|
+
+> 上表只列每种控件的**主要**事件。凡是有键盘焦点概念的原生控件
+> （`button`/`switch`/`edit`/`multiedit`/`richtext`/`spinner`/`datepicker`/`checkbox`/`radio`/
+> `listbox`/`combo`/`slider`/`tabs`/`tree`/`table`）都额外支持 `gotfocus` / `lostfocus`。
 
 **窗口本身也是一个"控件"**（伪控件 id 固定为 `__window`，头文件里是 `CG_WINDOW_ID`）。
 它的事件写在 `app.events` 里，和控件事件共用同一套 `CG_BIND` 机制：
@@ -347,6 +367,16 @@ C 侧 `runtime/src/core/cg_doc_kind.c` 的 `k_kinds`，画布侧 `designer/src/m
   控件显示格式跟这个写法对齐，不受系统区域设置影响。
 - `monthcal` 同样把选中的日期放在 `text` 里（`2026-09-19`），启动前给它 `text` 就定位到那天。
 - `iconbutton` 用 `src` 指定图片（png/jpg/bmp/gif），等比缩放到控件内；没图就画个占位框。
+- `timer` 不写 `period` 就等于关着（C 侧缺省 0）；画布新建时钟会给 1000，运行时用 `cg_widget_set_period()` 改。
+- `colorpicker` 的当前颜色存在 `value`（`0xRRGGBB`），点色块弹系统取色器。**要程序改颜色别用
+  `cg_widget_set_value()`** —— 那条路会按 `min`/`max` 截断，颜色不是区间值。
+- `rate` 星数 = `max-min`（上限 10）；`pagination` 页数 = `max-min+1`；当前值都用 `cg_widget_value()` 读。
+- `canvas` 用 `cg_canvas_clear/set_color/set_line_width/line/rect/ellipse/text` 在回调里画，
+  绘制命令被录下来，重绘时按序回放。
+- `badge` / `tag` / `shape` 只有 `text` 与样式（配色/圆角）能配；`tag` 能点（`click`），`badge` / `shape` 没有事件。
+- `card` 与 `group` / `box` 同为容器，子控件坐标相对卡片客户区。
+- 表格的**行级附加状态**（行勾选 / 行数值 / 行图标）**不是 `.cgui` 字段**，是运行时 API：
+  `cg_table_set_checked()` / `cg_table_set_row_value()` / `cg_table_set_row_icon()`。
 
 ---
 
@@ -479,6 +509,29 @@ void cg_tabs_select(cg_widget_t *w, int index);
 int  cg_tabs_selected(const cg_widget_t *w);
 void cg_widget_set_image(cg_widget_t *w, const char *path);
 const char *cg_widget_image(const cg_widget_t *w);
+
+/* 表格行级状态（多选 / 勾选列 / 行数值 / 行图标；不是 .cgui 字段，运行时设） */
+void cg_table_set_checked(cg_widget_t *w, int row, int on);
+int  cg_table_checked(const cg_widget_t *w, int row);
+int  cg_table_set_row_value(cg_widget_t *w, int row, int value);
+int  cg_table_row_value(const cg_widget_t *w, int row);
+void cg_table_set_row_icon(cg_widget_t *w, int row, const char *path);
+int  cg_table_selected_count(const cg_widget_t *w);
+int  cg_table_selected_row(const cg_widget_t *w, int index);
+
+/* 悬停提示 / 时钟周期 */
+void cg_widget_set_hint(cg_widget_t *w, const char *text);
+void cg_widget_set_period(cg_widget_t *w, int period_ms);   /* 0 = 停 */
+int  cg_widget_period(const cg_widget_t *w);
+
+/* 画板：在回调里直接画，重绘自动回放 */
+void cg_canvas_clear(cg_widget_t *w);
+void cg_canvas_set_color(cg_widget_t *w, unsigned rgb);
+void cg_canvas_set_line_width(cg_widget_t *w, int px);
+void cg_canvas_line(cg_widget_t *w, int x1, int y1, int x2, int y2);
+void cg_canvas_rect(cg_widget_t *w, int x, int y, int wd, int ht, int fill);
+void cg_canvas_ellipse(cg_widget_t *w, int x, int y, int wd, int ht, int fill);
+void cg_canvas_text(cg_widget_t *w, int x, int y, const char *text);
 
 /* 菜单：点中某一项后问是哪一项（menu / menubutton 通用） */
 const char *cg_menu_last_id(const cg_widget_t *w);
