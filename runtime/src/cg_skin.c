@@ -168,11 +168,11 @@ void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
         else              fill = base;
         textcol = sk_luminance(base) < 0.55f ? 0xFFFFFFu : 0x000000u;
     } else {
-        /* 默认（未设 style.bg）：M3 tonal 填充按钮，与画布预览一致（#EADDFF） */
+        /* 默认（未设 style.bg）：M3 tonal 填充按钮，与画布预览一致（#EADDFF）。
+         * 无描边——1px 灰边在实机上又重又脏，画布/渲染效果差异最大的一处。 */
         if (pressed)      fill = sk_shade(0xEADDFFu, 0.90f);
         else if (hot)     fill = sk_shade(0xEADDFFu, 0.95f);
         else              fill = 0xEADDFFu;
-        border = 0x79747Eu; has_border = 1;
         textcol = 0x1D1B20u;
     }
 
@@ -283,7 +283,13 @@ void cg_skin_draw_switch(cg_widget_t *w, HDC hdc, const RECT *rc)
         int tspace = (tw - knob) / 2;
         if (inset > tspace) inset = tspace;
     }
-    kx = on ? (x + wpx - inset - knob) : (x + inset);
+    /* 钮贴在轨道内左右两端，各留 3px 边距（画布同款） */
+    {
+        int tl = x + wpx - inset - tw;          /* 轨道左缘 */
+        int m = 3 * scale / 100;
+        if (m * 2 + knob > tw) m = (tw - knob) / 2;
+        kx = on ? (tl + tw - m - knob) : (tl + m);
+    }
     ky = y + (hpx - knob) / 2;
 
     if (on)            track_fill = 0x6750A4u;                     /* on：主题紫 */
@@ -298,8 +304,8 @@ void cg_skin_draw_switch(cg_widget_t *w, HDC hdc, const RECT *rc)
         GdipSetSmoothingMode(g, SK_SMOOTH_AA);
         if (GdipCreatePath(SK_FILL_WINDING, &p) == SK_GDIP_OK && p) {
             GpSolidFill *bf = NULL;
-            GdipAddPathEllipse(p, (REAL)(x + wpx - inset - tw), (REAL)(y + inset),
-                               (REAL)tw, (REAL)th);
+            sk_round_rect(p, (REAL)(x + wpx - inset - tw), (REAL)(y + inset),
+                          (REAL)tw, (REAL)th, (REAL)(th / 2));
             if (GdipCreateSolidFill(sk_argb(255, track_fill), &bf) == SK_GDIP_OK && bf) {
                 GdipFillPath(g, (GpBrush *)bf, p);
                 GdipDeleteBrush((GpBrush *)bf);

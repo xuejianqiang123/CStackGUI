@@ -81,6 +81,11 @@ async function resolveProjectRoot() {
    * 但开发机上 release\ 常嵌在真项目里（D:\CPro\CStackGUI\release），
    * 这种情况要先向上认出真根，否则一开画布就把项目根显示成 release。 */
   const portable = process.env.PORTABLE_EXECUTABLE_DIR;
+  if (portable && existsSync(portable)) {
+    /* 无论目录是不是已经是项目根，都先刷新内嵌资源：用户换了新 exe 时，
+     * 自举出来的旧 runtime\ 会一直赖着（isProjectRoot 恒真），新外观永远编不进去。 */
+    await ensureWorkspace(portable);
+  }
   if (isProjectRoot(portable)) {
     const realRoot = findProjectRootUpwards(path.dirname(portable));
     projectRootCache = realRoot || portable;
