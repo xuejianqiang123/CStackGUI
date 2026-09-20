@@ -72,6 +72,20 @@ if (argc > 1 && strcmp(argv[1], "--selftest") == 0) return cg_app_selftest(&d);`
         ],
       },
       {
+        label: "日志",
+        cmds: [
+          c("cg_log", "写日志", "void cg_log(int level, const char *fmt, ...)", "往日志文件补一行；GUI 版没有控制台，这是用户报障时唯一的线索", {
+            params: [
+              "level：CG_LOG_INFO / CG_LOG_WARN / CG_LOG_ERROR",
+              "fmt, ...：和 printf 一样（支持中文）",
+            ],
+            sample: `cg_log(CG_LOG_INFO, "保存到 %s（%d 字节）", path, n);
+if (!ok) cg_log(CG_LOG_ERROR, "写文件失败：%s", path);`,
+          }),
+          c("cg_log_set_level", "设日志等级", "void cg_log_set_level(int level)", "只记 >= 该等级的条目（默认 CG_LOG_INFO，全记）"),
+        ],
+      },
+      {
         label: "事件",
         cmds: [
           c(
@@ -457,6 +471,138 @@ if (cg_choose_color(self, &rgb)) {
               }),
             ],
           },
+        ],
+      },
+    ],
+  },
+  {
+    key: "kit",
+    label: "基础能力支持库",
+    hint: "文件、路径、配置(INI)、文本编码、剪贴板、外部程序、注册表",
+    groups: [
+      {
+        label: "文件",
+        cmds: [
+          c("cg_file_exists", "文件是否存在", "int cg_file_exists(const char *path)", "1 = 存在（目录不算）", {
+            sample: `if (!cg_file_exists("config.ini")) cg_log(CG_LOG_INFO, "还没有配置文件，用默认值");`,
+          }),
+          c("cg_file_read", "读整个文件", "char *cg_file_read(const char *path)", "返回堆串（自动去掉 UTF-8 BOM）；失败 NULL", {
+            params: ["用完记得 cg_free()"],
+            ret: "文件内容；打不开返回 NULL",
+            sample: `char *text = cg_file_read(path);
+if (text) {
+    cg_widget_set_text(cg_find(cg_app_of(self), "edt_body"), text);
+    cg_free(text);
+}`,
+          }),
+          c("cg_file_write", "写文件（覆盖）", "int cg_file_write(const char *path, const char *text)", "整体覆盖成 UTF-8 文本；成功 0", {
+            sample: `cg_file_write(path, cg_widget_text(cg_find(cg_app_of(self), "edt_body")));`,
+          }),
+          c("cg_file_append", "追加到文件", "int cg_file_append(const char *path, const char *text)", "加到末尾，文件不存在就新建（写日志常用）", {
+            sample: `cg_file_append("log.txt", cg_str_format("%s 打开 %s\\r\\n", cg_time_now(NULL), path));`,
+          }),
+          c("cg_file_delete", "删文件", "int cg_file_delete(const char *path)", "成功返回 0"),
+          c("cg_file_copy", "拷文件", "int cg_file_copy(const char *from, const char *to)", "覆盖目标；成功返回 0"),
+          c("cg_dir_exists", "目录是否存在", "int cg_dir_exists(const char *path)", ""),
+          c("cg_dir_create", "建目录", "int cg_dir_create(const char *path)", "父目录必须已存在；已存在也算成功"),
+          c("cg_dir_list", "枚举目录", "int cg_dir_list(const char *dir, const char *filter, int index, char *out, int out_size)", "index 从 0 递增取文件名；返回 0 表示没有了", {
+            params: ["filter：\"*.txt\" 这种；传 NULL 或 \"*\" 表示全部"],
+            sample: `char name[256];
+for (int i = 0; cg_dir_list("C:\\\\data", "*.txt", i, name, sizeof(name)); i++) {
+    cg_widget_list_add(cg_find(cg_app_of(self), "lst_files"), name);
+}`,
+          }),
+        ],
+      },
+      {
+        label: "路径",
+        cmds: [
+          c("cg_path_join", "拼路径", "char *cg_path_join(const char *a, const char *b)", "自动补分隔符，返回堆串"),
+          c("cg_path_dir", "取目录", "char *cg_path_dir(const char *path)", "去掉文件名部分，返回堆串"),
+          c("cg_path_name", "取文件名", "const char *cg_path_name(const char *path)", "**返回内部指针，不用 cg_free**", {
+            sample: `cg_widget_set_text(lab, cg_path_name("C:\\\\data\\\\a.txt"));   /* a.txt */`,
+          }),
+          c("cg_path_ext", "取扩展名", "const char *cg_path_ext(const char *path)", "含点（\".txt\"）；没有返回空串。内部指针，不用释放"),
+          c("cg_app_dir", "程序所在目录", "char *cg_app_dir(void)", "exe 所在目录，读同目录的配置文件用"),
+          c("cg_app_data_dir", "用户数据目录", "char *cg_app_data_dir(void)", "%LOCALAPPDATA%\\<exe名>（会自动建），存配置/缓存用", {
+            sample: `char *dir = cg_app_data_dir();
+char *ini = cg_path_join(dir, "config.ini");
+cg_ini_write(ini, "窗口", "宽", "800");
+cg_free(ini);
+cg_free(dir);`,
+          }),
+        ],
+      },
+      {
+        label: "配置（INI）",
+        cmds: [
+          c("cg_ini_read", "读配置项", "char *cg_ini_read(const char *path, const char *section, const char *key, const char *def)", "读 [节] 下的 键=值；没有就用 def（返回的堆串要 cg_free）", {
+            sample: `char *w = cg_ini_read("config.ini", "窗口", "宽", "800");
+int width = atoi(w);
+cg_free(w);`,
+          }),
+          c("cg_ini_write", "写配置项", "int cg_ini_write(const char *path, const char *section, const char *key, const char *value)", "改一项（文件里其它内容保持不动），节/键不存在就补上；成功 0", {
+            sample: `/* 关窗时记住窗口大小 */
+cg_ini_write("config.ini", "窗口", "宽", cg_str_format("%d", cg_widget_w(w)));`,
+          }),
+        ],
+      },
+      {
+        label: "文本与编码",
+        cmds: [
+          c("cg_str_format", "拼字符串", "char *cg_str_format(const char *fmt, ...)", "printf 风格拼好返回堆串（省一个临时缓冲）", {
+            sample: `char *msg = cg_str_format("共 %d 个文件，合计 %d KB", n, kb);
+cg_message_box(self, msg, "统计", 0);
+cg_free(msg);`,
+          }),
+          c("cg_str_trim", "去首尾空白", "char *cg_str_trim(const char *s)", "去掉两端空格/制表/换行，返回堆串"),
+          c("cg_str_equal", "比较字符串", "int cg_str_equal(const char *a, const char *b)", "忽略英文大小写；相等返回 1"),
+          c("cg_str_replace", "替换子串", "char *cg_str_replace(const char *src, const char *from, const char *to)", "把 src 里所有 from 换成 to，返回堆串"),
+          c("cg_utf8_to_gbk", "UTF-8 转 GBK", "char *cg_utf8_to_gbk(const char *utf8)", "写老式 ANSI/GBK 文件前转一下，否则中文会乱"),
+          c("cg_gbk_to_utf8", "GBK 转 UTF-8", "char *cg_gbk_to_utf8(const char *gbk)", "读进来的 GBK 老文件转成界面能显示的中文", {
+            sample: `char *raw = cg_file_read("老文件.txt");       /* 可能是 GBK */
+char *u8  = cg_gbk_to_utf8(raw);
+cg_widget_set_text(edt, u8);
+cg_free(u8);
+cg_free(raw);`,
+          }),
+          c("cg_free", "释放内存", "void cg_free(void *p)", "上面这些返回的字符串都要用它释放（等价 free）"),
+        ],
+      },
+      {
+        label: "剪贴板与系统",
+        cmds: [
+          c("cg_clip_get_text", "读剪贴板", "char *cg_clip_get_text(void)", "剪贴板里的文字；没有返回 NULL（堆串要 cg_free）"),
+          c("cg_clip_set_text", "写剪贴板", "int cg_clip_set_text(const char *text)", "成功返回 0", {
+            sample: `cg_clip_set_text(cg_widget_text(cg_find(cg_app_of(self), "edt_body")));
+cg_message_box(self, "已复制到剪贴板", "提示", 0);`,
+          }),
+          c("cg_shell_open", "用默认程序打开", "int cg_shell_open(const char *path_or_url)", "打开文件 / 文件夹 / 网址（浏览器、记事本……都行）", {
+            sample: `cg_shell_open("https://www.example.com");
+cg_shell_open(cg_app_data_dir());      /* 打开数据目录 */`,
+          }),
+          c("cg_run_process", "启动外部程序", "int cg_run_process(const char *cmd_line, int wait)", "跑一条命令行；wait=1 时返回它的退出码"),
+          c("cg_time_now", "取当前时间", "char *cg_time_now(const char *fmt)", "fmt 传 NULL 用 \"2026-09-21 02:33:53\"（strftime 格式）", {
+            sample: `char *now = cg_time_now("%H:%M:%S");
+cg_status_set(cg_find(cg_app_of(self), "sb_main"), 1, now);
+cg_free(now);`,
+          }),
+        ],
+      },
+      {
+        label: "注册表",
+        cmds: [
+          c("cg_reg_read", "读注册表", "char *cg_reg_read(const char *subkey, const char *name, const char *def)", "读 HKCU\\subkey 的字符串值；没有返回 def", {
+            sample: `char *v = cg_reg_read("Software\\\\MyApp", "install_dir", "(未安装)");
+cg_free(v);`,
+          }),
+          c("cg_reg_write", "写注册表", "int cg_reg_write(const char *subkey, const char *name, const char *value)", "写 HKCU 下的字符串值；做开机自启就写到 ...\\CurrentVersion\\Run", {
+            sample: `/* 开机自启：把 exe 路径写进 Run */
+char *dir = cg_app_dir();
+cg_reg_write("Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run", "MyApp",
+             cg_path_join(dir, "MyApp.exe"));
+cg_free(dir);`,
+          }),
         ],
       },
     ],

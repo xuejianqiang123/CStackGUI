@@ -600,6 +600,71 @@ export function emptyDoc(): CgDoc {
   };
 }
 
+/* ------------------------------------------------------------ 新工程模板
+ * 新手最怕的是一块空画布：给三个能直接跑的起点，每个都带好 id、中文文字和已绑好的事件。
+ * 模板只是普通 CgDoc，建完可以随便改（也解释了"画布产物就是一份 JSON"）。
+ */
+
+export type TemplateKind = "blank" | "form" | "tray";
+
+/** 造一个节点：id / 文字 / 位置尺寸一次给全 */
+function tpl(type: string, id: string, x: number, y: number, w: number, h: number, text?: string): CgNode {
+  const n = makeNode(type, x, y);
+  n.id = id;
+  n.rect = { x, y, w, h };
+  if (text !== undefined) n.text = text;
+  return n;
+}
+
+/** 按模板建一个新文档 */
+export function templateDoc(kind: TemplateKind): CgDoc {
+  if (kind === "blank") return emptyDoc();
+
+  if (kind === "form") {
+    /* 表单型：分组框里几行「标签 + 输入」，底下确定/取消。
+     * 教的是最常用的套路：分组框当容器、id 用 控件名_用途、事件先绑好名字。 */
+    const doc = emptyDoc();
+    doc.app = { ...doc.app, title: "form", width: 520, height: 300 };
+    const box = tpl("group", "grp_form", 20, 16, 480, 190, "填写信息");
+    box.children = [
+      tpl("label", "lab_name", 20, 34, 60, 24, "姓名"),
+      tpl("edit", "edt_name", 90, 30, 360, 30),
+      tpl("label", "lab_memo", 20, 84, 60, 24, "备注"),
+      tpl("multiedit", "edt_memo", 90, 80, 360, 92),
+    ];
+    const ok = tpl("button", "btn_ok", 290, 226, 100, 38, "确定");
+    ok.events = { click: "on_ok_click" };
+    const cancel = tpl("button", "btn_cancel", 400, 226, 100, 38, "取消");
+    cancel.events = { click: "on_cancel_click" };
+    doc.widgets = [box, ok, cancel];
+    return doc;
+  }
+
+  /* 托盘 + 日志型：常驻小工具的样子 —— 日志列表 + 开始/停止/清空 + 状态栏，
+   * 窗口开 tray（托盘图标）和 close（点关闭先收进托盘，而不是退出）。 */
+  const doc = emptyDoc();
+  doc.app = {
+    ...doc.app,
+    title: "tool",
+    width: 560,
+    height: 380,
+    tray: true,
+    events: { close: "on_close" },
+  };
+  const start = tpl("button", "btn_start", 12, 12, 92, 32, "开始");
+  start.events = { click: "on_start_click" };
+  const stop = tpl("button", "btn_stop", 112, 12, 92, 32, "停止");
+  stop.events = { click: "on_stop_click" };
+  const clear = tpl("button", "btn_clear", 212, 12, 92, 32, "清空");
+  clear.events = { click: "on_clear_click" };
+  const sw = tpl("switch", "sw_auto", 440, 14, 108, 28, "自动滚动");
+  sw.checked = true;
+  const log = tpl("listbox", "lst_log", 12, 56, 536, 280);
+  const status = tpl("statusbar", "sb_main", 0, 356, 560, 24);
+  doc.widgets = [start, stop, clear, sw, log, status];
+  return doc;
+}
+
 /* ------------------------------------------------------------ 遍历 */
 
 export function walk(nodes: CgNode[], visit: (n: CgNode, parent: CgNode | null) => void, parent: CgNode | null = null) {

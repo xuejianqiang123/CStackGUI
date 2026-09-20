@@ -9,7 +9,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
-import { existsSync, appendFileSync } from "node:fs";
+import { existsSync, appendFileSync, readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -384,6 +384,52 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
 
 ipcMain.handle("app:reveal", (_e, target) => {
   if (target && existsSync(target)) shell.showItemInFolder(target);
+});
+
+/* 打开回调所在的 C 文件（画布「事件」页签里那个「代码」按钮）。
+ *
+ * 新手闭环最容易断在这里：绑完事件、导出骨架之后要"切到编辑器里找到那个空函数"。
+ * 这里从 .cgui 路径推出工程目录 → 找 <名字>_ui_events.c → 搜索函数名所在行 →
+ * 优先用 VS Code 的 `code -g 文件:行号` 直接跳过去，没装 VS Code 就用默认程序打开。 */
+ipcMain.handle("cgui:openCallback", async (_e, { filePath, callback }) => {
+  const target = filePath || currentFile;
+  if (!target) {
+    return { ok: false, message: "先「导出 C 骨架」，画布才知道 C 文件在哪" };
+  }
+  const dir = path.dirname(target);
+  const base = path.basename(target).replace(/\.cgui$/i, "");
+  const cfile = path.join(dir, `${base}_ui_events.c`);
+  if (!existsSync(cfile)) {
+    return { ok: false, message: `还没生成 ${base}_ui_events.c，先点工具条的「导出 C 骨架」` };
+  }
+
+  let line = 1;
+  if (callback) {
+    try {
+      const lines = readFileSync(cfile, "utf8").split(/\r?\n/);
+      const idx = lines.findIndex((l) => l.includes(`${callback}(`));
+      if (idx >= 0) line = idx + 1;
+    } catch {
+      /* 读不到就只打开文件，不跳行 */
+    }
+  }
+
+  /* 有 VS Code 就跳行；没有（spawn 失败或退出码非 0）就退回默认程序打开整个文件 */
+  const jumped = await new Promise((resolve) => {
+    try {
+      const p = spawn("code", ["-g", `${cfile}:${line}`], { shell: true, stdio: "ignore" });
+      p.on("error", () => resolve(false));
+      p.on("exit", (code) => resolve(code === 0));
+    } catch {
+      resolve(false);
+    }
+  });
+  if (!jumped) {
+    const err = await shell.openPath(cfile);
+    if (err) return { ok: false, message: `打不开 ${cfile}：${err}` };
+    return { ok: true, message: `已用默认程序打开 ${base}_ui_events.c` };
+  }
+  return { ok: true, message: `已打开 ${base}_ui_events.c${line > 1 ? ` 第 ${line} 行` : ""}` };
 });
 
 /** 选窗口图标（.ico）。尽量给出相对 .cgui 目录的路径（工程整体搬走也不失效）；

@@ -18,9 +18,11 @@ type Props = {
   node: CgNode | null;
   onBeginHistory: () => void;
   onApply: (mutator: (doc: CgDoc) => void) => void;
+  /** 在编辑器里打开这个回调（装了 VS Code 会直接跳到那一行） */
+  onOpenCallback?: (name: string) => void;
 };
 
-export default function EventPanel({ doc, node, onBeginHistory, onApply }: Props) {
+export default function EventPanel({ doc, node, onBeginHistory, onApply, onOpenCallback }: Props) {
   const isWindow = !node;
   const supported = isWindow ? WINDOW_EVENTS : eventsOf(node!.type);
   const curEvents: Partial<Record<CgEvent, string>> = isWindow
@@ -137,6 +139,15 @@ export default function EventPanel({ doc, node, onBeginHistory, onApply }: Props
                   ) : null}
                 </td>
                 <td className="ev-actions">
+                  {value && onOpenCallback ? (
+                    <button
+                      className="mini"
+                      title={`在编辑器里打开 ${value}（装了 VS Code 会跳到那一行）`}
+                      onClick={() => onOpenCallback(value)}
+                    >
+                      代码
+                    </button>
+                  ) : null}
                   <button
                     className="mini"
                     title="用 窗口/控件 + 事件名 生成规范的回调名"
@@ -173,6 +184,7 @@ export default function EventPanel({ doc, node, onBeginHistory, onApply }: Props
           </ul>
           <div className="hint-foot">
             点「导出 C 骨架」会在导出目录里生成同名空函数和绑定表；每个控件只导出它自己支持的事件。
+            导出之后，点上面的「代码」按钮就能直接跳到 <code>*_ui_events.c</code> 里那个函数（装了 VS Code 会定位到行）。
           </div>
         </div>
       ) : (

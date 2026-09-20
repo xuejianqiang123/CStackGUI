@@ -1724,6 +1724,39 @@ button.icon-pick svg {
   padding: 7px 22px;
 }
 
+/* 新建工程的模板卡片 */
+.tpl-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tpl-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--outline);
+  background: #fff;
+  cursor: pointer;
+}
+.tpl-item:hover {
+  border-color: var(--seed);
+  background: var(--seed-weak);
+}
+.tpl-name {
+  font-weight: 600;
+}
+.tpl-desc {
+  font-size: 11.5px;
+  color: var(--on-surface-var);
+}
+
 /* ------------------------------------------------------------ 支持库
  * 面向新手的运行时 API 索引：上面是可折叠的分类树（虚线导引线看层级），
  * 下面是选中命令的帮助卡片（说明 → 参数 → 返回 → 示例）。 */

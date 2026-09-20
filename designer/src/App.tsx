@@ -9,6 +9,7 @@ import EventPanel from "./components/EventPanel";
 import Inspector from "./components/Inspector";
 import InfoDialog from "./components/InfoDialog";
 import LayerTree from "./components/LayerTree";
+import NewProjectDialog from "./components/NewProjectDialog";
 import Palette from "./components/Palette";
 import SupportPanel from "./components/SupportPanel";
 import Toolbar from "./components/Toolbar";
@@ -26,9 +27,11 @@ import {
   parseDoc,
   removeNode,
   serializeDoc,
+  templateDoc,
   walk,
   type CgDoc,
   type CgNode,
+  type TemplateKind,
 } from "./model";
 
 type Tab = "props" | "events" | "doc" | "support";
@@ -77,6 +80,8 @@ export default function App() {
   const [running, setRunning] = useState(false);
   /** 「程序配置」对话框开关（工具栏按钮 / WindowPanel 入口都能打开） */
   const [infoOpen, setInfoOpen] = useState(false);
+  /** 「新建工程」模板选择对话框 */
+  const [newOpen, setNewOpen] = useState(false);
 
   const past = useRef<CgDoc[]>([]);
   const future = useRef<CgDoc[]>([]);
@@ -193,9 +198,9 @@ export default function App() {
   }, [edit, selectedId]);
 
   /* -------------------------------------------------- 文件操作 */
-  const doNew = useCallback(async () => {
+  const doNew = useCallback(async (kind: TemplateKind = "blank") => {
     if (dirty && !(await bridge.confirmDiscard("当前改动还没保存，确定新建？"))) return;
-    const fresh = emptyDoc();
+    const fresh = templateDoc(kind);
     past.current = [];
     future.current = [];
     setDoc(fresh);
@@ -285,6 +290,15 @@ export default function App() {
     say(`已导出到 ${res.dir}${skipped}，接着去填 ${baseName}_ui_events.c`);
   }, [bridge, docRef, projectRoot, say, filePath]);
 
+  /* 「代码」按钮：把「导出骨架后要切编辑器找函数」这一跳补上 */
+  const openCallback = useCallback(
+    async (callback: string) => {
+      const res = await bridge.openCallback({ filePath: filePath || undefined, callback });
+      say(res.message);
+    },
+    [bridge, filePath, say],
+  );
+
   const doLocateProject = useCallback(async () => {
     const res = await bridge.locateProject();
     if (res.canceled || !res.projectRoot) return;
@@ -346,7 +360,7 @@ export default function App() {
   /* -------------------------------------------------- 菜单 & 快捷键 */
   useEffect(() => {
     bridge.onMenu((action) => {
-      if (action === "new") void doNew();
+      if (action === "new") setNewOpen(true);
       else if (action === "open") void doOpen();
       else if (action === "save") void doSave();
       else if (action === "saveAs") void doSave(true);
@@ -524,7 +538,7 @@ export default function App() {
         snapOn={snapOn}
         canUndo={past.current.length > 0}
         canRedo={future.current.length > 0}
-        onNew={() => void doNew()}
+        onNew={() => setNewOpen(true)}
         onOpen={() => void doOpen()}
         onSave={() => void doSave()}
         onSaveAs={() => void doSave(true)}
@@ -604,7 +618,13 @@ export default function App() {
               )
             ) : null}
             {tab === "events" ? (
-              <EventPanel doc={doc} node={selected} onBeginHistory={onBeginHistory} onApply={onApply} />
+              <EventPanel
+                doc={doc}
+                node={selected}
+                onBeginHistory={onBeginHistory}
+                onApply={onApply}
+                onOpenCallback={(name) => void openCallback(name)}
+              />
             ) : null}
             {tab === "support" ? <SupportPanel onSay={say} /> : null}
             {tab === "doc" ? (
@@ -727,6 +747,14 @@ rect = { x:${selected.rect.x}, y:${selected.rect.y}, w:${selected.rect.w}, h:${s
       ) : null}
 
       {runOpen ? <RunPanel lines={runLines} running={running} onClose={() => setRunOpen(false)} /> : null}
+      <NewProjectDialog
+        open={newOpen}
+        onClose={() => setNewOpen(false)}
+        onPick={(kind) => {
+          setNewOpen(false);
+          void doNew(kind);
+        }}
+      />
       <InfoDialog
         open={infoOpen}
         doc={doc}

@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("cstackgui", {
   exportC: (payload) => ipcRenderer.invoke("cgui:exportC", payload),
   buildAndRun: (payload) => ipcRenderer.invoke("run:buildAndLaunch", payload),
   publish: (payload) => ipcRenderer.invoke("publish:project", payload),
+  openCallback: (payload) => ipcRenderer.invoke("cgui:openCallback", payload),
   reveal: (target) => ipcRenderer.invoke("app:reveal", target),
   setTitle: (title) => ipcRenderer.invoke("app:setTitle", title),
   confirmDiscard: (message) => ipcRenderer.invoke("app:confirmDiscard", message),

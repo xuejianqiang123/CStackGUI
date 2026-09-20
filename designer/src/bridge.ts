@@ -35,6 +35,8 @@ export type Bridge = {
   /** F5 一键运行：调项目根的 build-app.bat 编译，成功后把 exe 跑起来 */
   buildAndRun: (p: { filePath: string }) => Promise<RunResult>;
   publish: (p: { filePath: string }) => Promise<RunResult>;
+  /** 打开某个回调所在的 C 函数（装了 VS Code 会直接跳到那一行） */
+  openCallback: (p: { filePath?: string; callback?: string }) => Promise<{ ok: boolean; message: string }>;
   reveal: (target: string) => void;
   setTitle: (title: string) => void;
   confirmDiscard: (message?: string) => Promise<boolean>;
@@ -86,6 +88,7 @@ export function getBridge(): Bridge {
       exportC: (p) => api.exportC(p),
       buildAndRun: (p) => api.buildAndRun(p),
       publish: (p) => api.publish(p),
+      openCallback: (p) => api.openCallback(p),
       reveal: (t) => void api.reveal(t),
       setTitle: (t) => void api.setTitle(t),
       confirmDiscard: (m) => api.confirmDiscard(m),
@@ -127,6 +130,10 @@ export function getBridge(): Bridge {
     publish: async () => ({
       ok: false,
       message: "浏览器模式没法编译发布，请用打包好的 CStackGUI.exe（或 npm run dev）。",
+    }),
+    openCallback: async () => ({
+      ok: false,
+      message: "浏览器模式打不开本地编辑器，请用打包好的 CStackGUI.exe（或 npm run dev）。",
     }),
     reveal: () => undefined,
     setTitle: (t) => {
