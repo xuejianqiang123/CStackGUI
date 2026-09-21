@@ -43,6 +43,10 @@ function extraFlags(file) {
       "-Iruntime/src/kit",
     );
   }
+  if (file.includes(`${path.sep}tests${path.sep}`)) {
+    /* 与 tools\run-tests.bat 的 CFLAGS 一致：单测是白盒测试，可以直接读 core 层的头 */
+    flags.push("-Itests", "-Iruntime/src/core");
+  }
   if (path.basename(file).startsWith("cg_win")) {
     /* Win32 后端子模块都明确走 W 系列 API */
     flags.push("-DUNICODE", "-D_UNICODE");
@@ -66,18 +70,39 @@ const runtimeSrcDirs = ["core", "win32", "skin", "kit"]
   .filter(existsSync);
 const dirs = [...runtimeSrcDirs, ...list("apps"), ...list("examples")];
 
-const entries = [];
+/** 递归收集某个目录下的全部 .c（tests\ 里有 unit\ 子目录，以后还可能再分） */
+const listCSources = (base) => {
+  const dir = path.join(root, base);
+  if (!existsSync(dir)) return [];
+  const out = [];
+  const walk = (d) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith(".c")) out.push(p);
+    }
+  };
+  walk(dir);
+  return out;
+};
+
+const files = [];
 for (const dir of dirs) {
   for (const f of readdirSync(dir)) {
-    if (!f.endsWith(".c")) continue;
-    const abs = path.join(dir, f);
-    const obj = path.join(root, "build", "obj", f.replace(/\.c$/, ".o"));
-    entries.push({
-      directory: ".",
-      file: rel(abs),
-      command: `gcc ${[...commonFlags, ...extraFlags(abs)].join(" ")} -c ${rel(abs)} -o ${rel(obj)}`,
-    });
+    if (f.endsWith(".c")) files.push(path.join(dir, f));
   }
+}
+files.push(...listCSources("tests"));
+
+const entries = [];
+for (const abs of files) {
+  /* 对象名取文件名（build-runtime.bat 也这样），单测的对象只是给 clangd 占位 */
+  const obj = path.join(root, "build", "obj", path.basename(abs).replace(/\.c$/, ".o"));
+  entries.push({
+    directory: ".",
+    file: rel(abs),
+    command: `gcc ${[...commonFlags, ...extraFlags(abs)].join(" ")} -c ${rel(abs)} -o ${rel(obj)}`,
+  });
 }
 
 const out = path.join(root, "compile_commands.json");
