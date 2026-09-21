@@ -1,15 +1,17 @@
 @echo off
+for /f "tokens=2 delims=:" %%c in ('chcp') do set "CG_CP=%%c"
+if not "%CG_CP: =%"=="65001" (
+    chcp 65001 >nul
+    cmd /c "%~f0" %*
+    exit /b %errorlevel%
+)
+rem ---- UTF-8 content starts here: Chinese is fine below ----
 rem ============================================================
-rem  ¸ñÊ½ÆõÔ¼»Ø¹é£º»­²¼Ğ´³öÀ´µÄ .cgui£¬ÔËĞĞÊ±±ØĞëÄÜ¶Á»ØÀ´ÇÒ×Ô¼ìÍ¨¹ı¡£
+rem  æ ¼å¼å¥‘çº¦å›å½’ï¼šç”»å¸ƒå†™å‡ºæ¥çš„ .cguiï¼Œè¿è¡Œæ—¶å¿…é¡»èƒ½è¯»å›æ¥ä¸”è‡ªæ£€é€šè¿‡ã€‚
 rem
-rem  ×îÈİÒ×³öÎÊÌâµÄ½Ó·ì£º»­²¼ÓÃ TS Ğ´ .cgui£¬ÔËĞĞÊ±ÓÃ C ¶ÁËü¡£
-rem  ¸Ä¹ı .cgui ×Ö¶Î»ò¿Ø¼şÀàĞÍÖ®ºó£¬¾ÍÅÜÒ»±éÕâ¸ö¡£
-rem
-rem  ×¢Òâ£º±¾ÎÄ¼şÊÇ GBK£¨cp936£©+ CRLF ĞĞÎ²£¬ºÍ²Ö¿âÀïËùÓĞ bat Ò»Ñù ¡ª¡ª cmd ½âÎö bat ÓÃµÄÊÇ
-rem  "Æô¶¯Õâ¸ö cmd ½ø³ÌÊ±"µÄ¿ØÖÆÌ¨´úÂëÒ³£¬UTF-8 µÄÖĞÎÄ»á±»°´ 2 ×Ö½Ú/×Ö½âÂë¡¢ĞĞ¶¨Î»´íÎ»£¬
-rem  ×¢ÊÍµÄºó°ë¾ä¾Í±»µ±ÃüÁîÖ´ĞĞ¡£¸ÄÍêÓÃ tools\bat-gbk.ps1 -Mode fix ¹éÎ»£¨±¾½Å±¾Ò²Ë³ÊÖ¼ì²é£©¡£
+rem  æœ€å®¹æ˜“å‡ºé—®é¢˜çš„æ¥ç¼ï¼šç”»å¸ƒç”¨ TS å†™ .cguiï¼Œè¿è¡Œæ—¶ç”¨ C è¯»å®ƒã€‚
+rem  æ”¹è¿‡ .cgui å­—æ®µæˆ–æ§ä»¶ç±»å‹ä¹‹åï¼Œå°±è·‘ä¸€éè¿™ä¸ªã€‚
 rem ============================================================
-chcp 65001 >nul
 setlocal
 if "%MINGW%"=="" set MINGW=C:\mingw64\bin
 set PATH=%MINGW%;%PATH%
@@ -19,7 +21,7 @@ if not exist build\lib\libcstackgui.a (
     call build-runtime.bat
     if errorlevel 1 exit /b 1
 )
-rem ±àÒë²úÎï¾ÍÔÚ¸÷¹¤³ÌÄ¿Â¼Àï£¨examples\<Ãû×Ö>\<Ãû×Ö>.exe£©
+rem ç¼–è¯‘äº§ç‰©å°±åœ¨å„å·¥ç¨‹ç›®å½•é‡Œï¼ˆexamples\<åå­—>\<åå­—>.exeï¼‰
 if not exist examples\gallery\gallery.exe (
     call build-app.bat gallery
     if errorlevel 1 exit /b 1
@@ -32,20 +34,20 @@ if errorlevel 1 (
     exit /b 1
 )
 
-rem gallery ÊÇºÏ²¢ºóµÄ³ÂÁĞÊÒ£ºµÚ 0 Ò³»ù´¡¿Ø¼ş£¬µÚ 1 Ò³Ê÷/±í¸ñ/Ò³Ç©/Í¼Æ¬¡­¡­£¬
-rem µÚ 2 Ò³¶¨Ê±Æ÷/»­²¼/¶Ô»°¿ò/ĞÂ¿Ø¼ş
+rem gallery æ˜¯åˆå¹¶åçš„é™ˆåˆ—å®¤ï¼šç¬¬ 0 é¡µåŸºç¡€æ§ä»¶ï¼Œç¬¬ 1 é¡µæ ‘/è¡¨æ ¼/é¡µç­¾/å›¾ç‰‡â€¦â€¦ï¼Œ
+rem ç¬¬ 2 é¡µå®šæ—¶å™¨/ç”»å¸ƒ/å¯¹è¯æ¡†/æ–°æ§ä»¶
 echo   roundtrip gallery
 node tools\format-roundtrip.mjs examples\gallery\gallery.exe examples\gallery\gallery.cgui build\roundtrip_gallery.cgui
 if errorlevel 1 exit /b 1
 
-rem »­²¼¡¸Ö§³Ö¿â¡¹Ò³Ç©ÊÇÊÖĞ´µÄ C API Ë÷Òı£¬Ã»ÈËĞ£Ñé¾Í»áºÍ cstackgui.h ÅÜÆ«¡£
+rem ç”»å¸ƒã€Œæ”¯æŒåº“ã€é¡µç­¾æ˜¯æ‰‹å†™çš„ C API ç´¢å¼•ï¼Œæ²¡äººæ ¡éªŒå°±ä¼šå’Œ cstackgui.h è·‘åã€‚
 echo   support library vs cstackgui.h
 node tools\check-support.mjs
 if errorlevel 1 exit /b 1
 
-rem bat ±àÂëÆõÔ¼£º´øÖĞÎÄµÄ bat ±ØĞëÊÇ GBK + CRLF£¬·ñÔòË«»÷Ê± cmd »á°Ñ×¢ÊÍµ±ÃüÁîÅÜ¡£
-echo   bat encoding (GBK/cp936, CRLF, no BOM)
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-gbk.ps1 -Mode check
+rem bat ç¼–ç å¥‘çº¦ï¼šå¸¦ä¸­æ–‡çš„ bat å¿…é¡»æ˜¯ UTF-8 æ—  BOM + CRLF + ASCII å‰å¯¼ï¼Œå¦åˆ™åŒå‡»æ—¶ cmd ä¼šæŠŠæ³¨é‡Šå½“å‘½ä»¤è·‘ã€‚
+echo   bat encoding (UTF-8 no BOM + CRLF + ASCII prelude)
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-utf8.ps1 -Mode check
 if errorlevel 1 exit /b 1
 
 echo.

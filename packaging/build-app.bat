@@ -1,35 +1,37 @@
 @echo off
+for /f "tokens=2 delims=:" %%c in ('chcp') do set "CG_CP=%%c"
+if not "%CG_CP: =%"=="65001" (
+    chcp 65001 >nul
+    cmd /c "%~f0" %*
+    exit /b %errorlevel%
+)
+rem ---- UTF-8 content starts here: Chinese is fine below ----
 rem ============================================================
-rem  °Ñ½çÃæ¹¤³Ì±àÒë³É exe£¨**·¢²¼°ü°æ±¾**£©
+rem  æŠŠç•Œé¢å·¥ç¨‹ç¼–è¯‘æˆ exeï¼ˆ**å‘å¸ƒåŒ…ç‰ˆæœ¬**ï¼‰
 rem
-rem  ÓëÔ´Âë²Ö¿âÀïÄÇ·Ý build-app.bat µÄÇø±ð£ºÕâÀï²»±àÒëÔËÐÐÊ±Ô´Âë£¬
-rem  Ö»Á´½ÓÔ¤±àÒëºÃµÄ runtime\lib\libcstackgui.a¡£Õû¸ö°üÊÇ×Ô°üº¬µÄ£¬
-rem  ²»ÐèÒªÈÎºÎ CStackGUI Ô´Âë¡£
+rem  ä¸Žæºç ä»“åº“é‡Œé‚£ä»½ build-app.bat çš„åŒºåˆ«ï¼šè¿™é‡Œä¸ç¼–è¯‘è¿è¡Œæ—¶æºç ï¼Œ
+rem  åªé“¾æŽ¥é¢„ç¼–è¯‘å¥½çš„ runtime\lib\libcstackgui.aã€‚æ•´ä¸ªåŒ…æ˜¯è‡ªåŒ…å«çš„ï¼Œ
+rem  ä¸éœ€è¦ä»»ä½• CStackGUI æºç ã€‚
 rem
-rem  ÓÃ·¨£º
-rem    build-app.bat gallery            ±à examples\gallery\
-rem    build-app.bat myapp              ±à apps\myapp\£¨Äã×Ô¼ºµÄ¹¤³Ì£©
-rem    build-app.bat myapp --release    ÎÞ¿ØÖÆÌ¨
-rem
-rem  ×¢Òâ£º±¾ÎÄ¼þÊÇ GBK£¨cp936£©+ CRLF ÐÐÎ²¡£
-rem  ËùÒÔ cmd °´"Æô¶¯Õâ¸ö cmd ½ø³ÌÊ±µÄ¿ØÖÆÌ¨´úÂëÒ³"½âÎö bat£¬UTF-8 µÄÖÐÎÄ»á±»°´ 2 ×Ö½Ú/×Ö½âÂë£¬
-rem  ÐÐ¶¨Î»´íÎ»¡¢×¢ÊÍºó°ë¾ä±»µ±ÃüÁîÖ´ÐÐ£»¸ÄÍêÓÃ tools\bat-gbk.ps1 -Mode fix ¹éÎ»£¨check-format »á²é£©¡£
+rem  ç”¨æ³•ï¼š
+rem    build-app.bat gallery            ç¼– examples\gallery\
+rem    build-app.bat myapp              ç¼– apps\myapp\ï¼ˆä½ è‡ªå·±çš„å·¥ç¨‹ï¼‰
+rem    build-app.bat myapp --release    æ— æŽ§åˆ¶å°
 rem ============================================================
-chcp 65001 >nul
 setlocal enabledelayedexpansion
 if "%MINGW%"=="" set MINGW=C:\mingw64\bin
 set PATH=%MINGW%;%PATH%
 cd /d "%~dp0"
 
 set APP=%~1
-rem »­²¼£¨F5 ÔËÐÐ£©ÓÃ»·¾³±äÁ¿ CG_APP_DIR ´«¹¤³ÌÄ¿Â¼£¬¶ø²»ÊÇ argv ¡ª¡ª
-rem spawn ³öÀ´µÄ cmd ×ªÒå»á°ÑÂ·¾¶¸ã»µ£»ÊÖ¶¯Ö´ÐÐÊ±ÈÔÈ»×ß %1¡£
+rem ç”»å¸ƒï¼ˆF5 è¿è¡Œï¼‰ç”¨çŽ¯å¢ƒå˜é‡ CG_APP_DIR ä¼ å·¥ç¨‹ç›®å½•ï¼Œè€Œä¸æ˜¯ argv â€”â€”
+rem spawn å‡ºæ¥çš„ cmd è½¬ä¹‰ä¼šæŠŠè·¯å¾„æžåï¼›æ‰‹åŠ¨æ‰§è¡Œæ—¶ä»ç„¶èµ° %1ã€‚
 if "%APP%"=="" if not "%CG_APP_DIR%"=="" set "APP=%CG_APP_DIR%"
 if "%APP%"=="" set APP=gallery
 set MODE=%~2
 
-rem %APP% ¼È¿ÉÒÔÊÇÂã¹¤³ÌÃû£¨apps\<Ãû×Ö> / examples\<Ãû×Ö>£¬ÀÏÔ¼¶¨£©£¬Ò²¿ÉÒÔÊÇ
-rem Ïà¶Ô·¢²¼°ü¸ùµÄÂ·¾¶£¨ÓÃ»§°Ñ¹¤³Ì·ÅÔÚÈÎÒâÄ¿Â¼Àï£¬±ÈÈç "main" »ò "work\demo"£©¡£
+rem %APP% æ—¢å¯ä»¥æ˜¯è£¸å·¥ç¨‹åï¼ˆapps\<åå­—> / examples\<åå­—>ï¼Œè€çº¦å®šï¼‰ï¼Œä¹Ÿå¯ä»¥æ˜¯
+rem ç›¸å¯¹å‘å¸ƒåŒ…æ ¹çš„è·¯å¾„ï¼ˆç”¨æˆ·æŠŠå·¥ç¨‹æ”¾åœ¨ä»»æ„ç›®å½•é‡Œï¼Œæ¯”å¦‚ "main" æˆ– "work\demo"ï¼‰ã€‚
 set APPDIR=
 if exist "apps\%APP%\"     set APPDIR=apps\%APP%
 if not defined APPDIR if exist "examples\%APP%\" set APPDIR=examples\%APP%
@@ -44,7 +46,7 @@ if not defined APPDIR (
     exit /b 1
 )
 
-rem exe Ãû = ¹¤³ÌÄ¿Â¼Ãû£¨%APP% µÄ×îºóÒ»¶Î£©
+rem exe å = å·¥ç¨‹ç›®å½•åï¼ˆ%APP% çš„æœ€åŽä¸€æ®µï¼‰
 for %%I in ("%APP%") do set NAME=%%~nxI
 if not defined NAME (
     echo [fail] cannot derive exe name from "%APP%"
@@ -63,15 +65,15 @@ if not exist "runtime\lib\libcstackgui.a" (
     exit /b 1
 )
 
-rem comdlg32 ¹©Í¨ÓÃ¶Ô»°¿ò£¨´ò¿ª/±£´æÎÄ¼þ¡¢Ñ¡ÑÕÉ«£©Ê¹ÓÃ
+rem comdlg32 ä¾›é€šç”¨å¯¹è¯æ¡†ï¼ˆæ‰“å¼€/ä¿å­˜æ–‡ä»¶ã€é€‰é¢œè‰²ï¼‰ä½¿ç”¨
 set LDFLAGS=-lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32
 set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include
 
-rem ×ÊÔ´¶ÔÏó£¨Çåµ¥ + °æ±¾ÐÅÏ¢£©ÀïÃ»ÓÐ´úÂë·ûºÅ£¬Á´½ÓÆ÷²»»áÖ÷¶¯´Ó¾²Ì¬¿âÀïÈ¡Ëü ¡ª¡ª
-rem ÏÔÊ½Á´½Ó£¬exe ²ÅÄÜÄÃµ½ v6 Í¨ÓÃ¿Ø¼þÇåµ¥£¨Ò³Ç©/½ø¶ÈÌõ²ÅÊÇÐÂÍâ¹Û£©¡£
-rem ¹¤³Ì×Ô´øµÄ <Ãû×Ö>.rc£¨»­²¼¡¸³ÌÐòÅäÖÃ¡¹¶Ô»°¿òÉú³ÉµÄ£©»á¶¥µôÍ¨ÓÃÄÇ·Ý£º
-rem ÀïÃæÊÇ±¾³ÌÐòµÄ²úÆ·Ãû / °æ±¾ / ×÷Õß / Í¼±ê¡£ËüÊÇ UTF-8£¨º¬ÖÐÎÄ£©£¬
-rem ËùÒÔ¼Ó --codepage=65001£»-I runtime\res ÈÃËüÕÒµ½Çåµ¥ºÍÄ¬ÈÏÍ¼±ê¡£
+rem èµ„æºå¯¹è±¡ï¼ˆæ¸…å• + ç‰ˆæœ¬ä¿¡æ¯ï¼‰é‡Œæ²¡æœ‰ä»£ç ç¬¦å·ï¼Œé“¾æŽ¥å™¨ä¸ä¼šä¸»åŠ¨ä»Žé™æ€åº“é‡Œå–å®ƒ â€”â€”
+rem æ˜¾å¼é“¾æŽ¥ï¼Œexe æ‰èƒ½æ‹¿åˆ° v6 é€šç”¨æŽ§ä»¶æ¸…å•ï¼ˆé¡µç­¾/è¿›åº¦æ¡æ‰æ˜¯æ–°å¤–è§‚ï¼‰ã€‚
+rem å·¥ç¨‹è‡ªå¸¦çš„ <åå­—>.rcï¼ˆç”»å¸ƒã€Œç¨‹åºé…ç½®ã€å¯¹è¯æ¡†ç”Ÿæˆçš„ï¼‰ä¼šé¡¶æŽ‰é€šç”¨é‚£ä»½ï¼š
+rem é‡Œé¢æ˜¯æœ¬ç¨‹åºçš„äº§å“å / ç‰ˆæœ¬ / ä½œè€… / å›¾æ ‡ã€‚å®ƒæ˜¯ UTF-8ï¼ˆå«ä¸­æ–‡ï¼‰ï¼Œ
+rem æ‰€ä»¥åŠ  --codepage=65001ï¼›-I runtime\res è®©å®ƒæ‰¾åˆ°æ¸…å•å’Œé»˜è®¤å›¾æ ‡ã€‚
 if not exist "%APPDIR%\lib" mkdir "%APPDIR%\lib"
 set RESOBJ=runtime\lib\cstackgui_res.o
 if exist "%APPDIR%\%NAME%.rc" (
@@ -86,9 +88,9 @@ if exist "%APPDIR%\%NAME%.rc" (
 
 set OUT=%APPDIR%\%NAME%.exe
 
-rem ÔöÁ¿±àÒë£º°Ñ <¹¤³Ì>\*.c Öð¸ö±à³É lib\<Ãû×Ö>.o£¬Ö»ÔÚ¸Ã .o ²»´æÔÚ¡¢»òÕß²»±È
-rem Ô´ÎÄ¼þ / ¹¤³ÌÍ·ÎÄ¼þ / cstackgui.h ÐÂÊ±²Å±à¡£É¾µôµÄÔ´ÎÄ¼þ×ÔÈ»´ÓÁ´½ÓÁÐ±íÀï
-rem ÏûÊ§¡££¨ÔËÐÐÊ±¿âÃ¿´Î¶¼»áÖØÐÂÁ´½Ó£¬ËùÒÔ¹ÊÒâ²»ÄÃËüÅÐ¶¨¹¤³ÌÒª²»ÒªÖØ±à¡££©
+rem å¢žé‡ç¼–è¯‘ï¼šæŠŠ <å·¥ç¨‹>\*.c é€ä¸ªç¼–æˆ lib\<åå­—>.oï¼Œåªåœ¨è¯¥ .o ä¸å­˜åœ¨ã€æˆ–è€…ä¸æ¯”
+rem æºæ–‡ä»¶ / å·¥ç¨‹å¤´æ–‡ä»¶ / cstackgui.h æ–°æ—¶æ‰ç¼–ã€‚åˆ æŽ‰çš„æºæ–‡ä»¶è‡ªç„¶ä»Žé“¾æŽ¥åˆ—è¡¨é‡Œ
+rem æ¶ˆå¤±ã€‚ï¼ˆè¿è¡Œæ—¶åº“æ¯æ¬¡éƒ½ä¼šé‡æ–°é“¾æŽ¥ï¼Œæ‰€ä»¥æ•…æ„ä¸æ‹¿å®ƒåˆ¤å®šå·¥ç¨‹è¦ä¸è¦é‡ç¼–ã€‚ï¼‰
 set "HDRT=0"
 for %%h in ("%APPDIR%\*.h") do if "%%~th" GTR "!HDRT!" set "HDRT=%%~th"
 for %%x in ("runtime\include\cstackgui.h") do if "%%~tx" GTR "!HDRT!" set "HDRT=%%~tx"
@@ -131,7 +133,7 @@ echo.
 echo     run it (double-click works):   %OUT%
 echo     self-check without window:     %OUT% --selftest
 
-rem Ë¢ÐÂ clangd ÓïÑÔ·þÎñÅäÖÃ£¨compile_commands.json£¬ÓÉ tools\gen-cc.mjs Éú³É£¬
-rem ¹© CodeBuddy/VSCode ÀïµÄ clangd ²å¼þÊ¹ÓÃ£©¡£Ã»×° node Ê±¾²Ä¬Ìø¹ý£¬²»Ó°Ïì±àÒë¡£
+rem åˆ·æ–° clangd è¯­è¨€æœåŠ¡é…ç½®ï¼ˆcompile_commands.jsonï¼Œç”± tools\gen-cc.mjs ç”Ÿæˆï¼Œ
+rem ä¾› CodeBuddy/VSCode é‡Œçš„ clangd æ’ä»¶ä½¿ç”¨ï¼‰ã€‚æ²¡è£… node æ—¶é™é»˜è·³è¿‡ï¼Œä¸å½±å“ç¼–è¯‘ã€‚
 where node >nul 2>nul && if exist tools\gen-cc.mjs node tools\gen-cc.mjs >nul 2>nul
 exit /b 0

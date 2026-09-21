@@ -1,26 +1,28 @@
 @echo off
+for /f "tokens=2 delims=:" %%c in ('chcp') do set "CG_CP=%%c"
+if not "%CG_CP: =%"=="65001" (
+    chcp 65001 >nul
+    cmd /c "%~f0" %*
+    exit /b %errorlevel%
+)
+rem ---- UTF-8 content starts here: Chinese is fine below ----
 rem ============================================================
-rem  ÔËĞĞÊ±µÄ C ²ãµ¥Ôª²âÊÔ¡£
+rem  è¿è¡Œæ—¶çš„ C å±‚å•å…ƒæµ‹è¯•ã€‚
 rem
-rem  °Ñ tests\ ÏÂµÄ .c È«²¿±àÒ»±é£¨¿ò¼Ü + ¸÷Ì×¼ş£¬²»ÓÃÊÖ¹¤Î¬»¤Çåµ¥£©£¬
-rem  Á´½Ó build\lib\libcstackgui.a ºóÔËĞĞ¡£¸÷Ì×¼şÆô¶¯Ê±×Ô¼º×¢²á
-rem  £¨¼û tests\cg_test.h£©£¬ËùÒÔ¼ÓÒ»¸ö²âÊÔÎÄ¼ş¾Í¹»ÁË ¡ª¡ª ÕâÀï²»ÓÃ¸Ä¡£
+rem  æŠŠ tests\ ä¸‹çš„ .c å…¨éƒ¨ç¼–ä¸€éï¼ˆæ¡†æ¶ + å„å¥—ä»¶ï¼Œä¸ç”¨æ‰‹å·¥ç»´æŠ¤æ¸…å•ï¼‰ï¼Œ
+rem  é“¾æ¥ build\lib\libcstackgui.a åè¿è¡Œã€‚å„å¥—ä»¶å¯åŠ¨æ—¶è‡ªå·±æ³¨å†Œ
+rem  ï¼ˆè§ tests\cg_test.hï¼‰ï¼Œæ‰€ä»¥åŠ ä¸€ä¸ªæµ‹è¯•æ–‡ä»¶å°±å¤Ÿäº† â€”â€” è¿™é‡Œä¸ç”¨æ”¹ã€‚
 rem
-rem  ÓÃ·¨£¨ÔÚÏîÄ¿¸ùÖ´ĞĞ£©£º
-rem    tools\run-tests.bat                  µ¥Ôª²âÊÔ + cg_kit Ã°ÑÌ²âÊÔ
-rem    tools\run-tests.bat --list           Ö»ÁĞÌ×¼ş£¬²»ÅÜ
-rem    tools\run-tests.bat --grep=json      Ö»ÅÜÃû×ÖÀïº¬ "json" µÄÌ×¼ş
-rem    tools\run-tests.bat --memcheck       ¸ø malloc/free ¹Ò¹³£¬±¨¸æĞ¹Â©µÄ¿é
-rem    tools\run-tests.bat --no-kit         Ìø¹ı tools\check-kit.bat
-rem    tools\run-tests.bat --full           ÔÙÅÜÒ»±é tools\check-format.bat
+rem  ç”¨æ³•ï¼ˆåœ¨é¡¹ç›®æ ¹æ‰§è¡Œï¼‰ï¼š
+rem    tools\run-tests.bat                  å•å…ƒæµ‹è¯• + cg_kit å†’çƒŸæµ‹è¯•
+rem    tools\run-tests.bat --list           åªåˆ—å¥—ä»¶ï¼Œä¸è·‘
+rem    tools\run-tests.bat --grep=json      åªè·‘åå­—é‡Œå« "json" çš„å¥—ä»¶
+rem    tools\run-tests.bat --memcheck       ç»™ malloc/free æŒ‚é’©ï¼ŒæŠ¥å‘Šæ³„æ¼çš„å—
+rem    tools\run-tests.bat --no-kit         è·³è¿‡ tools\check-kit.bat
+rem    tools\run-tests.bat --full           å†è·‘ä¸€é tools\check-format.bat
 rem
-rem  ÍË³öÂë£º0 = È«²¿Í¨¹ı¡£
-rem
-rem  ×¢Òâ£º±¾ÎÄ¼şÊÇ GBK£¨cp936£©+ CRLF ĞĞÎ²¡£
-rem  ËùÒÔ cmd °´"Æô¶¯Õâ¸ö cmd ½ø³ÌÊ±µÄ¿ØÖÆÌ¨´úÂëÒ³"½âÎö bat£¬UTF-8 µÄÖĞÎÄ»á±»°´ 2 ×Ö½Ú/×Ö½âÂë£¬
-rem  ĞĞ¶¨Î»´íÎ»¡¢×¢ÊÍºó°ë¾ä±»µ±ÃüÁîÖ´ĞĞ£»¸ÄÍêÓÃ tools\bat-gbk.ps1 -Mode fix ¹éÎ»£¨check-format »á²é£©¡£
+rem  é€€å‡ºç ï¼š0 = å…¨éƒ¨é€šè¿‡ã€‚
 rem ============================================================
-chcp 65001 >nul
 setlocal enabledelayedexpansion
 if "%MINGW%"=="" set MINGW=C:\mingw64\bin
 set PATH=%MINGW%;%PATH%
@@ -32,12 +34,12 @@ if errorlevel 1 (
     echo        to its bin dir, e.g.:  set MINGW=D:\mingw64\bin
     exit /b 1
 )
-rem Ã¿´Î¶¼Ë¢Ò»±é¿â ¡ª¡ª build-runtime.bat Ö»»áÖØ±à¹ıÆÚµÄÎÄ¼ş¡£¸Õ¸ÄÍê runtime\
-rem È´ÄÃ¾É .a À´²â£¬»áµÃ³ö¡¸¾É´úÂëÍ¨¹ı¡¹µÄ¼Ù½áÂÛ£¬±ÈÃ»ÓĞ²âÊÔ»¹Ôã¡£
+rem æ¯æ¬¡éƒ½åˆ·ä¸€éåº“ â€”â€” build-runtime.bat åªä¼šé‡ç¼–è¿‡æœŸçš„æ–‡ä»¶ã€‚åˆšæ”¹å®Œ runtime\
+rem å´æ‹¿æ—§ .a æ¥æµ‹ï¼Œä¼šå¾—å‡ºã€Œæ—§ä»£ç é€šè¿‡ã€çš„å‡ç»“è®ºï¼Œæ¯”æ²¡æœ‰æµ‹è¯•è¿˜ç³Ÿã€‚
 call build-runtime.bat
 if errorlevel 1 exit /b 1
 
-rem ---- °Ñ±¾½Å±¾×Ô¼ºµÄ¿ª¹ØºÍ²âÊÔ³ÌĞòÈÏÊ¶µÄ¿ª¹Ø·Ö¿ª ----
+rem ---- æŠŠæœ¬è„šæœ¬è‡ªå·±çš„å¼€å…³å’Œæµ‹è¯•ç¨‹åºè®¤è¯†çš„å¼€å…³åˆ†å¼€ ----
 set "MEMCHECK="
 set "RUNKIT=1"
 set "RUNFORMAT="
@@ -49,14 +51,14 @@ for %%a in (%*) do (
     ) else set "EXEOPT=!EXEOPT! %%a"
 )
 
-rem °üº¬Â·¾¶£º¹«¿ªÍ·ÎÄ¼ş¡¢Óëºó¶ËÎŞ¹ØÄÇ²ã£¨°×ºĞ²âÊÔÖ±½Ó¶Á cg_json.h / cg_doc.h£©£¬
-rem ÒÔ¼° tests\ ×Ô¼º£¨ÎªÁË cg_test.h£©¡£
+rem åŒ…å«è·¯å¾„ï¼šå…¬å¼€å¤´æ–‡ä»¶ã€ä¸åç«¯æ— å…³é‚£å±‚ï¼ˆç™½ç›’æµ‹è¯•ç›´æ¥è¯» cg_json.h / cg_doc.hï¼‰ï¼Œ
+rem ä»¥åŠ tests\ è‡ªå·±ï¼ˆä¸ºäº† cg_test.hï¼‰ã€‚
 set "CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include -Iruntime\src\core -Itests"
 set "DEFS="
 set "LINKFLAGS="
 if defined MEMCHECK (
-    rem -g + -O1£ºÈÃ²å×®ÔÚµ÷ÊÔÊ±¼È²»Ê§ÕæÓÖºÃ¶Á¡£
-    rem --memcheck ÒÀÀµ tests\cg_test_memcheck.c Ìá¹©µÄ ld --wrap ¹Ò¹³¡£
+    rem -g + -O1ï¼šè®©æ’æ¡©åœ¨è°ƒè¯•æ—¶æ—¢ä¸å¤±çœŸåˆå¥½è¯»ã€‚
+    rem --memcheck ä¾èµ– tests\cg_test_memcheck.c æä¾›çš„ ld --wrap æŒ‚é’©ã€‚
     set "CFLAGS=-std=c11 -O1 -g -Wall -Wextra -Wno-unused-parameter -Iruntime\include -Iruntime\src\core -Itests"
     set "DEFS=-DCG_TEST_MEMCHECK"
     set "LINKFLAGS=-Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=free -Wl,--wrap=_strdup"
@@ -66,14 +68,14 @@ set "SRC="
 for /r tests %%f in (*.c) do set SRC=!SRC! "%%f"
 if not exist build\tests mkdir build\tests
 
-echo   CC tests\ -> build\tests\cgu-tests.exe
-gcc %CFLAGS% %DEFS% !SRC! -o build\tests\cgu-tests.exe build\lib\libcstackgui.a %LINKFLAGS% -lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32
+echo   CC tests\ -^> build\tests\cgu-tests.exe
+gcc %CFLAGS% %DEFS% !SRC! -o build\tests\cgu-tests.exe build\lib\libcstackgui.a %LINKFLAGS% -lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32 -luuid -lole32 -loleaut32
 if errorlevel 1 (
     echo [fail] compiling the test program failed
     exit /b 1
 )
 
-rem ÔÚ build\tests ÀïÔËĞĞ£¬ÁÙÊ±ÎÄ¼ş£¨dump Êä³ö¡¢ÁÙÊ±ÅäÖÃ£©¾Í²»»áÂäµ½²Ö¿âÀï¡£
+rem åœ¨ build\tests é‡Œè¿è¡Œï¼Œä¸´æ—¶æ–‡ä»¶ï¼ˆdump è¾“å‡ºã€ä¸´æ—¶é…ç½®ï¼‰å°±ä¸ä¼šè½åˆ°ä»“åº“é‡Œã€‚
 pushd build\tests
 cgu-tests.exe %EXEOPT%
 set "RC=%errorlevel%"

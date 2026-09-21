@@ -1,22 +1,24 @@
 @echo off
+for /f "tokens=2 delims=:" %%c in ('chcp') do set "CG_CP=%%c"
+if not "%CG_CP: =%"=="65001" (
+    chcp 65001 >nul
+    cmd /c "%~f0" %*
+    exit /b %errorlevel%
+)
+rem ---- UTF-8 content starts here: Chinese is fine below ----
 rem ============================================================
-rem  cg_kit API Ã°ÑÌ²âÊÔ£¨ÎÄ¼þ / Â·¾¶ / INI / ÎÄ±¾+±àÂë /
-rem  ¼ôÌù°å / Íâ²¿½ø³Ì / ×¢²á±í£©¡£
+rem  cg_kit API å†’çƒŸæµ‹è¯•ï¼ˆæ–‡ä»¶ / è·¯å¾„ / INI / æ–‡æœ¬+ç¼–ç  /
+rem  å‰ªè´´æ¿ / å¤–éƒ¨è¿›ç¨‹ / æ³¨å†Œè¡¨ï¼‰ã€‚
 rem
-rem  cg_kit ÊÇÒ»¶Ñ Win32 °ü×°´úÂë£¨BOM¡¢CRLF¡¢INI ¼ü¸Ã²åÔÚÄÄ¡¢±àÂëÍù·µ£©£¬
-rem  »­²¼ºÍ gallery ¶¼Åö²»µ½Ëü ¡ª¡ª Ò»ÐÐÐ´´í¾ÍÊÇ¾²Ä¬³ö´í¡£
-rem  ¸Ä¹ý runtime\src\kit\ ÏÂµÄÈÎºÎÎÄ¼þºó£¬ÅÜÒ»±éÕâ¸ö¡£
+rem  cg_kit æ˜¯ä¸€å † Win32 åŒ…è£…ä»£ç ï¼ˆBOMã€CRLFã€INI é”®è¯¥æ’åœ¨å“ªã€ç¼–ç å¾€è¿”ï¼‰ï¼Œ
+rem  ç”»å¸ƒå’Œ gallery éƒ½ç¢°ä¸åˆ°å®ƒ â€”â€” ä¸€è¡Œå†™é”™å°±æ˜¯é™é»˜å‡ºé”™ã€‚
+rem  æ”¹è¿‡ runtime\src\kit\ ä¸‹çš„ä»»ä½•æ–‡ä»¶åŽï¼Œè·‘ä¸€éè¿™ä¸ªã€‚
 rem
-rem  ËüÄÃ¸Õ±à³öÀ´µÄ¿â±àÒë tools\kit-test.c£¬È»ºóÔÚ build\kittest\ ÀïÔËÐÐ£¬
-rem  ²úÉúµÄÁÙÊ±ÎÄ¼þ²»»áÂäµ½²Ö¿âÀï¡£
+rem  å®ƒæ‹¿åˆšç¼–å‡ºæ¥çš„åº“ç¼–è¯‘ tools\kit-test.cï¼Œç„¶åŽåœ¨ build\kittest\ é‡Œè¿è¡Œï¼Œ
+rem  äº§ç”Ÿçš„ä¸´æ—¶æ–‡ä»¶ä¸ä¼šè½åˆ°ä»“åº“é‡Œã€‚
 rem
-rem  ÓÃ·¨£ºtools\check-kit.bat
-rem
-rem  ×¢Òâ£º±¾ÎÄ¼þÊÇ GBK£¨cp936£©+ CRLF ÐÐÎ²¡£
-rem  ËùÒÔ cmd °´"Æô¶¯Õâ¸ö cmd ½ø³ÌÊ±µÄ¿ØÖÆÌ¨´úÂëÒ³"½âÎö bat£¬UTF-8 µÄÖÐÎÄ»á±»°´ 2 ×Ö½Ú/×Ö½âÂë£¬
-rem  ÐÐ¶¨Î»´íÎ»¡¢×¢ÊÍºó°ë¾ä±»µ±ÃüÁîÖ´ÐÐ£»¸ÄÍêÓÃ tools\bat-gbk.ps1 -Mode fix ¹éÎ»£¨check-format »á²é£©¡£
+rem  ç”¨æ³•ï¼štools\check-kit.bat
 rem ============================================================
-chcp 65001 >nul
 setlocal
 if "%MINGW%"=="" set MINGW=C:\mingw64\bin
 set PATH=%MINGW%;%PATH%
@@ -35,7 +37,7 @@ if not exist build\lib\libcstackgui.a (
 if not exist build\kittest mkdir build\kittest
 
 echo   CC tools\kit-test.c
-gcc -std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include tools\kit-test.c -o build\kittest\kit-test.exe build\lib\libcstackgui.a -lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32
+gcc -std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include tools\kit-test.c -o build\kittest\kit-test.exe build\lib\libcstackgui.a -lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32 -luuid -lole32 -loleaut32
 if errorlevel 1 (
     echo [fail] compiling tools\kit-test.c failed
     exit /b 1

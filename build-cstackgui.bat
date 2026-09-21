@@ -1,47 +1,53 @@
 @echo off
+for /f "tokens=2 delims=:" %%c in ('chcp') do set "CG_CP=%%c"
+if not "%CG_CP: =%"=="65001" (
+    chcp 65001 >nul
+    cmd /c "%~f0" %*
+    exit /b %errorlevel%
+)
+rem ---- UTF-8 content starts here: Chinese is fine below ----
 rem ============================================================
-rem  Ò»¼ü±àÒë CStackGUI »­²¼£¬²¢°Ñ CStackGUI.exe Í¬²½µ½ release\
+rem  ä¸€é”®ç¼–è¯‘ CStackGUI ç”»å¸ƒï¼Œå¹¶æŠŠ CStackGUI.exe åŒæ­¥åˆ° release\
 rem
-rem  ÓÃ·¨£¨ÔÚÏîÄ¿¸ùË«»÷»òÖ´ĞĞ£©£º
+rem  ç”¨æ³•ï¼ˆåœ¨é¡¹ç›®æ ¹åŒå‡»æˆ–æ‰§è¡Œï¼‰ï¼š
 rem    build-cstackgui.bat
 rem
-rem  ×öÁ½¼şÊÂ£º
-rem    1) ±àÒë²¢´ò°ü»­²¼£¨designer -> designer\release\CStackGUI.exe£©
-rem    2) °Ñ¸Õ±à³öÀ´µÄ CStackGUI.exe ¿½µ½ÏîÄ¿¸ùµÄ release\CStackGUI.exe
+rem  åšä¸¤ä»¶äº‹ï¼š
+rem    1) ç¼–è¯‘å¹¶æ‰“åŒ…ç”»å¸ƒï¼ˆdesigner -> designer\release\CStackGUI.exeï¼‰
+rem    2) æŠŠåˆšç¼–å‡ºæ¥çš„ CStackGUI.exe æ‹·åˆ°é¡¹ç›®æ ¹çš„ release\CStackGUI.exe
 rem
-rem  Ö»¸üĞÂ»­²¼ÕâÒ»¸ö exe£»ÔËĞĞÊ±¿âºÍÊ¾ÀıÓÉ build-all.bat / make-release.bat ¸ºÔğ¡£
+rem  åªæ›´æ–°ç”»å¸ƒè¿™ä¸€ä¸ª exeï¼›è¿è¡Œæ—¶åº“å’Œç¤ºä¾‹ç”± build-all.bat / make-release.bat è´Ÿè´£ã€‚
 rem ============================================================
-chcp 65001 >nul
 setlocal
 cd /d "%~dp0"
 
-echo == 1/2 ±àÒë²¢´ò°ü»­²¼£¨vite build + electron-builder£©==
+echo == 1/2 ç¼–è¯‘å¹¶æ‰“åŒ…ç”»å¸ƒï¼ˆvite build + electron-builderï¼‰==
 pushd designer
-rem ¹úÄÚÍøÂçÖ±Á¬ GitHub ÏÂÔØ¶ş½øÖÆ£¨electron zip / winCodeSign µÈ£©¾­³£³¬Ê±£¬
-rem ×ß npmmirror ¾µÏñ£»»º´æÒÑÆëÈ«Ê±ÕâĞ©±äÁ¿²»Æğ×÷ÓÃ¡£
+rem å›½å†…ç½‘ç»œç›´è¿ GitHub ä¸‹è½½äºŒè¿›åˆ¶ï¼ˆelectron zip / winCodeSign ç­‰ï¼‰ç»å¸¸è¶…æ—¶ï¼Œ
+rem èµ° npmmirror é•œåƒï¼›ç¼“å­˜å·²é½å…¨æ—¶è¿™äº›å˜é‡ä¸èµ·ä½œç”¨ã€‚
 set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
 set ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
 call npm run dist
 if errorlevel 1 (
     popd
-    echo [fail] »­²¼±àÒë/´ò°üÊ§°Ü
+    echo [fail] ç”»å¸ƒç¼–è¯‘/æ‰“åŒ…å¤±è´¥
     exit /b 1
 )
 popd
 if not exist "designer\release\CStackGUI.exe" (
-    echo [fail] Ã»ÕÒµ½ designer\release\CStackGUI.exe
+    echo [fail] æ²¡æ‰¾åˆ° designer\release\CStackGUI.exe
     exit /b 1
 )
 
 echo.
-echo == 2/2 Í¬²½ CStackGUI.exe µ½ release\ ==
+echo == 2/2 åŒæ­¥ CStackGUI.exe åˆ° release\ ==
 if not exist release mkdir release
 copy /y designer\release\CStackGUI.exe release\CStackGUI.exe >nul
 if errorlevel 1 (
-    echo [fail] ¸´ÖÆ CStackGUI.exe µ½ release\ Ê§°Ü
+    echo [fail] å¤åˆ¶ CStackGUI.exe åˆ° release\ å¤±è´¥
     exit /b 1
 )
 
 echo.
-echo [ok] CStackGUI.exe ÒÑ¸üĞÂµ½ release\
+echo [ok] CStackGUI.exe å·²æ›´æ–°åˆ° release\
 exit /b 0

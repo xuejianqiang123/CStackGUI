@@ -1,18 +1,20 @@
 @echo off
+for /f "tokens=2 delims=:" %%c in ('chcp') do set "CG_CP=%%c"
+if not "%CG_CP: =%"=="65001" (
+    chcp 65001 >nul
+    cmd /c "%~f0" %*
+    exit /b %errorlevel%
+)
+rem ---- UTF-8 content starts here: Chinese is fine below ----
 rem ============================================================
-rem  ±àÒë CStackGUI ÔËĞĞÊ±¿â -> build\lib\libcstackgui.a
+rem  ç¼–è¯‘ CStackGUI è¿è¡Œæ—¶åº“ -> build\lib\libcstackgui.a
 rem
-rem  Ö»ÓĞ¸Ä¹ı runtime\ »òÕßµÚÒ»´ÎÓÃÊ±²ÅĞèÒªµ¥¶ÀÅÜ£»Æ½Ê±µÄ¹¤³Ì±àÒë
-rem  ¶¼×ß build-app.bat£¨Ëü×Ô¼º»áÏÈË¢Ò»±é£©¡£
+rem  åªæœ‰æ”¹è¿‡ runtime\ æˆ–è€…ç¬¬ä¸€æ¬¡ç”¨æ—¶æ‰éœ€è¦å•ç‹¬è·‘ï¼›å¹³æ—¶çš„å·¥ç¨‹ç¼–è¯‘
+rem  éƒ½èµ° build-app.batï¼ˆå®ƒè‡ªå·±ä¼šå…ˆåˆ·ä¸€éï¼‰ã€‚
 rem
-rem  ¿ÉÑ¡»·¾³±äÁ¿£º
-rem    MINGW   MinGW-w64 µÄ bin Ä¿Â¼£¨Ä¬ÈÏ C:\mingw64\bin£©
-rem
-rem  ×¢Òâ£º±¾ÎÄ¼şÊÇ GBK£¨cp936£©+ CRLF ĞĞÎ²¡£
-rem  ËùÒÔ cmd °´"Æô¶¯Õâ¸ö cmd ½ø³ÌÊ±µÄ¿ØÖÆÌ¨´úÂëÒ³"½âÎö bat£¬UTF-8 µÄÖĞÎÄ»á±»°´ 2 ×Ö½Ú/×Ö½âÂë£¬
-rem  ĞĞ¶¨Î»´íÎ»¡¢×¢ÊÍºó°ë¾ä±»µ±ÃüÁîÖ´ĞĞ£»¸ÄÍêÓÃ tools\bat-gbk.ps1 -Mode fix ¹éÎ»£¨check-format »á²é£©¡£
+rem  å¯é€‰ç¯å¢ƒå˜é‡ï¼š
+rem    MINGW   MinGW-w64 çš„ bin ç›®å½•ï¼ˆé»˜è®¤ C:\mingw64\binï¼‰
 rem ============================================================
-chcp 65001 >nul
 setlocal enabledelayedexpansion
 if "%MINGW%"=="" set MINGW=C:\mingw64\bin
 set PATH=%MINGW%;%PATH%
@@ -28,27 +30,27 @@ if errorlevel 1 (
 if not exist build\obj mkdir build\obj
 if not exist build\lib mkdir build\lib
 
-rem Ô´ÂëÔÚ runtime\src ÏÂ°´²ã·Ö×é£º
-rem   core\   Óëºó¶ËÎŞ¹Ø£ºJSON¡¢ÎÄµµ + ÀàĞÍ±í¡¢¿Ø¼şÄ£ĞÍ¡¢ÊÂ¼ş¡¢ÉúÃüÖÜÆÚ
-rem   win32\  Win32 ºó¶Ë£º´°¿Ú¡¢Ô­Éú¿Ø¼ş¡¢ÏûÏ¢Ó³Éä¡¢¶Ô»°¿ò¡¢ÍĞÅÌ
-rem   skin\   GDI+ Íâ¹Û²ã£¨Õû¸öÄ¿Â¼»»µô¾ÍÄÜ»»³É D2D ÄÚºË£©
-rem   kit\    ·Ç½çÃæµÄÆ½Ì¨·şÎñ£ºÎÄ¼ş¡¢Â·¾¶¡¢INI¡¢ÎÄ±¾/±àÂë¡¢×¢²á±í
-rem Ã¿Ò»²ã¶¼ÔÚ include Â·¾¶ÉÏ£¬²ãÄÚÎÄ¼ş¿ÉÒÔÖ±½ÓÓÃÂãÎÄ¼şÃû»¥Ïà°üº¬£»
-rem runtime\src ±¾Éí¹ÊÒâ²»ÔÚÂ·¾¶Àï ¡ª¡ª ¿ç²ã°üº¬±ØĞëĞ´Çå³şÊÇÄÄÒ»²ã¡£
+rem æºç åœ¨ runtime\src ä¸‹æŒ‰å±‚åˆ†ç»„ï¼š
+rem   core\   ä¸åç«¯æ— å…³ï¼šJSONã€æ–‡æ¡£ + ç±»å‹è¡¨ã€æ§ä»¶æ¨¡å‹ã€äº‹ä»¶ã€ç”Ÿå‘½å‘¨æœŸ
+rem   win32\  Win32 åç«¯ï¼šçª—å£ã€åŸç”Ÿæ§ä»¶ã€æ¶ˆæ¯æ˜ å°„ã€å¯¹è¯æ¡†ã€æ‰˜ç›˜
+rem   skin\   GDI+ å¤–è§‚å±‚ï¼ˆæ•´ä¸ªç›®å½•æ¢æ‰å°±èƒ½æ¢æˆ D2D å†…æ ¸ï¼‰
+rem   kit\    éç•Œé¢çš„å¹³å°æœåŠ¡ï¼šæ–‡ä»¶ã€è·¯å¾„ã€INIã€æ–‡æœ¬/ç¼–ç ã€æ³¨å†Œè¡¨
+rem æ¯ä¸€å±‚éƒ½åœ¨ include è·¯å¾„ä¸Šï¼Œå±‚å†…æ–‡ä»¶å¯ä»¥ç›´æ¥ç”¨è£¸æ–‡ä»¶åäº’ç›¸åŒ…å«ï¼›
+rem runtime\src æœ¬èº«æ•…æ„ä¸åœ¨è·¯å¾„é‡Œ â€”â€” è·¨å±‚åŒ…å«å¿…é¡»å†™æ¸…æ¥šæ˜¯å“ªä¸€å±‚ã€‚
 set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include -Iruntime\src\core -Iruntime\src\win32 -Iruntime\src\skin -Iruntime\src\kit
 set CHANGED=
 set OBJS=
 
-rem °Ñ core\ win32\ skin\ kit\ ÏÂµÄ .c È«²¿±àÒ»±é ¡ª¡ª ²»ÓÃÊÖ¹¤Î¬»¤ÎÄ¼şÇåµ¥£¬Ò²¾Í²»»áÂ©¡£
-rem Ä¿±êÎÄ¼şÃû = Ô´ÎÄ¼ş»ù´¡Ãû£¨build\obj\<Ãû×Ö>.o£©£¬ËùÒÔÁ½¸öÄ¿Â¼¾ø²»ÄÜÓĞÍ¬ÃûÎÄ¼ş£¬
-rem ÃüÃûÔ¼¶¨±£Ö¤ÁËÕâÒ»µã£º
-rem core = cg_*¡¢ºó¶Ë = cg_win_*¡¢Íâ¹Û = cg_skin_*¡¢Æ½Ì¨·şÎñ = cg_kit_*¡£
-rem ÔöÁ¿±àÒë£ºÖ»ÖØ±à .o ²»´æÔÚ¡¢»òÕß²»±ÈÔ´ÎÄ¼şĞÂµÄÄÇĞ©¡£
-rem Ê±¼ä´ÁÊÇ "YYYY/MM/DD HH:MM" ¸ñÊ½£¬°´×Ö·û´®±È½ÏÕıºÃµÈÓÚ°´Ê±¼ä±È½Ï£»
-rem ¡¸²»±ÈÔ´ÎÄ¼şĞÂ¡¹Ò²Ëã¹ıÆÚ£¬ÕâÑùÍ¬Ò»·ÖÖÓÄÚ¸ÄµÄ´úÂë²»»á±»Â©µô¡£
-rem ¸ÄÍ·ÎÄ¼ş±ØĞëÈÃËùÓĞÄ¿±êÎÄ¼şÊ§Ğ§£ºÕâĞ©Í·ÎÄ¼şÉùÃ÷ÁËÕû¸ö¿âÀµÒÔ¹¹½¨µÄ½á¹¹Ìå
-rem ²¼¾ÖºÍºê£¬Áô×Å¾É .o »áÇÄÇÄÁ´µ½¾É¶¨ÒåÉÏ¡£ËùÒÔÈ¡ runtime\include ¼ÓËÄ²ãÀï
-rem ×îĞÂµÄÍ·ÎÄ¼şÊ±¼ä£¬±ÈËü¾ÉµÄÄ¿±êÎÄ¼şÈ«²¿ÖØ±à¡£
+rem æŠŠ core\ win32\ skin\ kit\ ä¸‹çš„ .c å…¨éƒ¨ç¼–ä¸€é â€”â€” ä¸ç”¨æ‰‹å·¥ç»´æŠ¤æ–‡ä»¶æ¸…å•ï¼Œä¹Ÿå°±ä¸ä¼šæ¼ã€‚
+rem ç›®æ ‡æ–‡ä»¶å = æºæ–‡ä»¶åŸºç¡€åï¼ˆbuild\obj\<åå­—>.oï¼‰ï¼Œæ‰€ä»¥ä¸¤ä¸ªç›®å½•ç»ä¸èƒ½æœ‰åŒåæ–‡ä»¶ï¼Œ
+rem å‘½åçº¦å®šä¿è¯äº†è¿™ä¸€ç‚¹ï¼š
+rem core = cg_*ã€åç«¯ = cg_win_*ã€å¤–è§‚ = cg_skin_*ã€å¹³å°æœåŠ¡ = cg_kit_*ã€‚
+rem å¢é‡ç¼–è¯‘ï¼šåªé‡ç¼– .o ä¸å­˜åœ¨ã€æˆ–è€…ä¸æ¯”æºæ–‡ä»¶æ–°çš„é‚£äº›ã€‚
+rem æ—¶é—´æˆ³æ˜¯ "YYYY/MM/DD HH:MM" æ ¼å¼ï¼ŒæŒ‰å­—ç¬¦ä¸²æ¯”è¾ƒæ­£å¥½ç­‰äºæŒ‰æ—¶é—´æ¯”è¾ƒï¼›
+rem ã€Œä¸æ¯”æºæ–‡ä»¶æ–°ã€ä¹Ÿç®—è¿‡æœŸï¼Œè¿™æ ·åŒä¸€åˆ†é’Ÿå†…æ”¹çš„ä»£ç ä¸ä¼šè¢«æ¼æ‰ã€‚
+rem æ”¹å¤´æ–‡ä»¶å¿…é¡»è®©æ‰€æœ‰ç›®æ ‡æ–‡ä»¶å¤±æ•ˆï¼šè¿™äº›å¤´æ–‡ä»¶å£°æ˜äº†æ•´ä¸ªåº“èµ–ä»¥æ„å»ºçš„ç»“æ„ä½“
+rem å¸ƒå±€å’Œå®ï¼Œç•™ç€æ—§ .o ä¼šæ‚„æ‚„é“¾åˆ°æ—§å®šä¹‰ä¸Šã€‚æ‰€ä»¥å– runtime\include åŠ å››å±‚é‡Œ
+rem æœ€æ–°çš„å¤´æ–‡ä»¶æ—¶é—´ï¼Œæ¯”å®ƒæ—§çš„ç›®æ ‡æ–‡ä»¶å…¨éƒ¨é‡ç¼–ã€‚
 set "HDRT=0"
 for %%h in (runtime\include\*.h) do if "%%~th" GTR "!HDRT!" set "HDRT=%%~th"
 for %%d in (core win32 skin kit) do (
@@ -68,13 +70,29 @@ for %%d in (core win32 skin kit) do (
         if defined DO (
             echo   CC runtime\src\%%d\%%~nxf
             gcc %CFLAGS% -c "!SRCF!" -o "!OBJ!"
-            if errorlevel 1 goto :fail
+            if errorlevel 1 ( echo [fail] runtime build failed & exit /b 1 )
             set "CHANGED=1"
         )
     )
 )
 
-rem ×ÊÔ´¶ÔÏó£¨Çåµ¥ + °æ±¾ĞÅÏ¢ + Í¼±ê£©£ºËüµÄ .rc / .ico ÓĞ±ä¶¯¾ÍÖØ±à
+rem WebView2 å®¿ä¸»æ˜¯ C++ï¼ˆWebView2 å¤´æ˜¯ C++ çš„ï¼‰ï¼Œå•ç‹¬ç”¨ g++ ç¼–ï¼›ç›®å‰åªæœ‰è¿™ä¸€ä¸ªæ–‡ä»¶ã€‚
+set "SRC=runtime\src\win32\cg_win_webview2.cpp"
+set "OBJ=build\obj\cg_win_webview2.o"
+set "OBJS=!OBJS! build\obj\cg_win_webview2.o"
+set "DO=1"
+if exist "!OBJ!" (
+    for %%o in ("!OBJ!") do set "OT=%%~to"
+    for %%c in ("!SRC!") do set "CT=%%~tc"
+    if "!OT!" GTR "!CT!" if "!OT!" GTR "!HDRT!" set "DO="
+)
+if defined DO (
+    echo   CXX !SRC!
+    g++ -std=c++17 -fno-exceptions -fno-rtti -Iruntime\include -Iruntime\src\core -Iruntime\src\win32 -Iruntime\src\skin -Iruntime\src\kit -c "!SRC!" -o "!OBJ!" -Wall || ( echo [fail] runtime build failed & exit /b 1 )
+    set "CHANGED=1"
+)
+
+rem èµ„æºå¯¹è±¡ï¼ˆæ¸…å• + ç‰ˆæœ¬ä¿¡æ¯ + å›¾æ ‡ï¼‰ï¼šå®ƒçš„ .rc / .ico æœ‰å˜åŠ¨å°±é‡ç¼–
 set "RCOBJ=build\obj\cstackgui_res.o"
 set "DO=1"
 if exist "!RCOBJ!" (
@@ -86,26 +104,22 @@ if exist "!RCOBJ!" (
 if defined DO (
     echo   RC runtime\res\cstackgui.rc
     windres --include-dir=runtime\res -O coff runtime\res\cstackgui.rc -o "!RCOBJ!"
-    if errorlevel 1 goto :fail
+    if errorlevel 1 ( echo [fail] runtime build failed & exit /b 1 )
     set "CHANGED=1"
 )
 
-rem Ö»ÓĞÕæµÄÓĞ¶«Î÷±äÁË£¨»òÕß¿â»¹²»´æÔÚ£©²ÅÖØĞÂ´ò°ü
+rem åªæœ‰çœŸçš„æœ‰ä¸œè¥¿å˜äº†ï¼ˆæˆ–è€…åº“è¿˜ä¸å­˜åœ¨ï¼‰æ‰é‡æ–°æ‰“åŒ…
 if not exist build\lib\libcstackgui.a set "CHANGED=1"
 if defined CHANGED (
     echo   AR build\lib\libcstackgui.a
     ar rcs build\lib\libcstackgui.a !OBJS! build\obj\cstackgui_res.o
-    if errorlevel 1 goto :fail
+    if errorlevel 1 ( echo [fail] runtime build failed & exit /b 1 )
     echo [ok] build\lib\libcstackgui.a
 ) else (
     echo   (runtime up to date, skipped compile^)
 )
 
-rem Ë¢ĞÂ clangd ÓïÑÔ·şÎñÅäÖÃ£¨ÓÃµÄ²ÎÊıºÍÉÏÃæÒ»ÖÂ£©¡£
-rem Ã»×° node »òÕß²»ÔÚÏîÄ¿¸ùÊ±»á¾²Ä¬Ìø¹ı¡£
+rem åˆ·æ–° clangd è¯­è¨€æœåŠ¡é…ç½®ï¼ˆç”¨çš„å‚æ•°å’Œä¸Šé¢ä¸€è‡´ï¼‰ã€‚
+rem æ²¡è£… node æˆ–è€…ä¸åœ¨é¡¹ç›®æ ¹æ—¶ä¼šé™é»˜è·³è¿‡ã€‚
 where node >nul 2>nul && if exist tools\gen-cc.mjs node tools\gen-cc.mjs >nul 2>nul
 exit /b 0
-
-:fail
-echo [fail] runtime build failed
-exit /b 1

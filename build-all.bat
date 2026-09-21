@@ -1,31 +1,37 @@
 @echo off
+for /f "tokens=2 delims=:" %%c in ('chcp') do set "CG_CP=%%c"
+if not "%CG_CP: =%"=="65001" (
+    chcp 65001 >nul
+    cmd /c "%~f0" %*
+    exit /b %errorlevel%
+)
+rem ---- UTF-8 content starts here: Chinese is fine below ----
 rem ============================================================
-rem  Ò»ÌõÃüÁî°Ñ¸Ã±àµÄ¶¼±àÁË£ºÔËĞĞÊ±¿â + examples\ ÏÂËùÓĞÊ¾Àı
+rem  ä¸€æ¡å‘½ä»¤æŠŠè¯¥ç¼–çš„éƒ½ç¼–äº†ï¼šè¿è¡Œæ—¶åº“ + examples\ ä¸‹æ‰€æœ‰ç¤ºä¾‹
 rem
-rem  ÓÃ·¨£¨ÔÚÏîÄ¿¸ùÖ´ĞĞ£©£º
-rem    build-all.bat              µ÷ÊÔ°æ
-rem    build-all.bat --release    ·¢²¼°æ£¨ÎŞ¿ØÖÆÌ¨£©
+rem  ç”¨æ³•ï¼ˆåœ¨é¡¹ç›®æ ¹æ‰§è¡Œï¼‰ï¼š
+rem    build-all.bat              è°ƒè¯•ç‰ˆ
+rem    build-all.bat --release    å‘å¸ƒç‰ˆï¼ˆæ— æ§åˆ¶å°ï¼‰
 rem
-rem  Äã×Ô¼ºµÄ¹¤³Ì£¨apps\ ÏÂ£©²»»á±»×Ô¶¯±àÒë ¡ª¡ª ÄÇĞ©°´Ğèµ¥¶À±à£º
-rem    build-app.bat <Ãû×Ö>
+rem  ä½ è‡ªå·±çš„å·¥ç¨‹ï¼ˆapps\ ä¸‹ï¼‰ä¸ä¼šè¢«è‡ªåŠ¨ç¼–è¯‘ â€”â€” é‚£äº›æŒ‰éœ€å•ç‹¬ç¼–ï¼š
+rem    build-app.bat <åå­—>
 rem ============================================================
-chcp 65001 >nul
 setlocal
 cd /d "%~dp0"
 
-echo == ÔËĞĞÊ±¿â ==
+echo == è¿è¡Œæ—¶åº“ ==
 call build-runtime.bat
 if errorlevel 1 exit /b 1
 
-rem ÔËĞĞÊ±Ö»±àÒ»´Î£¬ºóÃæµÄ build-app ¾Í²»ÒªÔÙ¸÷Ë¢Ò»±éÁË
+rem è¿è¡Œæ—¶åªç¼–ä¸€æ¬¡ï¼Œåé¢çš„ build-app å°±ä¸è¦å†å„åˆ·ä¸€éäº†
 set CSTACKGUI_SKIP_RUNTIME=1
 set FAIL=0
 
-rem Öğ¸ö±àÒëÊ¾Àı£¬±àÍêÁ¢¿ÌÅÜÒ»´Î --selftest£º±àÒë¹ıÖ»ÄÜËµÃ÷Óï·¨Ã»ÎÊÌâ£¬
-rem ×Ô¼ì¹ı²ÅËµÃ÷ .cgui ÀïµÄÊÂ¼şÃû¶¼ÄÜ¶ÔÉÏ C º¯Êı¡£
+rem é€ä¸ªç¼–è¯‘ç¤ºä¾‹ï¼Œç¼–å®Œç«‹åˆ»è·‘ä¸€æ¬¡ --selftestï¼šç¼–è¯‘è¿‡åªèƒ½è¯´æ˜è¯­æ³•æ²¡é—®é¢˜ï¼Œ
+rem è‡ªæ£€è¿‡æ‰è¯´æ˜ .cgui é‡Œçš„äº‹ä»¶åéƒ½èƒ½å¯¹ä¸Š C å‡½æ•°ã€‚
 for /d %%a in (examples\*) do (
     echo.
-    echo == Ê¾Àı %%a ==
+    echo == ç¤ºä¾‹ %%a ==
     call build-app.bat %%~nxa %~1
     if errorlevel 1 (
         set FAIL=1
@@ -38,8 +44,8 @@ for /d %%a in (examples\*) do (
 
 echo.
 if "%FAIL%"=="1" (
-    echo [fail] ÓĞÊ¾ÀıÃ»±à¹ı£¬¿´ÉÏÃæµÄÊä³ö
+    echo [fail] æœ‰ç¤ºä¾‹æ²¡ç¼–è¿‡ï¼Œçœ‹ä¸Šé¢çš„è¾“å‡º
     exit /b 1
 )
-echo [ok] È«²¿¹¹½¨Íê³É
+echo [ok] å…¨éƒ¨æ„å»ºå®Œæˆ
 exit /b 0

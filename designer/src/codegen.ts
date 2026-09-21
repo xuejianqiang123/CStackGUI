@@ -263,25 +263,38 @@ int main(int argc, char **argv)
 }
 `;
 
-  /* 本模板必须是纯 ASCII：cmd 解析 bat 用的是"启动这个 cmd 进程时"的控制台代码页（中文
-     Windows 双击时是 936），而 Node 只能按 UTF-8 写文件 —— UTF-8 的中文会被按 2 字节/字
-     解码，cmd 行定位错位，注释后半句会被当命令执行。Node 没有 GBK 编码器，所以导出的
-     脚本一律英文 ASCII（仓库里手写的 bat 用 GBK，见 tools\bat-gbk.ps1）。 */
+  /* 导出的 build.bat 与仓库里手写的 bat 同一套规则（见 tools\bat-utf8.ps1）：UTF-8 无 BOM
+     + CRLF，开头一段纯 ASCII 前导先切代码页、再把同一个文件在新进程里重跑一遍。cmd 解析
+     bat 用的是"启动这个 cmd 进程时"的控制台代码页，直接把中文写进 UTF-8 的 bat 又在同一个
+     进程里切页的话，行定位会错位（注释后半句被当命令执行）；有了前导，标记行以下写中文是
+     安全的 —— Node 本来也只能写 UTF-8，所以导出脚本也可以带中文。 */
   const buildBat = `@echo off
+rem ---- ASCII prelude: keep everything above the next marker ASCII-only ----
+rem cmd decodes a .bat with the console code page captured when it started, so a
+rem UTF-8 file must be (re)entered by a process whose console is already 65001;
+rem otherwise the Chinese lines below get cut in the middle and run as commands.
+for /f "tokens=2 delims=:" %%c in ('chcp') do set "CG_CP=%%c"
+if not "%CG_CP: =%"=="65001" (
+    chcp 65001 >nul
+    cmd /c "%~f0" %*
+    exit /b %errorlevel%
+)
+rem ---- UTF-8 content starts here: Chinese is fine below ----
 rem Build this UI project into a standalone exe.
 rem The folder can live anywhere: the script walks up from here to find the
 rem CStackGUI root (the one holding build-app.bat + runtime\\lib), so the
 rem project may sit under CStackGUI\\apps\\, beside CStackGUI.exe, or in any
 rem folder of your own; CSTACKGUI_HOME can also point at the root directly.
-rem Keep this file pure ASCII (see tools\\bat-gbk.ps1 for why).
 setlocal enabledelayedexpansion
-if not "%CSTACKGUI_HOME%"=="" goto have_home
-set "SEARCH=%~dp0"
-for /L %%%%i in (1,1,10) do (
-    if not defined CSTACKGUI_HOME if exist "!SEARCH!build-app.bat" if exist "!SEARCH!runtime\\lib\\libcstackgui.a" set "CSTACKGUI_HOME=!SEARCH!"
-    if not defined CSTACKGUI_HOME set "SEARCH=!SEARCH!..\\"
+rem No goto / call :label in this file: cmd looks a label up by byte offset and
+rem Chinese text below the prelude would make that scan drift (see tools\\bat-utf8.ps1).
+if "%CSTACKGUI_HOME%"=="" (
+    set "SEARCH=%~dp0"
+    for /L %%%%i in (1,1,10) do (
+        if not defined CSTACKGUI_HOME if exist "!SEARCH!build-app.bat" if exist "!SEARCH!runtime\\lib\\libcstackgui.a" set "CSTACKGUI_HOME=!SEARCH!"
+        if not defined CSTACKGUI_HOME set "SEARCH=!SEARCH!..\\"
+    )
 )
-:have_home
 if "%CSTACKGUI_HOME:~-1%" NEQ "\\" set "CSTACKGUI_HOME=%CSTACKGUI_HOME%\\"
 if "%CSTACKGUI_HOME%"=="\\" (
     echo [fail] cannot find the CStackGUI root ^(a folder with build-app.bat + runtime\\lib^).

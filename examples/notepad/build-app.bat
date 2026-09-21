@@ -1,6 +1,12 @@
 @echo off
-rem ±¾¹¤³ÌµÄ±àÒëÈë¿Ú£¨ÓÉÏîÄ¿¸ùÄ¿Â¼µÄ build-app.bat Éú³É£©¡£
-rem ÕæÕıµÄ±àÒëÂß¼­ÔÚÏîÄ¿¸ùµÄ build-app.bat Àï£¬Á½´¦²»»á¸÷×ÔÅÜÆ«¡£
+for /f "tokens=2 delims=:" %%c in ('chcp') do set "CG_CP=%%c"
+if not "%CG_CP: =%"=="65001" (
+    chcp 65001 >nul
+    cmd /c "%~f0" %*
+    exit /b %errorlevel%
+)
+rem ---- UTF-8 content starts here: Chinese is fine below ----
+echo æœ¬å·¥ç¨‹çš„ç¼–è¯‘å…¥å£ï¼ˆç”±é¡¹ç›®æ ¹ç›®å½•çš„ build-app.bat ç”Ÿæˆï¼‰ã€‚
 setlocal
 if "%CSTACKGUI_HOME%"=="" set CSTACKGUI_HOME=%~dp0..\..
 if not exist "%CSTACKGUI_HOME%\build-app.bat" (
@@ -8,11 +14,10 @@ if not exist "%CSTACKGUI_HOME%\build-app.bat" (
     echo        set CSTACKGUI_HOME to the CStackGUI root dir, the one holding runtime\ and apps\
     exit /b 1
 )
-rem ¹¤³ÌÃû¾ÍÊÇ±¾Ä¿Â¼µÄÃû×Ö£¬ËùÒÔËæ±ã¸ÄÄ¿Â¼Ãû¶¼Ã»¹ØÏµ¡£
+echo å·¥ç¨‹åå°±æ˜¯æœ¬ç›®å½•çš„åå­—ï¼Œæ‰€ä»¥éšä¾¿æ”¹ç›®å½•åéƒ½æ²¡å…³ç³»ã€‚
 for %%I in ("%~dp0.") do set CG_APP=%%~nI
 call "%CSTACKGUI_HOME%\build-app.bat" %CG_APP% %*
-rem Ê§°ÜÊ±±ğÈÃ´°¿ÚÒ»ÉÁ¶ø¹ı£ºË«»÷ÔËĞĞÊ±Ëü»áÖ±½Ó¹Øµô£¬
-rem ´íÎóĞÅÏ¢»¹Ã»¿´Çå¾ÍÃ»ÁË¡£
+echo å¤±è´¥æ—¶åˆ«è®©çª—å£ä¸€é—ªè€Œè¿‡ï¼šåŒå‡»è¿è¡Œæ—¶å®ƒä¼šç›´æ¥å…³æ‰ï¼Œ
 set CG_RC=%errorlevel%
 if not "%CG_RC%"=="0" pause
 exit /b %CG_RC%
