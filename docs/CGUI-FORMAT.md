@@ -113,10 +113,10 @@
 | `children` | 数组 | 否 | 只有容器类型（`group` / `box` / `card` / `tabs`）能带；**非容器带 children 会被运行时判为错误** |
 | `page` | 整数 | 否 | 属于父 `tabs` 的第几页（0 起）。缺省 0 |
 | `src` | 字符串 | 否 | `image` 的图片路径，见 2.4 |
-| `format` | 字符串 | 否 | `datepicker` 的细分格式：`date`（缺省）/ `time` / `datetime`；`shape` 的外形：`rect`（缺省）/ `roundrect` / `ellipse`；`splitter` 的方向：`col`（缺省，左右分栏）/ `row`（上下分行）；`terminal` 的显示模式：留空（文本）/ `hex` |
+| `format` | 字符串 | 否 | `datepicker` 的细分格式：`date`（缺省）/ `time` / `datetime`；`shape` 的外形：`rect`（缺省）/ `roundrect` / `ellipse`；`splitter` 的方向：`col`（缺省，左右分栏）/ `row`（上下分行）；`terminal` 的显示模式：留空（文本）/ `hex`；`chart` 的图形：`line`（缺省）/ `bar`；`led` 的形状：`round`（缺省，圆）/ `square`（方）；`meter` 的样式：`arc`（缺省，270° 圆弧）/ `half`（半圆 180°）|
 | `hint` | 字符串 | 否 | 鼠标悬停提示（tooltip），**所有控件通用**；不写 / 空 = 无提示 |
 | `bind` | 对象 | 否 | 控件绑定：值/文字/勾选跟着另一个控件走，见 2.8 |
-| `period` | 整数 | 否 | `timer` 的触发周期（毫秒）。**不写 = 0 = 不触发**（画布新建时钟时给 1000）|
+| `period` | 整数 | 否 | `timer` 的触发周期（毫秒）。**不写 = 0 = 不触发**（画布新建时钟时给 1000）；`led` 的闪烁周期（毫秒，仅在状态=闪时有意义；缺省 500，小于 100 兜回缺省）|
 | `multi` / `check` | 布尔 | 否 | `table`：`multi` = 允许整行多选，`check` = 显示行首复选框列（配合 `check` 事件）|
 | `items` | 字符串数组 | 否 | `listbox` / `combo` / `tabs`（页签文字）/ `statusbar`（分段文字）/ `toolbar`（按钮文字）的内容 |
 | `nodes` | 对象数组 | 否 | `tree` 的节点树（2.5）或 `menu`/`menubutton` 的菜单项（2.7）|
@@ -143,8 +143,8 @@
 | `visible` | 布尔 | `true` | 全部 |
 | `enabled` | 布尔 | `true` | 全部 |
 | `checked` | 布尔 | `false` | `checkbox` / `radio` |
-| `value` | 整数 | `0`（数值类默认 40）| `slider` / `progress` / `listbox`(选中项序号) |
-| `min` / `max` | 整数 | `0` / `100` | `slider` / `progress` / `spinner` / `rate`（星数 = `max-min`，上限 10）/ `pagination`（页数 = `max-min+1`）。`max <= min` 时自动修正为 `min+1` |
+| `value` | 整数 | `0`（数值类默认 40）| `slider` / `progress` / `listbox`(选中项序号) / `meter`（当前值，按 `min`/`max` 夹） / `led`（`0` 灭 / `1` 亮 / `2` 闪，**不按区间夹**）|
+| `min` / `max` | 整数 | `0` / `100` | `slider` / `progress` / `spinner` / `meter`（量程）/ `rate`（星数 = `max-min`，上限 10）/ `pagination`（页数 = `max-min+1`）。`max <= min` 时自动修正为 `min+1` |
 
 ### 2.4 `src`：图片路径
 
@@ -349,6 +349,67 @@ cg_chart_push_all(cht, vals, 2);      /* 一次给前 2 个系列各推一个点
   "value": 200, "min": 0, "max": 100, "items": ["温度", "湿度"] }
 ```
 
+### 2.11 `led`：状态灯
+
+一个"看一眼就知道通没通"的小灯。业务只给它一个状态，闪烁不用自己管：
+
+```c
+cg_led_set(cg_find(app, "led_net"), 2);                /* 0 灭 / 1 亮 / 2 闪 */
+cg_led_set_color(cg_find(app, "led_net"), 0x1B6E33);   /* 换亮起的颜色，缺省绿 */
+int st = cg_led_state(cg_find(app, "led_net"));        /* 读回状态 */
+```
+
+几个字段在这个控件上有专门含义：
+
+| 字段 | 在本控件上的含义 |
+| --- | --- |
+| `value` | 状态：`0` 灭 / `1` 亮 / `2` 闪。**越界会被夹到 0..2** |
+| `format` | 形状：`"round"`（缺省，圆）/ `"square"`（方）|
+| `period` | 闪烁周期（毫秒），只在状态 = 闪时有意义；缺省 500、最小 100 |
+| `text` | 灯右边的说明文字（可空；为空时灯占满整个矩形）|
+| `style.fg` | 亮起的颜色，缺省绿 `#1B6E33` |
+
+行为约定：
+
+- **闪烁不用你开时钟**：设成 `2` 之后，控件自己按 `period` 的前后半个周期各亮 / 灭一次；
+  业务只要 `cg_led_set(w, 2)` 这一件事。
+- `period` 小于 100 会被**兜回缺省 500** —— 再快人眼已经不觉得在闪，只会像"暗的"，所以直接兜底。
+- 它是**纯显示**控件：没有任何事件，点它没有反应。
+
+```json
+{ "id": "led_net", "type": "led", "rect": { "x": 24, "y": 24, "w": 96, "h": 20 },
+  "value": 1, "format": "round", "text": "网络", "style": { "fg": "#1B6E33" } }
+```
+
+### 2.12 `meter`：仪表盘
+
+一个带刻度与指针的表，业务给它一个值：
+
+```c
+cg_meter_set(cg_find(app, "mtr_cpu"), 63);             /* 给一个值（按 min/max 夹）*/
+cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
+```
+
+| 字段 | 在本控件上的含义 |
+| --- | --- |
+| `value` | 当前值，被 `min`/`max` 夹（和滑块同一套语义）|
+| `min` / `max` | 量程（缺省 0~100）|
+| `format` | 样式：`"arc"`（缺省，270° 圆弧）/ `"half"`（半圆 180°）|
+| `text` | 单位文字，画在中心大数值下面（可空）|
+| `style.fg` | 圆弧 / 指针主色，缺省 `#6750A4` |
+
+行为约定：
+
+- 表由**底弧（灰）+ 值弧（彩色，随值增长）+ 刻度线 + 指针 + 中心大数值 + 下面的单位**一起画。
+- 角度：`arc` 从 135° 顺时针扫 270° 到 45°；`half` 从 180° 扫 180°（左端到右端）。
+- 值超量程**按边界夹取**后画，不会跑出弧外；`max <= min` 时按 range=1 处理，**不会除零**。
+- 纯显示控件，没有事件；值只能被程序写（`cg_meter_set`）。
+
+```json
+{ "id": "mtr_cpu", "type": "meter", "rect": { "x": 24, "y": 24, "w": 140, "h": 140 },
+  "value": 63, "min": 0, "max": 100, "format": "arc", "text": "%" }
+```
+
 ---
 
 ## 3. `events`：事件绑定
@@ -409,6 +470,8 @@ cg_chart_push_all(cht, vals, 2);      /* 一次给前 2 个系列各推一个点
 | `statusbar` | 状态栏 | 否 | 400×24 | — | **无** | `msctls_statusbar32` |
 | `terminal` | 终端 | 否 | 360×200 | — | **无** | 只读 RichEdit：按行着色（RX 绿 / TX 蓝 / 自己记的灰）、可选中复制，见 2.9 |
 | `chart` | 图表 | 否 | 320×160 | — | **无** | 自绘折线 / 柱状图：滑动窗口 + 超像素密度时按列画 min/max，见 2.10 |
+| `led` | 状态灯 | 否 | 20×20 | — | **无**（纯显示） | 自绘指示点：圆 / 方，灭 / 亮 / 闪，见 2.11 |
+| `meter` | 仪表盘 | 否 | 140×140 | — | **无**（纯显示） | 自绘弧表：底弧 + 值弧 + 刻度 + 指针 + 中心值，见 2.12 |
 | `menu` | 菜单栏 | 否 | 无矩形 | — | `click` | 窗口 `HMENU`（一根窗口一根）|
 | `menubutton` | 菜单按钮 | 否 | 130×32 | `菜单` | `click` | `BUTTON` + `TrackPopupMenu` |
 | `toolbar` | 工具栏 | 否 | 400×34 | — | `click` | `ToolbarWindow32`（纯文字按钮）|
