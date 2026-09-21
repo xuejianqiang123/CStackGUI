@@ -288,11 +288,17 @@ static void test_term_save(void)
     cg_test_ok("NULL 都不会崩", 1);
 
     cg_test_note("---- 非 terminal 控件上调用要被忽略 ----");
-    if (build_app(&app, "{\"widgets\":[{\"id\":\"lb\",\"type\":\"listbox\"}]}")) {
-        cg_widget_t *lb = cg_find(&app, "lb");
-        cg_term_write(lb, CG_TERM_RX, "x", -1);
-        cg_test_int("listbox 没被塞进行", cg_term_count(lb), 0);
-        free_app(&app);
+    {
+        /* 用**另一个** app 变量：build_app() 会 memset 掉传进去的结构体，直接拿上面那个 app
+         * 重来会把还活着的控件树与文档整体孤立掉（memcheck 会报"新增存活堆块"）。 */
+        cg_app_t other;
+
+        if (build_app(&other, "{\"widgets\":[{\"id\":\"lb\",\"type\":\"listbox\"}]}")) {
+            cg_widget_t *lb = cg_find(&other, "lb");
+            cg_term_write(lb, CG_TERM_RX, "x", -1);
+            cg_test_int("listbox 没被塞进行", cg_term_count(lb), 0);
+            free_app(&other);
+        }
     }
 
     free_app(&app);
