@@ -698,7 +698,7 @@ cg_free(dir);`,
       {
         label: "串口（cg_serial）",
         cmds: [
-          c("cg_serial_list", "枚举串口", "int cg_serial_list(char *buf, int cap)", "把本机可用的串口名写进 buf（每行一个，如 \"COM3\\nCOM7\\n\"），返回写入的字节数；一个都没有返回 0（不是错误）", {
+          c("cg_serial_list", "枚举串口", "int cg_serial_list(char *buf, int cap)", "把本机可用的串口名写进 buf（每行一个，如 \"COM3\\nCOM7\\n\"），返回写入的字节数；一个都没有返回 0（不是错误）。只给端口名，不给「USB-SERIAL CH340 (COM3)」那种友好名 —— 那必须走 SetupAPI，而系统库是在 exe 链接那步才连的，用它等于给每个应用的链接依赖加 -lsetupapi，这点好看不值得", {
             params: ["buf：够大的缓冲区，每行一个端口名", "cap：buf 的容量"],
             ret: "写入的字节数（按 '\\n' 切行就是端口名）；装不下时宁可少列也不截断半行",
             sample: `char buf[4096];
