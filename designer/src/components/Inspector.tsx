@@ -647,11 +647,15 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
                 value={node.period ?? 500}
                 onChange={(e) =>
                   patch((n) => {
-                    n.period = Math.max(100, Math.round(Number(e.target.value) || 500));
+                    /* 口径跟运行时走：`cg_led_lit()` / LedProc 都是 "period >= 100 用 period，
+                       否则按 500 算"。画布这边也写成 500，同一个字段才不会出现两条口径 ——
+                       手写进 .cgui 的 <100 值不在这里改写（coerce 宽容原则，运行时照样按 500 闪） */
+                    const v = Math.round(Number(e.target.value) || 500);
+                    n.period = v < 100 ? 500 : v;
                   })
                 }
               />
-              <span className="muted small">毫秒，最小 100</span>
+              <span className="muted small">毫秒；小于 100 按 500 算（再快看不出在闪）</span>
             </Row>
           ) : null}
           <p className="muted small">
