@@ -259,85 +259,88 @@ export default function Canvas(props: Props) {
   const sysmenu = app.controlBox !== false;    /* 控制按钮组（含关闭钮） */
 
   return (
-    <div className="viewport" onPointerDown={() => onSelect(null)}>
-      <div className="stage" ref={stageRef} style={{ transform: `scale(${zoom})` }}>
-        <div className={`app-window${showTitlebar ? "" : " borderless"}`} style={{ width: doc.app.width, height: doc.app.height, background: doc.app.bg }}>
-          {showTitlebar ? (
-            <div className="titlebar">
-              <span className="titlebar-icon" />
-              <span className="titlebar-text">{app.title}</span>
-              <span className="titlebar-size">
-                {app.width}×{app.height}
-              </span>
-              {sysmenu ? (
-                <span className="titlebar-controls" title="窗口控制按钮（跟随「控制按钮 / 最小化 / 最大化」属性）">
-                  {app.minimizeBox !== false ? <span className="tb-btn" title="最小化按钮">–</span> : null}
-                  {app.maximizeBox !== false ? <span className="tb-btn" title="最大化按钮">□</span> : null}
-                  <span className="tb-btn tb-close" title="关闭按钮">
-                    ✕
+    /* 外层是画布栏：滚动区 + 固定底栏（提示行不进滚动区，放大内容时不会盖在窗口上） */
+    <div className="canvas-root">
+      <div className="viewport" onPointerDown={() => onSelect(null)}>
+        <div className="stage" ref={stageRef} style={{ transform: `scale(${zoom})` }}>
+          <div className={`app-window${showTitlebar ? "" : " borderless"}`} style={{ width: doc.app.width, height: doc.app.height, background: doc.app.bg }}>
+            {showTitlebar ? (
+              <div className="titlebar">
+                <span className="titlebar-icon" />
+                <span className="titlebar-text">{app.title}</span>
+                <span className="titlebar-size">
+                  {app.width}×{app.height}
+                </span>
+                {sysmenu ? (
+                  <span className="titlebar-controls" title="窗口控制按钮（跟随「控制按钮 / 最小化 / 最大化」属性）">
+                    {app.minimizeBox !== false ? <span className="tb-btn" title="最小化按钮">–</span> : null}
+                    {app.maximizeBox !== false ? <span className="tb-btn" title="最大化按钮">□</span> : null}
+                    <span className="tb-btn tb-close" title="关闭按钮">
+                      ✕
+                    </span>
                   </span>
-                </span>
-              ) : null}
-            </div>
-          ) : null}
+                ) : null}
+              </div>
+            ) : null}
 
-          {/* 菜单栏在窗口框架上，不在客户区里（和运行时一致） */}
-          {menuNode ? (
-            <div
-              className={`menubar${selectedId === menuNode.id ? " selected" : ""}`}
-              title={`${menuNode.id}（菜单栏：没有矩形，运行时挂在窗口上）`}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                onSelect(menuNode.id);
-              }}
-            >
-              {(menuNode.nodes ?? []).map((item, i) => (
-                <span key={i} className="menubar-item">
-                  {item.text}
-                </span>
-              ))}
-              {!menuNode.nodes?.length ? <span className="muted small">菜单栏（还没有菜单项）</span> : null}
-            </div>
-          ) : null}
-          <div className="client-area" onPointerDown={() => onSelect(null)}>
-            {showGrid && <div className="grid-layer" style={{ backgroundSize: "16px 16px" }} />}
-            {doc.widgets.map((n) => (
-              <WidgetView
-                key={n.id}
-                node={n}
-                depth={0}
-                selectedId={selectedId}
-                onSelect={(id) => onSelect(id)}
-                onPointerDown={startMove}
-              />
-            ))}
-            {snapLines.x.map((x, i) => (
-              <div key={`sx${i}`} className="snapline-v" style={{ left: x }} />
-            ))}
-            {snapLines.y.map((y, i) => (
-              <div key={`sy${i}`} className="snapline-h" style={{ top: y }} />
-            ))}
-
-            {/* 选中框画在客户区坐标系里，和控件同一套坐标 */}
-            {selected && (
+            {/* 菜单栏在窗口框架上，不在客户区里（和运行时一致） */}
+            {menuNode ? (
               <div
-                className="handles"
-                style={{
-                  left: absRect(doc, selected).x,
-                  top: absRect(doc, selected).y,
-                  width: selected.rect.w,
-                  height: selected.rect.h,
+                className={`menubar${selectedId === menuNode.id ? " selected" : ""}`}
+                title={`${menuNode.id}（菜单栏：没有矩形，运行时挂在窗口上）`}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  onSelect(menuNode.id);
                 }}
               >
-                {HANDLES.map((dir) => (
-                  <span key={dir} className={`handle handle-${dir}`} onPointerDown={(e) => startResize(e, dir)} />
+                {(menuNode.nodes ?? []).map((item, i) => (
+                  <span key={i} className="menubar-item">
+                    {item.text}
+                  </span>
                 ))}
-                <span className="size-tip">
-                  {Math.round(selected.rect.w)}×{Math.round(selected.rect.h)}
-                  {parentOfSelected ? ` · in ${parentOfSelected.id}` : ""}
-                </span>
+                {!menuNode.nodes?.length ? <span className="muted small">菜单栏（还没有菜单项）</span> : null}
               </div>
-            )}
+            ) : null}
+            <div className="client-area" onPointerDown={() => onSelect(null)}>
+              {showGrid && <div className="grid-layer" style={{ backgroundSize: "16px 16px" }} />}
+              {doc.widgets.map((n) => (
+                <WidgetView
+                  key={n.id}
+                  node={n}
+                  depth={0}
+                  selectedId={selectedId}
+                  onSelect={(id) => onSelect(id)}
+                  onPointerDown={startMove}
+                />
+              ))}
+              {snapLines.x.map((x, i) => (
+                <div key={`sx${i}`} className="snapline-v" style={{ left: x }} />
+              ))}
+              {snapLines.y.map((y, i) => (
+                <div key={`sy${i}`} className="snapline-h" style={{ top: y }} />
+              ))}
+
+              {/* 选中框画在客户区坐标系里，和控件同一套坐标 */}
+              {selected && (
+                <div
+                  className="handles"
+                  style={{
+                    left: absRect(doc, selected).x,
+                    top: absRect(doc, selected).y,
+                    width: selected.rect.w,
+                    height: selected.rect.h,
+                  }}
+                >
+                  {HANDLES.map((dir) => (
+                    <span key={dir} className={`handle handle-${dir}`} onPointerDown={(e) => startResize(e, dir)} />
+                  ))}
+                  <span className="size-tip">
+                    {Math.round(selected.rect.w)}×{Math.round(selected.rect.h)}
+                    {parentOfSelected ? ` · in ${parentOfSelected.id}` : ""}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

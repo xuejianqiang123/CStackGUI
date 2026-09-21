@@ -553,7 +553,6 @@ export default function App() {
         onToggleSnap={() => setSnapOn((v) => !v)}
         onUndo={undo}
         onRedo={redo}
-        onPatchApp={(patch) => edit((d) => Object.assign(d.app, patch))}
         projectRoot={projectRoot}
         onLocateProject={() => void doLocateProject()}
       />
@@ -608,7 +607,6 @@ export default function App() {
                   doc={doc}
                   onBeginHistory={onBeginHistory}
                   onApply={onApply}
-                  onOpenInfo={() => setInfoOpen(true)}
                   onPickIcon={async () => {
                     const res = await bridge.pickIcon();
                     if (res.canceled) return null;

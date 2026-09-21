@@ -4,7 +4,7 @@
  * 回车/Esc 行为、任务栏、总在最前、托盘……每一项都写进 .cgui 的 app 节点，
  * 由运行时读取（runtime/src/win32/cg_win_window.c）。缺省不写 = 保持 Windows 默认观感。
  *
- * 「程序配置」（版本信息 / 作者 / 图标）在工具栏的对话框里，这里只给个入口和摘要。
+ * 「程序配置」（版本信息 / 作者 / 图标）在顶部工具条的对话框里，这里不再重复给入口。
  */
 import { BORDER_LABEL, CURSORS, type CgApp, type CgBorder, type CgDoc } from "../model";
 
@@ -12,7 +12,6 @@ type Props = {
   doc: CgDoc;
   onBeginHistory: () => void;
   onApply: (mutator: (doc: CgDoc) => void) => void;
-  onOpenInfo: () => void;
   /** 打开系统文件选择框挑一个 .ico，返回写进 app.icon 的路径（取消返回 null） */
   onPickIcon: () => Promise<string | null>;
 };
@@ -34,7 +33,7 @@ function Row({
       <span className="insp-label" title={hint}>
         {label}
       </span>
-      <span className={right ? "insp-value right" : "insp-value"}>{children}</span>
+      <span className={right ? "insp-value align-end" : "insp-value"}>{children}</span>
     </div>
   );
 }
@@ -59,7 +58,7 @@ function Flag({
   );
 }
 
-export default function WindowPanel({ doc, onBeginHistory, onApply, onOpenInfo, onPickIcon }: Props) {
+export default function WindowPanel({ doc, onBeginHistory, onApply, onPickIcon }: Props) {
   const app = doc.app;
 
   /** 改一个窗口属性；undefined / 空串 = 删掉该字段，回到 C 侧默认值。
@@ -72,9 +71,6 @@ export default function WindowPanel({ doc, onBeginHistory, onApply, onOpenInfo, 
       else bag[key as string] = value;
     });
   };
-
-  const info = doc.app.info ?? {};
-  const configured = Object.keys(info).length;
 
   return (
     <div className="panel-body win-panel">
@@ -126,12 +122,6 @@ export default function WindowPanel({ doc, onBeginHistory, onApply, onOpenInfo, 
           />
         </span>
       </Row>
-      <Flag
-        label="位置居中"
-        hint="按当前显示器工作区居中，盖过左边/顶边"
-        checked={!!app.center}
-        onChange={(v) => set("center", v || undefined)}
-      />
       <Row label="宽度 × 高度" hint="客户区尺寸（不含标题栏边框）">
         <span className="pair">
           <input
@@ -150,8 +140,24 @@ export default function WindowPanel({ doc, onBeginHistory, onApply, onOpenInfo, 
           />
         </span>
       </Row>
+      {/* 居中放最后：别把「左边/顶边 + 宽度×高度」这一对数尺寸输入拆开 */}
+      <Flag
+        label="位置居中"
+        hint="按当前显示器工作区居中，盖过左边/顶边"
+        checked={!!app.center}
+        onChange={(v) => set("center", v || undefined)}
+      />
 
       <div className="insp-section">外观</div>
+      <Row label="底色" hint="窗口背景色；控件透明处透出的就是它">
+        <input
+          className="input color"
+          type="color"
+          value={app.bg}
+          onFocus={onBeginHistory}
+          onChange={(e) => onApply((d) => { d.app.bg = e.target.value; })}
+        />
+      </Row>
       <Row label="边框" hint="决定能不能拉伸、有没有标题栏">
         <select
           className="input"
@@ -269,19 +275,6 @@ export default function WindowPanel({ doc, onBeginHistory, onApply, onOpenInfo, 
         checked={!!app.tray}
         onChange={(v) => set("tray", v || undefined)}
       />
-
-      <div className="insp-section">程序配置</div>
-      <p className="muted small">
-        {configured > 0
-          ? `已填 ${configured} 项：${info.product ?? "未命名"}${info.version ? ` v${info.version}` : ""}`
-          : "程序名称、版本号、作者、版权、图标……这些会写进编译后的 exe 版本信息。"}
-      </p>
-      <button className="primary" onClick={onOpenInfo}>
-        打开「程序配置」
-      </button>
-      <p className="muted small">
-        导出的工程里会带一份 <code>&lt;工程名&gt;.rc</code>，编译时用它，exe 的属性里就能看到这些信息。
-      </p>
     </div>
   );
 }

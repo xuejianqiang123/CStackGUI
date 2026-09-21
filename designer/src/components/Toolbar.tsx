@@ -27,7 +27,6 @@ type Props = {
   onToggleSnap: () => void;
   onUndo: () => void;
   onRedo: () => void;
-  onPatchApp: (patch: Partial<CgDoc["app"]>) => void;
   projectRoot: string;
   onLocateProject: () => void;
 };
@@ -90,39 +89,7 @@ export default function Toolbar(p: Props) {
         </button>
       </div>
 
-      <div className="tool-group grow">
-        <label className="field">
-          <span>标题</span>
-          <input className="input" value={p.doc.app.title} onChange={(e) => p.onPatchApp({ title: e.target.value })} />
-        </label>
-        <label className="field narrow">
-          <span>宽</span>
-          <input
-            className="input"
-            type="number"
-            value={p.doc.app.width}
-            onChange={(e) => p.onPatchApp({ width: Number(e.target.value) || 100 })}
-          />
-        </label>
-        <label className="field narrow">
-          <span>高</span>
-          <input
-            className="input"
-            type="number"
-            value={p.doc.app.height}
-            onChange={(e) => p.onPatchApp({ height: Number(e.target.value) || 100 })}
-          />
-        </label>
-        <label className="field narrow">
-          <span>底色</span>
-          <input
-            className="input color"
-            type="color"
-            value={p.doc.app.bg}
-            onChange={(e) => p.onPatchApp({ bg: e.target.value })}
-          />
-        </label>
-      </div>
+      <div className="tool-group grow" />
 
       <div className="tool-group">
         <button onClick={() => p.onZoom(Math.round((p.zoom - 0.1) * 10) / 10)}>−</button>
