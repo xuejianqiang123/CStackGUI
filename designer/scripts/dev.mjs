@@ -22,19 +22,24 @@ const vite = spawn(npx, ["vite", "--port", String(PORT), "--strictPort"], {
 
 const waitPort = (tries = 80) =>
   new Promise((resolve, reject) => {
-    const probe = (left) => {
+    /* Windows 上 localhost 常解析到 IPv6 ::1，Vite 就绑在 ::1 上，
+     * 只探 127.0.0.1 会一直被拒。每轮轮换地址，IPv4/IPv6 都试到。 */
+    const hosts = ["127.0.0.1", "::1", "localhost"];
+    const probe = (left, hi) => {
       if (left <= 0) return reject(new Error("等待 vite 端口超时"));
-      const sock = net.connect(PORT, "127.0.0.1");
-      sock.once("connect", () => {
+      const sock = net.connect(PORT, hosts[hi % hosts.length]);
+      let done = false;
+      const next = (ok) => {
+        if (done) return;
+        done = true;
         sock.destroy();
-        resolve();
-      });
-      sock.once("error", () => {
-        sock.destroy();
-        setTimeout(() => probe(left - 1), 250);
-      });
+        if (ok) resolve();
+        else setTimeout(() => probe(left - 1, hi + 1), 250);
+      };
+      sock.once("connect", () => next(true));
+      sock.once("error", () => next(false));
     };
-    probe(tries);
+    probe(tries, 0);
   });
 
 let child = null;
