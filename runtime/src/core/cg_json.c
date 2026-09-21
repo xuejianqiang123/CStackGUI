@@ -470,8 +470,11 @@ unsigned cj_color(const cj_val_t *v, unsigned def)
         if (sscanf(s, "%2x%2x%2x", &r, &g, &b) == 3) return ((r << 16) | (g << 8) | b) & 0xFFFFFFu;
     }
     if (n == 8) {
+        /* 8 位写法是 #AARRGGBB（见 docs\CGUI-FORMAT.md 的 style.fg/bg）：
+         * 第一对是透明度，不是红色分量 —— 顺序写反的话 rgba 会整体错位，
+         * 而且不报错，只是颜色看起来不对（tests\unit\test_json.c 钉住了这个约定）。 */
         unsigned a = 0;
-        if (sscanf(s, "%2x%2x%2x%2x", &r, &g, &b, &a) == 4) return ((a << 24) | (r << 16) | (g << 8) | b);
+        if (sscanf(s, "%2x%2x%2x%2x", &a, &r, &g, &b) == 4) return ((a << 24) | (r << 16) | (g << 8) | b);
     }
     return def;
 }
