@@ -395,6 +395,13 @@ export const KINDS: KindInfo[] = [
   /* 图表：listLike 是为了用「条目」编辑系列名；**不标 ranged** —— value 是窗口点数，
      不该被 min/max（Y 轴范围）夹，标了 ranged 画布就会拿 min/max 去夹 value */
   { type: "chart", label: "图表", group: "数据", container: false, w: 320, h: 160, text: "", listLike: true },
+  /* 状态灯：20×20 的小灯，text 为空时灯占满整个矩形、有文字时灯在左文字在右。
+     不标 ranged/checklist/listLike —— 三种都不是它的行为。 */
+  { type: "led", label: "状态灯", group: "其它", container: false, w: 20, h: 20, text: "" },
+  /* 仪表盘：和滑块一样是被 min/max 夹的值控件，画布显示「值/最小/最大」三行是对的。
+     text 这里留空是为了和 k_kinds 的 def_text 逐字一致（上面那句"顺序与分组要和 k_kinds
+     保持一致"是这张表的硬约定）；新控件的单位 "°C" 由 makeNode 的种子给，效果一样。 */
+  { type: "meter", label: "仪表盘", group: "数值", container: false, w: 140, h: 140, text: "", ranged: true },
   { type: "separator", label: "分割线", group: "其它", container: false, w: 200, h: 2, text: "" },
   { type: "image", label: "图片", group: "其它", container: false, w: 240, h: 140, text: "" },
   { type: "shape", label: "外形框", group: "其它", container: false, w: 120, h: 120, text: "" },
@@ -406,11 +413,6 @@ export const KINDS: KindInfo[] = [
   { type: "tag", label: "标签片", group: "装饰", container: false, w: 72, h: 28, text: "标签" },
   { type: "rate", label: "评分", group: "装饰", container: false, w: 140, h: 32, text: "", ranged: true },
   { type: "pagination", label: "分页", group: "装饰", container: false, w: 180, h: 32, text: "", ranged: true },
-  /* 状态灯：20×20 的小灯，text 为空时灯占满整个矩形、有文字时灯在左文字在右。
-     不标 ranged/checklist/listLike —— 三种都不是它的行为。 */
-  { type: "led", label: "状态灯", group: "其它", container: false, w: 20, h: 20, text: "" },
-  /* 仪表盘：和滑块一样是被 min/max 夹的值控件，画布显示「值/最小/最大」三行是对的 */
-  { type: "meter", label: "仪表盘", group: "数值", container: false, w: 140, h: 140, text: "°C", ranged: true },
 ];
 
 export const KIND_MAP: Record<string, KindInfo> = Object.fromEntries(KINDS.map((k) => [k.type, k]));
