@@ -91,11 +91,11 @@ export const EVENT_HINT: Record<CgEvent, string> = {
   tray: "托盘图标被点，cg_tray_action 给 1=单击 / 2=双击 / 3=右键",
   show: "窗口被显示出来",
   hide: "窗口被隐藏",
-  mousedown: "在窗口空白处按下左键；坐标用 cg_event_x / cg_event_y",
-  mouseup: "在窗口空白处松开左键",
-  rdown: "在窗口空白处按下右键",
-  rup: "在窗口空白处松开右键",
-  mousemove: "鼠标在窗口空白处移动（触发很频繁，别做重活）",
+  mousedown: "按下左键（窗口=客户区，控件=控件内）；坐标用 cg_event_x / cg_event_y",
+  mouseup: "松开左键（位置口径同上）",
+  rdown: "按下右键",
+  rup: "松开右键",
+  mousemove: "鼠标移动（触发很频繁，别做重活）",
   keydown: "按下按键；cg_event_key 给键代码、cg_event_keys 给 Ctrl/Shift/Alt",
   keyup: "松开按键",
   char: "输入了可打印字符（中文输入法也走这里）",
@@ -106,7 +106,10 @@ export const EVENT_HINT: Record<CgEvent, string> = {
  *  事件是按控件特性设计的：标签没有交互、进度条只能被程序写、只有树有展开折叠。
  *  画布只列这里声明的事件；C 侧也会校验，绑错了启动时会警告。 */
 export const KIND_EVENTS: Record<string, CgEvent[]> = {
-  button: ["click", "dblclick", "gotfocus", "lostfocus"],
+  /* 按钮是交互最全的控件：鼠标按下/放开/右键/移动、键盘按下/放开/字符、滚轮全套支持
+   * （必须和 runtime/src/core/cg_doc_kind.c 的 button 行一致） */
+  button: ["click", "mousedown", "mouseup", "dblclick", "rdown", "rup", "mousemove",
+           "gotfocus", "lostfocus", "keydown", "keyup", "char", "wheel"],
   iconbutton: ["click", "dblclick"],
   link: ["click", "dblclick"],
   label: [],
