@@ -795,6 +795,155 @@ if (cg_serial_write(g_ser, buf, n) < 0) {
           }),
         ],
       },
+      {
+        label: "网口（cg_net）",
+        cmds: [
+          c("cg_net_connect", "连接服务器", "cg_net_t *cg_net_connect(const char *host, int port, int timeout_ms)", "以客户端身份连到 host:port（TCP），内部起读线程把字节搬进接收缓冲；失败返回 NULL", {
+            params: ["host：主机名或 IP；**NULL / 空串 = 127.0.0.1**（本机自测最常用）", "port：端口（1~65535）", "timeout_ms：连接超时；**<= 0 按 3000 算**（内部用非阻塞 connect + select，坏地址不会冻住界面）"],
+            ret: "连接句柄（用完必须 cg_net_close）；失败返回 NULL，原因用 cg_net_last_error(NULL) 取",
+            sample: `/* 连接失败最要紧的是"为什么"，别只报一句"失败了" */
+g_cli = cg_net_connect("192.168.1.10", 8080, 3000);
+if (!g_cli) {
+    cg_term_write(term, CG_TERM_SYS, cg_net_last_error(NULL), -1);  /* 拒绝 / 超时 / 找不到主机… */
+    return;
+}
+cg_set_timer(app, 50, poll, app);        /* 连着就用时钟去取数据（见 cg_net_read） */`,
+          }),
+          c("cg_net_listen", "监听端口", "cg_net_t *cg_net_listen(int port, int backlog)", "以服务端身份监听本机端口（TCP），等客户端连进来；**backlog <= 0 按 4 算**", {
+            params: ["port：要监听的本机端口", "backlog：等待队列长度；<= 0 按 4"],
+            ret: "监听句柄（它只是「等连接」，不收发数据；用完必须 cg_net_close）；绑不上（端口被占用）返回 NULL，原因见 cg_net_last_error(NULL)",
+            sample: `/* 绑定失败最常见的原因就是端口被占用 */
+g_srv = cg_net_listen(8080, 4);
+if (!g_srv) {
+    cg_term_write(term, CG_TERM_SYS, cg_net_last_error(NULL), -1);
+    return;
+}
+cg_set_timer(app, 50, poll, app);        /* accept 在时钟里做，见 cg_net_accept */`,
+          }),
+          c("cg_net_accept", "收一个连接（时钟里轮询）", "cg_net_t *cg_net_accept(cg_net_t *srv, int timeout_ms)", "从监听句柄上收一条新连接；**timeout_ms <= 0 = 不等、立刻返回**，没连接时返回 NULL —— 那是正常情况，不是错误", {
+            params: ["srv：cg_net_listen 的返回值", "timeout_ms：等多久；**传 0 = 立刻返回**（正因如此它才适合放在时钟里轮询）"],
+            ret: "新连接的句柄（**一个句柄 = 一条连接**，用完 cg_net_close）；没连接返回 NULL（正常，不是错误）",
+            sample: `/* ★ 服务端要同时管多个客户端，就自己拿一个句柄数组，在时钟里轮询 accept ——
+   本层故意不做"客户端列表"这个概念，API 面保持一条线。 */
+static cg_net_t *g_peer[8];
+static int       g_npeer;
+
+static void poll(void *user)
+{
+    cg_app_t *app = (cg_app_t *)user;
+    cg_net_t *c;
+    int       k;
+
+    for (k = 0; k < 4; k++) {                        /* 一拍最多收几个，防"连接风暴" */
+        c = cg_net_accept(g_srv, 0);                  /* 0 = 不等，立刻返回 */
+        if (!c) break;                                /* NULL = 这拍没人连，不是错误 */
+        if (g_npeer >= 8) { cg_net_close(c); break; } /* 数组满了就拒收，别漏了 close */
+        g_peer[g_npeer++] = c;                        /* 存进自己的数组，稍后逐个 read */
+        cg_term_write(cg_find(app, "term"), CG_TERM_SYS, cg_net_peer(c), -1);  /* 谁来了 */
+    }
+    cg_set_timer(app, 50, poll, app);                 /* 一次性定时器：再挂一次 = 周期 */
+}`,
+          }),
+          c("cg_net_write", "发送数据", "int cg_net_write(cg_net_t *n, const void *data, int len)", "同步写（带 1s 超时，不是写队列）；返回实际写出的字节数，< 0 表示失败", {
+            params: ["n：连接句柄（监听句柄不能写）", "data：要发的字节；文本直接传字符串", "len：字节数，**必须 > 0**（和 cg_term_write 不一样，它不认 -1）"],
+            ret: "实际写出的字节数；失败返回 < 0（原因见 cg_net_last_error）",
+            sample: `const char *cmd = "GET / HTTP/1.0\\r\\n\\r\\n";   /* 长度得自己算，len 不支持传 -1 */
+if (cg_net_write(g_cli, cmd, (int)strlen(cmd)) < 0) {
+    cg_log(CG_LOG_ERROR, "发送失败：%s", cg_net_last_error(g_cli));
+}`,
+          }),
+          c("cg_net_read", "取数据（时钟里读）", "int cg_net_read(cg_net_t *n, void *buf, int cap)", "**非阻塞**取最多 cap 字节；没数据返回 0（不是错误）", {
+            params: ["n：连接句柄", "buf：接收缓冲区", "cap：buf 的容量"],
+            ret: "取到的字节数；0 = 这一拍没有数据；对端已关闭时也能把剩下的取完",
+            sample: `/* ★ 唯一被支持的读法：在时钟回调里主动"取"，而不是等着被"推"。
+   原因：cg_net_connect / cg_net_accept 的读线程只把字节搬进环形缓冲，
+   **它绝不碰控件**（控件只能在建它的线程里碰，这是 Win32 硬约束）。
+   cg_set_timer 是一次性的，"收尾再挂一次"才是周期。 */
+cg_set_timer(app, 50, poll, app);
+
+static void poll(void *user)
+{
+    cg_app_t     *app  = (cg_app_t *)user;
+    cg_widget_t  *term = cg_find(app, "term");
+    unsigned char buf[4096];
+    int           n, i;
+
+    if (g_cli) {                                       /* 客户端那条连接 */
+        if (!cg_net_connected(g_cli) && cg_net_available(g_cli) <= 0) {
+            cg_term_write(term, CG_TERM_SYS, "对端关闭了连接", -1);   /* 掉线了 */
+            cg_net_close(g_cli);
+            g_cli = NULL;
+        } else while (cg_net_available(g_cli) > 0) {
+            n = cg_net_read(g_cli, buf, (int)sizeof(buf));  /* 非阻塞，没数据返回 0 */
+            if (n <= 0) break;
+            cg_term_write(term, CG_TERM_RX, buf, n);        /* 收到多少灌多少，会按 \\n 切行 */
+        }
+    }
+    for (i = 0; i < g_npeer; i++) {                    /* 服务端收上来的每条连接 */
+        while (cg_net_available(g_peer[i]) > 0) {
+            n = cg_net_read(g_peer[i], buf, (int)sizeof(buf));
+            if (n <= 0) break;
+            cg_term_write(term, CG_TERM_RX, buf, n);
+        }
+    }
+    cg_set_timer(app, 50, poll, app);                  /* 再挂一次 = 50ms 周期 */
+}`,
+          }),
+          c("cg_net_available", "还有多少没取", "int cg_net_available(const cg_net_t *n)", "接收缓冲里还剩多少字节 —— 用来判断「这一拍到底有没有东西」，省一次注定返回 0 的 read", {
+            ret: "还没被取走的字节数；n 为 NULL 返回 0",
+            sample: `/* 取空一条连接的标准循环：先问一句再读，读到空就收工 */
+while (cg_net_available(g_cli) > 0) {
+    int n = cg_net_read(g_cli, buf, (int)sizeof(buf));
+    if (n <= 0) break;
+    cg_term_write(term, CG_TERM_RX, buf, n);
+}`,
+          }),
+          c("cg_net_connected", "对端还在吗", "int cg_net_connected(const cg_net_t *n)", "对端还在返回 1，对方关闭后变 0 —— **这是判断「掉线」的唯一信号**（监听句柄恒为 0）", {
+            ret: "1 = 连接还在；0 = 对端已关闭（或这是监听句柄）",
+            sample: `/* 掉线检测：先把缓冲里剩下的取干净，再回收句柄 */
+if (!cg_net_connected(g_cli) && cg_net_available(g_cli) <= 0) {
+    cg_term_write(term, CG_TERM_SYS, "对端关闭了连接", -1);
+    cg_net_close(g_cli);
+    g_cli = NULL;
+}`,
+          }),
+          c("cg_net_rx_bytes", "累计收到字节", "long long cg_net_rx_bytes(const cg_net_t *n)", "从连上到现在这条连接一共收到多少字节（只增不减，要归零就重连）", {
+            ret: "累计字节数；n 为 NULL 返回 0",
+            sample: `cg_status_setf(cg_find(app, "sb_main"), 2, "RX %lld B", cg_net_rx_bytes(g_cli));`,
+          }),
+          c("cg_net_tx_bytes", "累计发出字节", "long long cg_net_tx_bytes(const cg_net_t *n)", "从连上到现在这条连接一共发出多少字节（同样只增不减）", {
+            ret: "累计字节数；n 为 NULL 返回 0",
+            sample: `cg_status_setf(cg_find(app, "sb_main"), 3, "TX %lld B", cg_net_tx_bytes(g_cli));`,
+          }),
+          c("cg_net_peer", "对端地址", "const char *cg_net_peer(const cg_net_t *n)", "对端的 \"ip:port\"；监听句柄返回 \"（监听中）\"", {
+            ret: "指向内部缓冲的字符串，不用 free；下次调用可能被覆盖，要留就自己拷走",
+            sample: `/* 服务端最想知道"谁来了"：收上新连接时打一行 */
+cg_term_write(term, CG_TERM_SYS, cg_net_peer(g_peer[g_npeer - 1]), -1);`,
+          }),
+          c("cg_net_last_error", "最后一次错误", "const char *cg_net_last_error(const cg_net_t *n)", "最后一次出错的中文描述（\"连接被拒绝…\"这种）；没出错返回空串", {
+            params: ["n：连接句柄；**传 NULL 表示问「最近一次连接/监听为什么失败」**（失败时没有句柄可问）"],
+            ret: "指向内部缓冲的字符串，不用 free；下次报错会被覆盖，要留就自己拷走",
+            sample: `/* 连接 / 监听失败：没有句柄，只能问 NULL */
+if (!(g_srv = cg_net_listen(port, 4))) {
+    cg_term_write(term, CG_TERM_SYS, cg_net_last_error(NULL), -1);
+    return;
+}
+/* 写入失败：手里的句柄上有原因 */
+if (cg_net_write(g_cli, buf, n) < 0) {
+    cg_term_write(term, CG_TERM_SYS, cg_net_last_error(g_cli), -1);
+}`,
+          }),
+          c("cg_net_close", "关闭连接", "void cg_net_close(cg_net_t *n)", "关掉连接或监听并回收读线程（会等它退出，最坏约 50ms）；**幂等且 NULL 安全**", {
+            params: ["n：cg_net_connect / cg_net_listen / cg_net_accept 的返回值（可以是 NULL）"],
+            ret: "void 无返回值",
+            sample: `/* 断开按钮和窗口 destroy 回调里，把每一个句柄都关掉 —— 不用自己判"到底连没连" */
+cg_net_close(g_cli);   g_cli = NULL;
+for (i = 0; i < g_npeer; i++) cg_net_close(g_peer[i]);
+g_npeer = 0;
+cg_net_close(g_srv);   g_srv = NULL;`,
+          }),
+        ],
+      },
     ],
   },
 ];

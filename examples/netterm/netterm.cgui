@@ -1,0 +1,179 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "网口调试助手（cg_net 示例）",
+    "width": 980,
+    "height": 700,
+    "bg": "#F3EDF7",
+    "events": {
+      "close": "on_close",
+      "destroy": "on_destroy"
+    },
+    "info": {
+      "product": "CStackGUI 网口调试助手示例",
+      "desc": "通信类工具样板：cg_net_* 客户端/服务端两种角色，读线程 + 时钟回调取数据，终端/图表/分隔条联动",
+      "version": "1.0.0.0",
+      "author": "CStackGUI"
+    }
+  },
+  "widgets": [
+    {
+      "id": "sb_main",
+      "type": "statusbar",
+      "rect": { "x": 0, "y": 674, "w": 980, "h": 26 },
+      "items": ["未连接", "对端 —", "RX 0 B", "TX 0 B"]
+    },
+    {
+      "id": "lab_role",
+      "type": "label",
+      "rect": { "x": 12, "y": 14, "w": 36, "h": 24 },
+      "text": "角色",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20" }
+    },
+    {
+      "id": "cmb_role",
+      "type": "combo",
+      "rect": { "x": 52, "y": 12, "w": 132, "h": 200 },
+      "items": ["客户端（连接）", "服务端（监听）"],
+      "value": 0,
+      "hint": "客户端：去连别人的地址/端口；服务端：监听本机端口，等别人连进来",
+      "events": { "select": "on_role_select" }
+    },
+    {
+      "id": "lab_host",
+      "type": "label",
+      "rect": { "x": 192, "y": 14, "w": 36, "h": 24 },
+      "text": "地址",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20" }
+    },
+    {
+      "id": "edt_host",
+      "type": "edit",
+      "rect": { "x": 232, "y": 10, "w": 128, "h": 32 },
+      "text": "127.0.0.1",
+      "style": { "font": "Microsoft YaHei UI", "size": 10 },
+      "hint": "只对「客户端」有意义；留空按 127.0.0.1（本机自测）。服务端不需要填地址"
+    },
+    {
+      "id": "lab_port",
+      "type": "label",
+      "rect": { "x": 368, "y": 14, "w": 36, "h": 24 },
+      "text": "端口",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20" }
+    },
+    {
+      "id": "spn_port",
+      "type": "spinner",
+      "rect": { "x": 408, "y": 12, "w": 76, "h": 28 },
+      "value": 8080,
+      "min": 1,
+      "max": 65535,
+      "hint": "1~65535：客户端=要连的远端端口；服务端=本机要监听的端口"
+    },
+    {
+      "id": "btn_conn",
+      "type": "button",
+      "rect": { "x": 492, "y": 10, "w": 92, "h": 32 },
+      "text": "连接",
+      "hint": "以客户端身份连到上面的「地址:端口」",
+      "events": { "click": "on_connect_click" }
+    },
+    {
+      "id": "btn_listen",
+      "type": "button",
+      "rect": { "x": 592, "y": 10, "w": 82, "h": 32 },
+      "text": "监听",
+      "hint": "以服务端身份监听上面的端口，等客户端连进来（可同时管多个连接）",
+      "events": { "click": "on_listen_click" }
+    },
+    {
+      "id": "btn_stop",
+      "type": "button",
+      "rect": { "x": 682, "y": 10, "w": 76, "h": 32 },
+      "text": "断开",
+      "hint": "关掉监听与全部连接（幂等，重复点也没事）",
+      "events": { "click": "on_stop_click" }
+    },
+    {
+      "id": "btn_clear",
+      "type": "button",
+      "rect": { "x": 762, "y": 10, "w": 76, "h": 32 },
+      "text": "清空",
+      "hint": "清空日志视图（累计 RX/TX 计数保留）",
+      "events": { "click": "on_clear_click" }
+    },
+    {
+      "id": "led_link",
+      "type": "led",
+      "rect": { "x": 848, "y": 17, "w": 120, "h": 18 },
+      "text": "未连接",
+      "value": 0,
+      "style": { "fg": "#1B6E33" }
+    },
+    {
+      "id": "term_log",
+      "type": "terminal",
+      "rect": { "x": 8, "y": 48, "w": 964, "h": 472 },
+      "checked": true,
+      "value": 500,
+      "items": [
+        "网口调试助手就绪。",
+        "客户端：选「客户端（连接）」→ 填地址和端口 → 点「连接」。",
+        "服务端：选「服务端（监听）」→ 填本机端口 → 点「监听」，等别人连进来。",
+        "收发的数据按行落到这里：RX 绿色 / TX 蓝色 / 灰色是程序自己的记录。"
+      ]
+    },
+    {
+      "id": "sp_main",
+      "type": "splitter",
+      "rect": { "x": 8, "y": 520, "w": 964, "h": 6 },
+      "format": "row",
+      "hint": "上下拖动：日志区变高、下面的发送区让位",
+      "events": { "release": "on_split_release" }
+    },
+    {
+      "id": "grp_send",
+      "type": "group",
+      "rect": { "x": 8, "y": 526, "w": 964, "h": 76 },
+      "text": "发送",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20", "bg": "#F7F2FA" },
+      "children": [
+        {
+          "id": "edt_send",
+          "type": "edit",
+          "rect": { "x": 12, "y": 34, "w": 700, "h": 30 },
+          "text": "",
+          "style": { "font": "Microsoft YaHei UI", "size": 10 },
+          "hint": "要发送的内容；勾了 HEX 就写 1A 2B 3C 这种。服务端会同时发给所有连上的客户端",
+          "events": { "submit": "on_send_submit" }
+        },
+        {
+          "id": "chk_hex",
+          "type": "checkbox",
+          "rect": { "x": 724, "y": 35, "w": 100, "h": 28 },
+          "text": "HEX 发送",
+          "hint": "把输入按十六进制解析成字节再发（空格可有可无）",
+          "events": { "change": "on_hex_change" }
+        },
+        {
+          "id": "btn_send",
+          "type": "button",
+          "rect": { "x": 836, "y": 33, "w": 112, "h": 32 },
+          "text": "发送",
+          "hint": "发送（在输入框里直接回车也一样）",
+          "events": { "click": "on_send_click" }
+        }
+      ]
+    },
+    {
+      "id": "cht_rate",
+      "type": "chart",
+      "rect": { "x": 8, "y": 604, "w": 964, "h": 66 },
+      "items": ["B/s"],
+      "value": 60,
+      "min": 0,
+      "max": 256,
+      "format": "line"
+    }
+  ]
+}
