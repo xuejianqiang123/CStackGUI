@@ -596,6 +596,60 @@ long long cg_serial_tx_bytes(const cg_serial_t *s);
  *  返回的指针指向内部缓冲，下次报错会被覆盖；要留就自己拷走。 */
 const char *cg_serial_last_error(const cg_serial_t *s);
 
+/* ------------------------------------------------------------ 网口（cg_net）
+ * 与串口（cg_serial）**同一套形状**，因为面对的是同一类问题：网络 I/O 不能做在 UI 线程上
+ * （等数据的每一毫秒都是消息循环被堵住的毫秒）。所以同样是"运行时起一个读线程把字节搬进
+ * 环形缓冲，业务在时钟里拉"：
+ *
+ *   客户端：  n = cg_net_connect("192.168.1.10", 8080, 3000);
+ *            时钟里：n2 = cg_net_read(n, buf, sizeof buf);  ->  cg_term_write(term, CG_TERM_RX, buf, n2)
+ *            掉线判断：cg_net_connected(n) 变 0（对端关掉了连接）
+ *
+ *   服务端：  srv = cg_net_listen(8080, 4);
+ *            时钟里：c = cg_net_accept(srv, 0);   // 0 = 不等，立刻返回；没连接返回 NULL（**不是错误**）
+ *                    if (c) 把它存进自己的连接数组（一个句柄 = 一条连接）
+ *
+ * **一个句柄 = 一条连接**：服务端要同时管多个客户端，就自己拿一个句柄数组（比如 16 个），
+ * 在时钟里逐个 cg_net_read —— 本层不引入"客户端列表"这个概念，API 面保持一条线。
+ *
+ * 错误处理与串口一致：失败返回 NULL / 负数，原因用 cg_net_last_error() 取；连接/监听失败时
+ * 句柄是 NULL，所以 cg_net_last_error(NULL) 给的就是"刚刚那次失败的原因"。
+ *
+ * v1 的边界（有意不做，别猜）：**只有 TCP**（UDP 的 sendto/recvfrom 下一步）；不做 TLS；
+ * 不自动重连；写是同步的（带超时，不是写队列）；接收缓冲 64KB 满了丢最老的（与串口同策略）。
+ * 链接：需要 winsock2（`-lws2_32`，构建脚本里已经加上）。
+ */
+typedef struct cg_net_t cg_net_t;
+
+/** 连到一台主机；host 传 NULL / 空串 = 127.0.0.1（本机自测最常用）。
+ *  timeout_ms <= 0 按 3000 算。用非阻塞 connect + select 实现超时 —— 坏地址不会把界面冻住。 */
+cg_net_t *cg_net_connect(const char *host, int port, int timeout_ms);
+
+/** 监听端口（backlog <= 0 按 4）。绑不上（端口被占）返回 NULL，原因见 cg_net_last_error(NULL)。 */
+cg_net_t *cg_net_listen(int port, int backlog);
+
+/** 收一个连接。**timeout_ms <= 0 = 不等，立刻返回**（适合放在时钟里轮询）；
+ *  没有连接时返回 NULL —— 那是正常情况，不是错误。每个连接是一个独立句柄，用完 cg_net_close。 */
+cg_net_t *cg_net_accept(cg_net_t *srv, int timeout_ms);
+
+/** 发送（同步，带 1 秒超时）；返回实际写出字节数，< 0 失败 */
+int  cg_net_write(cg_net_t *n, const void *data, int len);
+/** 从接收缓冲取最多 cap 字节（**非阻塞**：没数据返回 0）；对端已关闭时也能把剩下的取完 */
+int  cg_net_read(cg_net_t *n, void *buf, int cap);
+/** 接收缓冲里还有多少字节没取走 */
+int  cg_net_available(const cg_net_t *n);
+/** 对端还在吗（对方关闭后变 0；监听句柄恒为 0）—— 这是判断"掉线"的唯一信号 */
+int  cg_net_connected(const cg_net_t *n);
+/** 累计收 / 发字节数（状态栏用） */
+long long cg_net_rx_bytes(const cg_net_t *n);
+long long cg_net_tx_bytes(const cg_net_t *n);
+/** 对端 "ip:port"（监听句柄返回"（监听中）"） */
+const char *cg_net_peer(const cg_net_t *n);
+/** 最后一次错误的中文描述；n 传 NULL 时给"最近一次连接/监听失败"的原因 */
+const char *cg_net_last_error(const cg_net_t *n);
+/** 关掉连接或监听（幂等、NULL 安全；会等读线程退出，所以最坏卡一个收超时周期约 50ms） */
+void cg_net_close(cg_net_t *n);
+
 /* ------------------------------------------------------------ 通用对话框
  * 都不是控件，是弹系统对话框的函数。parent 传控件（定位用）或 NULL。
  * 路径缓冲区至少 1024 字节。返回 1 = 用户确定，0 = 取消/失败。

@@ -80,7 +80,7 @@ if errorlevel 1 (
 
 echo gdiplus 只用来加载图片（png/jpg/bmp/gif），Windows 自带
 echo comdlg32 供通用对话框（打开/保存文件、选颜色）使用
-set LDFLAGS=-lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32 -luuid -lole32 -loleaut32
+set LDFLAGS=-lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32 -luuid -lole32 -loleaut32 -lws2_32
 echo 回调签名是固定的，没用到的 self/ev/user 参数不应该报警告
 set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include
 

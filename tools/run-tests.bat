@@ -69,7 +69,7 @@ for /r tests %%f in (*.c) do set SRC=!SRC! "%%f"
 if not exist build\tests mkdir build\tests
 
 echo   CC tests\ -^> build\tests\cgu-tests.exe
-gcc %CFLAGS% %DEFS% !SRC! -o build\tests\cgu-tests.exe build\lib\libcstackgui.a %LINKFLAGS% -lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32 -luuid -lole32 -loleaut32
+gcc %CFLAGS% %DEFS% !SRC! -o build\tests\cgu-tests.exe build\lib\libcstackgui.a %LINKFLAGS% -lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32 -luuid -lole32 -loleaut32 -lws2_32
 if errorlevel 1 (
     echo [fail] compiling the test program failed
     exit /b 1

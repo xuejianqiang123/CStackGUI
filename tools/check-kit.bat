@@ -37,7 +37,7 @@ if not exist build\lib\libcstackgui.a (
 if not exist build\kittest mkdir build\kittest
 
 echo   CC tools\kit-test.c
-gcc -std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include tools\kit-test.c -o build\kittest\kit-test.exe build\lib\libcstackgui.a -lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32 -luuid -lole32 -loleaut32
+gcc -std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include tools\kit-test.c -o build\kittest\kit-test.exe build\lib\libcstackgui.a -lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32 -luuid -lole32 -loleaut32 -lws2_32
 if errorlevel 1 (
     echo [fail] compiling tools\kit-test.c failed
     exit /b 1

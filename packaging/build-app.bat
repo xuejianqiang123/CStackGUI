@@ -66,7 +66,7 @@ if not exist "runtime\lib\libcstackgui.a" (
 )
 
 rem comdlg32 供通用对话框（打开/保存文件、选颜色）使用
-set LDFLAGS=-lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32
+set LDFLAGS=-lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32 -lws2_32
 set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include
 
 rem 资源对象（清单 + 版本信息）里没有代码符号，链接器不会主动从静态库里取它 ——
