@@ -114,7 +114,7 @@ argument-hint: [要改的东西，可以用日常语言，例如 "画布选中�
 | 你动了 | 必须连带确认 |
 | --- | --- |
 | `CgNode` 字段 | `coerceNode` 读入 + `cleanNode` 写出成对；Inspector 有编辑入口；C 侧 `cg_node_t`/`parse_node`/`build_node` 同步 |
-| `KINDS` | `k_kinds` 同步；`makeNode` 有种子；`WidgetView` 有外观；`styles.css` 有 glyph/ctl 类名 |
+| `KINDS` | `k_kinds` 同步；`makeNode` 有种子；`WidgetView` 有外观；`styles.css` 有 glyph/ctl 类名；跑 `tools\run-tests.bat`（`test_kind.c` 会报不一致） |
 | `KIND_EVENTS` / `CG_EVENTS` | `k_kinds[].events` / `CG_EV_*` 同步；`EVENT_LABEL`/`EVENT_HINT` 补中文 |
 | IPC | `preload.cjs` 白名单 + `bridge.ts` 类型 + **浏览器降级分支** |
 | 运行时公共 API（`cstackgui.h`） | `src/supportlib.ts`（「支持库」页签）同步加/改条目；`node tools\check-support.mjs` 必须过 |
@@ -192,6 +192,7 @@ argument-hint: [要改的东西，可以用日常语言，例如 "画布选中�
 ```bat
 cd designer && npx tsc --noEmit && npx vite build     :: 类型检查 + 构建
 tools\check-format.bat                                :: 画布写的 .cgui 必须被 C 侧读懂 + 支持库表对齐 cstackgui.h
+tools\run-tests.bat                                   :: C 层单测（类型表/事件掩码/文档解析）
 build-all.bat                                         :: 运行时 + 所有示例仍能编译
 examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui   :: 回 0 才算事件闭环
 ```

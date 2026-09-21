@@ -7,7 +7,7 @@ argument-hint: [文件路径或函数名]
 
 # 技能：CStackGUI C 代码规范（合并版）
 
-> 适用范围：`runtime/`、`examples/`、`apps/` 下的全部 `.c` / `.h`。
+> 适用范围：`runtime/`、`examples/`、`apps/`、`tests/` 下的全部 `.c` / `.h`。
 > 本项目是 Win32 GUI 运行时（不是单片机固件）：原通用嵌入式规范里的 HAL/寄存器/RTOS
 > 条款不适用，已裁剪；保留命名/结构/安全/注释四类可执行规则，并补充本项目铁律。
 > 原 `c-function-comment` 技能已合并进本技能（其 Doxygen 格式是用户指定的，全文收录在 §1）。
@@ -81,7 +81,8 @@ char *cg_read_file(const char *path);
 ## §5 项目铁律（违反 = 高危）
 
 1. 业务代码只 `#include "cstackgui.h"`，不碰 `cg_internal.h` 和 Windows 头
-2. 控件类型表 `k_kinds`（cg_doc.c）与画布 `KINDS`（model.ts）必须同步；改格式跑 `tools\check-format.bat`
+2. 控件类型表 `k_kinds`（cg_doc.c）与画布 `KINDS`（model.ts）必须同步；改格式跑 `tools\check-format.bat`，
+   改类型表 / 事件掩码跑 `tools\run-tests.bat`（`tests\unit\test_kind.c` 会直接报哪一行不一致）
 3. 事件按控件特性分配（`CG_EV_*` 位掩码），别给不需要交互的控件加事件
 4. 原生控件按树序创建（父先于子），别遍历 `app->widgets` 链表建控件
 5. 回调里改控件会触发原生通知再进回调——靠 `g_in_notify` 防重入，别删

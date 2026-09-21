@@ -4,8 +4,14 @@
 > **适用范围（CStackGUI）**：本仓库是 **Win32 桌面 GUI 项目**（Electron 画布 + C 运行时 + MinGW gcc），
 > 不是固件工程。下面第 1~3 节的硬件 / 中断 / RTOS 规则**只在第 6 节列出的审查技能被触发时才适用**，
 > 对 `runtime/`、`designer/` 和业务 C 代码不构成约束；本工程真正的硬门禁是
-> `build-all.bat` → `examples\gallery\gallery.exe --selftest` → `tools\check-format.bat`
-> （改了 `.cgui` 契约或控件类型时），以及 README 第三章列的项目铁律。
+> `build-all.bat` → `examples\gallery\gallery.exe --selftest` → `tools\run-tests.bat`
+> （C 层单测：JSON / 文档 / 类型表 / 事件表 + cg_kit 冒烟） → `tools\check-format.bat`
+> （改了 `.cgui` 契约或控件类型时；它顺带检查 bat 编码），以及 README 第三章列的项目铁律。
+>
+> **动过任何 `.bat` 之后必须跑**：`powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-gbk.ps1 -Mode fix`
+> —— 仓库里带中文的 bat 必须是 **GBK（cp936）+ CRLF、无 BOM**。cmd 用"启动这个 cmd 进程时的控制台
+> 代码页"解析 bat，UTF-8 的中文会被按 2 字节/字解码、行定位错位，注释后半句会被当命令执行（双击时
+> 满屏 `"... is not recognized"`）。纯 ASCII 内容不受影响；`-Mode check` 已并入 `tools\check-format.bat`。
 
 ## 1. 硬件相关硬性规则
 - 禁止自动优化硬件初始化代码
