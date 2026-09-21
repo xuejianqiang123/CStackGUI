@@ -161,7 +161,7 @@ void cb(cg_widget_t *self, cg_event_t ev, void *user);
 | `separator` | 分割线 | 否 | `STATIC` + `SS_ETCHEDHORZ` |
 | `image` | 图片 | 否 | 自注册窗口类 `CStackGUIImage`，GDI+ 读图 + 自绘缩放 |
 
-> 这里只是常用控件的速览。**完整 39 行类型表**（含 `progressring` / `timer` / `canvas` / `colorpicker` /
+> 这里只是常用控件的速览。**完整 41 行类型表**（含 `progressring` / `timer` / `canvas` / `colorpicker` /
 > `browser` / `shape` / `badge` / `tag` / `rate` / `pagination`）见
 > [docs/CGUI-FORMAT.md](CGUI-FORMAT.md) 第 4 节。
 
@@ -518,6 +518,14 @@ release/
 - **画布内一键运行 / 发布**：工具条「运行」（F5）编译并启动工程；「发布」组装 `publish\<名字>\` 并打 zip。
 - **控件补齐到 39 种**：含 `iconbutton`、`monthcal`、`progressring`、`canvas`、`colorpicker`、`browser`、
   `rate`、`pagination`、`badge`、`tag`、`card`、`shape`、`timer`。
+- **分隔条（splitter）**：第 40 种控件，"能拖动的分区边界"。拖它 = 撑开前一块、后面的兄弟整体
+  让位、同一容器里最后一块吃掉余量 —— 所以 [日志区/分隔条/发送区] 这种布局不需要布局引擎（见 §3.3）。
+  自绘窗口类 `CStackGUISplitter`；`format` 缺省 `col`（竖条），`row` 是横条。
+- **终端（terminal）**：第 41 种控件，通信/调试工具最需要的那块"日志视图"。业务用
+  `cg_term_write(w, CG_TERM_RX/TX/SYS, buf, len)` 灌内容，格式（时间戳、HEX）、行数上限、
+  按方向着色都由控件管；后端是**只读 RichEdit + 逐行 CHARFORMAT**，所以"选择复制"与
+  自动滚动是白捡的（日志最常被做的事就是复制出去）。行在 core 里存为 `items[]`，
+  **首字节是方向标记**（裁剪/清空/保存只需面对一个数组）。
 - **控件绑定**：`.cgui` 的 `bind` / 运行时的 `cg_bind()`，值·文字·勾选自动同步（见 §3.3）。
   思路来自同类项目 YMGUI 的 subject-observer，但按我们"原生控件 + `.cgui` 描述界面"的路线
   简化成"值镜像"，不引入独立 subject 对象。

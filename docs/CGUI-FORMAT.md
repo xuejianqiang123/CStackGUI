@@ -113,7 +113,7 @@
 | `children` | 数组 | 否 | 只有容器类型（`group` / `box` / `card` / `tabs`）能带；**非容器带 children 会被运行时判为错误** |
 | `page` | 整数 | 否 | 属于父 `tabs` 的第几页（0 起）。缺省 0 |
 | `src` | 字符串 | 否 | `image` 的图片路径，见 2.4 |
-| `format` | 字符串 | 否 | `datepicker` 的细分格式：`date`（缺省）/ `time` / `datetime`；`shape` 的外形：`rect`（缺省）/ `roundrect` / `ellipse` |
+| `format` | 字符串 | 否 | `datepicker` 的细分格式：`date`（缺省）/ `time` / `datetime`；`shape` 的外形：`rect`（缺省）/ `roundrect` / `ellipse`；`splitter` 的方向：`col`（缺省，左右分栏）/ `row`（上下分行）；`terminal` 的显示模式：留空（文本）/ `hex` |
 | `hint` | 字符串 | 否 | 鼠标悬停提示（tooltip），**所有控件通用**；不写 / 空 = 无提示 |
 | `bind` | 对象 | 否 | 控件绑定：值/文字/勾选跟着另一个控件走，见 2.8 |
 | `period` | 整数 | 否 | `timer` 的触发周期（毫秒）。**不写 = 0 = 不触发**（画布新建时钟时给 1000）|
@@ -275,6 +275,47 @@ static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
 cg_bind(cg_find(app, "sld_level"), cg_find(app, "lab_value"), 0);
 ```
 
+### 2.9 `terminal`：终端 / 日志视图
+
+只读的按行视图，通信 / 调试工具最需要的那块。业务只管把字节丢进来：
+
+```c
+cg_term_write(cg_find(app, "term_log"), CG_TERM_RX, buf, n);             /* 收到 */
+cg_term_write(cg_find(app, "term_log"), CG_TERM_TX, "AT+GMR\r\n", -1);   /* 发出（-1 = 按字符串取长度）*/
+```
+
+几个字段在这个控件上有专门含义：
+
+| 字段 | 含义 |
+| --- | --- |
+| `format` | 显示模式：留空 = 文本（ASCII / UTF-8）；`"hex"` = 十六进制。**只影响之后写入的行** |
+| `checked` | 每行前面要不要 `[时:分:秒]`（画布上显示成「时间戳」）|
+| `value` | 最多保留多少行，超了从最老的丢；`0` / 不写 = 默认 500 |
+| `items` | **初始内容**（可选）；运行时写入的行接在后面 |
+
+行为约定（这些是踩过的坑，写清楚省得猜）：
+
+- **一次调用 = 一段数据**：里面带 `\r\n` 会**切成多行**（串口一次收 `"OK\r\nERR"` 是常态），`\r` 丢掉；
+  一次调用只刷新一次界面，所以可以放心在收数据的循环里逐段调用。
+- 文本模式只把控制字符（`< 0x20` 与 `0x7F`）换成 `.`，**0x80 以上原样保留** —— 所以中文不会被搅坏。
+- 行按方向着色：`CG_TERM_RX`（绿）/ `CG_TERM_TX`（蓝）/ `CG_TERM_SYS`（灰），行首分别是 `RX ` / `TX ` / `-- `。
+- 内容可以**选中复制**（日志最常被做的事就是复制出去），也能 `cg_term_save(w, path)` 存成
+  UTF-8 + CRLF 的文本文件。
+- 其余 API：`cg_term_clear` / `cg_term_set_hex` / `cg_term_hex` / `cg_term_set_timestamp` /
+  `cg_term_set_max_lines` / `cg_term_count` / `cg_term_save`。
+
+日志区 + 分隔条这种"上日志下操作"的经典布局：
+
+```json
+{ "widgets": [
+  { "id": "term_log", "type": "terminal", "rect": { "x": 8, "y": 8, "w": 464, "h": 180 },
+    "checked": true, "value": 500 },
+  { "id": "sp_main", "type": "splitter", "format": "row",
+    "rect": { "x": 8, "y": 192, "w": 464, "h": 6 }, "events": { "release": "on_split" } },
+  { "id": "term_send", "type": "terminal", "rect": { "x": 8, "y": 202, "w": 464, "h": 110 } }
+] }
+```
+
 ---
 
 ## 3. `events`：事件绑定
@@ -333,12 +374,14 @@ cg_bind(cg_find(app, "sld_level"), cg_find(app, "lab_value"), 0);
 | `tree` | 树 | 否 | 220×180 | — | `select`、`dblclick`、`expand`、`collapse` | `SysTreeView32` |
 | `table` | 表格 | 否 | 360×180 | — | `select`、`dblclick`、`check` | `SysListView32` 报表模式（`check`/`multi` 开勾选列与多选）|
 | `statusbar` | 状态栏 | 否 | 400×24 | — | **无** | `msctls_statusbar32` |
+| `terminal` | 终端 | 否 | 360×200 | — | **无** | 只读 RichEdit：按行着色（RX 绿 / TX 蓝 / 自己记的灰）、可选中复制，见 2.9 |
 | `menu` | 菜单栏 | 否 | 无矩形 | — | `click` | 窗口 `HMENU`（一根窗口一根）|
 | `menubutton` | 菜单按钮 | 否 | 130×32 | `菜单` | `click` | `BUTTON` + `TrackPopupMenu` |
 | `toolbar` | 工具栏 | 否 | 400×34 | — | `click` | `ToolbarWindow32`（纯文字按钮）|
 | `group` | 分组框 | **是** | 260×180 | `分组` | **无** | 自注册面板窗口（边框+标题完全自绘）|
 | `box` | 容器块 | **是** | 200×120 | — | **无** | 自注册面板窗口 |
 | `card` | 卡片 | **是** | 280×180 | `卡片` | **无** | 自注册面板窗口 |
+| `splitter` | 分隔条 | 否 | 6×200 | — | `release` | 自绘窗口：能拖动的分区边界（拖它撑开前一块、后面整体让位、最后一块吃掉余量），见 2.8 |
 | `separator` | 分割线 | 否 | 200×2 | — | **无** | `STATIC` + `SS_ETCHEDHORZ` |
 | `image` | 图片 | 否 | 200×120 | — | `click`、`dblclick` | 自绘窗口（GDI+ 读图）|
 | `shape` | 外形框 | 否 | 120×120 | — | **无** | 自注册面板窗口（自绘外形）|
