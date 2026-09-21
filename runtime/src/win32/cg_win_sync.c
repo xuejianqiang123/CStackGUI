@@ -66,6 +66,11 @@ static void term_push_line(HWND h, const char *text, COLORREF col)
             cf.crTextColor = col;
             SendMessageW(h, EM_SETSEL, (WPARAM)start, (LPARAM)end);
             SendMessageW(h, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM)&cf);
+
+            /* 3) 上完色**把选区收掉**：这里靠的是"真选区"上色，不收的话最后一行会一直
+             *   显示成选中状态（观感上像"总有半行被高亮"），而且新数据一来就把用户正拖着的
+             *   选区顶掉。收成末尾插入点同时也保住了自动滚动（光标在末尾）。 */
+            SendMessageW(h, EM_SETSEL, (WPARAM)end, (LPARAM)end);
         }
     }
     free(wt);
