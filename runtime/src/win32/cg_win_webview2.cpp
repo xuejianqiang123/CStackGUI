@@ -340,14 +340,29 @@ void cgw_echarts_init(cg_widget_t *w)
     CoTaskMemFree(ver);
     if (fixed) cg_log(CG_LOG_INFO, "browserExecutableFolder=%ls", fixed);
 
+    /* 某些机器上 WebView2 的 DComp/GPU 初始化会读坏指针崩（实测本机：环境创建成功、
+       随后 EmbeddedBrowserWebView.dll 读 0xFFFFFFFFFFFFFFFF 崩）。默认附加一组保守的
+       浏览器参数禁用 DComp/软件光栅化；用户可用同名环境变量覆盖。WebView2 在
+       CreateCoreWebView2EnvironmentWithOptions 时会读取此变量。 */
+    if (!GetEnvironmentVariableW(L"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", NULL, 0)) {
+        SetEnvironmentVariableW(
+            L"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+            L"--disable-features=VizDisplayCompositor --disable-gpu "
+            L"--disable-gpu-compositing --disable-software-rasterizer");
+        cg_log(CG_LOG_INFO, "set WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS (DComp/GPU off)");
+    }
+
     HRESULT hr = g_createEnv(browserFolder, wudf, NULL, h);
     if (FAILED(hr)) {
         cg_log(CG_LOG_ERROR, "CreateCoreWebView2Environment failed: 0x%08X", (unsigned)hr);
-        free(h);   /* 同步失败：handler 不会被 WebView2 接管 */
+        free(h);          /* 同步失败：handler 不会被 WebView2 接管 */
+        free(wudf);       /* 环境没建起来，WebView2 不会再用这两个字符串 */
+        free(fixed);
     }
-    /* 若 Create... 返回 S_OK，handler 由 WebView2 异步回调接管并自行释放（实际上我们 leak 它）。 */
-    free(wudf);
-    free(fixed);
+    /* 成功（S_OK）：WebView2 是【异步】创建环境的，返回后还会在后台线程/回调里继续读
+       browserExecutableFolder 和 userDataFolder。这两个宽字符串【不能】在这里 free，
+       否则 use-after-free（实测崩在 EmbeddedBrowserWebView.dll、读 0xFFFFFFFFFFFFFFFF）。
+       这里故意 leak 这两个串，随进程退出回收（应用生命周期内 WebView2 一直需要它们）。 */
 }
 
 /* 宿主窗口过程：转发尺寸/销毁，WebView2 没起来时画占位 */
