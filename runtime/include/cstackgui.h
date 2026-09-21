@@ -525,20 +525,30 @@ void cg_meter_set_range(cg_widget_t *w, int min, int max);
  *
  * 典型用法（**必须这么写**，原因见下面那段）：
  *
- *   void on_ready(cg_app_t *app, void *user) {
+ *   static cg_timer_t *g_poll;
+ *
+ *   static void poll_tick(void *user) {
+ *       cg_app_t *app = (cg_app_t *)user;
+ *       char      buf[4096];
+ *       int       n = cg_serial_read(g_ser, buf, sizeof buf);    // 非阻塞：没数据返回 0
+ *       if (n > 0) cg_term_write(cg_find(app, "term"), CG_TERM_RX, buf, n);
+ *       g_poll = cg_set_timer(app, 50, poll_tick, app);          // ← 必须自己重挂（见下）
+ *   }
+ *
+ *   void on_open_click(...) {                                    // 连接按钮
  *       g_ser = cg_serial_open("COM3", 115200);
- *       if (!g_ser) {
+ *       if (!g_ser) {                                            // 失败原因直接写进日志视图
  *           cg_term_write(cg_find(app, "term"), CG_TERM_SYS,
- *                         cg_serial_last_error(NULL), -1);      // 原因直接写进日志视图
+ *                         cg_serial_last_error(NULL), -1);
  *           return;
  *       }
- *       cg_set_timer(50);                                      // 50ms 去取一次
+ *       g_poll = cg_set_timer(app, 50, poll_tick, app);           // 起第一颗
  *   }
- *   void on_tick(cg_widget_t *self, cg_event_t ev, void *user) {
- *       char buf[4096];
- *       int  n = cg_serial_read(g_ser, buf, sizeof buf);        // 非阻塞，没数据就返回 0
- *       if (n > 0) cg_term_write(g_find(term), CG_TERM_RX, buf, n);
- *   }
+ *   void on_close_click(...) { cg_kill_timer(g_poll); cg_serial_close(g_ser); }
+ *
+ * **注意 `cg_set_timer()` 是一次性的**：到点触发之后就自己被回收了，**不会自动重挂**。
+ * 所以"定周期"的样子就是在回调末尾再挂一颗（上面 poll_tick 最后一行）。忘了重挂的表现是
+ * "界面只刷新了第一轮"，很难往定时器上想 —— 完整例子见 examples/serialterm。
  *
  * **线程模型（唯一被支持的用法，也是唯一容易出事的地方）**：
  * cg_serial_open() 内部起一个读线程，它只做一件事 —— 把驱动里的字节搬进接收缓冲。
