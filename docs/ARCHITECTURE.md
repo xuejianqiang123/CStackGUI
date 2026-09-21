@@ -205,6 +205,22 @@ cg_free(w); cg_free(txt); cg_free(u8); cg_free(cfg);
 
 `cg_widget_add` 可以运行时造控件，id 同样参与事件名查找——先在 `.cgui` 里写好事件名、再在运行时造控件也行。
 
+**控件绑定（`cg_bind.c`）**把"两个控件要保持一致"从"自己写两个回调互相 set"变成一行声明：
+
+```c
+cg_bind(cg_find(app, "sld_level"), cg_find(app, "lab_value"), 0);   /* 滑块 -> 标签显示数字 */
+cg_bind(cg_find(app, "sld_level"), cg_find(app, "spn_level"), 1);   /* 双向：两个入口改同一个值 */
+```
+```json
+{ "id": "lab_value", "type": "label", "bind": { "src": "sld_level" } }
+```
+
+同步规则很薄：**按目标的类型决定抄 value / checked / text**（值型控件抄值、勾选型抄勾选、
+其余能显示文字的控件抄源的文字或十进制数值），列表类控件存的是条目下标所以不按 `min`/`max` 夹。
+传播只有两个入口——`cg_dispatch()` 派发前（后端刚写好后端字段）与公共 `set_*`，
+且**同步本身不派发目标的 `change` 回调**：镜像是"跟着变"不是用户操作，因此串联与双向都不会
+形成回调互推（`cg_bind_propagate()` 有深度上限兜底）。没有任何绑定时传播直接返回，老工程零开销。
+
 ### 3.4 生命周期
 
 ```
@@ -235,6 +251,7 @@ runtime/
       cg_event.c        事件名表、回调绑定解析、事件派发中枢
       cg_widget.c       运行时控件模型：构建、查找、公共属性 API
       cg_widget_data.c  内容 API：列表/树/表格/状态栏/标签页/图片/提示/时钟
+      cg_bind.c         控件绑定：值/文字/勾选自动同步到另一个控件
       cg_app.c          应用生命周期（定位 .cgui / 打开 / 消息循环 / 收尾）与自检
       cg_timer.c        一次性定时器（后端 50ms 心跳驱动）
     win32/              Win32 原生后端：不知道业务的存在
@@ -501,6 +518,9 @@ release/
 - **画布内一键运行 / 发布**：工具条「运行」（F5）编译并启动工程；「发布」组装 `publish\<名字>\` 并打 zip。
 - **控件补齐到 39 种**：含 `iconbutton`、`monthcal`、`progressring`、`canvas`、`colorpicker`、`browser`、
   `rate`、`pagination`、`badge`、`tag`、`card`、`shape`、`timer`。
+- **控件绑定**：`.cgui` 的 `bind` / 运行时的 `cg_bind()`，值·文字·勾选自动同步（见 §3.3）。
+  思路来自同类项目 YMGUI 的 subject-observer，但按我们"原生控件 + `.cgui` 描述界面"的路线
+  简化成"值镜像"，不引入独立 subject 对象。
 
 **限制（都是明确取舍，不是没做完）**
 
@@ -511,6 +531,8 @@ release/
 - 画布不预览真实图片（只显示 `src` 的文件名），运行时才画。
 - 一键运行（F5）要求工程在项目根的 `apps\`/`examples\` 下且已导出过 C 骨架——
   这是 `build-app.bat` 的查找规则决定的，画布会在不满足时给出明确指引。
+- **绑定不做格式换算**：只镜像值/文字/勾选三类语义，没有"0~100 映射到 0~5"、没有单位后缀、
+  不做列表整行结构绑定；需要格式化仍然要写回调（回调绑在**源**控件上）。
 
 **下一步的候选**
 

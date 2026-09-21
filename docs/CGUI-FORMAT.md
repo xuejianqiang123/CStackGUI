@@ -115,6 +115,7 @@
 | `src` | 字符串 | 否 | `image` 的图片路径，见 2.4 |
 | `format` | 字符串 | 否 | `datepicker` 的细分格式：`date`（缺省）/ `time` / `datetime`；`shape` 的外形：`rect`（缺省）/ `roundrect` / `ellipse` |
 | `hint` | 字符串 | 否 | 鼠标悬停提示（tooltip），**所有控件通用**；不写 / 空 = 无提示 |
+| `bind` | 对象 | 否 | 控件绑定：值/文字/勾选跟着另一个控件走，见 2.8 |
 | `period` | 整数 | 否 | `timer` 的触发周期（毫秒）。**不写 = 0 = 不触发**（画布新建时钟时给 1000）|
 | `multi` / `check` | 布尔 | 否 | `table`：`multi` = 允许整行多选，`check` = 显示行首复选框列（配合 `check` 事件）|
 | `items` | 字符串数组 | 否 | `listbox` / `combo` / `tabs`（页签文字）/ `statusbar`（分段文字）/ `toolbar`（按钮文字）的内容 |
@@ -232,6 +233,47 @@ static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
 ```
 
 菜单项在运行时是**只读**的：v1 没有「运行时增删菜单项」的 API（`cg_menu_count()` 只用来查个数）。
+
+### 2.8 `bind`：控件绑定
+
+让两个控件一直保持一致，省掉「自己写两个回调互相 set」的活。写**想被同步的那个控件**上：
+
+```json
+{
+  "id": "lab_value",
+  "type": "label",
+  "rect": { "x": 24, "y": 120, "w": 120, "h": 24 },
+  "bind": { "src": "sld_level" }
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `src` | 字符串 | **是** | 源控件的 `id`（同一份 `.cgui` 里的另一个控件）。空串 = 不绑定（画布就是这么存的）|
+| `two` | 布尔 | 否 | `true` = 双向：本控件被用户改动时也推回源。缺省 `false`（单向：只有源变化时同步）|
+
+**抄什么由「本控件（目标）的类型」决定**，不用额外配置：
+
+| 目标的类型 | 同步内容 |
+| --- | --- |
+| `slider` `progress` `progressring` `spinner` `rate` `pagination` `tabs` `listbox` `combo` `toolbar` | 抄 `value`。**列表类（`tabs`/`listbox`/`combo`/`toolbar`）的下标不按 `min`/`max` 夹**，跟用户点选是同一套语义；其余按目标的 `min`/`max` 夹 |
+| `checkbox` `radio` `switch` | 抄勾选状态：源也是勾选型就抄 `checked`，否则取「源的值是否为 0」 |
+| 其它能显示文字的（`label` `edit` `multiedit` `richtext` `statusbar` `button` `link` `badge` `tag` …） | 源是文本型（输入框/标签/链接/徽章/标签片/日期）就抄**文字**，否则把源的**数值**写成十进制 |
+
+两条刻意的规矩，知道了才不会误判：
+
+- **绑定的同步不派发目标的 `change` 回调**。镜像是「跟着变」，不是用户操作 —— 否则一个控件动一下会连带触发一串回调，
+  顺序谁也说不清。也因此不存在回调互推的死循环（值一样就不写）。想在同步发生时做事，把 `change` 绑在**源**控件上。
+- 源控件的 `id` **改了要一起改**：`src` 是名字，运行时按 `cg_find()` 查；找不到源时启动会写一条警告日志，
+  `--selftest` 会把它算进失败项（返回 5）。画布上改 id 时会自动把指向旧 id 的 `bind.src` 一起改掉。
+- 链式绑定（`A -> B -> C`）有效，会一路传下去；双向绕成环（`A <-> B <-> C <-> A`）靠「值相等就停」和最大深度兜底，不会挂死。
+
+运行时也能绑（覆盖 `.cgui` 里写的）：
+
+```c
+/* 滑块拖动时旁边的标签显示数字；第三个参数 1 = 双向 */
+cg_bind(cg_find(app, "sld_level"), cg_find(app, "lab_value"), 0);
+```
 
 ---
 
@@ -478,6 +520,9 @@ void cg_widget_set_rect/pos/size(...);
 void cg_widget_set_visible/enabled/checked/value(...);
 void cg_widget_set_colors(cg_widget_t *w, unsigned fg, unsigned bg);   /* CG_COLOR_NONE = 系统默认 */
 void cg_widget_set_font(cg_widget_t *w, const char *family, int size_pt, int bold);
+
+/* 控件绑定：dst 一直跟着 src 走（见 2.8）。two_way 非 0 = 双向 */
+int  cg_bind(cg_widget_t *src, cg_widget_t *dst, int two_way);
 
 /* 列表类控件（listbox / combo / tabs 标签 / statusbar 分段） */
 int  cg_widget_list_add(cg_widget_t *w, const char *item);

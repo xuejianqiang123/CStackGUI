@@ -49,6 +49,12 @@ tick / check / gotfocus / lostfocus`（+ 窗口级 `close`）。
 读写注册表（做开机自启）、写日志。**所以业务代码从头到尾只 include `cstackgui.h`**，
 不用为了读个配置去 include `windows.h`。这 30 个函数的用法在画布「支持库」页签里一查就有。
 
+界面里还有一件**不用写代码**的事：**控件绑定**。在画布「属性」里给一个控件选个"源"控件
+（等价于 `.cgui` 里写 `"bind": { "src": "sld_level" }`），它的值/文字/勾选就一直跟着源走 ——
+"滑块拖动时旁边的标签显示数字"这种活，一行 C 都不用写，连重置都不用管它。
+源与目标的类型决定抄什么、双向怎么用，见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md) 第 2.8 节，
+活例子见 `examples\lesson02_controls`。
+
 仓库自带三类示例，分工不同：
 
 - `examples\lesson01_edit_button` ~ `examples\lesson05_todo` —— **五课教学示例**，从"编辑框 + 按钮"
@@ -67,9 +73,26 @@ tick / check / gotfocus / lostfocus`（+ 窗口级 `close`）。
 - 窗口尺寸固定，没有布局引擎（绝对坐标，所见即所得，拉伸不重排）。
 - 画布目前是单选，没有多选、组合、对齐工具条（有网格吸附和邻近参考线）。
 - 菜单是声明式的：能读结果（`cg_menu_last_id()`），但没有运行时增删菜单项的 API。
+- 控件绑定只镜像**值 / 文字 / 勾选**三类语义，**不做格式换算**（不能把 0~100 映射成 0~5、或自动加
+  `%` 后缀）；要格式化还是得写回调。颜色选择器的颜色值不参与绑定。
 - 网页浏览控件走系统 WebBrowser（IE 内核），标注为实验性。
 
-设计细节见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，界面文件字段见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md)。
+**文档地图**（每份只讲一块，别指望一份读全）：
+
+| 想了解 | 看哪份 |
+| --- | --- |
+| 怎么上手、环境、示例学习路线 | 本文件 |
+| 界面文件 `.cgui` 每个字段是什么意思 | [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md) |
+| 内部为什么这么设计、模块怎么分层 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| 自绘外观（M3）怎么改 | [docs/M3-SKIN.md](docs/M3-SKIN.md) |
+| 把工程交付给别人、打包发布 | [packaging/](packaging/) |
+| C 代码规范、改动前必读的约定 | `.codebuddy/skills/`（`firmware_code_style` / `designer-modify`）|
+
+**对不上时信谁**（优先级从高到低）：`runtime/` 的代码与 `tests/` 的断言 → `docs/*.md` → 界面上的文字提示。
+两条"真相所在"的位置要记住：`.cgui` 的**字段语义**在 `runtime/src/core/cg_doc.c`，
+**控件类型与支持的事件**在 `runtime/src/core/cg_doc_kind.c` 的 `k_kinds` ——
+画布端 `designer/src/model.ts` 是跟着它们走的，不是反过来。
+文档与代码不一致时**按代码改文档**，并把该补的测试补上。
 
 ---
 
@@ -229,6 +252,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-utf8.ps1 -Mode fix
 cd designer && npx tsc --noEmit && npx vite build   :: 改了画布时
 ```
 
+门禁红了先看 4.3 节开头的**排查表**（现象 → 先查什么），别从头猜。
+另外提醒一句：**`read_lints` 这类 IDE 提示不报 TS 语法错误** —— 曾经出现 `model.ts` 少一个 `}`
+（lint 0 错、`tsc --noEmit` 只说"文件末尾少个 `}`"），最后是 `npx vite build` 直接指出行号。
+所以改了画布必须真跑 tsc + vite build。
+
 ### 3.4 让 AI 不踩坑的几条铁律（也是代码评审重点）
 
 1. **控件类型表有两份，必须同步**：`runtime\src\core\cg_doc_kind.c` 的 `k_kinds` 与
@@ -275,6 +303,7 @@ CStackGUI\
       cg_event.c               事件名表、回调绑定解析、事件派发
       cg_widget.c              运行时控件模型：构建、查找、属性 API
       cg_widget_data.c         内容 API：列表/树/表格/状态栏/标签页/图片/提示/时钟
+      cg_bind.c                控件绑定：值/文字/勾选自动同步到另一个控件（.cgui 的 bind）
       cg_app.c                 应用生命周期（定位 .cgui / 打开 / 消息循环）与 --selftest
       cg_log.c                 日志：stderr 镜像 + 日志文件（GUI 版没有控制台时唯一的线索）
       cg_timer.c               一次性定时器
@@ -363,6 +392,24 @@ cg_dispatch(w, ev) ──> 按 .cgui 里绑的函数名查表 ──> 你的回�
 靠 `--selftest`（非 0 退出）和运行时 stderr 警告兜底。
 
 ### 4.3 常见问题
+
+先看这张**排查表**（现象 → 先查什么，按顺序查）。它的价值在"这类问题别从头猜"：
+下面每一条都是这个工程真实踩过的坑，指的位置就是真相所在的地方。
+
+| 现象 | 先查什么 |
+| --- | --- |
+| 改了界面 / 代码，跑起来没变化 | ① stderr 里 `[cstackgui] 界面文件: ...` 是哪个文件（`.cgui` 运行时才读，不改它就别指望界面变）② exe 是不是刚编的（`build-app.bat <工程>` 是增量编译，按时间戳）③ 改的是 `runtime\` 就看是不是链了旧 `libcstackgui.a`（正常 `build-app.bat` 会自动刷库，`CSTACKGUI_SKIP_RUNTIME=1` 会跳过） |
+| 事件不触发 / 点了没反应 | ① `.cgui` 里的函数名与 C 侧 `CG_BIND("名字", 函数)` 是否**逐字**相同（不相等不报错，只在启动时汇总弹一次 + 写日志）② 该控件**是否支持**这个事件（画布只列支持的；绑错了 `--selftest` 返回 5）③ 控件是否被容器挡住、或不在当前标签页（`page`）④ 是否在 `--selftest` 下跑（自检不开窗，弹对话框之前先问 `cg_app_has_window()`） |
+| 值 / 文字写进去没生效 | ① `cg_widget_set_value` 会按 `min`/`max` **夹取**（列表类控件的下标不走夹取）② 输入驱动型控件（`edit` / `spinner`）的顺序是"先落模型再 sync"③ 树节点要**全部插完**再 `cg_tree_expand`（插的过程中展开是空操作） |
+| 绑定不同步 | ① 源控件 `id` 是否拼对（启动写警告日志、`--selftest` 返回 5）② 抄什么由**目标类型**决定（值型抄值 / 勾选型抄勾选 / 其余抄源的文字或数值）③ 同步**不触发**目标的 `change` 回调 —— 想在同步时做事，把回调绑在**源**上 |
+| 中文显示成乱码 | ① 控制台/终端的代码页（仓库里的 `.bat` 一律 UTF-8 无 BOM + 头部重入 65001，见 `tools\bat-utf8.ps1`）② 宽字符格式化必须用 `%ls`（`%s` 是多字节）③ 业务文件按 UTF-8 存，转 GBK 用 `cg_utf8_to_gbk()`（方向写反就是乱码，但不报错） |
+| 底色 / 圆角设了没用 | ① 系统控件（列表框 / 树 / 表格 / 标签页 / 月历 / 下拉框）不吃自绘外观，这是 Win32 固有限制 ② 标签不设 `bg` = **透明**，透出的是"背后的颜色"（`cg_win_behind_rgb`）③ 改完底色用像素采样复核，别只看代码（`tools\shot.ps1`） |
+| 控件位置 / 尺寸不对 | ① 容器里的坐标是**相对容器**的 ② 菜单栏挂在窗口上没有矩形，它会占客户区顶部，运行时按 `WindowRect-ClientRect` 差值把窗口调高 ③ 高分屏有 DPI 缩放（`app->scale = dpi*100/96`），单位是逻辑像素 |
+| `.cgui` 打开就报错 | ① `type` 拼错 → 整个文件加载失败并报出类型名 ② 非容器带 `children` 会被判错（能放子控件的只有 `group`/`box`/`card`/`tabs`）③ 颜色 6 位是 `#RRGGBB`、**8 位是 `#AARRGGBB`**（顺序写反不报错，只是颜色错位）④ 字段语义的真相在 `runtime\src\core\cg_doc.c`，不在画布 |
+| 关了窗口崩溃 / 卡住 | ① 别在事件回调里立刻销毁控件，用 `cg_set_timer()` 延后 ② 长活别做在 `idle` 事件里 ③ 链接报 `Permission denied` = exe 还在跑，先结束进程再编 |
+| 看不到任何输出 / 想确认程序状态 | GUI 版（`--release`）**没有控制台，stderr 不可靠**：看日志 `%LOCALAPPDATA%\<exe名>\app.log`（256KB 轮转成 `.old`），或自己 `cg_log()` 记一条 |
+
+下面这些是更常见的问答：
 
 **Q：事件名写错了，为什么编译不报错？**
 绑定是"运行期按名字查表"，画布和 C 代码才能互不依赖。兜底：运行时 stderr 打印
