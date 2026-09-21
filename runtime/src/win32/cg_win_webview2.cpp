@@ -28,14 +28,19 @@ struct cg_echarts_state_t {
     int                        ready;
 };
 
-/* ---- WebView2 环境创建函数指针（来自 WebView2Loader.dll，运行时 LoadLibrary） ---- */
+/* ---- WebView2 函数指针（来自 WebView2Loader.dll，运行时 LoadLibrary） ---- */
 typedef HRESULT (STDMETHODCALLTYPE *PFN_CreateEnv)(
     PCWSTR browserExecutableFolder, PCWSTR userDataFolder,
     ICoreWebView2EnvironmentOptions *options,
     ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler *handler);
+typedef HRESULT (STDMETHODCALLTYPE *PFN_GetVersion)(
+    PCWSTR browserExecutableFolder, LPWSTR *version);
 
 static HMODULE g_wv2 = NULL;
 static PFN_CreateEnv g_createEnv = NULL;
+static PFN_GetVersion g_getVersion = NULL;
+
+
 
 static int cgw_wv2_ready(void)
 {
@@ -48,6 +53,11 @@ static int cgw_wv2_ready(void)
     g_createEnv = (PFN_CreateEnv)GetProcAddress(g_wv2, "CreateCoreWebView2EnvironmentWithOptions");
     if (!g_createEnv) {
         cg_log(CG_LOG_ERROR, "CreateCoreWebView2EnvironmentWithOptions not exported (%lu)", GetLastError());
+        return 0;
+    }
+    g_getVersion = (PFN_GetVersion)GetProcAddress(g_wv2, "GetAvailableCoreWebView2BrowserVersionString");
+    if (!g_getVersion) {
+        cg_log(CG_LOG_ERROR, "GetAvailableCoreWebView2BrowserVersionString not exported (%lu)", GetLastError());
         return 0;
     }
     return 1;
@@ -76,7 +86,7 @@ static LRESULT cgw_echarts_placeholder(HWND hwnd)
     HDC dc = BeginPaint(hwnd, &ps);
     RECT rc; GetClientRect(hwnd, &rc);
     SetBkMode(dc, TRANSPARENT);
-    DrawTextW(dc, L"图表：需要 WebView2 Runtime", -1, &rc,
+    DrawTextW(dc, L"图表：WebView2 未就绪", -1, &rc,
               DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     EndPaint(hwnd, &ps);
     return 0;
@@ -284,13 +294,25 @@ void cgw_echarts_init(cg_widget_t *w)
     HRESULT hrcom = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     if (FAILED(hrcom) && hrcom != RPC_E_CHANGED_MODE) {
         cg_log(CG_LOG_ERROR, "CoInitializeEx failed: 0x%08X", (unsigned)hrcom);
-        free(wudf);
-        return;
+        free(wudf); free(h); return;
     }
 
+    /* 先检测系统是否已安装 WebView2 Runtime；没有的话不要继续创建环境。 */
+    wchar_t *ver = NULL;
+    HRESULT hrv = g_getVersion(NULL, &ver);
+    if (FAILED(hrv) || !ver) {
+        cg_log(CG_LOG_ERROR, "WebView2 Runtime not available: 0x%08X", (unsigned)hrv);
+        free(wudf); free(h); return;
+    }
+    cg_log(CG_LOG_INFO, "WebView2 Runtime version: %ls", ver);
+    CoTaskMemFree(ver);
+
     HRESULT hr = g_createEnv(NULL, wudf, NULL, h);
-    if (FAILED(hr))
+    if (FAILED(hr)) {
         cg_log(CG_LOG_ERROR, "CreateCoreWebView2Environment failed: 0x%08X", (unsigned)hr);
+        free(h);   /* 同步失败：handler 不会被 WebView2 接管 */
+    }
+    /* 若 Create... 返回 S_OK，handler 由 WebView2 异步回调接管并自行释放（实际上我们 leak 它）。 */
     free(wudf);
 }
 

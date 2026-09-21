@@ -55,13 +55,23 @@ static LONG WINAPI diag_on_crash(EXCEPTION_POINTERS *ep)
     DWORD code = (ep && ep->ExceptionRecord) ? ep->ExceptionRecord->ExceptionCode : 0;
     void *addr = (ep && ep->ExceptionRecord) ? ep->ExceptionRecord->ExceptionAddress : NULL;
     char  msg[640];
+    char  mod[512] = "(unknown)";
+    HMODULE hmod;
 
-    cg_log(CG_LOG_ERROR, "程序异常退出：code=0x%08lX addr=%p", (unsigned long)code, addr);
+    if (addr && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                                   (LPCSTR)addr, &hmod)) {
+        DWORD len = GetModuleFileNameA(hmod, mod, sizeof(mod) - 1);
+        if (len > 0) mod[len] = '\0';
+        FreeLibrary(hmod);
+    }
+
+    cg_log(CG_LOG_ERROR, "程序异常退出：code=0x%08lX addr=%p module=%s",
+           (unsigned long)code, addr, mod);
     snprintf(msg, sizeof(msg),
              "程序遇到异常，即将退出。\n\n"
-             "异常码：0x%08lX\n出错地址：%p\n\n"
+             "异常码：0x%08lX\n出错地址：%p\n出错模块：%s\n\n"
              "日志文件：\n%s",
-             (unsigned long)code, addr, cg_log_file() ? cg_log_file() : "(未启用)");
+             (unsigned long)code, addr, mod, cg_log_file() ? cg_log_file() : "(未启用)");
     cg_fatal_dialog("CStackGUI 程序异常", msg);
     return EXCEPTION_EXECUTE_HANDLER;
 }

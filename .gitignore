@@ -26,3 +26,8 @@ compile_commands.json
 *.a
 Thumbs.db
 desktop.ini
+
+# WebView2 运行时创建的临时/用户数据目录（默认在 exe 旁）
+*.exe.WebView2/
+# WebView2 NuGet 包解包目录（nupkg 已入库，可重新解出）
+webview2pkg/
