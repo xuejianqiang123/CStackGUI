@@ -276,6 +276,7 @@ runtime/
       cg_kit.c          文件/路径/INI 配置/文本编码/剪贴板/外部程序/注册表；
                         有了它业务代码才真的"只 include cstackgui.h"
       cg_serial.c       串口：读线程 + 环形缓冲；业务在时钟里 cg_serial_read 取走（docs/COMM.md）
+      cg_net.c          网口（TCP）：连接 / 监听 / 接受 + 读线程 + 环形缓冲，形状同串口（docs/COMM.md）
   res/                  清单（v6 通用控件 + 每显示器 DPI）与版本资源
 ```
 
@@ -284,8 +285,8 @@ runtime/
 `runtime\src` 本身**故意不上**路径——跨层引用写错就编不过，而不是被悄悄找到。
 对象名取文件名（`build\obj\<名字>.o`），所以各层里的 `.c` 文件名必须唯一，
 命名约定已经保证（core 用 `cg_*`、后端 `cg_win_*`、外观 `cg_skin_*`、平台服务 `cg_kit_*`，
-串口按业务域命名成 `cg_serial_*`，同样落在 `kit/` 里）。
-`kit` 和 `win32` 一样知道 Win32，但**不知道任何界面概念**——它只管文件、配置、编码这些事，
+串口与网口按业务域命名成 `cg_serial_*` / `cg_net_*`，同样落在 `kit/` 里）。
+`kit` 和 `win32` 一样知道 Win32，但**不知道任何界面概念**——它只管文件、配置、编码、通信这些事，
 所以画布和 skin 都不依赖它，把 `runtime\src\kit` 整个删掉也能编过（只剩 public API 声明）。
 
 ### 4.1 四条容易踩的实现约束
@@ -551,11 +552,19 @@ release/
 - **控件绑定**：`.cgui` 的 `bind` / 运行时的 `cg_bind()`，值·文字·勾选自动同步（见 §3.3）。
   思路来自同类项目 YMGUI 的 subject-observer，但按我们"原生控件 + `.cgui` 描述界面"的路线
   简化成"值镜像"，不引入独立 subject 对象。
-- **通信层（串口）**：`runtime/src/kit/cg_serial.c`，业务用 `cg_serial_*` 枚举端口 / 打开 / 收发，
-  业务代码照旧只 include `cstackgui.h`。**运行时的第一个、也是唯一一个工作线程就在这里** ——
-  kit 的读线程只把串口字节搬进 64KB 环形缓冲（满了丢最老），业务必须在 `cg_set_timer()` 的时钟
-  回调里 `cg_serial_read()` 取走再灌进 `terminal` 控件：控件不是线程安全的，这条线不能破。
-  v1 只有 8N1、一个句柄一条线、不自动重连，见 `docs/COMM.md`。
+- **通信层（串口 / 网口）**：`runtime/src/kit/cg_serial.c` 与 `cg_net.c`，业务用 `cg_serial_*` /
+  `cg_net_*` 建链路与收发，业务代码照旧只 include `cstackgui.h`。**运行时的工作线程只出现在这两个文件里** ——
+  读线程只把字节搬进 64KB 环形缓冲（满了丢最老），业务必须在 `cg_set_timer()` 的时钟回调里
+  `cg_serial_read()` / `cg_net_read()` 取走再灌进 `terminal` 控件：控件不是线程安全的，这条线不能破。
+  串口 v1 只有 8N1、一个句柄一条线、不自动重连；网口 v1 只有 TCP、不做 TLS、不自动重连。
+  两层的取舍、可抄代码与排查表都在 `docs/COMM.md`（串口 §1~§6、网口 §7~§9）。
+- **网口（TCP）**：`cg_net_*` = 客户端 `cg_net_connect()` / 服务端 `cg_net_listen()` + `cg_net_accept()`，
+  与串口**完全同构**（每条连接一个读线程 + 一份 64KB 环形缓冲），所以上一条"线程只搬字节"的约束原样适用。
+  两处刻意的设计：**`accept` 放在时钟里轮询**（`cg_net_accept(srv, 0)` 不等、没有连接返回 `NULL`
+  是正常情况而不是错误）、**一个句柄 = 一条连接**（多客户端由业务自己拿句柄数组，本层不引入"客户端列表"）；
+  `connect` 用非阻塞 + select 实现超时，坏地址不会把界面冻住十几秒。链接需要 `-lws2_32`
+  （四处构建脚本已加），这是本项目第一项"必须新增"的链接依赖 —— `ws2_32.dll` 是系统核心 DLL，
+  不影响"单 exe、零依赖"。能自验到什么程度见 `tests/unit/test_net.c`（本机回环端到端）。
 
 **限制（都是明确取舍，不是没做完）**
 

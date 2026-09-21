@@ -1,10 +1,21 @@
-# 通信层：串口（`cg_serial_*`）
+# 通信层：串口（`cg_serial_*`）与网口（`cg_net_*`）
 
-> 一句话：**枚举端口、打开、收字节、发字节**收进运行时，业务代码照样只 `#include "cstackgui.h"` ——
-> 不用 include `windows.h`，也不用自己写 `CreateFile` / `DCB` / 读线程。
+> 一句话：**建立链路、收字节、发字节**收进运行时，业务代码照样只 `#include "cstackgui.h"` ——
+> 不用 include `windows.h`，也不用自己写 `CreateFile` / `DCB` / `WSAStartup` / 读线程。
 
-实现：`runtime/src/kit/cg_serial.c`。用法示例：`examples/serialterm/`（串口助手，第 3 节的线程模型完整版）。
+实现：`runtime/src/kit/cg_serial.c`（串口）、`runtime/src/kit/cg_net.c`（网口）。
+用法示例：`examples/serialterm/`（串口助手）与 `examples/netterm/`（网口助手）—— 两个示例共用第 3 节的线程模型。
 控件侧的配套是 `terminal`（日志视图），字段与坑见 [CGUI-FORMAT.md](CGUI-FORMAT.md) 第 2.9 节。
+
+**两层的形状是同一个**，因为面对的是同一件麻烦事（等 I/O 的每一毫秒都是消息循环被堵住的毫秒）：
+
+```
+运行时（本层）                          业务（UI 线程）
+  读线程 ──> 环形缓冲（64KB，满了丢最老） ──> cg_set_timer 回调里 read() ──> cg_term_write()
+```
+
+所以读本篇的顺序是：**先看串口（§1~§6，那套形状讲得最细）→ 再看网口（§7~§9，只讲它自己特有的部分）**。
+线程模型（§3）、接收缓冲策略（§4）这两节是两层共用的，网口那几节只做引用、不再重讲。
 
 ---
 
@@ -21,7 +32,11 @@
 - **不做**"收到数据自动回调业务" —— 那等于把线程问题原样塞回给业务，与项目一贯的
   "别开线程碰控件" 矛盾（`chart` 的实时刷新也是同一个立场，见 CGUI-FORMAT 2.10）。
 
-## 2. API 速查
+**网口（§7）面对的是同一件事** —— 等 socket 数据同样会堵死消息循环，所以它是照这个形状复制的：
+读线程 + 环形缓冲 + "业务在时钟里取"。两层唯一的区别是**"怎么建立链路"**：串口只有一件事（打开端口），
+网口有两件（客户端 `connect`、服务端 `listen` + `accept`）。
+
+## 2. 串口：API 速查（`cg_serial_*`）
 
 ```c
 typedef struct cg_serial_t cg_serial_t;   /* 不透明句柄：一个句柄 = 一条线 */
@@ -56,7 +71,7 @@ const char  *cg_serial_last_error(const cg_serial_t *s);
 `HKLM\HARDWARE\DEVICEMAP\SERIALCOMM` 列端口，**零额外链接依赖** —— 和"单 exe、零依赖"这条底线一致。
 想要设备描述就自己拿端口名去设备管理器对一下。
 
-## 3. 线程模型（唯一容易出事的地方）
+## 3. 线程模型（串口与网口共用，唯一容易出事的地方）
 
 `cg_serial_open()` 内部起一个**读线程**：它阻塞等数据，读到就写进环形缓冲（临界区保护），
 读不到就继续等。**它不认识控件，也不该认识** —— Win32 控件不是线程安全的，在读线程里
@@ -67,7 +82,7 @@ const char  *cg_serial_last_error(const cg_serial_t *s);
 
 ```
 读线程（运行时内）                  UI 线程（你的代码）
-  ReadFile ──> 环形缓冲  ────────>  cg_serial_read()  ──>  cg_term_write()
+  ReadFile / recv ──> 环形缓冲  ──>  cg_serial_read() / cg_net_read()  ──>  cg_term_write()
 ```
 
 唯一被支持的用法就是这三步，其中"什么时候来取"由 `cg_set_timer()` 决定：
@@ -157,7 +172,7 @@ static void close_port(cg_app_t *app)
 行首的 `RX ` / `TX ` / `-- ` 是 terminal **自己加的**，别在内容里再写一遍。
 另外一次 `cg_term_write()` 只刷新一次界面，所以循环里逐段灌是没问题的（CGUI-FORMAT 2.9）。
 
-## 4. 接收缓冲：满了丢最老的
+## 4. 接收缓冲：满了丢最老的（两层同策略）
 
 内部环形缓冲上限 **64KB**，写满时**丢最老的字节、保住最新的** —— 与 terminal 控件"行数超上限丢最老"
 是同一个策略：通信工具里最新的一帧永远比三分钟前的日志值钱。所以：
@@ -168,7 +183,10 @@ static void close_port(cg_app_t *app)
 
 要"一条都不丢"就得自己尽快取走：把轮询周期压到 30~50ms 对常见波特率（115200 约 11KB/s）足够了。
 
-## 5. v1 的边界（有意不做）
+网口（§7）同一套：**每条连接一份 64KB 环形缓冲 + 一个读线程**，所以服务端接 16 个客户端就是
+16 个缓冲、16 个读线程（约 1MB 内存）—— "多客户端"要不要这么多、句柄数组开多大，是业务自己掂量的。
+
+## 5. 串口 v1 的边界（有意不做）
 
 自曝一下，免得你对着 API 猜：
 
@@ -180,7 +198,7 @@ static void close_port(cg_app_t *app)
 | `cg_serial_write()` 是**同步写** | 有超时，返回实际写出的字节数。**没有发送队列** —— 发送节奏很密时排队得自己来（最省事的做法仍然是走时钟，见 `examples/serialterm`）。 |
 | 没有串口设备时**只能验证错误路径** | 没有板子的机器上就只有这一条路可走：`cg_serial_open()` 返回 `NULL`、`cg_serial_last_error()` 给出可读的中文原因。**这条路径本身就是排查第一步**，示例工程把它当正常分支处理（不是"测不到就不测"）。 |
 
-## 6. 排查表
+## 6. 串口排查表
 
 先看这张表（现象 → 先查什么，按顺序查）。下面每条都是串口这类活最常卡住的地方：
 
@@ -203,12 +221,165 @@ while (hold < 3 && hold < n && (buf[n - 1 - hold] & 0xC0) == 0x80) hold++;
    下一轮拼在新缓冲区的最前面。中文 3 字节，实际只会留 1~2 个，开 4 字节小尾巴就够 */
 ```
 
-## 7. 后面还要做什么（计划中，不是已有能力）
+## 7. 网口：API 速查（`cg_net_*`，TCP）
 
-- **网口**（`cg_net_*`）、**WiFi**（`cg_wifi_*`）、**BLE**（`cg_ble_*`）：**计划中，尚未实现**。
-- 三者的可行性已在本机工具链上实测过（2026-09-21，探针程序），所以"能不能做"不是问号：
-  - **网口**：Winsock2 是 MinGW 自带的（`-lws2_32`），TCP 客户端 / TCP 服务端 / UDP 都能做。
-    需求蓝本可直接对齐 NetAssist / Hercules（多客户端、ASCII↔Hex 互转、间隔/循环发送、从文件导入指令）。
+**先读 §3**：线程模型、`cg_set_timer` 是一次性的、`read` 返回 0 不是错 —— 这些一个字都不用改，
+把下面的 `cg_net_*` 当成 `cg_serial_*` 的同胞兄弟读就行。网口自己特有的只有"怎么建立链路"和"掉线怎么判"。
+
+```c
+typedef struct cg_net_t cg_net_t;   /* 不透明句柄：一个句柄 = 一条连接（或一个监听） */
+
+cg_net_t   *cg_net_connect(const char *host, int port, int timeout_ms);  /* 客户端 */
+cg_net_t   *cg_net_listen(int port, int backlog);                        /* 服务端：监听 */
+cg_net_t   *cg_net_accept(cg_net_t *srv, int timeout_ms);                /* 服务端：收一条连接 */
+int         cg_net_write(cg_net_t *n, const void *data, int len);
+int         cg_net_read(cg_net_t *n, void *buf, int cap);
+int         cg_net_available(const cg_net_t *n);
+int         cg_net_connected(const cg_net_t *n);
+long long   cg_net_rx_bytes(const cg_net_t *n);
+long long   cg_net_tx_bytes(const cg_net_t *n);
+const char *cg_net_peer(const cg_net_t *n);
+const char *cg_net_last_error(const cg_net_t *n);
+void        cg_net_close(cg_net_t *n);
+```
+
+| 函数 | 说明 |
+| --- | --- |
+| `cg_net_connect` | 连到 `host:port`。`host` 传 `NULL` / 空串 = `127.0.0.1`（本机自测最常用）；`timeout_ms <= 0` 按 **3000** 算。失败返回 `NULL`。实现是**非阻塞 connect + select** 带超时，所以坏地址不会把界面冻十几秒 —— 但它仍是同步调用，会占住调用线程最多 `timeout_ms`。 |
+| `cg_net_listen` | 监听端口，`backlog <= 0` 按 **4**。绑不上（端口被占）返回 `NULL`，原因见 `cg_net_last_error(NULL)`。绑 `INADDR_ANY`，本机与局域网都能连进来。 |
+| `cg_net_accept` | 收一条已到达的连接，**返回的是新句柄**（每个连接一个句柄，用完 `cg_net_close`）。`timeout_ms <= 0` = **不等、立刻返回**；没有连接时返回 `NULL` —— **那是正常情况，不是错误**（"服务端放时钟里轮询"的用法前提就在这里）。 |
+| `cg_net_write` | **同步写**（内部 1 秒超时），返回实际写出的字节数；`< 0` 失败。**没有发送队列**，与串口同一取舍；`len` 必须 `> 0`（不像 `cg_term_write` 认 `-1`）。 |
+| `cg_net_read` | **非阻塞**读，返回读到的字节数；**`0` = 此刻没有数据，不是错误**。对端已关闭时也能把缓冲里剩下的取完。 |
+| `cg_net_available` | 这条连接已到达、还没被取走的字节数。 |
+| `cg_net_connected` | 对端还在吗：**对端关闭后变 0**，这是判断"掉线"的**唯一信号**。监听句柄恒为 0。 |
+| `cg_net_rx_bytes` / `cg_net_tx_bytes` | 这条连接从建立起累计收 / 发字节数（`long long`），状态栏用。 |
+| `cg_net_peer` | 对端 `"ip:port"`；监听句柄返回 `"（监听中）"`。 |
+| `cg_net_last_error` | 最后一次失败的中文原因；**句柄传 `NULL` 时给的是"最近一次连接/监听失败"的原因**（那时还没有句柄可问）—— 与串口同一个约定。 |
+| `cg_net_close` | 关连接或关监听，**幂等、NULL 安全**。内部会**等读线程退出**（最坏一个收超时周期，约 50ms），所以它不是"零耗时"的。 |
+
+**监听句柄上做读写不崩，只是没意义**：`write` 返回 `-1`、`read` 返回 `0`、`connected` 恒 `0`；
+对一条已经连上的句柄再 `accept` 也是返回 `NULL`（它没在监听）。`WSAStartup` 在第一次建链路时自动做
+（整进程一次），**业务不需要自己碰 Winsock 的初始化和清理** —— 这是"只 include `cstackgui.h`"的一部分。
+
+## 8. 网口：与串口一样的地方、不一样的地方
+
+**一样的地方（直接复用，别重造）**：线程模型（§3）、"时钟里取字节"那三步、接收缓冲满了丢最老（§4）、
+`read` 返回 0 不是错、失败先看 `last_error()`、`close` 幂等且 NULL 安全、
+`cg_set_timer` 是一次性的（回调末尾必须再挂一次才成为"周期"）。
+
+**客户端：把 §3.1 那个例子照抄，只改建立/断开链路的两行** ——
+
+```c
+g_net = cg_net_connect("192.168.1.10", 8080, 3000);   /* 原来是 cg_serial_open("COM3", 115200) */
+...
+cg_net_close(g_net);                                  /* 原来是 cg_serial_close */
+g_net = NULL;                                         /* 置 NULL 之后时钟回调自己就停了 */
+```
+
+再补一句掉线判断就闭环了（对端一走，`cg_net_connected()` 就变 0）：
+
+```c
+if (!cg_net_connected(g_net)) {                       /* 对端断开：唯一的信号 */
+    cg_term_write(term, CG_TERM_SYS, "对端已断开\r\n", -1);
+    cg_net_close(g_net);                              /* 自己回收，别留着句柄 */
+    g_net = NULL;
+    return;                                           /* 不再排下一拍 */
+}
+```
+
+**服务端：多两件事** —— 监听，以及**自己管一组连接句柄**（本层没有"客户端列表"这个概念）：
+
+```c
+#define MAX_CLI  16
+static cg_net_t *g_srv = NULL;        /* 监听句柄：不能读写，只用来 accept */
+static cg_net_t *g_cli[MAX_CLI];      /* 一个句柄 = 一条连接，槽位由业务自己管 */
+
+static void net_tick(void *user)
+{
+    cg_app_t     *app  = (cg_app_t *)user;
+    cg_widget_t  *term = cg_find(app, "term_log");
+    unsigned char buf[512];
+    int           i, n;
+
+    if (g_srv) {
+        cg_net_t *c = cg_net_accept(g_srv, 0);        /* 0 = 不等、立刻返回 */
+        if (c) {                                      /* NULL 是"还没人来"，不是错误 */
+            for (i = 0; i < MAX_CLI; i++) if (!g_cli[i]) break;
+            if (i < MAX_CLI) {
+                g_cli[i] = c;
+                cg_term_write(term, CG_TERM_SYS, "新客户端接入\r\n", -1);
+                cg_log(CG_LOG_INFO, "来自 %s", cg_net_peer(c));   /* 想看是谁连的 */
+            } else {
+                cg_net_close(c);                      /* 满了就拒掉，别泄漏句柄 */
+                cg_term_write(term, CG_TERM_SYS, "连接数已满，拒掉\r\n", -1);
+            }
+        }
+    }
+
+    for (i = 0; i < MAX_CLI; i++) {
+        cg_net_t *c = g_cli[i];
+
+        if (!c) continue;
+        while ((n = cg_net_read(c, buf, (int)sizeof(buf))) > 0)
+            cg_term_write(term, CG_TERM_RX, buf, n);
+        if (!cg_net_connected(c)) {                   /* 客户端走了：服务端负责回收 */
+            cg_net_close(c);
+            g_cli[i] = NULL;
+            cg_term_write(term, CG_TERM_SYS, "客户端断开\r\n", -1);
+        }
+    }
+
+    cg_set_timer(app, 30, net_tick, app);             /* 再挂一次才是"周期" */
+}
+```
+
+两个新手最容易栽的点：**`accept` 要放在时钟里**（`timeout_ms` 传 0 的那次调用永远不让你等），
+以及**每条连接是独立句柄** —— 读错句柄（读了监听句柄、或读了别人的连接）不会崩，只是永远收不到数据。
+
+**TCP 是字节流，没有"消息边界"**：一次 `cg_net_read()` 拿到的可能是半个报文，也可能是两条半；
+它和对方调用了几次 `cg_net_write()` **没有任何对应关系**。按行 / 按长度切分是业务的事 ——
+这一点和串口完全一样，§6 里那段 UTF-8 尾巴处理可以直接抄。
+
+| 网口 v1 的边界（有意不做） | 说明 |
+| --- | --- |
+| 只有 **TCP** | UDP（`sendto` / `recvfrom`）是下一步；广播 / 组播也没有。 |
+| **不做 TLS** | 明文 TCP，要加密得自己在业务侧加一层。 |
+| **不自动重连** | 对端断开后旧句柄就废了（`connected` 变 0）。要恢复就"`close` 掉旧的 + 重新 `connect`"。 |
+| `cg_net_write()` 是**同步写** | 带 1 秒超时，**没有发送队列**（与串口同一取舍）；发送节奏很密时自己排队，最省事的做法仍然是走时钟。 |
+| 接收缓冲 **64KB** 满了丢最老 | 与串口、terminal 同一策略，见 §4。 |
+| **一个句柄 = 一条连接** | 多客户端要自己拿句柄数组（上面那段就是模板）；本层不引入"客户端列表"。 |
+| `host` 只解析 **IPv4** | 写域名（A 记录）能解析；写 IPv6 字面量会直接解析失败（内部限定 `AF_INET`）。 |
+
+**链接要 `-lws2_32`，但用户不用管**：winsock2 是系统自带的库，四个构建脚本
+（根 `build-app.bat`、`tools\run-tests.bat`、`tools\check-kit.bat`、`packaging\build-app.bat`）**已经加好了** ——
+自己写工程、或画布导出骨架后直接 `build-app.bat` 都能编过，不需要手工往链接行里加东西。
+`ws2_32.dll` 是系统核心 DLL，所以"单 exe、零依赖"这条底线没破。
+
+## 9. 网口排查表
+
+**所有网口问题的第一步都是本机回环**：让客户端连自己机器上的 `127.0.0.1:<你监听的端口>`，
+一步就把"网络 / 防火墙 / 网线 / 对端程序"全部排除掉，剩下的只可能是代码。
+这也是网口比串口好验的地方：**回环 100% 能自验**（串口要有板子），
+`tools\run-tests.bat` 里的 `tests\unit\test_net.c` 就是这么干的 —— 同一个进程里
+"监听 → 连接 → 接受 → 双向收发 → 关一端看另一端掉线"全跑通，服务端读到的对端是真实地址
+（形如 `127.0.0.1:41635`），不是模拟出来的。
+
+| 现象 | 先查什么 |
+| --- | --- |
+| `cg_net_connect()` 返回 NULL | ① **先看 `cg_net_last_error(NULL)`**：中文、直接说原因（拒绝连接 / 超时 / 网络不可达 / 主机名解析不了），别从代码猜 ② 端口和 IP 是不是服务端在听的那个（服务端 `cg_net_listen()` 有没有成功）③ **先本机回环**：连 `127.0.0.1` 都不通，就别去查网线和防火墙了，是服务端没在听 |
+| 连不上，原因是"对方拒绝连接"（`WSAECONNREFUSED`） | ① 这个端口上**没人监听** —— 服务端没起 / 端口写错 / 服务端自己也 `listen` 失败了（那它的原因在 `last_error(NULL)` 里）② 服务端绑的是 `INADDR_ANY`，所以**同一台机器**上连 `127.0.0.1` 一定能通：通不了就是它确实没在听 |
+| 连不上，原因是"连接超时"（`WSAETIMEDOUT`） | ① 对方 IP 对不对、和你是不是同一网段（跨网段要先有路由）② **Windows 防火墙**：程序第一次监听 / 外连会弹"是否允许"，点了拒绝就一直超时，而且不会再弹第二次（去入站/出站规则里看）③ 跨网、公网要把 `timeout_ms` 给大（默认 3000 可能不够）④ 别误判成"界面卡住"：`connect` 是同步的，它会占住调用线程最多 `timeout_ms`（内部非阻塞 + select，所以不会像裸阻塞那样冻十几秒）|
+| `cg_net_listen()` 返回 NULL（端口被占 / 监听失败） | ① **先看 `cg_net_last_error(NULL)`**，最常见两种：`端口已被占用`（上一次的 exe 没退干净、或别的程序占着）、`端口被拒绝`（1024 以下要管理员）② 换个端口试（测试代码就是三个候选端口逐个试）③ 端口范围 1~65535：`listen(0)` / `listen(70000)` 直接失败，**不是**"自动挑一个空闲端口" ④ 监听句柄设了 `SO_REUSEADDR`，重启后立刻重绑通常没问题，但真有别的进程在抢同一端口时还是会失败 |
+| 连上了，但收不到数据 | ① **时钟有没有真的跑起来**（`cg_set_timer` 一次性，回调末尾忘了再挂 = 只跑一轮，同 §3 / §6）② **服务端最容易拿错句柄**：要读的是 `cg_net_accept()` 返回的那条连接，不是监听句柄；读错不崩，只是永远 0 ③ `read` 返回 0 是"这一拍没有"，用 `cg_net_available()` / `cg_net_rx_bytes()` 判断字节**到底有没有到**（到了却读不出来 = 句柄拿错；根本没到 = 对端或网络侧）④ 先本机回环：回环能收，就往"防火墙 / 网段 / 对端程序"上查 |
+| 服务端收不到连接 | ① **`accept` 必须在时钟里轮询**（`timeout_ms` 传 0 = 不等、立刻返回，返回 NULL 是正常的，别拿它当失败去弹框）② 时钟挂上了吗、有没有被自己 `cg_kill_timer` 掉 ③ 监听句柄是不是被提前 `close` 了 —— **别用 `connected()` 判断监听是否还活着**（监听句柄恒为 0）④ 客户端 `connect` 成功 ≠ 你 `accept` 过了：连接会先进内核等待队列，`backlog` 默认 4，攒满之前不会丢 ⑤ 防火墙拦的是**入站**方向：本机回环通、别的机器连不进来，先看这条 |
+| 中文（UTF-8）被截断 / 偶尔半个字 | 与串口同一个原因：`cg_net_read()` 的缓冲区边界可能正好切在 UTF-8 序列中间 —— **一次收不完是常态**，拼接方法直接抄 §6 的"中文被截断怎么处理"。再加一条网络特有的：TCP 是字节流，**一次 `read` 与对方一次 `write` 没有边界对应**，别把一轮读到的字节当"一条完整报文"用 |
+| 界面卡顿 / 终端不刷新 | ① 最大嫌疑：**在读线程里碰控件**（读线程唯一被允许做的事就是往环形缓冲写，见 §3）② 是不是以为有数据会自动回调 —— 模型是**拉**：必须在时钟里主动 `cg_net_read()` ③ 一次 `cg_term_write()` 刷一次界面，循环里逐段灌没问题（CGUI-FORMAT 2.9）④ 别把"连接"做成一个大 timeout 的同步等待去卡住消息循环 |
+| 关闭时崩溃 / 卡住 | ① 关之前先让时钟停：把句柄置 `NULL`，回调里发现没了就 `return`，别让下一拍再用它 ② 同一条连接别被两处同时拿着（另一个定时器、另一个回调）③ `cg_net_close()` 会**等读线程退出**（最坏约 50ms），"关窗口那一瞬间"别反复开关多条连接 ④ 服务端的句柄数组里**每条已连句柄都要 `close`**（漏一个就是句柄 + 读线程泄漏）；它幂等、NULL 安全，放心写成"遍历数组全关" |
+
+## 10. 后面还要做什么（计划中，不是已有能力）
+
+- **WiFi**（`cg_wifi_*`）、**BLE**（`cg_ble_*`）：**计划中，尚未实现**。
+- 两者的可行性已在本机工具链上实测过（2026-09-21，探针程序），所以"能不能做"不是问号：
   - **WiFi**：MinGW 自带 `wlanapi.h`，链接 `-lwlanapi`；`WlanOpenHandle` / `WlanEnumInterfaces` /
     `WlanGetAvailableNetworkList` / `WlanQueryInterface`(RSSI) / `WlanConnect` / `WlanDisconnect`
     实跑全通 —— "扫描 + 看信号 + 连/断"这一档可做。
@@ -217,12 +388,14 @@ while (hold < 3 && hold < n && (buf[n - 1 - hold] & 0xC0) == 0x80) hold++;
     `BluetoothFindFirstDevice` 可用。**但只限"Windows 已配对"的设备** —— 未配对设备的广播扫描
     只能走 WinRT（要 C++/WinRT + MSVC），本工具链没有。变通：先让 Windows 配对，或走
     "串口-BLE 透传模块"（那就回到本篇这层串口）。
-- 本层（串口）落在 `runtime/src/kit/` 里，列端口走注册表 `HKLM\HARDWARE\DEVICEMAP\SERIALCOMM`
-  （**不引 SetupAPI，见 §2**），所以串口这块没有给 exe 加任何新的链接依赖。
-  **运行时的第一个、也是唯一一个工作线程就在这里** —— 网口/WiFi 若落地，会沿用同一套
-  "运行时起读线程、你在时钟里取"的形状，业务侧不会再看到线程。
+- **网口 v1 只做了 TCP**：UDP 是下一步（沿用同一套跳，见 §8 的边界表）。
+- 通信层都落在 `runtime/src/kit/` 里：串口（`cg_serial.c`）列端口走注册表
+  `HKLM\HARDWARE\DEVICEMAP\SERIALCOMM`（**不引 SetupAPI，见 §2**），网口（`cg_net.c`）只多一条
+  `-lws2_32`（见 §8）—— 两者都**没有**给业务 exe 加"要用户自己配"的依赖。
+  **运行时的工作线程只出现在这两个文件里**（各自的读线程）；业务侧永远只看到"在时钟里取字节"。
+  WiFi 若落地，也沿用同一套形状（§3）。
 
-## 8. 示例工程
+## 11. 示例工程
 
 `examples/serialterm/` —— 串口助手，演示第 3 节那套线程模型的完整版（17 个控件、8 个事件回调）：
 
@@ -234,3 +407,11 @@ while (hold < 3 && hold < n && (buf[n - 1 - hold] & 0xC0) == 0x80) hold++;
   `cg_term_*` 那组 API 自己加一个，见 CGUI-FORMAT 2.9）；
 - **重点看三处**：`on_ready` 里开串口 + 起时钟、时钟回调里 `cg_serial_read` → `cg_term_write`、
   断开时 `cg_serial_close` + 句柄置 `NULL`。把这三处抄进自己的工程，串口这块就不会踩到线程的坑。
+
+`examples/netterm/` —— 网口助手（TCP 客户端 + 服务端），**与 serialterm 是同一个形状**，看点也还是那三处：
+
+- 客户端半边：就是 §3.1 的三步，把 `cg_serial_*` 换成 `cg_net_*`（§8 写了具体改哪两行），
+  外加 §8 那句掉线判断（`cg_net_connected()` 变 0 就收摊）；
+- 服务端半边：`cg_net_listen()` + 时钟里 `cg_net_accept(srv, 0)` + 自己那份连接句柄数组
+  （§8 里那段 `net_tick` 就是它的骨架）；
+- 上手第一步按 §9 说的做：**先连 `127.0.0.1` 自测**，通了再去连真机器。
