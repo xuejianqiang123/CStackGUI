@@ -372,7 +372,11 @@ static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
         snprintf(auto_id, sizeof(auto_id), "%s_%d", ki->name, ++s_auto_id);
         n->id = dup_str(auto_id);
     }
-    n->text = dup_str(cj_str(cj_get(o, "text"), ki->def_text));
+    /* text 缺失就是**空文字**：.cgui 是唯一真相，别拿类型的默认文字回填。
+     * def_text（"按钮"/"标签"/…）只服务于画布调色板新建控件和 cg_widget_add()
+     * 程序化创建；在解析时回填会让"画布上清空的文字"被顶回来，
+     * 表现出来就是空文字按钮里又长出一个"按钮"（图片按钮最明显）。 */
+    n->text = dup_str(cj_str(cj_get(o, "text"), ""));
 
     /* rect 既支持 {x,y,w,h} 对象，也支持扁平的 x/y/w/h */
     rect = cj_get(o, "rect");
