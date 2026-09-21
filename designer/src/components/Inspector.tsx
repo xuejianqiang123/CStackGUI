@@ -2,6 +2,7 @@
  *
  * 每个字段都直接改文档模型，改完即可保存，没有「应用」按钮。
  */
+import { useState, useEffect, useMemo } from "react";
 import {
   KIND_MAP,
   findParent,
@@ -76,6 +77,52 @@ function Area({
         onFocus={onFocus}
         onChange={(e) => onChange(e.target.value)}
       />
+    </div>
+  );
+}
+
+/** ECharts 的 option 编辑器：整段 JSON 自由编辑，解析失败只提示、不提交，
+ *  解析成功才写回 node.option（和「结构化内容用文本编辑」一个思路，只是校验交给 JSON）。 */
+function EchartsOptionArea({
+  value,
+  onFocus,
+  onChange,
+}: {
+  value: unknown;
+  onFocus: () => void;
+  onChange: (v: unknown) => void;
+}) {
+  const [text, setText] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const serialized = useMemo(() => JSON.stringify(value ?? {}, null, 2), [value]);
+  useEffect(() => {
+    setText(serialized);
+    setErr(null);
+  }, [serialized]);
+  return (
+    <div className="insp-area">
+      <div className="insp-area-head">
+        <span>图表配置 (option)</span>
+        <span className="muted small">ECharts JSON</span>
+      </div>
+      <textarea
+        className="input mono insp-textarea"
+        rows={12}
+        value={text}
+        spellCheck={false}
+        onFocus={onFocus}
+        onChange={(e) => {
+          const t = e.target.value;
+          setText(t);
+          try {
+            onChange(JSON.parse(t));
+            setErr(null);
+          } catch (ex) {
+            setErr((ex as Error).message);
+          }
+        }}
+      />
+      {err ? <div className="insp-error">JSON 解析失败：{err}</div> : null}
     </div>
   );
 }
@@ -629,6 +676,20 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
           onFocus={onBeginHistory}
           onChange={(v) => patchSoft((n) => { n.text = v; })}
         />
+      ) : null}
+
+      {node.type === "echarts" ? (
+        <>
+          <EchartsOptionArea
+            value={node.option}
+            onFocus={onBeginHistory}
+            onChange={(v) => patchSoft((n) => { n.option = v; })}
+          />
+          <p className="muted small">
+            option 是整段 ECharts 配置：series[].type 决定图类型（bar/line/pie/scatter…）。
+            运行时用 WebView2 内嵌 Edge 渲染同一套配置，所见即所得。
+          </p>
+        </>
       ) : null}
 
       {node.type === "tree" ? (
