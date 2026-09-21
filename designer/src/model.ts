@@ -144,6 +144,10 @@ export const KIND_EVENTS: Record<string, CgEvent[]> = {
   rate: ["change"],
   pagination: ["change"],
   card: [],
+  /* 终端是只读的：内容由 cg_term_write 灌进去，没有用户操作要通知业务 */
+  terminal: [],
+  /* 拖完才发一次（拖动中不发）—— 适合在回调里把布局存进 INI */
+  splitter: ["release"],
   shape: [],
 };
 
@@ -380,6 +384,8 @@ export const KINDS: KindInfo[] = [
   { type: "group", label: "分组框", group: "容器", container: true, w: 260, h: 180, text: "分组" },
   { type: "box", label: "容器块", group: "容器", container: true, w: 200, h: 120, text: "" },
   { type: "card", label: "卡片", group: "容器", container: true, w: 280, h: 180, text: "卡片" },
+  { type: "splitter", label: "分隔条", group: "容器", container: false, w: 6, h: 200, text: "" },
+  { type: "terminal", label: "终端", group: "数据", container: false, w: 360, h: 200, text: "", listLike: true },
   { type: "separator", label: "分割线", group: "其它", container: false, w: 200, h: 2, text: "" },
   { type: "image", label: "图片", group: "其它", container: false, w: 240, h: 140, text: "" },
   { type: "shape", label: "外形框", group: "其它", container: false, w: 120, h: 120, text: "" },
@@ -579,6 +585,14 @@ export function makeNode(type: string, x: number, y: number): CgNode {
     node.text = todayText();
   } else if (type === "richtext") {
     node.text = "富文本内容";
+  } else if (type === "terminal") {
+    /* 给几行初始内容，画布上才看得出这是什么控件（运行时按 format/checked 重新着色） */
+    node.items = [
+      "[12:00:00] -- 就绪",
+      "[12:00:01] TX AT+GMR",
+      "[12:00:01] RX OK",
+    ];
+    node.checked = true;      /* 默认显示时间戳 */
   } else if (type === "timer") {
     node.period = 1000;
   } else if (type === "colorpicker") {
@@ -1030,7 +1044,15 @@ function cleanNode(node: CgNode): CgNode {
   if (node.text) out.text = node.text;
   if (node.page !== undefined && node.page > 0) out.page = Math.round(node.page);
   if (node.src) out.src = node.src;
-  if (node.format && ((node.type === "datepicker" && node.format !== "date") || node.type === "shape")) {
+  if (
+    node.format &&
+    ((node.type === "datepicker" && node.format !== "date") ||
+      node.type === "shape" ||
+      /* 分隔条缺省就是左右分栏（竖条），只有 "row" 需要写出去 */
+      (node.type === "splitter" && node.format !== "col") ||
+      /* 终端缺省是文本模式，只有 "hex" 需要写出去 */
+      (node.type === "terminal" && !!node.format))
+  ) {
     out.format = node.format;
   }
   if (node.hint) out.hint = node.hint;

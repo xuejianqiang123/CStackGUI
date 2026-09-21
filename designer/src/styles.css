@@ -1134,6 +1134,81 @@ input.narrow {
 .widget-shape::after {
   content: none;
 }
+
+/* 分隔条（splitter）：和运行时画的一样 —— 中间一条线 + 一列握点，一眼看出"这里能拖"。
+   左右分栏 = 竖条（format 缺省 "col"）；上下分行 = 横条（format: "row"）。 */
+.widget-splitter {
+  --split-line: #cac4d0;
+  --split-dot: #79747e;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+.widget-splitter::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, transparent calc(50% - 0.5px), var(--split-line) calc(50% - 0.5px),
+                    var(--split-line) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+    repeating-linear-gradient(to bottom, var(--split-dot) 0 1.5px, transparent 1.5px 6px);
+  background-size: 100% 100%, 3px 100%;
+  background-position: center center, center center;
+  background-repeat: no-repeat;
+}
+.widget-splitter-row::after {
+  background-image:
+    linear-gradient(to bottom, transparent calc(50% - 0.5px), var(--split-line) calc(50% - 0.5px),
+                    var(--split-line) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+    repeating-linear-gradient(to right, var(--split-dot) 0 1.5px, transparent 1.5px 6px);
+  background-size: 100% 100%, 100% 3px;
+}
+
+/* 调色板里的小图标：一节虚线立柱 */
+.glyph-splitter {
+  width: 3px;
+  height: 12px;
+  border: none;
+  border-radius: 1px;
+  background: repeating-linear-gradient(to bottom, var(--outline-strong) 0 2px, transparent 2px 5px);
+}
+
+/* 终端（terminal）：画布上也画成"日志窗口"的样子，行色跟运行时的方向色对齐 */
+.widget-terminal {
+  background: #fffbfe;
+  border: 1px solid #cac4d0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.term-body {
+  height: 100%;
+  padding: 2px 5px;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  overflow: hidden;
+}
+.term-line {
+  white-space: pre;
+  overflow: hidden;
+}
+.term-rx {
+  color: #1b6e33;
+}
+.term-tx {
+  color: #145ca8;
+}
+.term-sys {
+  color: #6b6b6b;
+}
+.term-hint {
+  padding: 6px 8px;
+  color: var(--on-surface-var);
+  font-size: 11.5px;
+}
+.glyph-terminal {
+  background: repeating-linear-gradient(to bottom, var(--outline-strong) 0 1px, transparent 1px 4px);
+}
 .ctl-timer {
   display: flex;
   align-items: center;

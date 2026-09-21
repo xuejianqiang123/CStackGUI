@@ -294,6 +294,39 @@ cg_bind(cg_find(app, "sld_level"), cg_find(app, "lab_value"), 0);
 /* 双向：滑块和微调框两个入口改同一个值 */
 cg_bind(cg_find(app, "sld_level"), cg_find(app, "spn_level"), 1);`,
           }),
+          c("cg_splitter_pos", "读分隔条位置", "int cg_splitter_pos(const cg_widget_t *w)", "相对父容器的像素（竖条是 x，横条是 y）；配 cg_ini_write 存布局", {
+            sample: `int pos = cg_splitter_pos(cg_find(app, "sp_main"));
+cg_ini_write(cfg, "布局", "分隔条", cg_str_format("%d", pos));`,
+          }),
+          c("cg_splitter_set", "设分隔条位置", "void cg_splitter_set(cg_widget_t *w, int pos)", "两侧面板跟着重排（会被夹到最小 16px）；启动时恢复布局用", {
+            sample: `/* on_ready 里恢复上次拖出来的比例 */
+int pos = atoi(cg_ini_read(cfg, "布局", "分隔条", "320"));
+cg_splitter_set(cg_find(app, "sp_main"), pos);`,
+          }),
+        ],
+      },
+      {
+        label: "终端 / 日志（terminal）",
+        cmds: [
+          c("cg_term_write", "写一行", "void cg_term_write(cg_widget_t *w, int dir, const void *data, int len)", "把收到/发出的数据灌进终端；方向决定行首标记与颜色（RX 绿 / TX 蓝 / SYS 灰）", {
+            sample: `/* 串口/网络收到多少就灌多少（len 传 -1 表示按 C 字符串取长度） */
+cg_term_write(cg_find(app, "term_log"), CG_TERM_RX, buf, n);
+
+/* 发出去的也记一笔；数据里带 \\r\\n 会自动切成多行 */
+cg_term_write(cg_find(app, "term_log"), CG_TERM_TX, "AT+GMR\\r\\n", -1);`,
+          }),
+          c("cg_term_clear", "清空", "void cg_term_clear(cg_widget_t *w)", "清屏（日志区旁边常配一个「清空」按钮）"),
+          c("cg_term_set_hex", "切 HEX / 文本", "void cg_term_set_hex(cg_widget_t *w, int on)", "1 = 十六进制（01 AB 20），0 = 文本；只影响**之后**写入的行", {
+            sample: `/* HEX 开关：一个按钮切一下 */
+cg_term_set_hex(term, !cg_term_hex(term));`,
+          }),
+          c("cg_term_hex", "读显示模式", "int cg_term_hex(const cg_widget_t *w)", "1 = 当前是 HEX 模式"),
+          c("cg_term_set_timestamp", "时间戳开关", "void cg_term_set_timestamp(cg_widget_t *w, int on)", "每行前面带 [时:分:秒]（排查数据间隔很有用）"),
+          c("cg_term_set_max_lines", "设行数上限", "void cg_term_set_max_lines(cg_widget_t *w, int lines)", "超了从最老的丢；传 0 恢复默认 500"),
+          c("cg_term_count", "读行数", "int cg_term_count(const cg_widget_t *w)", "当前多少行（用来判断「到底收到东西没有」）"),
+          c("cg_term_save", "存成文件", "int cg_term_save(cg_widget_t *w, const char *path)", "UTF-8 + CRLF，不含方向标记；成功返回 0", {
+            sample: `cg_term_save(cg_find(app, "term_log"), "session.log");`,
+          }),
         ],
       },
       {

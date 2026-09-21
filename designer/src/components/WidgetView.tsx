@@ -340,6 +340,25 @@ function inner(node: CgNode) {
     case "shape":
       return null;
 
+    case "terminal": {
+      /* 画布不知道每行的方向（那是运行时灌内容时才知道的），所以只按行首的
+       * RX / TX 字样给个提示色，让画布上的观感和跑起来差不多。 */
+      const lines = node.items ?? [];
+      if (!lines.length) return <div className="term-hint">运行时用 cg_term_write() 灌内容</div>;
+      return (
+        <div className="term-body">
+          {lines.map((t, i) => {
+            const cls = t.includes(" TX") ? "term-tx" : t.includes(" RX") ? "term-rx" : "term-sys";
+            return (
+              <div key={i} className={`term-line ${cls}`}>
+                {t}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
     default:
       return null;
   }
@@ -367,6 +386,8 @@ export default function WidgetView({ node, depth, selectedId, onSelect, onPointe
 
   const bound = CG_EVENTS.filter((e) => node.events?.[e]);
   const isGroup = node.type === "group" || node.type === "box" || node.type === "tabs" || node.type === "card";
+  /* 分隔条按方向画：format "row" = 上下分行（横条），缺省 "col" = 左右分栏（竖条） */
+  const splitterRow = node.type === "splitter" && node.format === "row";
 
   /* 菜单栏没有矩形：它画在窗口框架上，由 Canvas 负责，这里不画 */
   if (node.type === "menu") return null;
@@ -382,6 +403,7 @@ export default function WidgetView({ node, depth, selectedId, onSelect, onPointe
       className={[
         "widget",
         `widget-${node.type}`,
+        splitterRow ? "widget-splitter-row" : "",
         selectedId === node.id ? "selected" : "",
         node.visible === false ? "hidden-widget" : "",
         node.enabled === false ? "disabled-widget" : "",

@@ -500,6 +500,70 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
           </select>
         </Row>
       ) : null}
+      {node.type === "splitter" ? (
+        <>
+          <Row label="方向">
+            <select
+              className="input"
+              value={node.format ?? "col"}
+              onChange={(e) => patch((n) => { n.format = e.target.value; })}
+            >
+              <option value="col">左右分栏（竖条，6px 宽）</option>
+              <option value="row">上下分行（横条，6px 高）</option>
+            </select>
+          </Row>
+          <p className="muted small">
+            拖它 = 撑开它<b>前面那一块</b>，它之后的控件整体让位，同一容器里<b>最后一块</b>吃掉余量
+            （反过来缩水）。所以「日志区 / 分隔条 / 发送区」这种两段布局，拖中间那根就是调比例 ——
+            不需要布局引擎。两侧最小 16px，拖完发一次 <code>release</code> 事件（适合存布局）。
+          </p>
+          <p className="muted small">
+            摆放要求：<b>前一块 → 分隔条 → 后一块</b> 顺序相邻，且最后一根之后必须还有一块；
+            竖条把高度铺满、横条把宽度铺满（坐标是绝对像素）。
+          </p>
+        </>
+      ) : null}
+      {node.type === "terminal" ? (
+        <>
+          <Row label="显示">
+            <select
+              className="input"
+              value={node.format ?? "ascii"}
+              onChange={(e) => patch((n) => { n.format = e.target.value; })}
+            >
+              <option value="ascii">文本（ASCII / UTF-8）</option>
+              <option value="hex">十六进制（HEX）</option>
+            </select>
+          </Row>
+          <Row label="时间戳">
+            <label className="check-inline">
+              <input
+                type="checkbox"
+                checked={node.checked === true}
+                onChange={(e) => patch((n) => { n.checked = e.target.checked; })}
+              />
+              每行前面带 [时:分:秒]
+            </label>
+          </Row>
+          <Row label="最多行数">
+            <input
+              className="input narrow"
+              type="number"
+              min={0}
+              step={100}
+              value={node.value ?? 500}
+              onChange={(e) => patch((n) => { n.value = Math.max(0, Number(e.target.value) || 0); })}
+            />
+            <span className="muted small">超了从最老的丢；0 = 用默认 500</span>
+          </Row>
+          <p className="muted small">
+            只读的日志视图：业务用 <code>cg_term_write(w, CG_TERM_RX/TX/SYS, buf, len)</code> 灌内容，
+            <b>一行一次调用</b>（数据里带 <code>\r\n</code> 会自动切成多行，<code>\r</code> 丢掉）。
+            RX 绿 / TX 蓝 / 自己记的灰；可以选中复制，也能 <code>cg_term_save()</code> 存成文件。
+            内容由代码灌，所以这里填的「条目」只是初始内容。
+          </p>
+        </>
+      ) : null}
       {node.type === "table" ? (
         <>
           <Row label="多选">
