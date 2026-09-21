@@ -315,6 +315,35 @@ int cg_bind_copy(cg_widget_t *src, cg_widget_t *dst);
  *  @return 实际位移（可能被最小尺寸夹小）；0 表示没动 */
 int cg_splitter_apply(cg_widget_t *w, int delta);
 
+/* -------------------------------------------------- 环形字节缓冲（core/cg_ringbuf.c）
+ * 平台服务层收数据用的定容 FIFO（串口的接收缓冲；网口以后复用同一套）。
+ * **本身不带锁** —— 谁用谁负责同步（串口那边是一把 CRITICAL_SECTION），这样测试可以在
+ * 单线程里把环绕/溢出/清空的边界挨个锤一遍。满了丢**最老的**。 */
+
+typedef struct {
+    unsigned char *buf;      /* 容量 cap 的字节环 */
+    int            cap;
+    int            head;     /* 下一个要读的位置 */
+    int            count;    /* 当前有多少字节 */
+    long long      dropped;  /* 累计因为满而丢掉的字节数（排错用） */
+} cg_ring_t;
+
+int  cg_ring_init(cg_ring_t *r, int cap);                      /* cap<=0 返回 0；可以递未初始化的结构体进来
+                                                                  （它不读旧内容），但**重建前要先 free** */
+void cg_ring_free(cg_ring_t *r);                               /* 幂等、NULL 安全 */
+int  cg_ring_push(cg_ring_t *r, const void *data, int len);    /* 返回实际写入 */
+int  cg_ring_pop(cg_ring_t *r, void *out, int cap);            /* 返回实际取出 */
+int  cg_ring_count(const cg_ring_t *r);
+void cg_ring_clear(cg_ring_t *r);
+
+/* -------------------------------------------------- 串口（kit/cg_serial.c） */
+
+/** 内部：拿一个**已经打开好的句柄**建链路并起读线程。
+ *  正常的 cg_serial_open() 走的就是它（先 CreateFile + 配 DCB 再进来）；单测拿**文件句柄**
+ *  喂进来，于是"读线程 + 环形缓冲 + 取回"这条链在没有串口设备的机器上也能验掉。
+ *  失败返回 NULL（此时句柄不被接管，调用方自己关）。name 只用于日志与错误信息。 */
+cg_serial_t *cg_serial_from_handle(void *handle, const char *name, int rx_cap);
+
 /* -------------------------------------------------- 状态灯 / 仪表盘（cg_widget_data.c） */
 
 /** led：此刻灯亮着吗（状态 = 闪时按 period 前后半周期翻转）。

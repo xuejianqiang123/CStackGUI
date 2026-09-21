@@ -519,6 +519,73 @@ void cg_led_set_color(cg_widget_t *w, unsigned rgb);
 void cg_meter_set(cg_widget_t *w, int value);
 void cg_meter_set_range(cg_widget_t *w, int min, int max);
 
+/* ------------------------------------------------------------ 串口（cg_serial）
+ * 这套东西最常被用来的场景就是"跟一块板子说话"。有了它，业务不用再 include windows.h 去
+ * CreateFile("\\\\.\\COMx")，"只 include cstackgui.h" 的约定继续成立。
+ *
+ * 典型用法（**必须这么写**，原因见下面那段）：
+ *
+ *   void on_ready(cg_app_t *app, void *user) {
+ *       g_ser = cg_serial_open("COM3", 115200);
+ *       if (!g_ser) {
+ *           cg_term_write(cg_find(app, "term"), CG_TERM_SYS,
+ *                         cg_serial_last_error(NULL), -1);      // 原因直接写进日志视图
+ *           return;
+ *       }
+ *       cg_set_timer(50);                                      // 50ms 去取一次
+ *   }
+ *   void on_tick(cg_widget_t *self, cg_event_t ev, void *user) {
+ *       char buf[4096];
+ *       int  n = cg_serial_read(g_ser, buf, sizeof buf);        // 非阻塞，没数据就返回 0
+ *       if (n > 0) cg_term_write(g_find(term), CG_TERM_RX, buf, n);
+ *   }
+ *
+ * **线程模型（唯一被支持的用法，也是唯一容易出事的地方）**：
+ * cg_serial_open() 内部起一个读线程，它只做一件事 —— 把驱动里的字节搬进接收缓冲。
+ * **你不能在那个线程里碰控件**（这不是本项目的风格偏好，是 Win32 的硬约束）。
+ * 所以要像上面那样用 cg_set_timer 定周期去"取"，而不是指望被"推"。
+ * 完整例子见 examples/serialterm。
+ *
+ * v1 的边界（有意不做，别猜）：只支持 8N1（不收数据位/停止位/校验位/流控）；一个句柄一条线；
+ * 不自动重连；cg_serial_write 是同步写（带超时），不是写队列。
+ */
+typedef struct cg_serial_t cg_serial_t;
+
+/** 枚举本机串口：每行一个端口名写入 buf（"COM3\nCOM7\n"），返回写入字节数。
+ *  没有端口时返回 0（不是错误）。走注册表，不引任何额外链接依赖。 */
+int  cg_serial_list(char *buf, int cap);
+
+/** 打开串口（"COM3" 或 "\\\\.\\COM3" 都收），固定 8N1。失败返回 NULL；
+ *  失败原因用 cg_serial_last_error(NULL) 取（打开失败时没有句柄可问）。 */
+cg_serial_t *cg_serial_open(const char *port, int baud);
+
+/** 关掉串口并回收读线程。**幂等、NULL 安全**（没连上时直接调它也没事）。
+ *  它会等读线程真的退出再释放缓冲，所以最坏会卡一个读超时周期（约 50ms）。 */
+void cg_serial_close(cg_serial_t *s);
+
+/** 发送数据。返回实际写出的字节数，< 0 表示失败（原因见 cg_serial_last_error）。 */
+int  cg_serial_write(cg_serial_t *s, const void *data, int len);
+
+/** 从接收缓冲取最多 cap 字节（**非阻塞**：没数据返回 0，不是错误）。
+ *  返回的字节数可能是**半个 UTF-8 序列** —— 要按文本显示的话，把不满意的尾巴留到下次
+ *  （终端控件是按字节灌的，所以直接 cg_term_write 也行，只是那一帧可能显示成截断的）。 */
+int  cg_serial_read(cg_serial_t *s, void *buf, int cap);
+
+/** 接收缓冲里还有多少字节没取走 */
+int  cg_serial_available(const cg_serial_t *s);
+
+/** 丢掉接收缓冲里还没取走的数据（"清空接收"按钮用） */
+void cg_serial_flush_rx(cg_serial_t *s);
+
+/** 累计收 / 发了多少字节（状态栏显示用；只增不减，要归零就重连） */
+long long cg_serial_rx_bytes(const cg_serial_t *s);
+long long cg_serial_tx_bytes(const cg_serial_t *s);
+
+/** 最后一次错误的中文描述（"找不到这个端口"这种）；没出错返回 ""。
+ *  s 传 NULL 时返回**最近一次 cg_serial_open 失败**的原因 —— 打开失败时用得上。
+ *  返回的指针指向内部缓冲，下次报错会被覆盖；要留就自己拷走。 */
+const char *cg_serial_last_error(const cg_serial_t *s);
+
 /* ------------------------------------------------------------ 通用对话框
  * 都不是控件，是弹系统对话框的函数。parent 传控件（定位用）或 NULL。
  * 路径缓冲区至少 1024 字节。返回 1 = 用户确定，0 = 取消/失败。
