@@ -59,7 +59,6 @@ typedef struct {
 #define CG_RING_CLASS  L"CStackGUIRing"
 #define CG_PROGRESS_CLASS L"CStackGUIProgress"
 #define CG_CANVAS_CLASS L"CStackGUICanvas"
-#define CG_ECHARTS_CLASS L"CStackGUIEcharts"
 
 /* 时钟（timer）控件没有自己的窗口，Win32 定时器 id 直接复用 ctrl_id，
  * 这样 WM_TIMER 里按 wp 反查一次就能找到控件。 */
@@ -138,14 +137,6 @@ int cgw_is_datetime(const cg_widget_t *w);
 /** @brief 控件 -> WS 样式位 */
 DWORD cgw_style_of(const cg_widget_t *w);
 
-/* ---------------- cg_win_webview2.c：ECharts 图表（WebView2 宿主） ---------------- */
-/** 注册 echarts 宿主窗口类（幂等，重复调用安全） */
-void cgw_register_echarts_class(void);
-/** 给 echarts 控件建好原生窗口后调用：初始化 WebView2 内核、加载图表 HTML。
- *  内核创建是异步的，建好后会自动应用控件当前的 option。 */
-void cgw_echarts_init(cg_widget_t *w);
-/** 把控件当前 option 推给 WebView2（option 变化 / 运行期改 option 都走这；控制器未建好时仅暂存） */
-void cgw_echarts_apply(cg_widget_t *w);
 /** @brief 控件 -> WS_EX 扩展样式位 */
 DWORD cgw_exstyle_of(const cg_widget_t *w);
 /** @brief 自绘控件画内容前，先把整块填成"背后"的颜色 */

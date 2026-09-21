@@ -335,7 +335,7 @@ static cj_val_t *parse_value(parser_t *ps)
     }
 }
 
-/* ------------------------------------------------------------ 序列化（option 等需要把解析后的对象重新变成字符串传给 WebView2） */
+/* ------------------------------------------------------------ 序列化（把解析后的对象重新变成字符串） */
 
 static void raw_append(char **buf, size_t *len, size_t *cap, const char *s)
 {

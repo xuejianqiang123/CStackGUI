@@ -133,18 +133,6 @@ echo.
 echo     run it (double-click works):   %OUT%
 echo     self-check without window:     %OUT% --selftest
 
-rem --- ECharts/WebView2 运行时资产（工程用到 echarts 控件时需要）---
-set NEED_WV2=0
-if exist "%APPDIR%\*.cgui" ( findstr /m "echarts" "%APPDIR%\*.cgui" >nul 2>nul && set NEED_WV2=1 )
-if "%NEED_WV2%"=="1" (
-    if exist "runtime\res\echarts.min.js"     copy /y "runtime\res\echarts.min.js" "%APPDIR%\" >nul
-    if exist "runtime\res\WebView2Loader.dll" copy /y "runtime\res\WebView2Loader.dll" "%APPDIR%\" >nul
-    if exist "runtime\res\WebView2Runtime" (
-        if not exist "%APPDIR%\WebView2Runtime" mkdir "%APPDIR%\WebView2Runtime"
-        robocopy "runtime\res\WebView2Runtime" "%APPDIR%\WebView2Runtime" /E /NFL /NDL /NJH /NJS >nul
-        echo   copied fixed-version WebView2 Runtime next to exe
-    )
-)
 
 rem 刷新 clangd 语言服务配置（compile_commands.json，由 tools\gen-cc.mjs 生成，
 rem 供 CodeBuddy/VSCode 里的 clangd 插件使用）。没装 node 时静默跳过，不影响编译。

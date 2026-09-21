@@ -313,16 +313,3 @@ void cg_browser_navigate(cg_widget_t *w, const char *url)
     cgw_sync_widget(w);   /* sync 发现 src 变了会整个重建 AtlAxWin */
 }
 
-/**
- * @brief 运行时改 ECharts 图表的 option（整段 JSON 文本）；实验性功能
- * @param w echarts 控件
- * @param json 新的 option JSON，会作为 chart.setOption 的参数
- * @return void 无返回值
- */
-void cg_echarts_set_option(cg_widget_t *w, const char *json)
-{
-    if (!w || !cgw_is_t(w, "echarts")) return;
-    free(w->option);
-    w->option = (json && *json) ? _strdup(json) : NULL;
-    cgw_sync_widget(w);
-}

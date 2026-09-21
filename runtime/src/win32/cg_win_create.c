@@ -52,7 +52,6 @@ void cgw_create_native(cg_widget_t *w)
     if (!strcmp(type, "progressring")) cgw_register_ring_class();
     if (!strcmp(type, "progress")) cgw_register_progress_class();
     if (!strcmp(type, "canvas")) cgw_register_canvas_class();
-    if (!strcmp(type, "echarts")) cgw_register_echarts_class();
 
     /* browser 的窗口名就是起始地址（AtlAxWin 的约定） */
     if (!strcmp(type, "browser") && w->src && *w->src) {
@@ -73,7 +72,6 @@ void cgw_create_native(cg_widget_t *w)
     }
     w->native = h;
 
-    if (!strcmp(type, "echarts")) cgw_echarts_init(w);
 
     /* 输入框圆角 + 单行文字垂直居中（spinner 的输入框也是 EDIT，同样要）
      * Subclass 在 resize/换字体时重算，Win32 原生 EDIT 不支持 owner-draw */

@@ -420,9 +420,6 @@ cg_canvas_line(cv, 0, 0, 100, 80);`,
         label: "网页浏览",
         cmds: [
           c("cg_browser_navigate", "打开网页", "void cg_browser_navigate(cg_widget_t *w, const char *url)", "http/https 或本地路径；实验性（走系统 IE 内核）"),
-          c("cg_echarts_set_option", "改图表配置", "void cg_echarts_set_option(cg_widget_t *w, const char *json)", "把一段 ECharts option JSON 喂给图表控件，实时换图；实验性（需 WebView2 Runtime）", {
-            sample: `cg_echarts_set_option(chart, "{\\"title\\":{\\"text\\":\\"实时销量\\"}}");`,
-          }),
         ],
       },
       {

@@ -75,6 +75,27 @@ static LONG WINAPI diag_on_crash(EXCEPTION_POINTERS *ep)
                opname, bad, addr, mod);
     }
 
+    /* 栈回溯：定位崩溃发生在哪个调用链里（尤其第三方模块内部） */
+    {
+        void     *frames[40];
+        char      mbuf[512];
+        USHORT    n = CaptureStackBackTrace(0, 40, frames, NULL);
+        cg_log(CG_LOG_ERROR, "调用栈(%u 帧)：", (unsigned)n);
+        for (USHORT i = 0; i < n; i++) {
+            HMODULE hm = NULL;
+            const char *name = "(?)";
+            DWORD64 off = 0;
+            if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                                   (LPCSTR)frames[i], &hm) && hm) {
+                DWORD l = GetModuleFileNameA(hm, mbuf, sizeof(mbuf) - 1);
+                if (l > 0) { mbuf[l] = '\0'; name = diag_base(mbuf); }
+                off = (DWORD64)((char *)frames[i] - (char *)hm);
+                FreeLibrary(hm);
+            }
+            cg_log(CG_LOG_ERROR, "  #%02u %s + 0x%llX", i, name, (unsigned long long)off);
+        }
+    }
+
     cg_log(CG_LOG_ERROR, "程序异常退出：code=0x%08lX addr=%p module=%s",
            (unsigned long)code, addr, mod);
     snprintf(msg, sizeof(msg),

@@ -145,7 +145,6 @@ export const KIND_EVENTS: Record<string, CgEvent[]> = {
   pagination: ["change"],
   card: [],
   shape: [],
-  echarts: [],
 };
 
 /** 这个控件支持的事件；没登记的按"不支持任何事件"处理（C 侧同样会拒绝）。
@@ -217,8 +216,6 @@ export type CgNode = {
   /** 表格 */
   columns?: CgColumn[];
   rows?: string[][];
-  /** ECharts 图表控件的 option（整段 ECharts JSON 配置，series[].type 决定图类型） */
-  option?: unknown;
   children?: CgNode[];
 };
 
@@ -364,7 +361,6 @@ export const KINDS: KindInfo[] = [
   { type: "tabs", label: "标签页", group: "数据", container: true, w: 320, h: 220, text: "", listLike: true },
   { type: "tree", label: "树", group: "数据", container: false, w: 220, h: 180, text: "" },
   { type: "table", label: "表格", group: "数据", container: false, w: 360, h: 180, text: "" },
-  { type: "echarts", label: "图表", group: "数据", container: false, w: 360, h: 240, text: "" },
   { type: "statusbar", label: "状态栏", group: "数据", container: false, w: 400, h: 24, text: "", listLike: true },
   { type: "group", label: "分组框", group: "容器", container: true, w: 260, h: 180, text: "分组" },
   { type: "box", label: "容器块", group: "容器", container: true, w: 200, h: 120, text: "" },
@@ -512,15 +508,6 @@ export const newId = (base = "w") => {
   return `${base}_${seed}`;
 };
 
-/** ECharts 控件的默认配置：一个最简单的柱状图，让画布上「看得见」 */
-export const DEFAULT_ECHARTS_OPTION = {
-  title: { text: "示例图表" },
-  tooltip: {},
-  legend: { data: ["销量"] },
-  xAxis: { data: ["周一", "周二", "周三", "周四", "周五", "周六", "周日"] },
-  yAxis: {},
-  series: [{ name: "销量", type: "bar", data: [120, 200, 150, 80, 70, 110, 130] }],
-};
 
 export function makeNode(type: string, x: number, y: number): CgNode {
   const info = KIND_MAP[type] ?? KINDS[0];
@@ -593,9 +580,6 @@ export function makeNode(type: string, x: number, y: number): CgNode {
     node.src = "about:blank";
   } else if (type === "shape") {
     node.format = "roundrect";
-  } else if (type === "echarts") {
-    node.option = DEFAULT_ECHARTS_OPTION;
-  }
   return node;
 }
 
@@ -909,8 +893,6 @@ function coerceNode(raw: unknown, index: number): CgNode | null {
       Array.isArray(r) ? r.map((c) => (typeof c === "string" ? c : String(c ?? ""))) : [],
     );
   }
-  /* ECharts 控件的 option：整段配置，原样保留（脏数据也保留，画布/运行时各自校验） */
-  if (o.option !== undefined && o.option !== null) node.option = o.option;
 
   if (Array.isArray(o.children)) {
     const kids = o.children.map((c, i) => coerceNode(c, i)).filter((c): c is CgNode => c !== null);

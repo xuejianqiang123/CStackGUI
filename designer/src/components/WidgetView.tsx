@@ -5,7 +5,6 @@
  */
 import type { CSSProperties } from "react";
 import { EVENT_LABEL, CG_EVENTS, type CgNode } from "../model";
-import EchartsView from "./EchartsView";
 
 const fontOf = (node: CgNode): CSSProperties => {
   const style = node.style ?? {};
@@ -303,9 +302,6 @@ function inner(node: CgNode) {
           <span className="ctl-browser-url">{node.src || "about:blank"}</span>
         </div>
       );
-
-    case "echarts":
-      return <EchartsView option={node.option} />;
 
     case "badge":
       return <div className="ctl-badge">{node.text || ""}</div>;

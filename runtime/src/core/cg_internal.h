@@ -90,7 +90,6 @@ struct cg_widget {
 
     /* 图片 */
     char        *src;
-    char        *option;    /* ECharts 图表的 option（JSON 文本） */
     void        *bitmap;        /* HBITMAP 缓存 */
     char        *bitmap_src;    /* 当前位图是从哪个路径加载的（后端维护） */
     int          image_failed;

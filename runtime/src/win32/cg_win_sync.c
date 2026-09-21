@@ -391,11 +391,6 @@ static void sync_widget_body(cg_widget_t *w)
         }
     }
 
-    /* echarts：option 变了就推给 WebView2（控制器未建好时仅暂存，建好自动应用） */
-    if (cgw_is_t(w, "echarts")) {
-        cgw_echarts_apply(w);
-    }
-
     /* 位置尺寸 */
     if (cgw_is_t(w, "spinner")) {
         /* 输入框让出右侧给箭头 */

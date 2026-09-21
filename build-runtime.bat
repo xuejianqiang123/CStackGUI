@@ -76,21 +76,6 @@ for %%d in (core win32 skin kit) do (
     )
 )
 
-rem WebView2 宿主是 C++（WebView2 头是 C++ 的），单独用 g++ 编；目前只有这一个文件。
-set "SRC=runtime\src\win32\cg_win_webview2.cpp"
-set "OBJ=build\obj\cg_win_webview2.o"
-set "OBJS=!OBJS! build\obj\cg_win_webview2.o"
-set "DO=1"
-if exist "!OBJ!" (
-    for %%o in ("!OBJ!") do set "OT=%%~to"
-    for %%c in ("!SRC!") do set "CT=%%~tc"
-    if "!OT!" GTR "!CT!" if "!OT!" GTR "!HDRT!" set "DO="
-)
-if defined DO (
-    echo   CXX !SRC!
-    g++ -std=c++17 -fno-exceptions -fno-rtti -Iruntime\include -Iruntime\src\core -Iruntime\src\win32 -Iruntime\src\skin -Iruntime\src\kit -c "!SRC!" -o "!OBJ!" -Wall || ( echo [fail] runtime build failed & exit /b 1 )
-    set "CHANGED=1"
-)
 
 rem 资源对象（清单 + 版本信息 + 图标）：它的 .rc / .ico 有变动就重编
 set "RCOBJ=build\obj\cstackgui_res.o"

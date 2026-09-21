@@ -311,7 +311,6 @@ static void node_free(cg_node_t *n)
     free(n->id);
     free(n->text);
     free(n->src);
-    free(n->option);
     free(n->format);
     free(n->hint);
     free(n);
@@ -417,12 +416,6 @@ static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
     if (n->period < 0) n->period = 0;
     n->multi = cj_bool(cj_get(o, "multi"), 0);
     n->check = cj_bool(cj_get(o, "check"), 0);
-
-    /* ECharts 图表：option 是整段配置对象，序列化成 JSON 文本存着，运行期直接喂给 WebView2 */
-    {
-        const cj_val_t *ov = cj_get(o, "option");
-        if (ov && ov->type == CJ_OBJ) n->option = cj_print_unformatted(ov);
-    }
 
     /* 结构化内容 */
     n->items = parse_str_array(cj_get(o, "items"), &n->nitems);

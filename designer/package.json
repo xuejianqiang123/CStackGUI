@@ -14,7 +14,6 @@
     "dist": "vite build && electron-builder"
   },
   "dependencies": {
-    "echarts": "^5.6.0"
   },
   "devDependencies": {
     "@types/react": "^19.2.0",

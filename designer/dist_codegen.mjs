@@ -142,7 +142,6 @@ var KINDS = [
   { type: "tabs", label: "\u6807\u7B7E\u9875", group: "\u6570\u636E", container: true, w: 320, h: 220, text: "", listLike: true },
   { type: "tree", label: "\u6811", group: "\u6570\u636E", container: false, w: 220, h: 180, text: "" },
   { type: "table", label: "\u8868\u683C", group: "\u6570\u636E", container: false, w: 360, h: 180, text: "" },
-  { type: "echarts", label: "\u56FE\u8868", group: "\u6570\u636E", container: false, w: 360, h: 240, text: "" },
   { type: "statusbar", label: "\u72B6\u6001\u680F", group: "\u6570\u636E", container: false, w: 400, h: 24, text: "", listLike: true },
   { type: "group", label: "\u5206\u7EC4\u6846", group: "\u5BB9\u5668", container: true, w: 260, h: 180, text: "\u5206\u7EC4" },
   { type: "box", label: "\u5BB9\u5668\u5757", group: "\u5BB9\u5668", container: true, w: 200, h: 120, text: "" },

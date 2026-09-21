@@ -61,7 +61,6 @@ static const cg_kind_info_t k_kinds[] = {
     { "pagination", CG_K_PAGINATION, 0, 180,  32, "",     CG_EV_CHANGE },
     { "card",       CG_K_CARD,       1, 280, 180, "卡片", 0 },
     { "shape",      CG_K_SHAPE,      0, 120, 120, "",     0 },
-    { "echarts",    CG_K_ECHARTS,    0, 360, 240, "图表", 0 },
     /* 伪控件：窗口自身。事件表与「启动窗口」的事件表对齐（见 cg_event_t 注释）。 */
     { "window",     CG_K_WINDOW,     1,   0,   0, "",
       CG_EV_CLOSE | CG_EV_READY | CG_EV_DESTROY | CG_EV_MOVE | CG_EV_SIZE |
