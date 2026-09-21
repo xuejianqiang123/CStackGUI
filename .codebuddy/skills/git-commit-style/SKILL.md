@@ -65,8 +65,8 @@ build-all.bat
 examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui
 tools\run-tests.bat       :: C 层单测（JSON/文档/类型表/事件表）+ cg_kit 冒烟
 tools\check-format.bat    :: 改了 .cgui 字段/控件类型时（顺带查 bat 编码）
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-gbk.ps1 -Mode fix
-                          :: 动过任何 .bat 之后必跑：带中文的 bat 必须是 GBK，否则双击时注释会被当命令跑
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-utf8.ps1 -Mode fix
+                          :: 动过任何 .bat 之后必跑：UTF-8 无 BOM + ASCII 前导，否则双击时注释会被当命令跑
 ```
 
 ## 输出

@@ -8,10 +8,11 @@
 > （C 层单测：JSON / 文档 / 类型表 / 事件表 + cg_kit 冒烟） → `tools\check-format.bat`
 > （改了 `.cgui` 契约或控件类型时；它顺带检查 bat 编码），以及 README 第三章列的项目铁律。
 >
-> **动过任何 `.bat` 之后必须跑**：`powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-gbk.ps1 -Mode fix`
-> —— 仓库里带中文的 bat 必须是 **GBK（cp936）+ CRLF、无 BOM**。cmd 用"启动这个 cmd 进程时的控制台
-> 代码页"解析 bat，UTF-8 的中文会被按 2 字节/字解码、行定位错位，注释后半句会被当命令执行（双击时
-> 满屏 `"... is not recognized"`）。纯 ASCII 内容不受影响；`-Mode check` 已并入 `tools\check-format.bat`。
+> **动过任何 `.bat` 之后必须跑**：`powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-utf8.ps1 -Mode fix`
+> —— 仓库 bat 统一 **UTF-8 无 BOM + CRLF + 开头一段纯 ASCII 前导**（先切 65001 再 `cmd /c "%~f0" %*` 重入）。
+> cmd 用"启动这个 cmd 进程时的控制台代码页"解码 bat，UTF-8 的中文会被按 2 字节/字解码、行定位错位，
+> 注释后半句被当命令执行（双击满屏 `"... is not recognized"`）；带 BOM 会让首行直接报错；带中文的 bat 里
+> 不能出现 `goto` / `call :label`（标签扫描会漂移）。`-Mode check` 已并入 `tools\check-format.bat`。
 
 ## 1. 硬件相关硬性规则
 - 禁止自动优化硬件初始化代码
