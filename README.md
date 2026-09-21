@@ -47,7 +47,7 @@ tick / check / gotfocus / lostfocus`（+ 窗口级 `close`）。
 界面之外还有一套 **基础能力 API**（`cg_kit`）：读写文件、INI 配置、路径处理、
 文本与编码转换（UTF-8 ↔ GBK）、剪贴板、用默认程序打开文件/网址、启动外部程序、
 读写注册表（做开机自启）、写日志。**所以业务代码从头到尾只 include `cstackgui.h`**，
-不用为了读个配置去 include `windows.h`。这 30 个函数的用法在画布「支持库」页签里一查就有。
+不用为了读个配置去 include `windows.h`。这些函数的用法在画布「支持库」页签里一查就有。
 
 **串口也在这套能力里**：`cg_serial_*` 能枚举端口、打开、收发，业务侧照样不用 include `windows.h`
 —— 它内部有一个读线程，所以用法与坑单独写在 [docs/COMM.md](docs/COMM.md)。
