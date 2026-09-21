@@ -10,47 +10,126 @@
     {
       "id": "lab_tip",
       "type": "label",
-      "rect": { "x": 16, "y": 16, "w": 388, "h": 24 },
-      "text": "在下面输入名字，然后点「打招呼」。",
-      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#49454F" }
+      "rect": {
+        "x": 16,
+        "y": 16,
+        "w": 388,
+        "h": 24
+      },
+      "text": "在下面输入名字，然后点「打招呼」；右侧带图按钮演示按钮支持的全部事件。",
+      "style": {
+        "font": "Microsoft YaHei UI",
+        "size": 9,
+        "fg": "#49454F"
+      }
     },
     {
       "id": "edt_name",
       "type": "edit",
-      "rect": { "x": 16, "y": 48, "w": 388, "h": 34 },
-      "text": "",
-      "style": { "font": "Microsoft YaHei UI", "size": 10 },
+      "rect": {
+        "x": 16,
+        "y": 48,
+        "w": 388,
+        "h": 34
+      },
       "hint": "输入名字后按回车，等于点「打招呼」",
-      "events": { "change": "on_input_change", "submit": "on_hello_submit" }
+      "style": {
+        "font": "Microsoft YaHei UI",
+        "size": 10
+      },
+      "events": {
+        "change": "on_input_change",
+        "submit": "on_hello_submit"
+      }
     },
     {
       "id": "btn_hello",
       "type": "button",
-      "rect": { "x": 16, "y": 100, "w": 130, "h": 40 },
+      "rect": {
+        "x": 16,
+        "y": 100,
+        "w": 130,
+        "h": 40
+      },
       "text": "打招呼",
       "hint": "读输入框里的名字，显示到下面",
-      "events": { "click": "on_button_click" }
+      "events": {
+        "click": "on_button_click"
+      }
     },
     {
       "id": "btn_clear",
       "type": "button",
-      "rect": { "x": 158, "y": 100, "w": 130, "h": 40 },
+      "rect": {
+        "x": 158,
+        "y": 100,
+        "w": 130,
+        "h": 40
+      },
       "text": "清空",
       "hint": "清空输入框和结果",
-      "events": { "click": "on_button_click" }
+      "events": {
+        "click": "on_button_click"
+      }
+    },
+    {
+      "id": "btn_full",
+      "type": "button",
+      "rect": {
+        "x": 300,
+        "y": 100,
+        "w": 104,
+        "h": 40
+      },
+      "src": "assets\\icon.png",
+      "hint": "带背景图，并演示按钮支持的全部 13 种事件",
+      "style": {
+        "fg": "#FFFFFF"
+      },
+      "events": {
+        "click": "on_full_event",
+        "dblclick": "on_full_event",
+        "gotfocus": "on_full_event",
+        "lostfocus": "on_full_event",
+        "mousedown": "on_full_event",
+        "mouseup": "on_full_event",
+        "rdown": "on_full_event",
+        "rup": "on_full_event",
+        "mousemove": "on_full_event",
+        "keydown": "on_full_event",
+        "keyup": "on_full_event",
+        "char": "on_full_event",
+        "wheel": "on_full_event"
+      }
     },
     {
       "id": "lab_result",
       "type": "label",
-      "rect": { "x": 16, "y": 160, "w": 388, "h": 110 },
+      "rect": {
+        "x": 16,
+        "y": 160,
+        "w": 388,
+        "h": 110
+      },
       "text": "（结果显示在这里）",
-      "style": { "font": "Microsoft YaHei UI", "size": 11, "fg": "#6750A4" }
+      "style": {
+        "font": "Microsoft YaHei UI",
+        "size": 11,
+        "fg": "#6750A4"
+      }
     },
     {
       "id": "sb_main",
       "type": "statusbar",
-      "rect": { "x": 0, "y": 296, "w": 420, "h": 24 },
-      "items": ["就绪"]
+      "rect": {
+        "x": 0,
+        "y": 296,
+        "w": 420,
+        "h": 24
+      },
+      "items": [
+        "就绪"
+      ]
     }
   ]
 }

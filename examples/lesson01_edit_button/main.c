@@ -1,6 +1,6 @@
 /**
  * @file    main.c
- * @brief   入门 01：编辑框 + 按钮 —— 最小的一次「读输入、改界面」
+ * @brief   入门 01：编辑框 + 按钮 —— 最小的一次「读输入、改界面」，外加按钮全功能演示
  * @details 这一个例子只讲三件事，也是所有 CStackGUI 程序的共同骨架：
  *
  *            1. `.cgui` 里给控件起 id（这里是 edt_name / btn_hello / lab_result）；
@@ -14,11 +14,18 @@
  *            - cg_str_format 返回的字符串是堆内存，用完必须 cg_free；
  *            - 想弹消息框的地方先问一句 cg_app_has_window()，否则 --selftest 会被弹窗卡住。
  *
+ *          右侧「全功能」按钮演示按钮的全部能力：
+ *            - 背景图：`.cgui` 里用 `src: "assets/logo.png"`（png/jpg/bmp/gif 拉伸铺满）；
+ *            - 全部 13 种事件（click/dblclick/mousedown/mouseup/rdown/rup/mousemove/
+ *              gotfocus/lostfocus/keydown/keyup/char/wheel）绑到同一个 `on_full_event`，
+ *              靠 cg_event_name() / cg_event_x() / cg_event_key() / cg_event_delta() 分流。
+ *
  * 界面在 lesson01_edit_button.cgui 里；本文件只有行为。
  * 编译：在项目根跑 build-app.bat lesson01_edit_button
  */
 #include "cstackgui.h"
 
+#include <stdio.h>
 #include <string.h>
 
 /* ------------------------------------------------------------ 业务状态
@@ -132,6 +139,64 @@ static void on_hello_submit(cg_widget_t *self, cg_event_t ev, void *user)
     say_hello(cg_app_of(self));
 }
 
+/**
+ * @brief 全功能按钮的演示回调：把按钮支持的全部事件都接同一个函数，再按事件类型分流。
+ * @details 这是「按钮全功能」的活教材——一个函数绑 13 种事件，靠 cg_event_name() 拿到
+ *          事件名、cg_event_x/y/key/delta 拿到这次事件的参数。鼠标移动/焦点只更新状态栏
+ *          （太频繁，不打到结果区），其余事件打到结果区方便对照。
+ * @param self 「全功能」按钮
+ * @param ev 事件枚举（CG_EVENT_*）
+ * @param user 未使用
+ */
+static void on_full_event(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t    *app = cg_app_of(self);
+    cg_widget_t *lab = cg_find(app, "lab_result");
+    cg_widget_t *sb  = cg_find(app, "sb_main");
+    int x = cg_event_x(self), y = cg_event_y(self);
+    int k = cg_event_key(self), d = cg_event_delta(self);
+
+    (void)user;
+
+    /* 高频事件只动状态栏，不打扰结果区 */
+    switch (ev) {
+    case CG_EVENT_MOUSEMOVE:
+        if (sb) cg_status_setf(sb, 0, "鼠标在「全功能」按钮上：坐标 (%d, %d)", x, y);
+        return;
+    case CG_EVENT_GOTFOCUS:
+        if (sb) set_status(app, "「全功能」按钮获得焦点（现在能收键盘事件）");
+        return;
+    case CG_EVENT_LOSTFOCUS:
+        if (sb) set_status(app, "「全功能」按钮失去焦点");
+        return;
+    default:
+        break;
+    }
+
+    /* 其余事件都打到结果区，方便对照 .cgui 里写的事件名。
+     * cg_widget_set_text 内部会自己拷贝字符串，所以直接传栈上的 buf 即可。 */
+    {
+        const char *name = cg_event_name(ev);
+        char        buf[160];
+
+        switch (ev) {
+        case CG_EVENT_CLICK:     snprintf(buf, sizeof(buf), "事件：click（左键单击）"); break;
+        case CG_EVENT_DBLCLICK:  snprintf(buf, sizeof(buf), "事件：dblclick（双击）"); break;
+        case CG_EVENT_MOUSEDOWN: snprintf(buf, sizeof(buf), "事件：mousedown（左键按下）@(%d,%d)", x, y); break;
+        case CG_EVENT_MOUSEUP:   snprintf(buf, sizeof(buf), "事件：mouseup（左键松开）@(%d,%d)", x, y); break;
+        case CG_EVENT_RDOWN:     snprintf(buf, sizeof(buf), "事件：rdown（右键按下）@(%d,%d)", x, y); break;
+        case CG_EVENT_RUP:       snprintf(buf, sizeof(buf), "事件：rup（右键松开）@(%d,%d)", x, y); break;
+        case CG_EVENT_KEYDOWN:   snprintf(buf, sizeof(buf), "事件：keydown（虚拟键码 %d）", k); break;
+        case CG_EVENT_KEYUP:     snprintf(buf, sizeof(buf), "事件：keyup（虚拟键码 %d）", k); break;
+        case CG_EVENT_CHAR:      snprintf(buf, sizeof(buf), "事件：char（字符 '%c'，码 %d）", k, k); break;
+        case CG_EVENT_WHEEL:     snprintf(buf, sizeof(buf), "事件：wheel（滚动量 %d，正=上）", d); break;
+        default:                 snprintf(buf, sizeof(buf), "事件：%s", name); break;
+        }
+        if (lab) cg_widget_set_text(lab, buf);
+        if (sb) cg_status_setf(sb, 0, "最近事件：%s", name);
+    }
+}
+
 /** @brief 界面建好之后调一次：把"初始状态"设成和业务一致 */
 static void on_ready(cg_app_t *app, void *user)
 {
@@ -148,6 +213,7 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND("on_input_change", on_input_change),
     CG_BIND("on_button_click", on_button_click),
     CG_BIND("on_hello_submit", on_hello_submit),
+    CG_BIND("on_full_event", on_full_event),
     CG_BIND_END
 };
 
