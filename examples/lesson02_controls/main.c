@@ -11,6 +11,11 @@
  *            下拉框 combo     -> cg_widget_value() = 第几项，配合 cg_widget_list_item() 取文字
  *            滑块 slider      -> cg_widget_value()      （范围由 min/max 决定）
  *
+ *          还有一个"一行 C 代码都不用写"的点：满意度滑块右边那个数字标签，
+ *          在 .cgui 里写了一句 "bind": { "src": "sld_level" } —— 滑块一动它就跟着变；
+ *          连「重置」都不用管它（程序改滑块的值，标签自己跟上）。
+ *          规则见 docs/CGUI-FORMAT.md 第 2.8 节（控件绑定）。
+ *
  *          顺带演示两件工程上的事：
  *            - 容器（group / box / card / tabs）里的子控件，rect 坐标是**相对容器**的；
  *            - 六种控件的 change / select 事件全指向同一个回调 on_form_change —— 事件的名字
@@ -62,6 +67,7 @@ static void collect(cg_app_t *app)
     cg_widget_set_text(cg_find(app, "lab_summary"), buf);
     cg_widget_set_value(prg, done);
     cg_status_setf(cg_find(app, "sb_main"), 0, "资料完成度 %d%%", done);
+    /* 注意这里没有更新 lab_level_val：它绑定了 sld_level，值一变自己就跟上了 */
 }
 
 /**
