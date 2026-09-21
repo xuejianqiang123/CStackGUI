@@ -74,6 +74,12 @@ struct cg_widget {
     /** terminal 专用：后端已经推送了多少行。比 nitems 大 = 中途裁剪/清空过，
      *  后端得整体重灌（见 cg_win_sync.c 的 sync_terminal）。 */
     int          term_pushed;
+    /** chart 专用：拍平的点数据（chart_nseries × chart_cap）与每个系列已填的点数。
+     *  系列名存在 items[] 里；缓冲按需建（见 cg_widget_data.c 的 cg_chart_ensure）。 */
+    int         *chart_pts;
+    int         *chart_fill;
+    int          chart_nseries;
+    int          chart_cap;
 
     /* 树：扁平数组 + 父下标（-1 为根），materialize 时逐层插入 */
     cg_tree_row_t *tree;
@@ -308,6 +314,14 @@ int cg_bind_copy(cg_widget_t *src, cg_widget_t *dst);
 /** 拖动分隔条：撑开前一个兄弟、自己与之后的兄弟整体让位、最后一块吃掉余量。
  *  @return 实际位移（可能被最小尺寸夹小）；0 表示没动 */
 int cg_splitter_apply(cg_widget_t *w, int delta);
+
+/* -------------------------------------------------- 图表（cg_widget_data.c） */
+
+/** chart：把点缓冲对齐当前配置（items 的系列数 / value 的窗口点数）。
+ *  配置变了就重建，**重建会丢已有点**（旧的窗口配不上新的）；配置没变时只是一次比较。
+ *  cg_widget_sync() 每次都会调它，所以查询与绘制看到的存储永远与配置一致。
+ *  @return 系列数；0 = 没内存 */
+int cg_chart_ensure(cg_widget_t *w);
 
 /* ---------------------------------------------- cg_app.c 拆分后的跨模块接口
  * 原来这几个是 cg_app.c 里的 static 助手，拆成 cg_widget.c / cg_event.c 之后

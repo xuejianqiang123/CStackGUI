@@ -118,6 +118,8 @@ void cg_widget_free(cg_widget_t *w)
     free(w->src);
     free(w->bitmap_src);
     free(w->bind_src);
+    free(w->chart_pts);      /* chart 的点缓冲（按需分配，可能为 NULL） */
+    free(w->chart_fill);
     free(w->id);
     free(w->type);
     free(w->text);

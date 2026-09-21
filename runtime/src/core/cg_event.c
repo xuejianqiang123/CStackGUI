@@ -156,7 +156,12 @@ int cg_on_named(cg_widget_t *w, cg_event_t ev, const char *callback_name)
 /** @brief 把控件逻辑状态推给后端（无原生句柄时是空操作） */
 void cg_widget_sync(cg_widget_t *w)
 {
-    if (cg_backend_active && cg_backend_active->sync && w && w->native) {
+    if (!w) return;
+    /* chart 的点缓冲要跟 items / value 对齐（改了窗口大小就得重建）。这一步是纯 core
+     * 记账、和后端在不在没关系，所以放在 native 判断**之前** —— 单测（没有窗口）里
+     * 也才查得到"和配置一致"的状态。配置没变时它只是一次比较。 */
+    if (w->type && strcmp(w->type, "chart") == 0) cg_chart_ensure(w);
+    if (cg_backend_active && cg_backend_active->sync && w->native) {
         cg_backend_active->sync(w);
     }
 }

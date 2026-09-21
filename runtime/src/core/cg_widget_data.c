@@ -888,3 +888,154 @@ int cg_term_save(cg_widget_t *w, const char *path)
     fclose(f);
     return 0;
 }
+
+/* ------------------------------------------------------------ 折线 / 柱状图（chart）
+ * 实时可视化的那块：业务按采样节奏 push 点，窗口、范围、网格与绘制都由控件管。
+ *   - 系列名存在 items[] 里（每个条目一个系列），颜色按调色板自动分配，不用额外字段；
+ *   - 点数据在拍平的 chart_pts（chart_nseries × chart_cap）里，按需分配；
+ *   - **窗口满了整体左移一格**，不做环形缓冲：cap 只有几十到几百，memmove 一下比维护
+ *     读写指针 + 一圈边界判断便宜得多，也不会出现"绕回时算错下标"这种隐蔽 bug。
+ * 绘制策略见 cg_win_draw.c 的 ChartProc（点数超过像素宽度时按列画 min/max）。
+ */
+
+/** 每系列保留多少点（.cgui 的 value）；小于 2 就按缺省 120 */
+#define CG_CHART_DEF_CAP 120
+/** 系列数上限：再多就该换控件了，顺便防 .cgui 写错把内存吃光 */
+#define CG_CHART_MAX_SERIES 8
+/** 窗口点数上限（一条曲线最多几万个点也够用了） */
+#define CG_CHART_MAX_CAP 4096
+
+/** @brief 每系列窗口点数（夹到合理区间） */
+static int chart_cap(const cg_widget_t *w)
+{
+    int c = w->value;
+
+    if (c < 2) c = CG_CHART_DEF_CAP;
+    if (c > CG_CHART_MAX_CAP) c = CG_CHART_MAX_CAP;
+    return c;
+}
+
+/** @brief 系列数：items 为空时按 1 个系列算（单条曲线的 .cgui 不用写 items） */
+static int chart_nseries(const cg_widget_t *w)
+{
+    int n = w->nitems > 0 ? w->nitems : 1;
+
+    return n > CG_CHART_MAX_SERIES ? CG_CHART_MAX_SERIES : n;
+}
+
+/** @brief 点缓冲按需建 / 重建（items 或 value 变了就重建），返回系列数 */
+int cg_chart_ensure(cg_widget_t *w)
+{
+    int n = chart_nseries(w);
+    int cap = chart_cap(w);
+
+    if (w->chart_pts && w->chart_fill && w->chart_nseries == n && w->chart_cap == cap) return n;
+
+    free(w->chart_pts);
+    free(w->chart_fill);
+    w->chart_pts = (int *)calloc((size_t)n * (size_t)cap, sizeof(int));
+    w->chart_fill = (int *)calloc((size_t)n, sizeof(int));
+    w->chart_nseries = (w->chart_pts && w->chart_fill) ? n : 0;
+    w->chart_cap = w->chart_nseries ? cap : 0;
+    return w->chart_nseries;
+}
+
+/** @brief 往某个系列塞一个点（不刷新，给批量接口用） */
+static void chart_push_raw(cg_widget_t *w, int series, int value)
+{
+    int *buf;
+    int  cap = w->chart_cap;
+
+    if (!w->chart_pts || !w->chart_fill || cap <= 0) return;
+    if (series < 0 || series >= w->chart_nseries) series = 0;
+    buf = w->chart_pts + (size_t)series * (size_t)cap;
+    if (w->chart_fill[series] < cap) {
+        buf[w->chart_fill[series]++] = value;
+    } else {
+        memmove(buf, buf + 1, (size_t)(cap - 1) * sizeof(int));
+        buf[cap - 1] = value;
+    }
+}
+
+/** @brief 给某个系列追加一个点（满了顶掉最老的） */
+void cg_chart_push(cg_widget_t *w, int series, int value)
+{
+    if (!w || !want_type(w, "chart", "cg_chart_push")) return;
+    if (cg_chart_ensure(w) <= 0) return;
+    chart_push_raw(w, series, value);
+    cg_widget_sync(w);
+}
+
+/** @brief 一次给前 nvalues 个系列各追加一个点（多通道采样最常用的一次调用） */
+void cg_chart_push_all(cg_widget_t *w, const int *values, int nvalues)
+{
+    int i, n;
+
+    if (!w || !values || !want_type(w, "chart", "cg_chart_push_all")) return;
+    n = cg_chart_ensure(w);
+    if (n <= 0) return;
+    for (i = 0; i < nvalues && i < n; i++) chart_push_raw(w, i, values[i]);
+    cg_widget_sync(w);
+}
+
+/** @brief 清空所有点（保留系列与范围） */
+void cg_chart_clear(cg_widget_t *w)
+{
+    if (!w || !want_type(w, "chart", "cg_chart_clear")) return;
+    if (cg_chart_ensure(w) <= 0) return;
+    memset(w->chart_fill, 0, (size_t)w->chart_nseries * sizeof(int));
+    cg_widget_sync(w);
+}
+
+/** @brief 运行时加一个系列（返回下标；超过上限或内存不足返回 -1） */
+int cg_chart_add_series(cg_widget_t *w, const char *name)
+{
+    char **ni;
+
+    if (!w || !want_type(w, "chart", "cg_chart_add_series")) return -1;
+    if (w->nitems >= CG_CHART_MAX_SERIES) return -1;
+    ni = (char **)realloc(w->items, ((size_t)w->nitems + 1) * sizeof(char *));
+    if (!ni) return -1;
+    w->items = ni;
+    w->items[w->nitems++] = cg_str_dup(name && *name ? name : "系列");
+    cg_chart_ensure(w);              /* 系列数变了：缓冲按新的宽度重建 */
+    cg_widget_sync(w);
+    return w->nitems - 1;
+}
+
+/** @brief 系列数（items 为空时是 1） */
+int cg_chart_series_count(const cg_widget_t *w)
+{
+    return w ? chart_nseries(w) : 0;
+}
+
+/** @brief 某系列已经填了多少点 */
+int cg_chart_filled(const cg_widget_t *w, int series)
+{
+    if (!w || !w->chart_fill) return 0;
+    if (series < 0 || series >= w->chart_nseries) return 0;
+    return w->chart_fill[series];
+}
+
+/** @brief 读回某个点（下标 0 = 最老的点）；越界返回 0 */
+int cg_chart_point(const cg_widget_t *w, int series, int index)
+{
+    if (!w || !w->chart_pts || w->chart_cap <= 0) return 0;
+    if (series < 0 || series >= w->chart_nseries) return 0;
+    if (index < 0 || index >= w->chart_fill[series]) return 0;
+    return w->chart_pts[(size_t)series * (size_t)w->chart_cap + (size_t)index];
+}
+
+/** @brief 设 Y 轴范围（超出的值按边界裁剪后画） */
+void cg_chart_set_range(cg_widget_t *w, int min, int max)
+{
+    if (!w || !want_type(w, "chart", "cg_chart_set_range")) return;
+    if (max <= min) max = min + 1;
+    w->vmin = min;
+    w->vmax = max;
+    if (w->node) {
+        w->node->vmin = min;
+        w->node->vmax = max;
+    }
+    cg_widget_sync(w);
+}

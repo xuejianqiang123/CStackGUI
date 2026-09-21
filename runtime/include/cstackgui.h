@@ -441,6 +441,43 @@ int  cg_term_count(const cg_widget_t *w);
 /** 存成文本文件（UTF-8 + CRLF，不含方向标记）；成功返回 0 */
 int  cg_term_save(cg_widget_t *w, const char *path);
 
+/* ------------------------------------------------------------ 折线 / 柱状图（chart）
+ * 实时数据可视化的那块：业务按采样节奏 push 点，窗口、范围、网格与绘制都由控件管。
+ *
+ *   cg_chart_push_all(cht, temps, 2);   // 一次给所有系列各推一个点（多通道采样最常用）
+ *   cg_chart_push(cht, 0, 42);          // 只推给第 0 个系列
+ *
+ * 系列在 .cgui 里用 items 声明（每个条目是一个系列名），颜色按调色板自动分配；
+ * 什么都不写就是"单系列"，不用配：
+ *
+ *   { "id": "cht_temp", "type": "chart", "value": 200, "min": 0, "max": 100,
+ *     "items": ["温度", "湿度"] }
+ *
+ * 这几个字段在这个控件上有专门含义：
+ *   value   = 窗口点数（每系列保留多少个点，缺省 120，最多 4096）
+ *   min/max = Y 轴范围（缺省 0~100），超出的值按边界裁剪后画
+ *   format  = "line"（缺省，折线）/ "bar"（柱状）
+ *
+ * 两个刻意的做法（都是踩过才知道的）：
+ *   - **窗口满了整体左移一格**，不做环形缓冲：cap 只有几十到几百，memmove 一下比维护
+ *     读写指针 + 一圈边界判断便宜，也不会出现"绕回时算错下标"这种隐蔽 bug。
+ *   - 点数超过绘图区像素宽度时**不抽点**，而是对每个像素列取该列覆盖点的 min/max 画一条
+ *     竖线（LVGL 的做法）：既不慢，也不会刚好把那个尖峰抽掉。抽点最坑的就是丢毛刺。
+ *
+ * 实时性靠"业务用 cg_set_timer 定周期 push"，**不要另开线程碰控件**（控件不是线程安全的）。
+ */
+void cg_chart_push(cg_widget_t *w, int series, int value);
+void cg_chart_push_all(cg_widget_t *w, const int *values, int nvalues);
+void cg_chart_clear(cg_widget_t *w);
+/** 运行时加一个系列（返回下标；到上限或没内存了返回 -1） */
+int  cg_chart_add_series(cg_widget_t *w, const char *name);
+int  cg_chart_series_count(const cg_widget_t *w);
+/** 某系列已经填了多少点 */
+int  cg_chart_filled(const cg_widget_t *w, int series);
+/** 读回某个点（下标 0 = 最老的点）；越界返回 0 */
+int  cg_chart_point(const cg_widget_t *w, int series, int index);
+void cg_chart_set_range(cg_widget_t *w, int min, int max);
+
 /* ------------------------------------------------------------ 通用对话框
  * 都不是控件，是弹系统对话框的函数。parent 传控件（定位用）或 NULL。
  * 路径缓冲区至少 1024 字节。返回 1 = 用户确定，0 = 取消/失败。

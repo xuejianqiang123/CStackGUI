@@ -49,6 +49,7 @@ const wchar_t *cgw_class_of(const cg_widget_t *w)
     if (!strcmp(w->type, "progress")) return CG_PROGRESS_CLASS;   /* 自绘进度条（原生的不支持 custom draw） */
     if (!strcmp(w->type, "canvas"))    return CG_CANVAS_CLASS;    /* 自绘画板 */
     if (!strcmp(w->type, "splitter"))  return CG_SPLITTER_CLASS;  /* 自绘分隔条（能拖动） */
+    if (!strcmp(w->type, "chart"))     return CG_CHART_CLASS;     /* 自绘折线/柱状图 */
     if (!strcmp(w->type, "colorpicker")) return L"BUTTON";        /* BS_OWNERDRAW 色块 */
     if (!strcmp(w->type, "badge"))     return L"BUTTON";          /* BS_OWNERDRAW 小圆片 */
     if (!strcmp(w->type, "tag"))       return L"BUTTON";          /* BS_OWNERDRAW 标签片 */
@@ -89,6 +90,7 @@ DWORD cgw_style_of(const cg_widget_t *w)
     if (!strcmp(w->type, "progressring")) return WS_CHILD | WS_VISIBLE;
     /* 分隔条：自绘、不需要 WS_TABSTOP（它是鼠标用的，别占 Tab 遍历） */
     if (!strcmp(w->type, "splitter"))  return WS_CHILD | WS_VISIBLE;
+    if (!strcmp(w->type, "chart"))     return WS_CHILD | WS_VISIBLE;   /* 自绘，纯显示 */
     if (!strcmp(w->type, "richtext"))  return WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN | WS_VSCROLL;
     /* 终端：只读（内容由 cg_term_write 控制）、要能选中（ES_NOHIDESEL 免得失焦看不清选中） */
     if (!strcmp(w->type, "terminal"))  return WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE |
