@@ -29,7 +29,6 @@
 #include "cstackgui.h"
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 /** 轮询周期（毫秒）：50ms 足够跟手，也不会给界面添负担 */
@@ -307,7 +306,9 @@ static void do_connect(cg_app_t *app)
     cg_widget_t *cmb_baud = cg_find(app, "cmb_baud");
     const char  *port = cg_widget_list_item(cmb_port, cg_widget_value(cmb_port));
     const char  *btext = cg_widget_list_item(cmb_baud, cg_widget_value(cmb_baud));
-    int          baud = btext ? atoi(btext) : 0;
+    int          baud = 0;
+
+    if (btext) sscanf(btext, "%d", &baud);      /* 下拉框里存的是文字，转成数字 */
 
     if (s_biz.n_ports <= 0 || !port || !*port) {
         term_sys(app, "没有可用串口。插上设备后点「刷新」。");
@@ -690,7 +691,11 @@ static void on_ready(cg_app_t *app, void *user)
             int idx = combo_find(cg_find(app, "cmb_baud"), lastbaud);
             if (idx >= 0) cg_widget_set_value(cg_find(app, "cmb_baud"), idx);
         }
-        if (split) cg_splitter_set(cg_find(app, "sp_main"), atoi(split));
+        if (split) {
+            int pos = 0;
+            sscanf(split, "%d", &pos);
+            cg_splitter_set(cg_find(app, "sp_main"), pos);
+        }
         cg_free(lastbaud);
         cg_free(split);
     }

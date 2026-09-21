@@ -150,7 +150,7 @@
       "id": "cht_rate",
       "type": "chart",
       "rect": { "x": 8, "y": 596, "w": 904, "h": 58 },
-      "items": ["RX 字节/秒"],
+      "items": ["B/s"],
       "value": 60,
       "min": 0,
       "max": 256,
