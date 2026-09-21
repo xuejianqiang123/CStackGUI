@@ -580,6 +580,7 @@ export function makeNode(type: string, x: number, y: number): CgNode {
     node.src = "about:blank";
   } else if (type === "shape") {
     node.format = "roundrect";
+  }
   return node;
 }
 
@@ -1017,7 +1018,6 @@ function cleanNode(node: CgNode): CgNode {
     out.columns = node.columns.map((c) => (c.w && c.w > 0 ? { title: c.title, w: Math.round(c.w) } : { title: c.title }));
   }
   if (node.rows && node.rows.length) out.rows = node.rows.map((r) => [...r]);
-  if (node.option !== undefined) out.option = node.option;
   const style = node.style ?? {};
   const kept: CgStyle = {};
   if (style.font) kept.font = style.font;
