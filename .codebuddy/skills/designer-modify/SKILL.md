@@ -48,6 +48,10 @@ argument-hint: [要改的东西，可以用日常语言，例如 "画布选中�
 - `events{<事件名>: <C 函数名>}`；窗口级 `close` 只存在于 `app.events`
 - 状态（`cleanDoc` 里**等于默认值就不写**）：`visible`(默认 true)、`enabled`(默认 true)、`checked`(默认 false)；`value/min/max` 仅在 `KIND_MAP[type].ranged` 时写
 - 内容：`items`（listbox/combo/tabs/statusbar/toolbar）、`nodes`（tree/menu/menubutton）、`columns[{title,w}]`+`rows[][]`（table）、`src`（image/iconbutton）、`format`（datepicker）、`page`（tabs 子控件归属第几页，>0 才写）
+- `bind{src,two?}`：**控件绑定** —— 本控件的值/文字/勾选一直跟着 `src`（另一个控件的 id）走，`two:true` 为双向。
+  抄什么由**目标控件类型**决定（值型抄值、勾选型抄勾选、其余显示源的数值或文字），
+  同步**不触发**目标的 `change` 回调。画布「属性」里有下拉选源；改 id 时 Inspector 会连带改掉指向它的 `bind.src`。
+  C 侧实现见 `runtime/src/core/cg_bind.c` + `docs/CGUI-FORMAT.md` 第 2.8 节。
 - `children`（仅容器 `group`/`box`/`card`/`tabs`；非容器带 children 读入时被挂到同级，不丢）
 
 读入（`parseDoc`/`coerceNode`）宽容：脏数据按默认值兜底、`type` 不认识降级成 `label`、兼容扁平 `x/y/w/h` 和 `state{}` 旧写法、`cgui > 1` 直接报错。
@@ -211,4 +215,5 @@ examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui   :: 回 0
 - 新 IPC 没写浏览器降级分支 → 浏览器模式下 `bridge` 缺方法崩
 - 改了 `cstackgui.h` 却没动 `supportlib.ts` → 「支持库」页签里点出来的函数不存在（`tools\check-support.mjs` 会拦）
 - 绘制时对 `node.children` 直接递归忘了 tabs 的 `page` 过滤 → 画布显示与运行时不符
+- `bind.src` 存的是**控件 id 字符串**（运行时按 `cg_find` 查）：手改 `.cgui` 里的 id 时忘了改 `bind.src` → 警告日志 + `--selftest` 返回 5（画布上改 id 会自动连带改，手改不会）
 - 一次性替换大文件：这不是一个整文件重构型项目，用定向 `replace_in_file`，不要重写 `model.ts`/`App.tsx`
