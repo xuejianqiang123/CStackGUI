@@ -88,6 +88,7 @@ static const char *net_why(int e)
     case WSAEACCES:        return "端口被拒绝（1024 以下要管理员？）";
     case WSAHOST_NOT_FOUND:
     case WSATRY_AGAIN:     return "主机名解析不了";
+    case WSAEMSGSIZE:      return "数据报比接收缓冲区大（尾巴取不回来，换更大的 buf）";
     default:               return "网络错误";
     }
 }
@@ -504,7 +505,9 @@ cg_net_t *cg_net_udp_open(int local_port, int broadcast)
         snprintf(g_open_err, sizeof(g_open_err), "创建 UDP 套接字失败");
         return NULL;
     }
-    setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (const char *)&yes, sizeof(yes));
+    /* 这里**故意不设 SO_REUSEADDR**（TCP 监听那边设了，UDP 这边不设）：Windows 上它的语义是
+     * "允许后来者抢同一个端口"，于是"端口被占"会退化成**不报错但收不到** —— 对调试工具来说，
+     * 沉默的失败比响亮的失败贵得多。UDP 又没有 TIME_WAIT，本来也不需要靠它来快速重绑。 */
     if (broadcast) setsockopt(s, SOL_SOCKET, SO_BROADCAST, (const char *)&yes, sizeof(yes));
 
     memset(&sa, 0, sizeof(sa));
@@ -512,7 +515,7 @@ cg_net_t *cg_net_udp_open(int local_port, int broadcast)
     sa.sin_addr.s_addr = htonl(INADDR_ANY);
     sa.sin_port = htons((u_short)local_port);
     if (bind(s, (const struct sockaddr *)&sa, sizeof(sa)) == SOCKET_ERROR) {
-        net_fail(NULL, "绑定 UDP 端口失败", WSAGetLastError());
+        net_fail(NULL, "绑定 UDP 端口失败（被占用？）", WSAGetLastError());
         closesocket(s);
         return NULL;
     }

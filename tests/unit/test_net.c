@@ -288,6 +288,47 @@ static void test_udp_loopback(void)
     cg_test_note("---- 累计字节与 NULL 兜底 ----");
     cg_test_int("a 累计收了 3+3+3+0 = 9", (int)cg_net_rx_bytes(a), 9);
     cg_test_int("b 累计发了 9", (int)cg_net_tx_bytes(b), 9);
+
+    cg_test_note("---- 端口被占：要**响亮地失败**，不能悄悄共用 ----");
+    /* 这条钉的是一个真缺陷的修复：`cg_net_udp_open` 原先无条件设 SO_REUSEADDR，而 Windows 上它的
+     * 语义是"允许后来者抢同一个端口" → 第二个句柄也能开起来，但数据报只会进其中一个，
+     * 表现是**不报错但收不到**。UDP 没有 TIME_WAIT，本来就不需要它，所以去掉了。 */
+    {
+        cg_net_t *u1 = cg_net_udp_open(47871, 0);
+        cg_test_ok("第一个句柄开起来了", u1 != NULL);
+        if (u1) {
+            cg_net_t *u2 = cg_net_udp_open(47871, 0);
+
+            cg_test_ok("同一端口再开一次必须失败（不是静默共用）", u2 == NULL);
+            if (u2) cg_net_close(u2);
+            cg_test_ok("失败原因可读", cg_net_last_error(NULL)[0] != '\0');
+            printf("        端口被占的报错：%s\n", cg_net_last_error(NULL));
+            cg_net_close(u1);
+        }
+    }
+
+    cg_test_note("---- 数据报比接收缓冲区大：不能静默丢掉 ----");
+    /* 这条本来是文档同事问我的问题（"单个数据报比 buf 大时是截断还是报错？"）。答案取决于
+     * Win32 的 WSAEMSGSIZE 路径，而我们的实现把非 WSAEWOULDBLOCK 的错误都记进 last_error
+     * 并返回 -1 —— 这里把它跑出来，并把**实际行为**打印出来供文档对齐（两种都不算静默丢数据）。 */
+    {
+        char big[2048];
+        char small[16];
+
+        memset(big, 'X', sizeof(big));
+        cg_test_int("先发一个 2048 字节的数据报", 
+                    cg_net_sendto(b, "127.0.0.1", 47861, big, (int)sizeof(big)), 2048);
+        n = -1;
+        for (waited = 0; waited < 2000; waited += 10) {
+            n = cg_net_recvfrom(a, NULL, 0, NULL, small, (int)sizeof(small));
+            if (n != -1) break;
+            Sleep(10);
+        }
+        printf("        16 字节缓冲区收到 2048 字节的数据报时返回 %d，last_error：%s\n",
+               n, cg_net_last_error(a));
+        cg_test_ok("要么截断到 16 字节、要么失败并留了记录（都不是静默丢）",
+                   n == 16 || (n == -1 && cg_net_last_error(a)[0] != '\0'));
+    }
     cg_test_int("sendto(NULL) 返回 -1", cg_net_sendto(NULL, "127.0.0.1", 1, "x", 1), -1);
     cg_test_int("recvfrom(NULL) 返回 -1",
                 cg_net_recvfrom(NULL, NULL, 0, NULL, buf, (int)sizeof(buf)), -1);
