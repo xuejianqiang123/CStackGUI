@@ -40,6 +40,17 @@ echo   roundtrip gallery
 node tools\format-roundtrip.mjs examples\gallery\gallery.exe examples\gallery\gallery.cgui build\roundtrip_gallery.cgui
 if errorlevel 1 exit /b 1
 
+rem 示例工程也要进这条回归：示例的 .cgui 是用户最可能照抄的东西，新控件/新 API 往往先在示例里用上，
+rem 只守 gallery 会让示例里的字段悄悄丢（2026-09-21 就是靠这条发现"回归只覆盖 gallery"这个缺口）。
+rem 注意这里**故意不写成 for (...) do (...) 块**：带中文的括号块在代码页解析下会漂移（见 README 的 bat 约定）。
+echo   roundtrip serialterm
+node tools\format-roundtrip.mjs examples\serialterm\serialterm.exe examples\serialterm\serialterm.cgui build\roundtrip_serialterm.cgui
+if errorlevel 1 exit /b 1
+
+echo   roundtrip netterm
+node tools\format-roundtrip.mjs examples\netterm\netterm.exe examples\netterm\netterm.cgui build\roundtrip_netterm.cgui
+if errorlevel 1 exit /b 1
+
 rem 画布「支持库」页签是手写的 C API 索引，没人校验就会和 cstackgui.h 跑偏。
 echo   support library vs cstackgui.h
 node tools\check-support.mjs
