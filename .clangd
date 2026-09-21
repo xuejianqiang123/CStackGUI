@@ -1,0 +1,11 @@
+# clangd 兜底配置
+#
+# 权威编译参数在 tools/gen-cc.mjs 生成的 compile_commands.json（与 build-*.bat 一致），
+# 这里只补一条保底：万一还没跑过构建（新克隆、刚清过目录）导致没有编译数据库，
+# clangd 也得能找到 runtime/include/cstackgui.h，否则每个示例的
+# `#include "cstackgui.h"` 都会被误报成 file not found。
+#
+# 相对路径以编译命令的工作目录（compile_commands.json 里的绝对 directory = 项目根）为基准。
+CompileFlags:
+  Add:
+    - -Iruntime/include

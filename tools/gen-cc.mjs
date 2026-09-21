@@ -6,7 +6,7 @@
  * 参数（-I、-std、宏）以这里为准，改了构建脚本要同步改这里。
  *
  * 运行：node tools\gen-cc.mjs（在项目根；build-runtime.bat / build-app.bat 成功后也会自动刷）
- * 产物：compile_commands.json（相对路径，内容机器无关；是否入库随项目定，当前 gitignore）
+ * 产物：compile_commands.json（机器相关：directory 是绝对路径，所以 gitignore 不入库）
  */
 import { readdirSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
@@ -99,7 +99,11 @@ for (const abs of files) {
   /* 对象名取文件名（build-runtime.bat 也这样），单测的对象只是给 clangd 占位 */
   const obj = path.join(root, "build", "obj", path.basename(abs).replace(/\.c$/, ".o"));
   entries.push({
-    directory: ".",
+    /* directory 必须是绝对路径：Compilation Database 规范如此，且 `-Iruntime/include`
+     * 这类相对参数都以它为基准解析。写成 "." 时部分 clangd/IDE 集成解析失败 → 退回
+     * 不带 -I 的默认参数 → `#include "cstackgui.h"` 被误报成 file not found。
+     * file/obj 仍用相对路径（以这个绝对 directory 为基准），内容照样可读。 */
+    directory: root,
     file: rel(abs),
     command: `gcc ${[...commonFlags, ...extraFlags(abs)].join(" ")} -c ${rel(abs)} -o ${rel(obj)}`,
   });
