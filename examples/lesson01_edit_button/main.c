@@ -15,7 +15,8 @@
  *            - 想弹消息框的地方先问一句 cg_app_has_window()，否则 --selftest 会被弹窗卡住。
  *
  *          右侧「全功能」按钮演示按钮的全部能力：
- *            - 背景图：`.cgui` 里用 `src: "assets/logo.png"`（png/jpg/bmp/gif 拉伸铺满）；
+ *            - 背景图：`.cgui` 里用 `src: "assets/icon.png"`（png/jpg/bmp/gif 拉伸铺满；
+ *              别用自带文字的图，字会叠在按钮文字上）；
  *            - 全部 13 种事件（click/dblclick/mousedown/mouseup/rdown/rup/mousemove/
  *              gotfocus/lostfocus/keydown/keyup/char/wheel）绑到同一个 `on_full_event`，
  *              靠 cg_event_name() / cg_event_x() / cg_event_key() / cg_event_delta() 分流。
