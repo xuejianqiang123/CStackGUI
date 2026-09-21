@@ -1,6 +1,6 @@
 /**
  * @file    main.c
- * @brief   网口调试助手示例：cg_net_* 的正确用法（客户端 / 服务端两种角色）
+ * @brief   网口调试助手示例：cg_net_* 的正确用法（客户端 / 服务端 / UDP 三种角色）
  * @details 这是"跟网络上的东西说话"那类工具的样板：界面全在 netterm.cgui 里，这里只有行为。
  *
  *          **线程模型是这个示例唯一想讲清楚的事，也是唯一容易出事的地方**（和串口示例同一套）：
@@ -16,6 +16,14 @@
  *              连接都是 cg_net_accept() 新给的独立句柄。所以服务端要同时管多个客户端，就得
  *              自己拿一个数组（本示例 8 个），在时钟里逐个 read / 检查掉线。
  *            本层故意不做"客户端列表"这个概念，API 面保持一条线。
+ *
+ *          **UDP 是同一套模型里刻意做的一个例外**（第三种角色）：
+ *            - cg_net_udp_open() 开的句柄上**没有读线程**：数据报的"报文边界"和"谁发的"
+ *              必须原样交到业务手里，而字节环（为字节流设计）会把这两样一起毁掉；
+ *            - 所以收是**拉取式**的 —— 时钟里循环 cg_net_recvfrom()，**一次一个完整数据报**，
+ *              外加它的来源 ip/port；-1 = 这一拍没有了（不是错误），0 = 收到了一个空数据报；
+ *            - 于是 UDP 分支里**不要碰** read / available / connected / write：它们在 UDP
+ *              句柄上分别返回 0 / 0 / 0 / -1（宁可明确拒绝，也不"悄悄支持"错的语义）。
  *
  *          界面上用到的控件（都在 .cgui 里声明）：
  *            combo（角色）、edit（地址）、spinner（端口）、button ×4、led（链路灯）、
@@ -33,7 +41,11 @@
  *               所以先取干净再回收句柄（本文件 drain_conn + 先读后判的顺序）；
  *            5. 断开与退出都要把**每一个**句柄 cg_net_close() 掉，它幂等且 NULL 安全；
  *            6. 发送在 HEX 模式下按十六进制解析；解析是手写的 —— 不用 strtok（它会就地改原串），
- *               而且"1A2B"这种没分隔符的也得算对。
+ *               而且"1A2B"这种没分隔符的也得算对；
+ *            7. UDP 那一支的返回值和 TCP 那套**不通用**：> 0 字节数、= 0 空数据报（合法，
+ *               是"收到了一帧"）、= -1 暂时没有数据（**也不是错误**）；想知道到底出没出错，
+ *               看 cg_net_last_error(u) 是不是空串 —— 而那个串是**粘的**（报过一次就一直
+ *               非空），所以本示例只报一次，免得每 50ms 往日志里刷同一句。
  *
  *          编译：在项目根跑 build-app.bat netterm
  */
@@ -56,22 +68,28 @@
 #define ACCEPT_PER_TICK 4
 /** 曲线 Y 轴的最小上限，也是初始上限（和 .cgui 里 chart 的 max 对齐） */
 #define CHART_TOP_MIN  256
+/** 一拍最多收几个 UDP 数据报（防"数据报一直比界面快"把这一拍拖久；剩下的下一拍再收） */
+#define UDP_RX_PER_TICK 16
+/** UDP 收报缓冲区：一个数据报最多这么多字节（超出部分被截掉，Win32 单报上限约 65507） */
+#define UDP_DATAGRAM_MAX 1472
 
 /** 角色：和 .cgui 里 cmb_role 的条目顺序一致（下拉框的 value 就是下标） */
-enum { ROLE_CLIENT = 0, ROLE_SERVER = 1 };
+enum { ROLE_CLIENT = 0, ROLE_SERVER = 1, ROLE_UDP = 2 };
 
-/** 业务状态：监听句柄、客户端连接、服务端连接数组、轮询定时器、累计量、曲线聚合量 */
+/** 业务状态：监听句柄、客户端连接、UDP 端口、服务端连接数组、轮询定时器、累计量、曲线聚合量 */
 typedef struct {
     cg_net_t    *srv;                 /**< 监听句柄；NULL = 没在监听 */
     cg_net_t    *cli;                 /**< 客户端角色下那条连接；NULL = 没连 */
+    cg_net_t    *udp;                 /**< UDP 角色下那个数据报端口；NULL = 没打开（句柄上没有读线程） */
     cg_net_t    *peers[MAX_CLIENTS];  /**< 服务端收上来的连接（一个句柄 = 一条连接） */
     int          n_peer;              /**< peers 里有效句柄的个数 */
-    int          role;                /**< ROLE_CLIENT / ROLE_SERVER */
+    int          role;                /**< ROLE_CLIENT / ROLE_SERVER / ROLE_UDP */
     cg_timer_t  *poll;                /**< 轮询定时器（一次性的，"再挂一次"就是周期） */
     char         ini[1200];           /**< 配置文件路径（记住上次的地址 / 端口 / 角色 / 分隔条） */
     int          ticks;               /**< 距曲线上一个点过了几拍 */
     int          rx_window;           /**< 这一秒内收到的字节数 */
     int          chart_top;           /**< 曲线 Y 轴当前上限（只往上扩） */
+    int          udp_err_shown;       /**< UDP 的收发出错只报一次：错误串是粘的，别每拍刷屏 */
     long long    rx_total;            /**< 累计收到字节（自己留一份，断开后还要显示） */
     long long    tx_total;            /**< 累计发出字节 */
 } biz_t;
@@ -158,10 +176,34 @@ static void peer_remove(int idx)
     s_biz.peers[s_biz.n_peer] = NULL;
 }
 
-/** @brief 现在有没有一条能收发的链路（客户端连接、或服务端已收到连接） */
+/** @brief 现在有没有一条能收发的链路（客户端连接、服务端已收到连接、或已打开的 UDP 端口） */
 static int has_link(void)
 {
-    return (s_biz.cli != NULL) || (s_biz.n_peer > 0);
+    return (s_biz.cli != NULL) || (s_biz.udp != NULL) || (s_biz.n_peer > 0);
+}
+
+/**
+ * @brief 当前角色的中文名（日志用）
+ * @return const char* "客户端" / "服务端" / "UDP"
+ */
+static const char *role_name(void)
+{
+    if (s_biz.role == ROLE_SERVER) return "服务端";
+    if (s_biz.role == ROLE_UDP)    return "UDP";
+    return "客户端";
+}
+
+/**
+ * @brief 让按钮上的措辞跟着角色走
+ * @param app 所属应用
+ * @return void
+ * @note UDP 角色下「监听」按钮干的事其实是"打开本机端口"（UDP 没有"连接"这回事），
+ *       所以这里把它改叫「打开 UDP」—— 只看 .cgui 里的静态文字很容易点错按钮。
+ *       cg_widget_set_text 对 NULL 是安全的，所以控件找不到也不会出事。
+ */
+static void sync_role_ui(cg_app_t *app)
+{
+    cg_widget_set_text(cg_find(app, "btn_listen"), (s_biz.role == ROLE_UDP) ? "打开 UDP" : "监听");
 }
 
 /* ------------------------------------------------------------ 界面刷新 */
@@ -171,7 +213,8 @@ static int has_link(void)
  * @param app 所属应用
  * @return void
  * @note 服务端"只监听、还没人来"和"已经有人连上"是两种状态，这里分开显示 ——
- *       不看日志也知道到底有没有人进来。
+ *       不看日志也知道到底有没有人进来。UDP 也一样：端口开着就叫"UDP 就绪"，
+ *       没开就叫"未打开"（UDP 无连接，"有没有对端"这个问题本身不成立）。
  */
 static void refresh_ui(cg_app_t *app)
 {
@@ -181,7 +224,11 @@ static void refresh_ui(cg_app_t *app)
     char         peer[192] = "对端 —";
     int          lamps = 0;
 
-    if (s_biz.cli) {                                  /* 客户端：连上了 */
+    if (s_biz.udp) {                                  /* UDP：端口开着就能收能发 */
+        state = "UDP 就绪";
+        lamps = 1;
+        snprintf(peer, sizeof(peer), "%s", cg_net_peer(s_biz.udp));
+    } else if (s_biz.cli) {                           /* 客户端：连上了 */
         state = "已连接";
         lamps = 1;
         snprintf(peer, sizeof(peer), "%s", cg_net_peer(s_biz.cli));
@@ -193,6 +240,9 @@ static void refresh_ui(cg_app_t *app)
         state = "监听中";
         lamps = 2;                                    /* 闪 = 在等连接 */
         snprintf(peer, sizeof(peer), "等待连接…");
+    } else if (s_biz.role == ROLE_UDP) {              /* UDP 角色：端口还没打开 */
+        state = "未打开";
+        snprintf(peer, sizeof(peer), "点「打开 UDP」绑定本机端口");
     }
 
     cg_widget_set_text(led, state);
@@ -233,6 +283,57 @@ static int drain_conn(cg_widget_t *term, cg_net_t *n)
     return got;
 }
 
+/**
+ * @brief 把这一拍的 UDP 数据报收干净（每拍最多 UDP_RX_PER_TICK 个）
+ * @param app 所属应用
+ * @param term 终端控件
+ * @return int 这一拍收到的字节数
+ * @note **UDP 没有读线程，所以这里是唯一的收数据入口**：一次调用 = 一个完整数据报，
+ *       报文绝不和下一个粘连（这是数据报和字节流的根本区别，也是本示例要讲的点）；
+ *       来源 ip/port 由 cg_net_recvfrom 一并带出来，正好够拼一行"[ip:port] 内容"。
+ *
+ *       **返回值和 TCP 那套不一样，别照抄**：
+ *         > 0  收到了这么多字节
+ *         = 0  收到了一个**空数据报**（UDP 允许，是"收到了一帧"，不是没收到）
+ *         = -1 这一拍没有数据了（**不是错误**）—— 真出错时 cg_net_last_error(u) 才有内容
+ *       错误串是粘的（报过一次就一直非空），所以只报一次，免得 50ms 往日志里刷一句。
+ */
+static int recv_udp(cg_app_t *app, cg_widget_t *term)
+{
+    unsigned char buf[UDP_DATAGRAM_MAX];    /**< 一次接一个数据报；比这还大的会被截断 */
+    char          ip[64];                   /**< 来源 IP（IPv4 够用） */
+    int           k, n, got = 0;
+
+    for (k = 0; k < UDP_RX_PER_TICK; k++) {
+        char *line;
+        int   port = 0;
+
+        ip[0] = '\0';                       /* inet_ntop 失败时别留着上一拍的地址 */
+        n = cg_net_recvfrom(s_biz.udp, ip, (int)sizeof(ip), &port, buf, (int)sizeof(buf));
+        if (n < 0) {
+            const char *why = cg_net_last_error(s_biz.udp);
+
+            if (why && *why && !s_biz.udp_err_shown) {
+                s_biz.udp_err_shown = 1;    /* 只在第一次出错时报，之后不再重复 */
+                term_sys(app, why);
+            }
+            break;                          /* -1 = 没有待收的数据报，收工（不是错误） */
+        }
+
+        /* n == 0 也要打一行：空数据报是合法的一帧，漏掉它会让人以为"什么都没收到" */
+        if (n == 0) line = cg_str_format("[%s:%d] （空数据报）", ip, port);
+        else        line = cg_str_format("[%s:%d] %.*s", ip, port, n, (const char *)buf);
+        if (line) {
+            cg_term_write(term, CG_TERM_RX, line, -1);
+            cg_free(line);
+        }
+        s_biz.rx_window += n;               /* 空数据报加 0，不影响曲线 */
+        s_biz.rx_total  += n;
+        got += n;
+    }
+    return got;
+}
+
 /** @brief 曲线推一个点：这一秒收到的字节数，并按需自动扩 Y 轴上限 */
 static void push_rate_point(cg_app_t *app)
 {
@@ -254,11 +355,12 @@ static void push_rate_point(cg_app_t *app)
 }
 
 /**
- * @brief 轮询回调：收新连接、取各条连接的数据、回收掉线的连接，并刷界面与曲线
+ * @brief 轮询回调：收 UDP 数据报、收新连接、取各条连接的数据、回收掉线的连接，并刷界面与曲线
  * @param user 挂进去的 cg_app_t（cg_set_timer 的第 4 个参数）
  * @return void
  * @note cg_set_timer 是一次性的，所以结尾要按需再挂一次，这才是"周期"。
  *       刚触发的那颗定时器已经被 cg_timer.c 回收了，所以这里先把自己的句柄清成 NULL。
+ *       三种角色共用这一颗时钟：UDP 只走第 1 步，TCP 客户端走第 3 步，服务端走第 2 + 4 步。
  */
 static void poll_tick(void *user)
 {
@@ -269,7 +371,10 @@ static void poll_tick(void *user)
 
     s_biz.poll = NULL;                  /* 上一颗已经回收，别让 stop_poll 去碰悬空指针 */
 
-    /* 1) 服务端：收新连接。accept 的 timeout 传 0 = 不等，没连接返回 NULL（正常） */
+    /* 1) UDP：数据报没有读线程，全靠这里一个个"拉"出来（每拍给个上限，防饿死界面） */
+    if (s_biz.udp) recv_udp(app, term);
+
+    /* 2) 服务端：收新连接。accept 的 timeout 传 0 = 不等，没连接返回 NULL（正常） */
     if (s_biz.srv) {
         for (k = 0; k < ACCEPT_PER_TICK; k++) {
             cg_net_t *c = cg_net_accept(s_biz.srv, 0);
@@ -288,7 +393,7 @@ static void poll_tick(void *user)
         }
     }
 
-    /* 2) 客户端：先取干净，再看掉线（对端关闭后缓冲里可能还有尾巴，得先取走） */
+    /* 3) 客户端：先取干净，再看掉线（对端关闭后缓冲里可能还有尾巴，得先取走） */
     if (s_biz.cli) {
         drain_conn(term, s_biz.cli);
         if (!cg_net_connected(s_biz.cli) && cg_net_available(s_biz.cli) <= 0) {
@@ -298,7 +403,7 @@ static void poll_tick(void *user)
         }
     }
 
-    /* 3) 服务端：逐个连接取数据；取干净后仍 disconnected = 这人对端走了，回收句柄 */
+    /* 4) 服务端：逐个连接取数据；取干净后仍 disconnected = 这人对端走了，回收句柄 */
     for (i = 0; i < s_biz.n_peer; ) {
         drain_conn(term, s_biz.peers[i]);
         if (!cg_net_connected(s_biz.peers[i]) && cg_net_available(s_biz.peers[i]) <= 0) {
@@ -322,8 +427,8 @@ static void poll_tick(void *user)
         push_rate_point(app);
     }
 
-    /* 还有要看的东西才再挂一颗；都没了就此停表（重连时再挂） */
-    if (s_biz.srv || s_biz.cli || s_biz.n_peer > 0) {
+    /* 还有要看的东西才再挂一颗；都没了就此停表（重连 / 重新打开 UDP 时再挂） */
+    if (s_biz.srv || s_biz.cli || s_biz.udp || s_biz.n_peer > 0) {
         s_biz.poll = cg_set_timer(app, POLL_MS, poll_tick, app);
     }
 }
@@ -427,25 +532,69 @@ static void do_listen(cg_app_t *app)
 }
 
 /**
- * @brief 断开：撤轮询，关掉监听与全部连接，刷界面
+ * @brief 打开本机 UDP 端口（第三角色），成功则开始轮询
  * @param app 所属应用
  * @return void
- * @note 顺序上先关连接再关监听；cg_net_close() 幂等且 NULL 安全，所以不用逐条判空。
+ * @note 端口就用界面上那个 spn_port（**传 0 = 让系统随便分一个**，实际分到几在 cg_net_peer()
+ *       里，形如 "UDP 本地 9000（可广播）"）；broadcast 传 1 = 允许往 255.255.255.255 发。
+ *       UDP 没有"连接"这一步：打开之后既能收也能发，目的地每次发送时用「地址:端口」现填。
+ */
+static void do_udp_open(cg_app_t *app)
+{
+    char *line;
+    int   port = port_of(app);
+
+    if (port < 0 || port > 65535) {
+        term_sys(app, "端口要在 0~65535 之间（0 = 让系统随便分一个）。");
+        return;
+    }
+
+    s_biz.udp = cg_net_udp_open(port, 1);
+    if (!s_biz.udp) {
+        term_sys(app, cg_net_last_error(NULL));  /* 端口被占用 / 权限不够… */
+        return;
+    }
+
+    s_biz.udp_err_shown = 0;                     /* 新开的句柄，错误可以重新报一次 */
+    s_biz.rx_window = 0;
+    s_biz.ticks     = 0;
+    line = cg_str_format("已打开 %s：现在就能收发了（「地址:端口」是发给谁）。", cg_net_peer(s_biz.udp));
+    if (line) {
+        term_sys(app, line);
+        cg_free(line);
+    }
+    if (s_biz.ini[0]) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%d", port);
+        cg_ini_write(s_biz.ini, "网口", "端口", buf);
+    }
+    refresh_ui(app);
+    start_poll(app);
+}
+
+/**
+ * @brief 断开：撤轮询，关掉监听、UDP 端口与全部连接，刷界面
+ * @param app 所属应用
+ * @return void
+ * @note 顺序上先关连接再关监听；cg_net_close() 幂等且 NULL 安全，所以不用逐条判空 ——
+ *       UDP 句柄也走同一个 close（它没有读线程，但关套接字、拆缓冲的收尾是一样的）。
  */
 static void do_disconnect(cg_app_t *app)
 {
-    int i, had = (s_biz.srv != NULL) || (s_biz.cli != NULL) || (s_biz.n_peer > 0);
+    int i, had = (s_biz.srv != NULL) || (s_biz.cli != NULL) || (s_biz.udp != NULL) || (s_biz.n_peer > 0);
 
     stop_poll();
     cg_net_close(s_biz.cli);
     s_biz.cli = NULL;
     for (i = 0; i < s_biz.n_peer; i++) cg_net_close(s_biz.peers[i]);
     s_biz.n_peer = 0;
+    cg_net_close(s_biz.udp);
+    s_biz.udp = NULL;
     cg_net_close(s_biz.srv);
     s_biz.srv = NULL;
 
     refresh_ui(app);
-    if (had) term_sys(app, "已断开：监听与全部连接都已关闭。");
+    if (had) term_sys(app, "已断开：监听、UDP 端口与全部连接都已关闭。");
 }
 
 /**
@@ -486,28 +635,76 @@ static void send_bytes(cg_app_t *app, const void *data, int len)
 }
 
 /**
+ * @brief 发一个 UDP 数据报给「地址 + 端口」指定的目的地
+ * @param app 所属应用
+ * @param data 要发的字节
+ * @param len 字节数（**可以是 0** —— 空数据报在 UDP 里是合法的）
+ * @return void
+ * @note UDP 无连接，所以"发给谁"每次现填：UDP 模式下「地址」就是目的地（留空按 127.0.0.1，
+ *       本机自测最方便），端口复用 spn_port。主机名解析不了 / 发不出去时，原因在句柄上。
+ */
+static void send_udp(cg_app_t *app, const void *data, int len)
+{
+    cg_widget_t *term = cg_find(app, "term_log");
+    cg_widget_t *edt  = cg_find(app, "edt_host");
+    const char  *host = cg_widget_text(edt);
+    int          port = port_of(app);
+    int          sent;
+
+    if (!host || !*host) host = "127.0.0.1";
+    if (port <= 0 || port > 65535) {
+        term_sys(app, "目的地端口要在 1~65535 之间，先把它改对。");
+        return;
+    }
+
+    sent = cg_net_sendto(s_biz.udp, host, port, data, len);
+    if (sent < 0) {
+        term_sys(app, cg_net_last_error(s_biz.udp));   /* 主机名解析不了 / 网络不通… */
+        return;
+    }
+    if (len > 0) cg_term_write(term, CG_TERM_TX, data, len);
+    else         term_sys(app, "已发出一个空数据报（0 字节）。");
+    s_biz.tx_total += len;
+}
+
+/**
+ * @brief 说清楚"现在为什么还不能发"（按角色给不同的话，别让按钮点了没反应）
+ * @param app 所属应用
+ * @return void
+ */
+static void no_target_hint(cg_app_t *app)
+{
+    if (s_biz.role == ROLE_UDP) term_sys(app, "UDP 端口还没打开：先点「打开 UDP」绑定本机端口。");
+    else if (s_biz.srv)         term_sys(app, "还没人连进来，等客户端接入后再发。");
+    else                        term_sys(app, "还没连上：先点「连接」或「监听」。");
+}
+
+/**
  * @brief 发送输入框里的内容：按「HEX 发送」勾选决定原文还是十六进制
  * @param app 所属应用
  * @return void
  * @note 没有链路、输入为空、HEX 写错，都在这里给出人话提示，不让按钮"点了没反应"。
+ *       三种角色共用这一段：UDP 下去「地址:端口」指定的目的地，TCP 下去所有活着的连接。
  */
 static void send_current(cg_app_t *app)
 {
-    cg_widget_t *edt  = cg_find(app, "edt_send");
-    const char  *text = cg_widget_text(edt);
+    cg_widget_t  *edt  = cg_find(app, "edt_send");
+    const char   *text = cg_widget_text(edt);
+    unsigned char bytes[512];
+    const void   *data;
+    int           len;
 
     if (!text || !*text) {
         term_sys(app, "输入框是空的，没东西可发。");
         return;
     }
-    if (!has_link()) {
-        term_sys(app, s_biz.srv ? "还没人连进来，等客户端接入后再发。" : "还没连上：先点「连接」或「监听」。");
+    if (!has_link()) {                    /* has_link 已经把 UDP 端口算进去了 */
+        no_target_hint(app);
         return;
     }
 
     if (cg_widget_checked(cg_find(app, "chk_hex"))) {
-        unsigned char bytes[512];
-        int           n = hex_parse(text, bytes, (int)sizeof(bytes));
+        int n = hex_parse(text, bytes, (int)sizeof(bytes));
 
         if (n == -2) {
             term_sys(app, "HEX 数据太长了（一次最多 512 字节）。");
@@ -521,10 +718,15 @@ static void send_current(cg_app_t *app)
             term_sys(app, "HEX 模式没解析出任何字节。");
             return;
         }
-        send_bytes(app, bytes, n);
+        data = bytes;
+        len  = n;
     } else {
-        send_bytes(app, text, (int)strlen(text));
+        data = text;
+        len  = (int)strlen(text);
     }
+
+    if (s_biz.udp) send_udp(app, data, len);   /* UDP：发给「地址:端口」 */
+    else           send_bytes(app, data, len); /* TCP：发给所有活着的链路 */
     refresh_ui(app);
 }
 
@@ -545,13 +747,22 @@ static void on_role_select(cg_widget_t *self, cg_event_t ev, void *user)
     (void)user;
 
     s_biz.role = cg_widget_value(self);
+    sync_role_ui(app);                                 /* UDP 下「监听」要改叫「打开 UDP」 */
     if (has_link()) {
         term_sys(app, "角色改了，但当前链路还在用：要换角色请先点「断开」。");
         return;
     }
-    term_sys(app, (s_biz.role == ROLE_SERVER)
-                      ? "角色：服务端（监听本机端口，等别人连进来）"
-                      : "角色：客户端（去连上面的地址和端口）");
+    switch (s_biz.role) {
+    case ROLE_SERVER:
+        term_sys(app, "角色：服务端（监听本机端口，等别人连进来）");
+        break;
+    case ROLE_UDP:
+        term_sys(app, "角色：UDP（绑定本机端口收发数据报，无连接；「地址:端口」是发给谁）");
+        break;
+    default:
+        term_sys(app, "角色：客户端（去连上面的地址和端口）");
+        break;
+    }
     refresh_ui(app);
 }
 
@@ -574,6 +785,11 @@ static void on_connect_click(cg_widget_t *self, cg_event_t ev, void *user)
 
     if (has_link()) {
         term_sys(app, "已经在用了：先点「断开」再重连。");
+        return;
+    }
+    if (s_biz.role == ROLE_UDP) {
+        term_sys(app, "UDP 是无连接的，没有「连接」这一步：目的地写在「地址:端口」，"
+                      "点「打开 UDP」绑定本机端口就能收发了。");
         return;
     }
     if (s_biz.role == ROLE_SERVER) {
@@ -600,6 +816,10 @@ static void on_listen_click(cg_widget_t *self, cg_event_t ev, void *user)
 
     if (has_link()) {
         term_sys(app, "已经在用了：先点「断开」再监听。");
+        return;
+    }
+    if (s_biz.role == ROLE_UDP) {                 /* UDP 下这个按钮就是"打开本机端口" */
+        do_udp_open(app);
         return;
     }
     if (s_biz.role == ROLE_CLIENT) {
@@ -767,6 +987,8 @@ static void on_destroy(cg_widget_t *self, cg_event_t ev, void *user)
     s_biz.cli = NULL;
     for (i = 0; i < s_biz.n_peer; i++) cg_net_close(s_biz.peers[i]);
     s_biz.n_peer = 0;
+    cg_net_close(s_biz.udp);         /* UDP 句柄也走同一个 close */
+    s_biz.udp = NULL;
     cg_net_close(s_biz.srv);
     s_biz.srv = NULL;
     cg_log(CG_LOG_INFO, "网口助手退出：RX %lld / TX %lld 字节", s_biz.rx_total, s_biz.tx_total);
@@ -818,7 +1040,7 @@ static void on_ready(cg_app_t *app, void *user)
         if (role) {
             int r = 0;
             sscanf(role, "%d", &r);
-            if (r == ROLE_CLIENT || r == ROLE_SERVER) {
+            if (r >= ROLE_CLIENT && r <= ROLE_UDP) {       /* 三种角色都要认得 */
                 cg_widget_set_value(cg_find(app, "cmb_role"), r);
                 s_biz.role = r;
             }
@@ -834,9 +1056,10 @@ static void on_ready(cg_app_t *app, void *user)
         cg_free(split);
     }
 
+    sync_role_ui(app);                               /* 按钮措辞要跟恢复出来的角色一致 */
     refresh_ui(app);
     cg_log(CG_LOG_INFO, "网口助手启动：角色 %s，配置 %s",
-           s_biz.role == ROLE_SERVER ? "服务端" : "客户端", s_biz.ini[0] ? s_biz.ini : "(无)");
+           role_name(), s_biz.ini[0] ? s_biz.ini : "(无)");
 }
 
 /** 事件名 -> C 函数 的登记表（右边这些名字写在 netterm.cgui 里） */
