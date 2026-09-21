@@ -263,13 +263,17 @@ int main(int argc, char **argv)
 }
 `;
 
+  /* 本模板必须是纯 ASCII：cmd 解析 bat 用的是"启动这个 cmd 进程时"的控制台代码页（中文
+     Windows 双击时是 936），而 Node 只能按 UTF-8 写文件 —— UTF-8 的中文会被按 2 字节/字
+     解码，cmd 行定位错位，注释后半句会被当命令执行。Node 没有 GBK 编码器，所以导出的
+     脚本一律英文 ASCII（仓库里手写的 bat 用 GBK，见 tools\bat-gbk.ps1）。 */
   const buildBat = `@echo off
 rem Build this UI project into a standalone exe.
-rem Works no matter where this folder lives: it walks up from here to find the
-rem CStackGUI root (a folder with build-app.bat + runtime\\lib), so this project
-rem can sit in CStackGUI\\apps\\, right beside CStackGUI.exe, or in any custom
-rem folder. You can still force the root with the CSTACKGUI_HOME env var.
-rem NOTE: keep this file ASCII-only (cmd mis-parses non-ASCII after chcp 65001).
+rem The folder can live anywhere: the script walks up from here to find the
+rem CStackGUI root (the one holding build-app.bat + runtime\\lib), so the
+rem project may sit under CStackGUI\\apps\\, beside CStackGUI.exe, or in any
+rem folder of your own; CSTACKGUI_HOME can also point at the root directly.
+rem Keep this file pure ASCII (see tools\\bat-gbk.ps1 for why).
 setlocal enabledelayedexpansion
 if not "%CSTACKGUI_HOME%"=="" goto have_home
 set "SEARCH=%~dp0"
@@ -286,8 +290,8 @@ if "%CSTACKGUI_HOME%"=="\\" (
     echo        CSTACKGUI_HOME to the CStackGUI root.
     exit /b 1
 )
-rem build-app.bat accepts the project directory as an absolute path (any
-rem location), so this folder can be renamed or moved and still builds itself.
+rem build-app.bat takes an absolute project dir, so renaming or moving this
+rem folder still rebuilds.
 call "%CSTACKGUI_HOME%build-app.bat" "%~dp0."
 `;
 
