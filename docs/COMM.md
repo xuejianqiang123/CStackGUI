@@ -224,10 +224,13 @@ while (hold < 3 && hold < n && (buf[n - 1 - hold] & 0xC0) == 0x80) hold++;
 
 ## 8. 示例工程
 
-`examples/serialterm/` —— 串口助手，演示第 3 节那套线程模型的完整版：
+`examples/serialterm/` —— 串口助手，演示第 3 节那套线程模型的完整版（17 个控件、8 个事件回调）：
 
-- 端口下拉（`cg_serial_list()`）+ 波特率 + 打开 / 断开；
+- 端口下拉（`cg_serial_list()`，插拔设备后点「刷新」重新枚举）+ 波特率 + 打开 / 断开 + 清空日志 + 存日志；
 - 上面一块 terminal 收 RX、下面一块发 TX，中间用 `splitter` 分隔（就是 CGUI-FORMAT 2.9 里那个经典布局）；
-- 文本 / HEX 切换、时间戳开关、`cg_term_save()` 存日志；
-- **重点看它的三个回调**：`on_ready` 里开串口 + 起时钟、时钟回调里 `cg_serial_read` → `cg_term_write`、
-  断开时 `cg_serial_close` + 置 `NULL`。把这三个改动抄进自己的工程，串口这块就不会踩到线程的坑。
+- 发送区带**发送编码**开关（`chk_hex`：勾上后按 `"1A 2B"` 这种文本转成字节再发），
+  右下角一块 `chart` 画"每秒收到多少字节"；
+- 日志的时间戳是在 `.cgui` 里给 terminal 打开 `checked` 的（**不是运行时可切的开关** —— 要切就用
+  `cg_term_*` 那组 API 自己加一个，见 CGUI-FORMAT 2.9）；
+- **重点看三处**：`on_ready` 里开串口 + 起时钟、时钟回调里 `cg_serial_read` → `cg_term_write`、
+  断开时 `cg_serial_close` + 句柄置 `NULL`。把这三处抄进自己的工程，串口这块就不会踩到线程的坑。
