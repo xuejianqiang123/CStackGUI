@@ -316,6 +316,39 @@ cg_term_write(cg_find(app, "term_log"), CG_TERM_TX, "AT+GMR\r\n", -1);   /* 发�
 ] }
 ```
 
+### 2.10 `chart`：折线 / 柱状图
+
+实时曲线：业务按采样节奏推点，窗口、范围、网格与绘制都由控件管。
+
+```c
+cg_chart_push(cht, 0, 42);            /* 给第 0 个系列推一个点 */
+cg_chart_push_all(cht, vals, 2);      /* 一次给前 2 个系列各推一个点（多通道采样最常用）*/
+```
+
+| 字段 | 在本控件上的含义 |
+| --- | --- |
+| `items` | **系列名**，一行一个（每个条目 = 一条曲线）；不写就是单系列 |
+| `value` | **窗口点数**：每系列保留多少个点（缺省 120，最多 4096）。它不是"当前值" |
+| `min` / `max` | **Y 轴范围**（缺省 0~100）；超出范围的值按边界裁剪后画，不会画到框外 |
+| `format` | `"line"`（缺省，折线）/ `"bar"`（柱状）|
+
+行为约定：
+
+- **窗口满了丢最老的**（不是环形缓冲）：内存里整体左移一格，所以
+  `cg_chart_point(w, 系列, 0)` 永远是最老的点、最后一个下标永远是最新的。
+- 点数超过绘图区像素宽度时**不抽点**，而是对每个像素列取该列覆盖点的 min/max 画一条竖线
+  （LVGL 的做法）—— 既不慢，也不会刚好把那个尖峰抽掉。抽点最坑的就是丢毛刺。
+- 颜色按固定调色板自动分配（8 色），按系列顺序取；写了 `items` 时名字会显示在右上角图例里。
+- 改了 `value` / `items` 之后**点缓冲会重建、已有点会丢**（旧窗口配不上新窗口），这是有意的。
+- 实时性靠"业务用 `cg_set_timer` 定周期推点"，**不要另开线程碰控件**（控件不是线程安全的）。
+- 其余 API：`cg_chart_clear` / `cg_chart_add_series` / `cg_chart_series_count` /
+  `cg_chart_filled` / `cg_chart_point` / `cg_chart_set_range`。
+
+```json
+{ "id": "cht_env", "type": "chart", "rect": { "x": 8, "y": 8, "w": 480, "h": 180 },
+  "value": 200, "min": 0, "max": 100, "items": ["温度", "湿度"] }
+```
+
 ---
 
 ## 3. `events`：事件绑定
@@ -375,6 +408,7 @@ cg_term_write(cg_find(app, "term_log"), CG_TERM_TX, "AT+GMR\r\n", -1);   /* 发�
 | `table` | 表格 | 否 | 360×180 | — | `select`、`dblclick`、`check` | `SysListView32` 报表模式（`check`/`multi` 开勾选列与多选）|
 | `statusbar` | 状态栏 | 否 | 400×24 | — | **无** | `msctls_statusbar32` |
 | `terminal` | 终端 | 否 | 360×200 | — | **无** | 只读 RichEdit：按行着色（RX 绿 / TX 蓝 / 自己记的灰）、可选中复制，见 2.9 |
+| `chart` | 图表 | 否 | 320×160 | — | **无** | 自绘折线 / 柱状图：滑动窗口 + 超像素密度时按列画 min/max，见 2.10 |
 | `menu` | 菜单栏 | 否 | 无矩形 | — | `click` | 窗口 `HMENU`（一根窗口一根）|
 | `menubutton` | 菜单按钮 | 否 | 130×32 | `菜单` | `click` | `BUTTON` + `TrackPopupMenu` |
 | `toolbar` | 工具栏 | 否 | 400×34 | — | `click` | `ToolbarWindow32`（纯文字按钮）|

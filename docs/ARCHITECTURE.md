@@ -161,7 +161,7 @@ void cb(cg_widget_t *self, cg_event_t ev, void *user);
 | `separator` | 分割线 | 否 | `STATIC` + `SS_ETCHEDHORZ` |
 | `image` | 图片 | 否 | 自注册窗口类 `CStackGUIImage`，GDI+ 读图 + 自绘缩放 |
 
-> 这里只是常用控件的速览。**完整 41 行类型表**（含 `progressring` / `timer` / `canvas` / `colorpicker` /
+> 这里只是常用控件的速览。**完整 42 行类型表**（含 `progressring` / `timer` / `canvas` / `colorpicker` /
 > `browser` / `shape` / `badge` / `tag` / `rate` / `pagination`）见
 > [docs/CGUI-FORMAT.md](CGUI-FORMAT.md) 第 4 节。
 
@@ -526,6 +526,12 @@ release/
   按方向着色都由控件管；后端是**只读 RichEdit + 逐行 CHARFORMAT**，所以"选择复制"与
   自动滚动是白捡的（日志最常被做的事就是复制出去）。行在 core 里存为 `items[]`，
   **首字节是方向标记**（裁剪/清空/保存只需面对一个数组）。
+- **图表（chart）**：第 42 种控件，实时曲线。业务用 `cg_chart_push*` 推点，窗口、范围、网格与绘制
+  都由控件管；两个刻意的做法：**窗口满了整体左移一格**（不做环形缓冲 —— cap 只有几十到几百，
+  memmove 一下比维护读写指针便宜，也不会出现"绕回时算错下标"这种隐蔽 bug）、
+  **点数超过绘图区像素宽度时按像素列取 min/max 画竖线**（LVGL 的做法，不抽点所以尖峰不丢）。
+  自绘窗口类 `CStackGUIChart`（GDI：折线用一次 `Polyline` 批量提交，数据线不做抗锯齿）。
+  `cg_widget_sync()` 会顺手把点缓冲对齐 `items`/`value`，所以查询与绘制看到的永远是与配置一致的状态。
 - **控件绑定**：`.cgui` 的 `bind` / 运行时的 `cg_bind()`，值·文字·勾选自动同步（见 §3.3）。
   思路来自同类项目 YMGUI 的 subject-observer，但按我们"原生控件 + `.cgui` 描述界面"的路线
   简化成"值镜像"，不引入独立 subject 对象。
