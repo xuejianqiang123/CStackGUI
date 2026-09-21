@@ -33,7 +33,17 @@ function inner(node: CgNode) {
         skin.color = (0.2126 * r + 0.7152 * g2 + 0.0722 * b) / 255 < 0.55 ? "#FFFFFF" : "#000000";
       }
       if (st.radius != null) skin.borderRadius = st.radius;
-      return <div className="ctl-button" style={skin}>{node.text || ""}</div>;
+      return (
+        <div className="ctl-button" style={skin}>
+          {node.text || ""}
+          {/* 画布不画真图（运行时才画），只在角落提示用了哪张背景图 */}
+          {node.src ? (
+            <span className="ctl-imgchip" title={node.src}>
+              {node.src.split(/[\\/]/).pop()}
+            </span>
+          ) : null}
+        </div>
+      );
     }
 
     case "label":

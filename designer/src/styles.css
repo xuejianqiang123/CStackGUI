@@ -141,7 +141,8 @@ input.narrow {
   border-right: 1px solid var(--outline);
   min-height: 0;
 }
-.right {
+/* 用直接子选择器限定「右面板」，别让 .right 这种通用名误伤行内修饰类（如 .insp-value.right） */
+.body > .right {
   width: 322px;
   display: flex;
   flex-direction: column;
@@ -154,11 +155,14 @@ input.narrow {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 8px 14px;
+  gap: 10px;
+  padding: 7px 12px;
   background: var(--surface);
   border-bottom: 1px solid var(--outline);
-  flex-wrap: wrap;
+  flex-wrap: wrap; /* 兜底：极窄窗口才换行 */
+}
+.toolbar button {
+  padding: 5px 10px;
 }
 .brand {
   display: flex;
@@ -185,7 +189,7 @@ input.narrow {
 }
 .tool-group.grow {
   flex: 1;
-  min-width: 260px;
+  min-width: 0; /* 可收缩到 0：窄窗口时缩放组也能挤上同一行，不再被 260px 撑到第二行 */
 }
 .field {
   display: flex;
@@ -462,9 +466,17 @@ input.narrow {
 }
 
 /* ---------------------------------------------------------------- 画布 */
-.viewport {
+/* 画布栏 = 滚动区（.viewport）+ 固定底栏（.viewport-hint），提示行不进滚动区 */
+.canvas-root {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.viewport {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 40px;
   position: relative;
@@ -596,11 +608,13 @@ input.narrow {
   pointer-events: none;
 }
 .viewport-hint {
-  position: sticky;
-  bottom: 0;
-  padding: 6px 2px;
+  /* 固定在画布栏底部（不在滚动区内），缩放内容再高也不会盖到窗口上 */
+  flex: none;
+  padding: 6px 12px;
   color: var(--on-surface-var);
   font-size: 11.5px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--outline);
   pointer-events: none;
 }
 
@@ -1578,7 +1592,7 @@ input.narrow {
   width: 104px;
   white-space: nowrap;
 }
-.insp-value.right {
+.insp-value.align-end {
   justify-content: flex-end;
 }
 /* 图标路径输入 + 右侧「选择文件」按钮 */
@@ -1621,6 +1635,103 @@ button.icon-pick svg {
 .insp-num span {
   font-size: 10.5px;
   color: var(--on-surface-var);
+}
+/* 按钮背景图提示角标：画布只显示文件名，真图由运行时拉伸铺满 */
+.ctl-button {
+  position: relative;
+}
+.ctl-imgchip {
+  position: absolute;
+  right: 3px;
+  bottom: 2px;
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  line-height: 1;
+  opacity: 0.55;
+  pointer-events: none;
+}
+/* 字体选择器：Aa 图标展开，字体/大小/字形三列 + 底部预览 */
+.font-picker {
+  margin: 2px 0 8px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  padding: 8px;
+  background: var(--surface);
+}
+.fp-cols {
+  display: flex;
+  gap: 8px;
+}
+.fp-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fp-col.fp-grow {
+  flex: 2;
+}
+.fp-head {
+  font-size: 10.5px;
+  color: var(--on-surface-var);
+}
+.fp-list {
+  max-height: 170px;
+  overflow-y: auto;
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+}
+.fp-sizes {
+  /* 大小/字形一列直排（不换行成两列），超出列表高度滚动 */
+  max-height: 170px;
+}
+.fp-item {
+  border: 0;
+  background: none;
+  text-align: left;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--on-surface);
+  display: flex;
+  flex-direction: column; /* 名称一行、示例一行：字体名占整行不被截断 */
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.fp-item:hover {
+  background: rgba(103, 80, 164, 0.08);
+}
+.fp-item.on {
+  background: rgba(103, 80, 164, 0.16);
+  font-weight: 600;
+}
+.fp-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fp-sample {
+  color: var(--on-surface-var);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fp-preview {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--outline);
+  border-radius: 8px;
+  color: var(--on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .check-inline {
   display: flex;

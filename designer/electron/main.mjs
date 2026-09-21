@@ -460,6 +460,34 @@ ipcMain.handle("app:pickIcon", async () => {
   }
 });
 
+/** 选控件背景图（按钮/图片控件用，png/jpg/bmp/gif）。相对路径与 assets 拷贝逻辑同 pickIcon：
+ *  工程内的图直接给相对路径；工程外的拷一份进 <工程>\assets\，工程整体搬走也不失效。 */
+ipcMain.handle("cgui:pickImage", async () => {
+  const res = await dialog.showOpenDialog(win, {
+    title: "选择图片（png / jpg / bmp / gif）",
+    filters: [{ name: "图片文件", extensions: ["png", "jpg", "jpeg", "bmp", "gif"] }],
+    properties: ["openFile"],
+  });
+  if (res.canceled || !res.filePaths.length) return { canceled: true };
+  const picked = res.filePaths[0];
+  if (!currentFile) return { canceled: false, path: picked };
+
+  const dir = path.dirname(path.resolve(currentFile));
+  const relRaw = path.relative(dir, picked);
+  if (relRaw && !relRaw.startsWith("..") && !path.isAbsolute(relRaw)) {
+    return { canceled: false, path: picked, rel: relRaw.split(path.sep).join("\\") };
+  }
+  try {
+    const assets = path.join(dir, "assets");
+    await fs.mkdir(assets, { recursive: true });
+    const dest = path.join(assets, path.basename(picked));
+    await fs.copyFile(picked, dest);
+    return { canceled: false, path: dest, rel: `assets\\${path.basename(picked)}` };
+  } catch {
+    return { canceled: false, path: picked };
+  }
+});
+
 /* ------------------------------------------------------------ 一键运行
  * F5：编译当前工程并把 exe 跑起来。
  * 前提（渲染进程负责先保存）：

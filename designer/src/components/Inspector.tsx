@@ -2,6 +2,8 @@
  *
  * 每个字段都直接改文档模型，改完即可保存，没有「应用」按钮。
  */
+import { useState } from "react";
+import { getBridge } from "../bridge";
 import {
   KIND_MAP,
   findParent,
@@ -59,6 +61,32 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     </div>
   );
 }
+
+/* 位置与尺寸的中文标签（.cgui 里仍是 rect.x/y/w/h，只是面板上好认） */
+const RECT_LABEL: Record<"x" | "y" | "w" | "h", string> = {
+  x: "左边",
+  y: "顶边",
+  w: "宽度",
+  h: "高度",
+};
+
+/** 字体选择器候选： Windows 常见字体，label 用中文名好认，value 写进 .cgui */
+const FONT_CHOICES: { label: string; value: string }[] = [
+  { label: "微软雅黑", value: "Microsoft YaHei UI" },
+  { label: "宋体", value: "SimSun" },
+  { label: "黑体", value: "SimHei" },
+  { label: "楷体", value: "KaiTi" },
+  { label: "仿宋", value: "FangSong" },
+  { label: "等线", value: "DengXian" },
+  { label: "Segoe UI", value: "Segoe UI" },
+  { label: "Arial", value: "Arial" },
+  { label: "Calibri", value: "Calibri" },
+  { label: "Consolas", value: "Consolas" },
+  { label: "Times New Roman", value: "Times New Roman" },
+  { label: "Courier New", value: "Courier New" },
+];
+/** 大小候选（磅）；运行时 style.size 缺省跟随系统 UI 字体 */
+const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36];
 
 /** 多行内容的编辑器：树/表格/条目都用纯文本编辑，格式简单、一眼能看懂。
  *  撤销栈只在获得焦点时压一次，避免每敲一个字都进历史。 */
@@ -123,6 +151,15 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
 
   const info = KIND_MAP[node.type];
   const style = node.style ?? {};
+  /** 字体选择器展开状态：换控件时保持原状，点 Aa 图标收起/展开 */
+  const [fontOpen, setFontOpen] = useState(false);
+  /** 选背景图（按钮）：Electron 弹文件对话框，优先给相对 .cgui 的路径；浏览器模式只有文件名 */
+  const pickImage = async () => {
+    const res = await getBridge().pickImage();
+    if (res.canceled) return;
+    const p = res.rel || res.path;
+    if (p) patch((n) => { n.src = p; });
+  };
   const parent = findParent(doc, node.id);
   const inTabs = parent?.type === "tabs";
   /** 可以当绑定源的控件（别人指向我的 id 改了就一起改，见上面 id 那段） */
@@ -206,7 +243,7 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
       <div className="insp-grid4">
         {(["x", "y", "w", "h"] as const).map((k) => (
           <label key={k} className="insp-num">
-            <span>{k.toUpperCase()}</span>
+            <span>{RECT_LABEL[k]}</span>
             <input
               className="input"
               type="number"
@@ -221,6 +258,36 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
         ))}
       </div>
 
+      {node.type === "button" ? (
+        <>
+          <Row label="图片">
+            <input
+              className="input mono"
+              value={node.src ?? ""}
+              placeholder="assets/picture.png"
+              spellCheck={false}
+              onChange={(e) =>
+                patch((n) => {
+                  n.src = e.target.value || undefined;
+                })
+              }
+            />
+            <button className="mini" title="选择图片文件" onClick={pickImage}>
+              更换
+            </button>
+            <button
+              className="mini"
+              title="清除图片"
+              onClick={() => patch((n) => { n.src = undefined; })}
+            >
+              清除
+            </button>
+          </Row>
+          <p className="muted small">
+            图片拉伸铺满按钮作背景，文字画在图上；路径相对 .cgui 所在目录，支持 png / jpg / bmp / gif。
+          </p>
+        </>
+      ) : null}
       <div className="insp-section">字体与颜色</div>
       <Row label="字体">
         <input
@@ -233,12 +300,102 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
             })
           }
         />
+        <button
+          className="mini"
+          title="展开选择字体"
+          onClick={() => setFontOpen(!fontOpen)}
+        >
+          Aa
+        </button>
       </Row>
+      {fontOpen ? (
+        <div className="font-picker">
+          <div className="fp-cols">
+            <div className="fp-col fp-grow">
+              <div className="fp-head">字体（字体族）</div>
+              <div className="fp-list">
+                {FONT_CHOICES.map((f) => (
+                  <button
+                    key={f.value}
+                    className={`fp-item${(style.font ?? "") === f.value ? " on" : ""}`}
+                    onClick={() =>
+                      patch((n) => {
+                        n.style = { ...(n.style ?? {}), font: f.value };
+                      })
+                    }
+                  >
+                    <span className="fp-name">{f.label}</span>
+                    <span className="fp-sample" style={{ fontFamily: `'${f.value}'` }}>
+                      示例 Aa 123
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="fp-col">
+              <div className="fp-head">大小（磅）</div>
+              <div className="fp-list fp-sizes">
+                {FONT_SIZES.map((s) => (
+                  <button
+                    key={s}
+                    className={`fp-item${(style.size ?? 10) === s ? " on" : ""}`}
+                    onClick={() =>
+                      patch((n) => {
+                        n.style = { ...(n.style ?? {}), size: s };
+                      })
+                    }
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="fp-col">
+              <div className="fp-head">字形</div>
+              <div className="fp-list fp-sizes">
+                <button
+                  className={`fp-item${!style.bold ? " on" : ""}`}
+                  onClick={() =>
+                    patch((n) => {
+                      if (n.style) delete n.style.bold;
+                    })
+                  }
+                >
+                  常规
+                </button>
+                <button
+                  className={`fp-item${style.bold ? " on" : ""}`}
+                  onClick={() =>
+                    patch((n) => {
+                      n.style = { ...(n.style ?? {}), bold: true };
+                    })
+                  }
+                >
+                  粗体
+                </button>
+              </div>
+            </div>
+          </div>
+          <div
+            className="fp-preview"
+            style={{
+              fontFamily: `'${style.font || "Microsoft YaHei UI"}', sans-serif`,
+              fontSize: `${Math.max(12, (style.size ?? 10) * 1.5)}px`,
+              fontWeight: style.bold ? 700 : 400,
+            }}
+          >
+            示例：按钮 Button 123
+          </div>
+          <p className="muted small">
+            点一下立即生效；字号填 0 表示跟随系统 UI 字体。粗体也可以在下面的「字号」行勾选。
+          </p>
+        </div>
+      ) : null}
       <Row label="字号">
         <input
           className="input"
           type="number"
-          value={style.size ?? 0}
+          value={style.size ?? 10}
           onChange={(e) =>
             patch((n) => {
               const v = Number(e.target.value) || 0;
