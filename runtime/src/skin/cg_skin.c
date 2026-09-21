@@ -244,6 +244,8 @@ void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
     unsigned base, fill, textcol, border, winbg;
     int filled, disabled, pressed, hot, has_border;
     int rad;
+    int has_img = 0;
+    BITMAP bm;
     GpGraphics *g = NULL;
 
     if (!w) return;
@@ -255,6 +257,12 @@ void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
 
     scale = (app && app->scale > 0) ? app->scale : 100;
     winbg = sk_behind(w);
+
+    /* 背景图（src 指定时）：有就代替纯色填充（位图由 cg_win_sync.c 的 sync_bitmap 按需加载） */
+    if (w->bitmap && GetObjectW((HGDIOBJ)w->bitmap, sizeof(bm), &bm) &&
+        bm.bmWidth > 0 && bm.bmHeight > 0) {
+        has_img = 1;
+    }
 
     filled   = (w->style.bg != CG_COLOR_NONE);
     base     = filled ? w->style.bg : 0xFFFFFFu;
@@ -288,6 +296,8 @@ void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
         else              fill = 0xEADDFFu;
         textcol = 0x1D1B20u;
     }
+    /* 背景图上文字颜色没法按底色亮度自动算（图是用户挑的）：设了前景色就听用户的 */
+    if (has_img && w->style.fg != CG_COLOR_NONE) textcol = w->style.fg;
 
     rad = (w->style.radius > 0 ? w->style.radius : 6) * scale / 100;   /* 画布按钮默认 6px */
     if (rad > wpx / 2) rad = wpx / 2;
@@ -302,6 +312,21 @@ void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
         DeleteObject(b);
     }
 
+    /* ---- 背景图：拉伸铺满整块，裁进圆角里（文字稍后画在图上） ---- */
+    if (has_img) {
+        HDC    mem  = CreateCompatibleDC(dis->hDC);
+        HGDIOBJ oldb = SelectObject(mem, (HGDIOBJ)w->bitmap);
+        HRGN   rgn  = CreateRoundRectRgn(x, y, x + wpx + 1, y + hpx + 1, rad * 2, rad * 2);
+        SelectClipRgn(dis->hDC, rgn);
+        SetStretchBltMode(dis->hDC, HALFTONE);
+        SetBrushOrgEx(dis->hDC, 0, 0, NULL);
+        StretchBlt(dis->hDC, x, y, wpx, hpx, mem, 0, 0, bm.bmWidth, bm.bmHeight, SRCCOPY);
+        SelectClipRgn(dis->hDC, NULL);
+        DeleteObject(rgn);
+        SelectObject(mem, oldb);
+        DeleteDC(mem);
+    }
+
     /* ---- 圆角填充（GDI+，抗锯齿） ---- */
     if (GdipCreateFromHDC(dis->hDC, &g) == SK_GDIP_OK && g) {
         GpPath *p = NULL;
@@ -310,7 +335,8 @@ void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
             sk_round_rect(p, (REAL)x, (REAL)y, (REAL)wpx, (REAL)hpx, (REAL)rad);
             {
                 GpSolidFill *br = NULL;
-                if (GdipCreateSolidFill(sk_argb(255, fill), &br) == SK_GDIP_OK && br) {
+                if (!has_img &&
+                    GdipCreateSolidFill(sk_argb(255, fill), &br) == SK_GDIP_OK && br) {
                     GdipFillPath(g, (GpBrush *)br, p);
                     GdipDeleteBrush((GpBrush *)br);
                 }
@@ -322,11 +348,24 @@ void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
                     GdipDeletePen(bd);
                 }
             }
+            if (has_img) {
+                /* 图上叠一层蒙版给悬停/按下/禁用反馈（半透明，图还看得见） */
+                unsigned veil = disabled ? sk_argb(150, 0xECECEEu)
+                              : pressed   ? sk_argb(60, 0x000000u)
+                              : hot       ? sk_argb(35, 0x000000u) : 0u;
+                if (veil) {
+                    GpSolidFill *vr = NULL;
+                    if (GdipCreateSolidFill(veil, &vr) == SK_GDIP_OK && vr) {
+                        GdipFillPath(g, (GpBrush *)vr, p);
+                        GdipDeleteBrush((GpBrush *)vr);
+                    }
+                }
+            }
             GdipDeletePath(p);
         }
         GdipDeleteGraphics(g);
-    } else {
-        /* 回退：GDI 圆角矩形，保证按钮永不消失 */
+    } else if (!has_img) {
+        /* 回退：GDI 圆角矩形，保证按钮永不消失（有背景图时图已经画上了） */
         HBRUSH br = CreateSolidBrush(sk_colorref(fill));
         HPEN   pn = CreatePen(PS_SOLID, 1, sk_colorref(has_border ? border : fill));
         HBRUSH ob = (HBRUSH)SelectObject(dis->hDC, br);

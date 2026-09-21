@@ -396,7 +396,7 @@ static void build_status(HWND h, cg_widget_t *w)
     }
 }
 
-/** 图片 / 图标按钮：按需加载，换图时释放旧位图 */
+/** 图片 / 图标按钮 / 按钮（背景图）：按需加载，换图时释放旧位图 */
 static void sync_bitmap(cg_widget_t *w)
 {
     const char *want = w->src ? w->src : "";
@@ -619,7 +619,8 @@ static void sync_widget_body(cg_widget_t *w)
             SendMessageW(up, UDM_SETRANGE32, (WPARAM)w->vmin, (LPARAM)w->vmax);
             SendMessageW(up, UDM_SETPOS32, 0, (LPARAM)w->value);
         }
-    } else if (!strcmp(w->type, "image") || !strcmp(w->type, "iconbutton")) {
+    } else if (!strcmp(w->type, "image") || !strcmp(w->type, "iconbutton") ||
+               !strcmp(w->type, "button")) {
         sync_bitmap(w);
     } else if (!strcmp(w->type, "monthcal")) {
         /* text 写日期就定位到那天，没写就用今天（.cgui 里通常留空） */
