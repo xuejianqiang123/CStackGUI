@@ -54,6 +54,8 @@ void cgw_create_native(cg_widget_t *w)
     if (!strcmp(type, "canvas")) cgw_register_canvas_class();
     if (!strcmp(type, "splitter")) cgw_register_splitter_class();
     if (!strcmp(type, "chart")) cgw_register_chart_class();
+    if (!strcmp(type, "led")) cgw_register_led_class();
+    if (!strcmp(type, "meter")) cgw_register_meter_class();
 
     /* browser 的窗口名就是起始地址（AtlAxWin 的约定） */
     if (!strcmp(type, "browser") && w->src && *w->src) {
@@ -88,7 +90,7 @@ void cgw_create_native(cg_widget_t *w)
         !strcmp(type, "card") || !strcmp(type, "shape") ||
         !strcmp(type, "image") || !strcmp(type, "progressring") ||
         !strcmp(type, "progress") || !strcmp(type, "splitter") ||
-        !strcmp(type, "chart") ||
+        !strcmp(type, "chart") || !strcmp(type, "led") || !strcmp(type, "meter") ||
         !strcmp(type, "canvas")) {
         SetWindowLongPtrW(h, GWLP_USERDATA, (LONG_PTR)app);
     }

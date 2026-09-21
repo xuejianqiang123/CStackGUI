@@ -315,6 +315,16 @@ int cg_bind_copy(cg_widget_t *src, cg_widget_t *dst);
  *  @return 实际位移（可能被最小尺寸夹小）；0 表示没动 */
 int cg_splitter_apply(cg_widget_t *w, int delta);
 
+/* -------------------------------------------------- 状态灯 / 仪表盘（cg_widget_data.c） */
+
+/** led：此刻灯亮着吗（状态 = 闪时按 period 前后半周期翻转）。
+ *  算在 core 而不是画的时候，是为了能脱窗单测时序 —— 闪烁算错了不崩、只是"看不出来在闪"。 */
+int cg_led_lit(const cg_widget_t *w, unsigned long now_ms);
+
+/** meter：值 -> 表盘角度（度）。arc 从 135° 起顺时针扫 270°，half 从 180° 起扫 180°（左端到右端）；
+ *  值超量程按边界夹取、max<=min 时按 range=1 处理。同样放 core 是为了能脱窗单测。 */
+int cg_meter_angle_deg(const cg_widget_t *w, int value);
+
 /* -------------------------------------------------- 图表（cg_widget_data.c） */
 
 /** chart：把点缓冲对齐当前配置（items 的系列数 / value 的窗口点数）。

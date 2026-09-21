@@ -61,6 +61,8 @@ typedef struct {
 #define CG_CANVAS_CLASS L"CStackGUICanvas"
 #define CG_SPLITTER_CLASS L"CStackGUISplitter"
 #define CG_CHART_CLASS  L"CStackGUIChart"
+#define CG_LED_CLASS    L"CStackGUILed"
+#define CG_METER_CLASS  L"CStackGUIMeter"
 
 /* 时钟（timer）控件没有自己的窗口，Win32 定时器 id 直接复用 ctrl_id，
  * 这样 WM_TIMER 里按 wp 反查一次就能找到控件。 */
@@ -160,6 +162,8 @@ void cgw_register_progress_class(void);
 void cgw_register_canvas_class(void);
 void cgw_register_splitter_class(void);
 void cgw_register_chart_class(void);
+void cgw_register_led_class(void);
+void cgw_register_meter_class(void);
 void cgw_register_panel_class(void);
 /** @brief 面板窗口过程（group/box/card/shape）：转发子控件通知 + 自绘底板 */
 LRESULT CALLBACK cgw_PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);

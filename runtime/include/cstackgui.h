@@ -478,6 +478,47 @@ int  cg_chart_filled(const cg_widget_t *w, int series);
 int  cg_chart_point(const cg_widget_t *w, int series, int index);
 void cg_chart_set_range(cg_widget_t *w, int min, int max);
 
+/* ------------------------------------------------------------ 状态灯（led）
+ * 最小的一块"看得见状态"的控件：通信连上没有、串口在不在收、设备就绪没有。
+ *
+ *   cg_led_set(cg_find(app, "led_net"), 1);   // 0 灭 / 1 亮 / 2 闪
+ *
+ * .cgui 里：{ "id": "led_net", "type": "led", "value": 1, "format": "round",
+ *             "period": 500, "text": "已连接" }
+ *
+ * 这几个字段在这个控件上有专门含义：
+ *   value    = 状态 0 灭 / 1 亮 / 2 闪（越界夹到 0~2）
+ *   format   = "round"（缺省，圆）/ "square"（方）
+ *   period   = 闪烁周期毫秒（只管"闪"；缺省 500，小于 100 会被兜成 500）
+ *   text     = 灯右边的说明文字；为空时灯自己占满整个矩形
+ *   style.fg = 亮起的颜色（缺省绿）
+ *
+ * 闪烁**由控件自己定时重绘**（半个周期亮、半个周期灭），业务只要 cg_led_set(w, 2)，
+ * 不用自己开时钟。它是纯显示控件：没有事件，点它没有反应。
+ */
+void cg_led_set(cg_widget_t *w, int state);
+int  cg_led_state(const cg_widget_t *w);
+/** 亮起的颜色（等价于 cg_widget_set_colors(w, rgb, CG_COLOR_NONE)） */
+void cg_led_set_color(cg_widget_t *w, unsigned rgb);
+
+/* ------------------------------------------------------------ 仪表盘（meter）
+ * 看单个读数"现在处在量程的哪个位置"：温度、转速、电压都合适。
+ *
+ * .cgui 里：{ "id": "mt_temp", "type": "meter", "value": 40, "min": 0, "max": 100,
+ *             "format": "arc", "text": "°C" }
+ *
+ * 表盘长这样：底弧（灰）+ 值弧（彩色，随值增长）+ 刻度线 + 指针 + 中心大数值 + 单位。
+ *   value    = 当前值（被 min/max 夹，和滑块同一套语义）
+ *   min/max  = 量程（缺省 0~100；max<=min 时按 range=1 处理，不会除零）
+ *   format   = "arc"（缺省，270° 圆弧）/ "half"（半圆 180°）
+ *   text     = 单位文字，画在中心大数值下面（可空）
+ *   style.fg = 圆弧/指针主色（缺省 #6750A4）
+ *
+ * 纯显示控件：没有事件。
+ */
+void cg_meter_set(cg_widget_t *w, int value);
+void cg_meter_set_range(cg_widget_t *w, int min, int max);
+
 /* ------------------------------------------------------------ 通用对话框
  * 都不是控件，是弹系统对话框的函数。parent 传控件（定位用）或 NULL。
  * 路径缓冲区至少 1024 字节。返回 1 = 用户确定，0 = 取消/失败。

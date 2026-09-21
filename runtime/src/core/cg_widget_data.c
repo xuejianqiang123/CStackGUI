@@ -1039,3 +1039,110 @@ void cg_chart_set_range(cg_widget_t *w, int min, int max)
     }
     cg_widget_sync(w);
 }
+
+/* ------------------------------------------------------------ 状态灯（led）
+ * 最小的一块"看得见状态"的控件：通信连上没有、串口在不在收、设备就绪没有。
+ * 状态就存在普通的 value 里（0 灭 / 1 亮 / 2 闪），形状在 format、闪烁周期在 period、
+ * 亮灯颜色在 style.fg —— **全是既有字段，没为它加新存储**。
+ * 闪烁相位的算法放在这里而不是画的时候，是为了能脱窗单测：闪错了不崩，只是"看不出来在闪"。
+ */
+
+/** 闪烁周期的缺省值：period 太小（<100ms）兜到这里 —— 再快也看不出在闪，只会看着像暗的 */
+#define CG_LED_DEF_PERIOD 500
+
+/** @brief 状态夹到 0..2 */
+static int led_state(const cg_widget_t *w)
+{
+    if (w->value < 0) return 0;
+    if (w->value > 2) return 2;
+    return w->value;
+}
+
+/** @brief 此刻灯亮着吗（状态 = 闪时按 period 前后半周期翻转） */
+int cg_led_lit(const cg_widget_t *w, unsigned long now_ms)
+{
+    unsigned long p;
+    int           s;
+
+    if (!w) return 0;
+    s = led_state(w);
+    if (s != 2) return s == 1;                      /* 灭 = 不亮；亮 = 一直亮 */
+    p = (w->period >= 100) ? (unsigned long)w->period : (unsigned long)CG_LED_DEF_PERIOD;
+    return ((now_ms % p) < (p / 2)) ? 1 : 0;        /* 前半周期亮、后半周期灭 */
+}
+
+/** @brief 设状态（0 灭 / 1 亮 / 2 闪；越界夹取） */
+void cg_led_set(cg_widget_t *w, int state)
+{
+    if (!w || !want_type(w, "led", "cg_led_set")) return;
+    if (state < 0) state = 0;
+    if (state > 2) state = 2;
+    w->value = state;
+    if (w->node) w->node->value = state;
+    cg_widget_sync(w);
+}
+
+/** @brief 读状态（0 / 1 / 2） */
+int cg_led_state(const cg_widget_t *w)
+{
+    return w ? led_state(w) : 0;
+}
+
+/** @brief 亮起的颜色（走既有的颜色通道：自绘控件都从 style.fg 取主色） */
+void cg_led_set_color(cg_widget_t *w, unsigned rgb)
+{
+    if (!w || !want_type(w, "led", "cg_led_set_color")) return;
+    cg_widget_set_colors(w, rgb, CG_COLOR_NONE);
+}
+
+/* ------------------------------------------------------------ 仪表盘（meter）
+ * 看单个读数"现在处在量程的哪个位置"。value/min/max 就是滑块那套（超量程夹取），
+ * 样式在 format、单位在 text、主色在 style.fg —— 同样没加新存储。
+ * 角度算法放 core 是为了能脱窗单测：表盘画歪了，肉眼很难判断是数据的问题还是控件的问题。
+ */
+
+#define CG_METER_ARC_FROM   135      /* arc 样式：135° 起（左下）…… */
+#define CG_METER_ARC_SWEEP  270      /* ……顺时针扫 270°（经正上方，到右下 45°） */
+#define CG_METER_HALF_FROM  180      /* half 样式：180° 起（正左）…… */
+#define CG_METER_HALF_SWEEP 180      /* ……顺时针扫 180°（到正右） */
+
+/** @brief 值 -> 表盘角度（度，顺时针、以 +x 轴为 0°）；超量程按边界夹取 */
+int cg_meter_angle_deg(const cg_widget_t *w, int value)
+{
+    int from, sweep, range;
+
+    if (!w) return CG_METER_ARC_FROM;
+    if (w->format && strcmp(w->format, "half") == 0) {
+        from = CG_METER_HALF_FROM;
+        sweep = CG_METER_HALF_SWEEP;
+    } else {
+        from = CG_METER_ARC_FROM;
+        sweep = CG_METER_ARC_SWEEP;
+    }
+    range = w->vmax - w->vmin;
+    if (range <= 0) return from;                    /* 量程非法：只给起点，不除零 */
+    if (value < w->vmin) value = w->vmin;
+    if (value > w->vmax) value = w->vmax;
+    return from + (int)((long long)(value - w->vmin) * sweep / range);
+}
+
+/** @brief 设当前值（夹到量程；既有 set_value 就带夹取与同步） */
+void cg_meter_set(cg_widget_t *w, int value)
+{
+    if (!w || !want_type(w, "meter", "cg_meter_set")) return;
+    cg_widget_set_value(w, value);
+}
+
+/** @brief 设量程（max<=min 时纠正成 min+1，免得除零） */
+void cg_meter_set_range(cg_widget_t *w, int min, int max)
+{
+    if (!w || !want_type(w, "meter", "cg_meter_set_range")) return;
+    if (max <= min) max = min + 1;
+    w->vmin = min;
+    w->vmax = max;
+    if (w->node) {
+        w->node->vmin = min;
+        w->node->vmax = max;
+    }
+    cg_widget_sync(w);
+}

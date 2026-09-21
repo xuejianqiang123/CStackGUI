@@ -64,6 +64,8 @@ static const cg_kind_info_t k_kinds[] = {
     { "splitter",   CG_K_SPLITTER,   0,   6, 200, "",     CG_EV_RELEASE },
     { "terminal",   CG_K_TERMINAL,   0, 360, 200, "",     0 },
     { "chart",      CG_K_CHART,      0, 320, 160, "",     0 },
+    { "led",        CG_K_LED,        0, 20,  20,  "",     0 },
+    { "meter",      CG_K_METER,      0, 140, 140, "",     0 },
     /* 伪控件：窗口自身。事件表与「启动窗口」的事件表对齐（见 cg_event_t 注释）。 */
     { "window",     CG_K_WINDOW,     1,   0,   0, "",
       CG_EV_CLOSE | CG_EV_READY | CG_EV_DESTROY | CG_EV_MOVE | CG_EV_SIZE |
