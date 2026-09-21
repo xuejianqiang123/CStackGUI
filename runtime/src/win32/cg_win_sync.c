@@ -5,6 +5,8 @@
  */
 #include "cg_win_internal.h"
 
+#include <richedit.h>       /* terminal 的行级着色（EM_SETCHARFORMAT / CHARFORMAT2W） */
+
 /* ------------------------------------------------------------ 主窗口 */
 
 
@@ -12,6 +14,102 @@
 
 /* spinner 的箭头宽度（逻辑像素） */
 #define CG_SPIN_ARROW_W 18
+
+/* ------------------------------------------------------------ 终端（terminal）
+ * core 把行攒在 items[] 里（**首字节是方向标记**），这里只负责把"还没推过的行"
+ * 追加进只读 RichEdit 并按方向着色。整体重灌只在裁剪/清空之后发生
+ * （term_pushed > nitems 就说明行数变少过）。
+ * 用 RichEdit 而不是 ownerdraw 列表框的理由：选择复制与自动滚动是白捡的，
+ * 而"把日志复制出来贴给别人"恰恰是这类控件最常被做的事。
+ */
+#define CG_TERM_COL_RX  RGB(0x1B, 0x6E, 0x33)   /* 收到：深绿 */
+#define CG_TERM_COL_TX  RGB(0x14, 0x5C, 0xA8)   /* 发出：深蓝 */
+#define CG_TERM_COL_SYS RGB(0x6B, 0x6B, 0x6B)   /* 自己记的：灰 */
+
+/** @brief 把一行文字（带颜色）追加到 RichEdit 末尾 */
+static void term_push_line(HWND h, const char *text, COLORREF col)
+{
+    wchar_t     *wt = cgw_wc_from_utf8(text ? text : "");
+    CHARFORMAT2W cf;
+    size_t       n;
+
+    if (!wt) return;
+    n = wcslen(wt);
+    {
+        int start = (int)SendMessageW(h, WM_GETTEXTLENGTH, 0, 0);
+
+        /* 1) 先把这一行插到末尾。
+         *   注意 EM_SETSEL(-1,-1) 在 RichEdit 里是**全选**（不是"移到末尾"）——
+         *   拿它定位插入点会把已有内容连同颜色一起重刷，所以这里按长度定位。 */
+        SendMessageW(h, EM_SETSEL, (WPARAM)start, (LPARAM)start);
+        {
+            wchar_t *buf = (wchar_t *)malloc((n + 3) * sizeof(wchar_t));
+            if (buf) {
+                memcpy(buf, wt, n * sizeof(wchar_t));
+                buf[n] = L'\r';             /* RichEdit 的换行约定 */
+                buf[n + 1] = L'\n';
+                buf[n + 2] = 0;
+                SendMessageW(h, EM_REPLACESEL, FALSE, (LPARAM)buf);
+                free(buf);
+            }
+        }
+
+        /* 2) 再选中"刚插进去的这段真实文字"上色。
+         *   不靠"空选区设插入点格式"那条路：RICHEDIT50W 上它不生效（设了也还是黑字），
+         *   给一段真选区上色才是稳的。 */
+        {
+            int end = (int)SendMessageW(h, WM_GETTEXTLENGTH, 0, 0);
+            memset(&cf, 0, sizeof(cf));
+            cf.cbSize = sizeof(cf);
+            cf.dwMask = CFM_COLOR;
+            cf.dwEffects = 0;
+            cf.crTextColor = col;
+            SendMessageW(h, EM_SETSEL, (WPARAM)start, (LPARAM)end);
+            SendMessageW(h, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM)&cf);
+        }
+    }
+    free(wt);
+}
+
+/** @brief terminal 的行 -> 原生控件（增量追加；裁剪或清空后整体重灌） */
+static void sync_terminal(HWND h, cg_widget_t *w)
+{
+    int i;
+
+    if (w->style.bg != CG_COLOR_NONE) {
+        SendMessageW(h, EM_SETBKGNDCOLOR, 0, (LPARAM)cgw_to_colorref(w->style.bg));
+    }
+    if (w->items_dirty || w->term_pushed > w->nitems || w->term_pushed < 0) {
+        SendMessageW(h, WM_SETREDRAW, FALSE, 0);
+        SetWindowTextW(h, L"");
+        w->term_pushed = 0;
+        SendMessageW(h, WM_SETREDRAW, TRUE, 0);
+    }
+    if (w->term_pushed >= w->nitems) {
+        SendMessageW(h, EM_SCROLLCARET, 0, 0);
+        return;
+    }
+
+    /* 只读控件不让 EM_REPLACESEL 写进去，临时放开，写完立刻收回 */
+    SendMessageW(h, EM_SETREADONLY, FALSE, 0);
+    SendMessageW(h, WM_SETREDRAW, FALSE, 0);
+    for (i = w->term_pushed; i < w->nitems; i++) {
+        const char *line = w->items[i] ? w->items[i] : "";
+        unsigned char tag = (unsigned char)line[0];
+        COLORREF col = CG_TERM_COL_SYS;
+
+        if (tag == CG_TERM_RX)       { col = CG_TERM_COL_RX;  line++; }
+        else if (tag == CG_TERM_TX)  { col = CG_TERM_COL_TX;  line++; }
+        else if (tag == CG_TERM_SYS) {                        line++; }
+        /* 首字节不是标记（用户手写的 .cgui 初始内容）就按 SYS 原样显示 */
+        term_push_line(h, line, col);
+    }
+    w->term_pushed = w->nitems;
+    SendMessageW(h, WM_SETREDRAW, TRUE, 0);
+    SendMessageW(h, EM_SETREADONLY, TRUE, 0);
+    InvalidateRect(h, NULL, TRUE);
+    SendMessageW(h, EM_SCROLLCARET, 0, 0);      /* 自动滚到底 */
+}
 
 /** 标签页当前显示第几页时，某个子控件该不该出现 */
 static int page_visible(const cg_widget_t *w)
@@ -440,7 +538,9 @@ static void sync_widget_body(cg_widget_t *w)
      * WM_SETFONT 会让控件重排（输入框子类里还会重设边距），同样会动到光标。 */
     {
         int underline = cgw_is_t(w, "link") ? 1 : 0;
-        HFONT f = cgw_font_for(app, w->style.font, w->style.size, w->style.bold, underline);
+        /* 终端默认等宽：HEX 与时间戳列对不齐就没法看（.cgui 里设了 style.font 就用它） */
+        const char *fam = (!w->style.font && cgw_is_t(w, "terminal")) ? "Consolas" : w->style.font;
+        HFONT f = cgw_font_for(app, fam, w->style.size, w->style.bold, underline);
         HFONT use = f ? f : (HFONT)GetStockObject(DEFAULT_GUI_FONT);
         if ((HFONT)SendMessageW(h, WM_GETFONT, 0, 0) != use) {
             SendMessageW(h, WM_SETFONT, (WPARAM)use, TRUE);
@@ -491,6 +591,11 @@ static void sync_widget_body(cg_widget_t *w)
         w->items_dirty = 0;
         w->scroll_bottom = 0;
     }
+
+    /* 终端：按行**增量追加**，所以不能挂在上面那个 if (items_dirty) 里 ——
+     * 它每次只是多几行（items_dirty 恒为 0），整体重灌只发生在裁剪/清空之后
+     * （sync_terminal 里靠 term_pushed > nitems 判断）。 */
+    if (!strcmp(w->type, "terminal")) sync_terminal(h, w);
 
     /* 值 */
     if (!strcmp(w->type, "progress")) {

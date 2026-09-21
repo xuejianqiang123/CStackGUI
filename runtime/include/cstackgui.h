@@ -392,6 +392,55 @@ const char *cg_widget_hint(const cg_widget_t *w);
 void cg_widget_set_period(cg_widget_t *w, int period_ms);
 int  cg_widget_period(const cg_widget_t *w);
 
+/* ------------------------------------------------------------ 分隔条（splitter）
+ * 能拖动的分区边界：拖它 = 撑开它**前面那一块**，它之后的兄弟整体让位，同一容器里
+ * **最后一块**吃掉余量（反过来缩水）。所以 2 段布局就是"上/左变大、下/右变小"：
+ *
+ *   [日志区]───────────────
+ *   [分隔条]        <- 拖这根：日志区变高、下面的发送区变矮
+ *   [发送区]
+ *
+ * [pane1][分隔条][pane2][分隔条][pane3] 这种多段布局也自洽 —— 每根分隔条只认
+ * "前一块 + 尾巴"，所以用不上布局引擎。
+ *
+ * 方向由 .cgui 的 format 决定：缺省 "col" = 左右分栏（一根竖条），"row" = 上下分行（横条）。
+ * 两侧被拖到最小尺寸（16px）就停住。拖完派发一次 release 事件 —— 适合在那里把布局
+ * 记进 INI，下次启动用 cg_splitter_set 恢复。
+ * 没有矩形的东西（菜单栏、时钟）不参与布局。
+ */
+int  cg_splitter_pos(const cg_widget_t *w);
+void cg_splitter_set(cg_widget_t *w, int pos);
+
+/* ------------------------------------------------------------ 终端 / 日志视图（terminal）
+ * 通信类程序最需要的东西：把收到的字节丢进一个只读的行视图，格式与上限都由控件管。
+ *
+ *   cg_term_write(term, CG_TERM_RX, buf, n);        // 收到的一段数据
+ *   cg_term_write(term, CG_TERM_TX, "AT\r\n", -1);  // 发出（len 传 -1 就按字符串取长度）
+ *
+ * 几个约定（写清楚省得猜）：
+ *   - **一次调用 = 一段数据**：里面带 `\r\n` 会**自动切成多行**（串口一次收
+ *     `"OK\r\nERR"` 是常态），`\r` 丢掉；一次调用只刷新一次界面。
+ *   - 方向决定行首标记与颜色：`RX ` / `TX ` / `-- `。
+ *   - HEX / 文本模式由 `.cgui` 的 `format` 决定（`"hex"` 或留空），**只影响之后写入的行**。
+ *   - 行首要不要 `[HH:MM:SS]` 由 `.cgui` 的 `checked` 决定（画布上显示成「显示时间戳」）。
+ *   - 最多保留多少行由 `.cgui` 的 `value` 决定（缺省 500），超了从最老的丢。
+ *   - 文本模式只把控制字符换成 `.`，0x80 以上原样保留 —— 所以中文（UTF-8 多字节）不会被搅坏。
+ *   - 内容可以选中复制，也能 `cg_term_save()` 存成文件。
+ */
+#define CG_TERM_RX  1   /* 收到 */
+#define CG_TERM_TX  2   /* 发出 */
+#define CG_TERM_SYS 3   /* 自己记的（连接状态、错误提示之类） */
+
+void cg_term_write(cg_widget_t *w, int dir, const void *data, int len);
+void cg_term_clear(cg_widget_t *w);
+void cg_term_set_hex(cg_widget_t *w, int on);
+int  cg_term_hex(const cg_widget_t *w);
+void cg_term_set_timestamp(cg_widget_t *w, int on);
+void cg_term_set_max_lines(cg_widget_t *w, int lines);
+int  cg_term_count(const cg_widget_t *w);
+/** 存成文本文件（UTF-8 + CRLF，不含方向标记）；成功返回 0 */
+int  cg_term_save(cg_widget_t *w, const char *path);
+
 /* ------------------------------------------------------------ 通用对话框
  * 都不是控件，是弹系统对话框的函数。parent 传控件（定位用）或 NULL。
  * 路径缓冲区至少 1024 字节。返回 1 = 用户确定，0 = 取消/失败。

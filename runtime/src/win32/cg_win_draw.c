@@ -517,3 +517,115 @@ void cgw_register_panel_class(void)
     RegisterClassExW(&wc);
     done = 1;
 }
+
+/* ------------------------------------------------------------ 分隔条（splitter）
+ * 一根能拖的细条。**几何计算在 core**（cg_splitter_apply，纯 rect 运算、可脱窗单测），
+ * 这里只做两件事：鼠标（捕获 + 光标 + 把位移喂进去）、外观（一条线 + 三个握点）。
+ */
+static int s_split_origin;   /* 按下时鼠标的屏幕坐标（竖条看 x，横条看 y） */
+
+/** @brief 分隔条窗口过程：拖动改两侧面板尺寸，松手派发一次 release */
+static LRESULT CALLBACK SplitterProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    cg_app_t    *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+    cg_widget_t *w = cgw_widget_by_hwnd(app, hwnd);
+
+    (void)wp;
+    switch (msg) {
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC         dc = BeginPaint(hwnd, &ps);
+        RECT        rc, r;
+        HBRUSH      line, dot;
+        int         cx, cy, i, vert;
+
+        GetClientRect(hwnd, &rc);
+        if (!w) {
+            FillRect(dc, &rc, cgw_brush_for(cg_win_behind_rgb(app, hwnd)));
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        /* 先把整块填成"背后"的颜色：分隔条是"没有自己底色"的自绘控件 */
+        cgw_clear_to_behind(w, dc, &rc);
+
+        vert = cgw_splitter_is_vert(w);
+        cx = rc.left + (rc.right - rc.left) / 2;
+        cy = rc.top + (rc.bottom - rc.top) / 2;
+        line = cgw_brush_for(0xCAC4D0);
+        dot  = cgw_brush_for(0x79747E);
+
+        /* 中间一条 1px 的线 + 三个握点，一眼能看出"这里能拖" */
+        r = rc;
+        if (vert) { r.left = cx; r.right = cx + 1; } else { r.top = cy; r.bottom = cy + 1; }
+        FillRect(dc, &r, line);
+        for (i = -1; i <= 1; i++) {
+            RECT d;
+            if (vert) {
+                d.left = cx - 1; d.right = cx + 2;
+                d.top = cy + i * 6 - 1; d.bottom = cy + i * 6 + 2;
+            } else {
+                d.top = cy - 1; d.bottom = cy + 2;
+                d.left = cx + i * 6 - 1; d.right = cx + i * 6 + 2;
+            }
+            FillRect(dc, &d, dot);
+        }
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_SETCURSOR:
+        if (w && LOWORD(lp) == HTCLIENT) {
+            SetCursor(LoadCursorW(NULL, cgw_splitter_is_vert(w) ? IDC_SIZEWE : IDC_SIZENS));
+            return TRUE;
+        }
+        break;
+    case WM_LBUTTONDOWN:
+        if (!w) break;
+        SetCapture(hwnd);
+        {
+            POINT pt;
+            GetCursorPos(&pt);
+            s_split_origin = cgw_splitter_is_vert(w) ? (int)pt.x : (int)pt.y;
+        }
+        return 0;
+    case WM_MOUSEMOVE:
+        if (!w || GetCapture() != hwnd) break;
+        {
+            POINT pt;
+            int   now, moved;
+            GetCursorPos(&pt);
+            now   = cgw_splitter_is_vert(w) ? (int)pt.x : (int)pt.y;
+            moved = cg_splitter_apply(w, now - s_split_origin);
+            /* 被最小尺寸夹住时原点不跟走，鼠标退回来还能继续拖 */
+            if (moved) s_split_origin += moved;
+        }
+        return 0;
+    case WM_LBUTTONUP:
+        if (GetCapture() == hwnd) ReleaseCapture();
+        /* 拖完通知一次：业务在这里把布局存进 INI 最合适 */
+        if (w) cg_dispatch(w, CG_EVENT_RELEASE);
+        return 0;
+    case WM_CAPTURECHANGED:
+        return 0;
+    default:
+        break;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+/** @brief 注册分隔条的自绘窗口类（整进程一次） */
+void cgw_register_splitter_class(void)
+{
+    static int done = 0;
+    WNDCLASSEXW wc;
+    if (done) return;
+    memset(&wc, 0, sizeof(wc));
+    wc.cbSize = sizeof(wc);
+    wc.lpfnWndProc = SplitterProc;
+    wc.hInstance = GetModuleHandleW(NULL);
+    wc.hCursor = LoadCursorW(NULL, IDC_SIZEWE);
+    wc.lpszClassName = CG_SPLITTER_CLASS;
+    RegisterClassExW(&wc);
+    done = 1;
+}

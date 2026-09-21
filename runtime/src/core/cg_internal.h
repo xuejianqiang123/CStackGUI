@@ -67,10 +67,13 @@ struct cg_widget {
     cg_widget_t **children;  /* 容器控件 */
     size_t       nchildren;
 
-    char       **items;      /* listbox / combo / tabs 标签 / statusbar 分段 */
+    char       **items;      /* listbox / combo / tabs 标签 / statusbar 分段 / terminal 的行 */
     int          nitems;
     int          items_dirty;/* 需要后端重建条目 */
     int          scroll_bottom;
+    /** terminal 专用：后端已经推送了多少行。比 nitems 大 = 中途裁剪/清空过，
+     *  后端得整体重灌（见 cg_win_sync.c 的 sync_terminal）。 */
+    int          term_pushed;
 
     /* 树：扁平数组 + 父下标（-1 为根），materialize 时逐层插入 */
     cg_tree_row_t *tree;
@@ -298,6 +301,13 @@ void cg_bind_apply_all(cg_app_t *app);
 
 /** 内部用：把源的值抄到目标，返回 1 表示真的改了（顺便 sync） */
 int cg_bind_copy(cg_widget_t *src, cg_widget_t *dst);
+
+/* -------------------------------------------------- 分隔条（cg_widget_data.c）
+ * 几何计算在 core（纯 rect 运算，可脱窗单测），后端的鼠标处理只负责把位移喂进来。 */
+
+/** 拖动分隔条：撑开前一个兄弟、自己与之后的兄弟整体让位、最后一块吃掉余量。
+ *  @return 实际位移（可能被最小尺寸夹小）；0 表示没动 */
+int cg_splitter_apply(cg_widget_t *w, int delta);
 
 /* ---------------------------------------------- cg_app.c 拆分后的跨模块接口
  * 原来这几个是 cg_app.c 里的 static 助手，拆成 cg_widget.c / cg_event.c 之后

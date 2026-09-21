@@ -52,6 +52,7 @@ void cgw_create_native(cg_widget_t *w)
     if (!strcmp(type, "progressring")) cgw_register_ring_class();
     if (!strcmp(type, "progress")) cgw_register_progress_class();
     if (!strcmp(type, "canvas")) cgw_register_canvas_class();
+    if (!strcmp(type, "splitter")) cgw_register_splitter_class();
 
     /* browser 的窗口名就是起始地址（AtlAxWin 的约定） */
     if (!strcmp(type, "browser") && w->src && *w->src) {
@@ -78,10 +79,14 @@ void cgw_create_native(cg_widget_t *w)
     if (!strcmp(type, "edit") || !strcmp(type, "multiedit") || !strcmp(type, "spinner"))
         cg_skin_apply_edit(w);
 
+    /* 自绘窗口类（CG_*_CLASS）的窗口过程要靠 GWLP_USERDATA 反查 app 和控件，
+     * 所以**新增一个自绘控件就必须在这里登记**。漏了它的后果很迷惑：
+     * 窗口过程拿到 NULL 的 app，于是控件画不出来（首帧填了兜底色），
+     * 运气差时还会在 cg_win_behind_rgb 里直接访问冲突崩掉 —— splitter 就是这么踩过一次。 */
     if (!strcmp(type, "group") || !strcmp(type, "box") ||
         !strcmp(type, "card") || !strcmp(type, "shape") ||
         !strcmp(type, "image") || !strcmp(type, "progressring") ||
-        !strcmp(type, "progress") ||
+        !strcmp(type, "progress") || !strcmp(type, "splitter") ||
         !strcmp(type, "canvas")) {
         SetWindowLongPtrW(h, GWLP_USERDATA, (LONG_PTR)app);
     }

@@ -26,6 +26,8 @@ const wchar_t *cgw_class_of(const cg_widget_t *w)
     if (!strcmp(w->type, "edit"))      return L"EDIT";        /* 单行输入框（运行时做圆角） */
     if (!strcmp(w->type, "multiedit")) return L"EDIT";        /* 多行输入框（运行时做圆角） */
     if (!strcmp(w->type, "richtext"))  return g_win_richedit_class ? g_win_richedit_class : L"EDIT";  /* 富文本，Msftedit 降级到 EDIT */
+    /* 终端也用 RichEdit（只读）：为了逐行着色 + 能选中复制，降级到 EDIT 时只是没有颜色 */
+    if (!strcmp(w->type, "terminal"))  return g_win_richedit_class ? g_win_richedit_class : L"EDIT";
     if (!strcmp(w->type, "checkbox"))  return L"BUTTON";      /* 自绘：BS_OWNERDRAW（cg_skin 画勾选框） */
     if (!strcmp(w->type, "radio"))     return L"BUTTON";      /* 自绘：BS_OWNERDRAW（cg_skin 画单选圆） */
     if (!strcmp(w->type, "switch"))    return L"BUTTON";      /* BS_OWNERDRAW 自绘开关 */
@@ -46,6 +48,7 @@ const wchar_t *cgw_class_of(const cg_widget_t *w)
     if (!strcmp(w->type, "progressring")) return CG_RING_CLASS;   /* 自绘圆环（进度环） */
     if (!strcmp(w->type, "progress")) return CG_PROGRESS_CLASS;   /* 自绘进度条（原生的不支持 custom draw） */
     if (!strcmp(w->type, "canvas"))    return CG_CANVAS_CLASS;    /* 自绘画板 */
+    if (!strcmp(w->type, "splitter"))  return CG_SPLITTER_CLASS;  /* 自绘分隔条（能拖动） */
     if (!strcmp(w->type, "colorpicker")) return L"BUTTON";        /* BS_OWNERDRAW 色块 */
     if (!strcmp(w->type, "badge"))     return L"BUTTON";          /* BS_OWNERDRAW 小圆片 */
     if (!strcmp(w->type, "tag"))       return L"BUTTON";          /* BS_OWNERDRAW 标签片 */
@@ -69,6 +72,12 @@ int cgw_is_datetime(const cg_widget_t *w)
     return w->format && strcmp(w->format, "datetime") == 0;
 }
 
+/** @brief 分隔条是不是竖的（左右分栏）：format 缺省 "col" 是竖条，"row" 才是横条 */
+int cgw_splitter_is_vert(const cg_widget_t *w)
+{
+    return !(w->format && strcmp(w->format, "row") == 0);
+}
+
 /** @brief 控件 -> WS 样式位（table 按 multi 决定单/多选） */
 DWORD cgw_style_of(const cg_widget_t *w)
 {
@@ -78,7 +87,12 @@ DWORD cgw_style_of(const cg_widget_t *w)
     if (!strcmp(w->type, "link"))      return WS_CHILD | WS_VISIBLE | SS_NOTIFY | SS_LEFTNOWORDWRAP | SS_CENTERIMAGE;
     if (!strcmp(w->type, "monthcal"))  return WS_CHILD | WS_VISIBLE | WS_TABSTOP | MCS_NOTODAYCIRCLE;
     if (!strcmp(w->type, "progressring")) return WS_CHILD | WS_VISIBLE;
+    /* 分隔条：自绘、不需要 WS_TABSTOP（它是鼠标用的，别占 Tab 遍历） */
+    if (!strcmp(w->type, "splitter"))  return WS_CHILD | WS_VISIBLE;
     if (!strcmp(w->type, "richtext"))  return WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN | WS_VSCROLL;
+    /* 终端：只读（内容由 cg_term_write 控制）、要能选中（ES_NOHIDESEL 免得失焦看不清选中） */
+    if (!strcmp(w->type, "terminal"))  return WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE |
+                                              ES_READONLY | ES_AUTOVSCROLL | ES_NOHIDESEL | WS_VSCROLL;
     if (!strcmp(w->type, "datepicker"))return WS_CHILD | WS_VISIBLE | WS_TABSTOP |
                                               (cgw_is_time_only(w) ? DTS_TIMEFORMAT : DTS_SHORTDATEFORMAT);
     if (!strcmp(w->type, "toolbar"))   return WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN |
@@ -236,12 +250,17 @@ static unsigned parent_body_rgb(HWND parent, HWND child)
  */
 unsigned cg_win_behind_rgb(cg_app_t *app, void *hwnd)
 {
-    cg_win_state_t *st = (cg_win_state_t *)app->natives;
+    cg_win_state_t *st;
     HWND child = (HWND)hwnd;
     HWND parent = child ? GetParent(child) : NULL;
     cg_widget_t *pw;
     ULONG_PTR v;
 
+    /* app 为空 = 自绘控件在**建窗口的过程中**就收到了一次 WM_PAINT（运行时还没把
+     * GWLP_USERDATA 挂上）。这不是错误状态，只是还问不出"背后是谁"，给个默认面色就行 ——
+     * 少了这一句，任何自绘控件的首帧都会在 app->natives 上访问冲突。 */
+    if (!app) return 0xF3EDF7u;
+    st = (cg_win_state_t *)app->natives;
     if (!st) return 0xF3EDF7u;
     if (!parent || parent == (HWND)app->hwnd) return rgb_of(st->bg_color);
 

@@ -56,6 +56,8 @@ typedef enum {
     CG_K_PAGINATION, /* 分页（自绘 < 页码 >，点两侧翻页） */
     CG_K_CARD,       /* 卡片（圆角边框容器） */
     CG_K_SHAPE,      /* 外形框（矩形/圆角/椭圆，纯视觉） */
+    CG_K_SPLITTER,   /* 分隔条（能拖动的分区边界：撑开前一块、后面让位、最后一块吃掉余量） */
+    CG_K_TERMINAL,   /* 终端 / 日志视图（只读、按行着色、自动滚到底、行数有上限） */
     CG_K_WINDOW,     /* 伪控件：窗口自身，只有 close 事件 */
     CG_K_COUNT
 } cg_kind_t;

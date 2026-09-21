@@ -59,6 +59,7 @@ typedef struct {
 #define CG_RING_CLASS  L"CStackGUIRing"
 #define CG_PROGRESS_CLASS L"CStackGUIProgress"
 #define CG_CANVAS_CLASS L"CStackGUICanvas"
+#define CG_SPLITTER_CLASS L"CStackGUISplitter"
 
 /* 时钟（timer）控件没有自己的窗口，Win32 定时器 id 直接复用 ctrl_id，
  * 这样 WM_TIMER 里按 wp 反查一次就能找到控件。 */
@@ -134,6 +135,8 @@ const wchar_t *cgw_class_of(const cg_widget_t *w);
 int cgw_is_time_only(const cg_widget_t *w);
 /** @brief datepicker 是否为"日期+时间"双控件模式 */
 int cgw_is_datetime(const cg_widget_t *w);
+/** @brief 分隔条是不是竖的（左右分栏 = 竖条，format != "row"） */
+int cgw_splitter_is_vert(const cg_widget_t *w);
 /** @brief 控件 -> WS 样式位 */
 DWORD cgw_style_of(const cg_widget_t *w);
 
@@ -154,6 +157,7 @@ void cgw_register_image_class(void);
 void cgw_register_ring_class(void);
 void cgw_register_progress_class(void);
 void cgw_register_canvas_class(void);
+void cgw_register_splitter_class(void);
 void cgw_register_panel_class(void);
 /** @brief 面板窗口过程（group/box/card/shape）：转发子控件通知 + 自绘底板 */
 LRESULT CALLBACK cgw_PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
