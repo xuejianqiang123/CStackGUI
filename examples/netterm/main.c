@@ -763,6 +763,11 @@ static void on_role_select(cg_widget_t *self, cg_event_t ev, void *user)
         term_sys(app, "角色：客户端（去连上面的地址和端口）");
         break;
     }
+    if (s_biz.ini[0]) {                                /* 记住这次真正选定的角色，下次启动照它恢复 */
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%d", s_biz.role);
+        cg_ini_write(s_biz.ini, "网口", "角色", buf);
+    }
     refresh_ui(app);
 }
 
@@ -968,7 +973,7 @@ static void on_close(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief 窗口已销毁：进程收尾 —— 撤轮询、关掉监听与全部连接
+ * @brief 窗口已销毁：进程收尾 —— 撤轮询、关掉监听 / UDP 端口与全部连接
  * @param self 窗口伪控件
  * @param ev destroy
  * @param user 未使用
