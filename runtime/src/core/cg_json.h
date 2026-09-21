@@ -46,4 +46,7 @@ unsigned cj_color(const cj_val_t *v, unsigned def);
 size_t cj_count(const cj_val_t *v);
 const cj_val_t *cj_at(const cj_val_t *arr, size_t i);
 
+/** 把值回序列化成紧凑 JSON 文本（无空白），返回 malloc 串，调用方 free；NULL 返回 "null" */
+char *cj_print_unformatted(const cj_val_t *v);
+
 #endif /* CG_JSON_H */

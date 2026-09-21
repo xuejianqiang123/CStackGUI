@@ -116,6 +116,7 @@ void cg_widget_free(cg_widget_t *w)
     free(w->row_icon);
     free(w->item_map);
     free(w->src);
+    free(w->option);
     free(w->bitmap_src);
     free(w->id);
     free(w->type);
@@ -231,6 +232,7 @@ static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node
     w->vmax = n->vmax;
     w->page = n->page;
     if (n->src) w->src = cg_str_dup(n->src);
+    if (n->option) w->option = cg_str_dup(n->option);
     if (n->format) w->format = cg_str_dup(n->format);
     if (n->hint) w->hint = cg_str_dup(n->hint);
     w->period = n->period;

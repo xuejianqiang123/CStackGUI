@@ -402,6 +402,10 @@ void cg_canvas_text(cg_widget_t *w, int x, int y, const char *text);
 /** 让 browser 控件打开一个地址（http/https/本地文件路径均可）；实验性功能 */
 void cg_browser_navigate(cg_widget_t *w, const char *url);
 
+/* ------------------------------------------------------------ ECharts 图表 */
+/** 运行时改 ECharts 图表的 option（整段 JSON 文本）；实验性功能，需系统装有 WebView2 Runtime */
+void cg_echarts_set_option(cg_widget_t *w, const char *json);
+
 /* ------------------------------------------------------------ 日志
  * 为什么需要它：GUI 版（-mwindows）没有控制台，printf / stderr 用户一个字都看不见。
  * 运行时启动时会自己开一份日志（%LOCALAPPDATA%\<exe名>\app.log），这里让业务代码

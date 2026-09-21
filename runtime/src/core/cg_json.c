@@ -335,6 +335,79 @@ static cj_val_t *parse_value(parser_t *ps)
     }
 }
 
+/* ------------------------------------------------------------ 序列化（option 等需要把解析后的对象重新变成字符串传给 WebView2） */
+
+static void raw_append(char **buf, size_t *len, size_t *cap, const char *s)
+{
+    while (*s) byte_append(buf, len, cap, (unsigned char)*s++);
+}
+
+static void emit_str(const cj_val_t *v, char **buf, size_t *len, size_t *cap)
+{
+    static const char hexd[] = "0123456789abcdef";
+    const char *s = v->str ? v->str : "";
+    byte_append(buf, len, cap, '"');
+    for (const char *p = s; *p; p++) {
+        unsigned char c = (unsigned char)*p;
+        if (c == '"' || c == '\\') { byte_append(buf, len, cap, '\\'); byte_append(buf, len, cap, c); }
+        else if (c == '\n') { byte_append(buf, len, cap, '\\'); byte_append(buf, len, cap, 'n'); }
+        else if (c == '\t') { byte_append(buf, len, cap, '\\'); byte_append(buf, len, cap, 't'); }
+        else if (c == '\r') { byte_append(buf, len, cap, '\\'); byte_append(buf, len, cap, 'r'); }
+        else if (c == '\b') { byte_append(buf, len, cap, '\\'); byte_append(buf, len, cap, 'b'); }
+        else if (c == '\f') { byte_append(buf, len, cap, '\\'); byte_append(buf, len, cap, 'f'); }
+        else if (c < 0x20) {
+            char tmp[8];
+            snprintf(tmp, sizeof(tmp), "\\u%c%c%c%c",
+                     hexd[(c >> 4) & 0xF], hexd[c & 0xF], '0', '0');
+            raw_append(buf, len, cap, tmp);
+        } else byte_append(buf, len, cap, c);
+    }
+    byte_append(buf, len, cap, '"');
+}
+
+static void emit_value(const cj_val_t *v, char **buf, size_t *len, size_t *cap)
+{
+    char tmp[32];
+    if (!v) { raw_append(buf, len, cap, "null"); return; }
+    switch (v->type) {
+    case CJ_NULL:  raw_append(buf, len, cap, "null"); break;
+    case CJ_BOOL:  raw_append(buf, len, cap, v->num ? "true" : "false"); break;
+    case CJ_NUM: {
+        snprintf(tmp, sizeof(tmp), "%.17g", v->num);
+        raw_append(buf, len, cap, tmp); break;
+    }
+    case CJ_STR:   emit_str(v, buf, len, cap); break;
+    case CJ_ARR: {
+        byte_append(buf, len, cap, '[');
+        for (size_t i = 0; i < v->count; i++) {
+            if (i) byte_append(buf, len, cap, ',');
+            emit_value(v->items[i], buf, len, cap);
+        }
+        byte_append(buf, len, cap, ']'); break;
+    }
+    case CJ_OBJ: {
+        byte_append(buf, len, cap, '{');
+        for (size_t i = 0; i < v->count; i++) {
+            if (i) byte_append(buf, len, cap, ',');
+            cj_val_t keyv; memset(&keyv, 0, sizeof(keyv));
+            keyv.type = CJ_STR; keyv.str = v->keys[i];
+            emit_str(&keyv, buf, len, cap);
+            byte_append(buf, len, cap, ':');
+            emit_value(v->items[i], buf, len, cap);
+        }
+        byte_append(buf, len, cap, '}'); break;
+    }
+    }
+}
+
+char *cj_print_unformatted(const cj_val_t *v)
+{
+    char *buf = NULL; size_t len = 0, cap = 0;
+    emit_value(v, &buf, &len, &cap);
+    if (!buf) { buf = (char *)malloc(1); if (buf) buf[0] = '\0'; }
+    return buf;
+}
+
 /* ------------------------------------------------------------ 公共入口 */
 
 /**

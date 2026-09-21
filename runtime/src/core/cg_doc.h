@@ -56,6 +56,7 @@ typedef enum {
     CG_K_PAGINATION, /* 分页（自绘 < 页码 >，点两侧翻页） */
     CG_K_CARD,       /* 卡片（圆角边框容器） */
     CG_K_SHAPE,      /* 外形框（矩形/圆角/椭圆，纯视觉） */
+    CG_K_ECHARTS,    /* ECharts 图表（内嵌 WebView2 渲染） */
     CG_K_WINDOW,     /* 伪控件：窗口自身，只有 close 事件 */
     CG_K_COUNT
 } cg_kind_t;
@@ -175,6 +176,8 @@ typedef struct cg_node {
     int      page;
     /** image 的图片路径（相对 .cgui 目录、exe 目录或绝对） */
     char    *src;
+    /** ECharts 图表的 option（整段 JSON 文本） */
+    char    *option;
     /** 细分格式：datepicker 用 "date"（默认）/ "time" / "datetime"；
      *  shape 用 "rect" / "roundrect" / "ellipse" */
     char    *format;

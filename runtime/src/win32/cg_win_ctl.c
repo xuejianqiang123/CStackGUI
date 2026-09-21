@@ -52,6 +52,7 @@ const wchar_t *cgw_class_of(const cg_widget_t *w)
     if (!strcmp(w->type, "rate"))      return L"BUTTON";          /* BS_OWNERDRAW 五角星 */
     if (!strcmp(w->type, "pagination"))return L"BUTTON";          /* BS_OWNERDRAW 分页 */
     if (!strcmp(w->type, "browser"))   return g_win_atl_ok ? L"AtlAxWin" : L"STATIC"; /* IE/WebBrowser 嵌入 */
+    if (!strcmp(w->type, "echarts"))   return CG_ECHARTS_CLASS;                        /* WebView2 宿主 */
     if (!strcmp(w->type, "timer"))     return L"STATIC";          /* 无窗口，cgw_create_native 会跳过 */
     if (!strcmp(w->type, "card") || !strcmp(w->type, "shape")) return CG_PANEL_CLASS; /* 容器面板 */
     return CG_PANEL_CLASS;   /* group / box */
@@ -113,6 +114,7 @@ DWORD cgw_style_of(const cg_widget_t *w)
     if (!strcmp(w->type, "pagination"))return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;
     if (!strcmp(w->type, "browser"))   return g_win_atl_ok ? (WS_CHILD | WS_VISIBLE | WS_TABSTOP)
                                                        : (WS_CHILD | WS_VISIBLE | SS_CENTER | SS_CENTERIMAGE);
+    if (!strcmp(w->type, "echarts"))   return WS_CHILD | WS_VISIBLE | WS_TABSTOP;
     if (!strcmp(w->type, "statusbar")) return WS_CHILD | WS_VISIBLE;
     /* 微调框：数字左对齐（原先 ES_RIGHT 在窄框里会贴着箭头，很难看） */
     if (!strcmp(w->type, "spinner"))   return WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_NUMBER | ES_LEFT | ES_AUTOHSCROLL;
