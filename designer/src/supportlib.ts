@@ -287,6 +287,13 @@ if (strcmp(who, "btn_add") == 0) { /* ... */ }`,
             sample: `/* on_ready 里挂一次 */
 cg_widget_set_user(cg_find(app, "lst_log"), &g_ctx);`,
           }),
+          c("cg_bind", "控件绑定", "int cg_bind(cg_widget_t *src, cg_widget_t *dst, int two_way)", "dst 的值/文字/勾选一直跟着 src 走，省掉手写同步回调（画布「属性」里也能配）", {
+            sample: `/* 滑块拖动时旁边的标签显示数字（等价于 .cgui 里给标签写 bind.src） */
+cg_bind(cg_find(app, "sld_level"), cg_find(app, "lab_value"), 0);
+
+/* 双向：滑块和微调框两个入口改同一个值 */
+cg_bind(cg_find(app, "sld_level"), cg_find(app, "spn_level"), 1);`,
+          }),
         ],
       },
       {

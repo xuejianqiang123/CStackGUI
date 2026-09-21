@@ -36,6 +36,21 @@ function findAny(nodes: CgNode[], id: string): CgNode | null {
   return null;
 }
 
+/** 收集能当绑定源的控件 id（已排序）。
+ *  排除自己和自己内部：绑自己没有意义，也不会是用户想要的结果。 */
+function collectBindIds(nodes: CgNode[], skipId: string): string[] {
+  const out: string[] = [];
+  const walk = (ns: CgNode[]) => {
+    for (const n of ns) {
+      if (n.id === skipId) continue;   /* 连它内部一起跳过 */
+      out.push(n.id);
+      if (n.children) walk(n.children);
+    }
+  };
+  walk(nodes);
+  return out.sort();
+}
+
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="insp-row">
@@ -110,6 +125,8 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
   const style = node.style ?? {};
   const parent = findParent(doc, node.id);
   const inTabs = parent?.type === "tabs";
+  /** 可以当绑定源的控件（别人指向我的 id 改了就一起改，见上面 id 那段） */
+  const bindIds = collectBindIds(doc.widgets, node.id);
   /* 标签 / 链接 / 分割线默认不画底色（透明）；这里给个显式开关，用户一眼能看清 */
   const transparentBg = node.type === "label" || node.type === "link" || node.type === "separator";
   /** 多行文本编辑：不进撤销栈，靠聚焦时压一次快照 */
@@ -149,8 +166,20 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
             let unique = raw;
             let k = 2;
             while (taken.has(unique)) unique = `${raw}_${k++}`;
-            patch((n) => {
-              n.id = unique;
+            const oldId = node.id;
+            onBeginHistory();
+            onApply((d) => {
+              /* 别人指向这个 id 的绑定一起改掉，否则运行时找不到源、绑定静默失效 */
+              if (unique !== oldId) {
+                const fix = (ns: CgNode[]) =>
+                  ns.forEach((n) => {
+                    if (n.bind?.src === oldId) n.bind = { ...n.bind, src: unique };
+                    if (n.children) fix(n.children);
+                  });
+                fix(d.widgets);
+              }
+              const t = findAny(d.widgets, oldId);
+              if (t) t.id = unique;
             });
             onSelect(unique);
           }}
@@ -516,6 +545,57 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
           }
         />
       </Row>
+
+      <Row label="绑定">
+        <select
+          className="input"
+          value={node.bind?.src ?? ""}
+          onChange={(e) =>
+            patch((n) => {
+              const src = e.target.value;
+              if (!src) {
+                n.bind = undefined;
+                return;
+              }
+              n.bind = { ...(n.bind ?? { src }), src };
+            })
+          }
+        >
+          <option value="">不绑定</option>
+          {bindIds.map((id) => (
+            <option key={id} value={id}>
+              {id}
+            </option>
+          ))}
+        </select>
+      </Row>
+      {node.bind?.src ? (
+        <>
+          <Row label="">
+            <label className="check-inline">
+              <input
+                type="checkbox"
+                checked={node.bind.two === true}
+                onChange={(e) =>
+                  patch((n) => {
+                    if (n.bind) n.bind = { ...n.bind, two: e.target.checked || undefined };
+                  })
+                }
+              />
+              双向（本控件也能改源）
+            </label>
+          </Row>
+          <p className="muted small">
+            本控件的{info?.checklist ? "勾选状态" : info?.ranged || (info?.listLike && node.type !== "statusbar") ? "值" : "显示内容"}
+            跟着 <code>{node.bind.src}</code> 走。
+            {info?.checklist || info?.ranged || (info?.listLike && node.type !== "statusbar")
+              ? ""
+              : "源是输入框时显示它的文字，否则显示它的数值。"}
+            {node.bind.two ? "双向：用户改这里也会推回源。" : "单向：只有源变化时才同步。"}
+            {" 同步不会触发 change 回调。"}
+          </p>
+        </>
+      ) : null}
 
       <div className="insp-section">内容</div>
       {inTabs ? (

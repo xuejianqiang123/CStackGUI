@@ -182,6 +182,19 @@ export type CgTreeItem = {
 /** 表格列 */
 export type CgColumn = { title: string; w?: number };
 
+/** 控件绑定（对应运行时 cg_bind.c）：本控件的值/文字/勾选一直跟着 src 走。
+ *  抄什么由**本控件的类型**决定，不需要额外配置：
+ *    滑块/进度/圆环/微调/评分/分页/标签页/列表/下拉/工具栏 -> 抄值
+ *    复选框/单选钮/开关                                    -> 抄勾选状态
+ *    其它（能显示文字的）                                  -> 源是输入框抄文字，否则显示源的数值
+ *  典型用法：滑块拖动时旁边的标签显示数字、微调框与滑块互相同步。 */
+export type CgBind = {
+  /** 源控件 id（同一份 .cgui 里的另一个控件） */
+  src: string;
+  /** 双向：本控件被用户改动时也推回源（两个入口改同一个值） */
+  two?: boolean;
+};
+
 export type CgNode = {
   id: string;
   type: string;
@@ -189,6 +202,8 @@ export type CgNode = {
   text?: string;
   style?: CgStyle;
   events?: Partial<Record<CgEvent, string>>;
+  /** 控件绑定：跟着哪个控件走（见 CgBind） */
+  bind?: CgBind;
   visible?: boolean;
   enabled?: boolean;
   checked?: boolean;
@@ -875,6 +890,16 @@ function coerceNode(raw: unknown, index: number): CgNode | null {
   if (o.multi === true) node.multi = true;
   if (o.check === true) node.check = true;
 
+  /* 控件绑定：src 空串或不是字符串一律当没绑（画布上「不绑定」就是这么存的） */
+  if (o.bind && typeof o.bind === "object") {
+    const b = o.bind as Record<string, unknown>;
+    if (typeof b.src === "string" && b.src.trim()) {
+      const bind: CgBind = { src: b.src.trim() };
+      if (b.two === true) bind.two = true;
+      node.bind = bind;
+    }
+  }
+
   /* 结构化内容：读进来时做形状校验，脏数据丢了总比画布崩了好 */
   if (Array.isArray(o.items)) {
     node.items = o.items.map((s) => (typeof s === "string" ? s : String(s ?? "")));
@@ -1012,6 +1037,9 @@ function cleanNode(node: CgNode): CgNode {
   if (node.period) out.period = Math.max(0, Math.round(node.period));
   if (node.multi === true) out.multi = true;
   if (node.check === true) out.check = true;
+  if (node.bind?.src) {
+    out.bind = node.bind.two ? { src: node.bind.src, two: true } : { src: node.bind.src };
+  }
   if (node.items && node.items.length) out.items = [...node.items];
   if (node.nodes && node.nodes.length) out.nodes = node.nodes.map(cleanTree);
   if (node.columns && node.columns.length) {
