@@ -278,6 +278,16 @@ void cgw_echarts_init(cg_widget_t *w)
 
     EnvHandler *h = (EnvHandler *)malloc(sizeof(EnvHandler));
     if (h) new (h) EnvHandler(hwnd);
+
+    /* WebView2 需要当前线程已初始化 COM Apartment；S_FALSE=已经初始化过，
+       RPC_E_CHANGED_MODE=已用其它模式初始化（仍可继续用），都不算失败。 */
+    HRESULT hrcom = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    if (FAILED(hrcom) && hrcom != RPC_E_CHANGED_MODE) {
+        cg_log(CG_LOG_ERROR, "CoInitializeEx failed: 0x%08X", (unsigned)hrcom);
+        free(wudf);
+        return;
+    }
+
     HRESULT hr = g_createEnv(NULL, wudf, NULL, h);
     if (FAILED(hr))
         cg_log(CG_LOG_ERROR, "CreateCoreWebView2Environment failed: 0x%08X", (unsigned)hr);
