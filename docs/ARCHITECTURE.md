@@ -414,16 +414,20 @@ examples\gallery\gallery.exe --trace    examples\gallery\gallery.cgui  :: 开窗
 tools\run-tests.bat                                             :: C 层单测（tests\）：JSON / .cgui 解析 / 类型表 / 事件表
 tools\run-tests.bat --memcheck                                  :: 同上，再叠一层堆泄漏记账（ld --wrap malloc/free）
 tools\check-format.bat                                          :: 画布写的 .cgui 必须能被 C 侧读进来自检通过
-tools\bat-gbk.ps1                                               :: 仓库 bat 的编码契约（GBK + CRLF + 无 BOM）
+tools\bat-utf8.ps1                                              :: 仓库 bat 的编码/前导契约（UTF-8 无 BOM + CRLF + ASCII 前导）
 ```
 
-**为什么仓库里的 bat 必须是 GBK（cp936）**：cmd 解析批处理用的是"启动这个 cmd 进程时的控制台
-代码页"（中文 Windows 双击时是 936），文件里的中文会被按 2 字节/字解码 —— UTF-8 的中文是 3 字节/字，
-两边对不上，cmd 在文件里的行定位就越读越偏，最后半句注释被当成命令执行（双击时满屏
-`"... is not recognized ..."`，但编译本身还能跑完，所以很容易被当成"只是显示问题"）。
-文件存成 GBK 后解码长度与文件编码一致，偏移问题消失；纯 ASCII 的 bat 则与代码页无关（用哪种都行）。
-`tools\bat-gbk.ps1 -Mode fix` 负责转换、`-Mode check` 已并入 `check-format`；
-`designer\src\codegen.ts` 生成的导出脚本只能按 UTF-8 写文件，所以那边保持**纯 ASCII**。
+**为什么 bat 需要一段 ASCII 前导**：cmd 解码批处理用的是"**启动这个 cmd 进程时**"的控制台代码页
+（中文 Windows 双击时是 936），而且此后 `chcp` 也改不了已经定下的解码口径。UTF-8 的文件里中文是
+3 字节/字，被按 2 字节/字解码后 cmd 在文件里的行定位越读越偏，半句注释被当命令执行（双击时满屏
+`"... is not recognized ..."`，但编译本身还能跑完，所以很容易被当成"只是显示问题"）。所以文件开头放
+一段**纯 ASCII 前导**：先读当前代码页，不是 65001 就 `chcp 65001` 并用 `cmd /c "%~f0" %*` 把同一个
+文件在新进程里重跑一遍 —— 那一趟是新进程、启动时就是 65001，整个文件从头按 UTF-8 解码且中途不再
+切页，中文注释与中文输出都正常（双击路径与 UTF-8 终端都实测过）。三条实测铁律：带 BOM 会让 cmd
+把首行报成 `'锘緻echo'`；脚本**内部**切代码页 + 后面有中文 + 括号块/标签会错位；带中文的 bat 里
+`goto` / `call :label` 会让标签扫描漂移（结局是结尾一行 `"*"` 报错或莫名 `Press any key`），子过程
+要拆成独立 .bat（见 `tools\gen-launcher.bat`）。`tools\bat-utf8.ps1 -Mode fix` 负责归位、
+`-Mode check` 已并入 `check-format`；`designer\src\codegen.ts` 生成的导出脚本带同一段前导。
 
 `tools\run-tests.bat` 编译 `tests\` 下全部 `.c`（套件用 `CG_TEST_SUITE` 自注册，新增测试文件
 不用改任何清单），链接运行时库后运行。它盯的是**两处"同一个事实有两份"的地方**：

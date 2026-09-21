@@ -160,8 +160,8 @@ tools\run-tests.bat                                              :: C 层单测�
 tools\run-tests.bat --memcheck                                   :: 再叠一层堆泄漏记账（ld --wrap malloc/free）
 tools\check-format.bat                                           :: 格式契约回归 + 支持库表一致性 + bat 编码
 tools\check-kit.bat                                              :: cg_kit 基础能力冒烟测试（已并入 run-tests）
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-gbk.ps1 -Mode fix
-                                                                 :: 动过 .bat 之后跑：中文 bat 必须是 GBK，否则双击时注释被当命令跑
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-utf8.ps1 -Mode fix
+                                                                 :: 动过 .bat 之后跑：UTF-8 无 BOM + ASCII 前导，否则双击时注释被当命令跑
 
 :: 画布（designer 目录里执行）
 npm install / npm run dev / npm run build / npm run dist
@@ -222,9 +222,9 @@ examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui   :: 回 0
 tools\run-tests.bat                            :: C 层单测：JSON / .cgui 解析 / 类型表 / 事件表 + cg_kit 冒烟
 tools\check-format.bat                         :: 画布写的 .cgui 必须被 C 侧读懂（改格式/控件时）
                                                :: 顺带查「支持库」表与 cstackgui.h 是否还一致
-                                               :: 再顺带查仓库 bat 是不是 GBK（见下面第 4 条）
+                                               :: 再顺带查仓库 bat 的编码与 ASCII 前导（见下面第 4 条）
 tools\check-kit.bat                            :: cg_kit 基础能力（文件/配置/编码/注册表）冒烟测试
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-gbk.ps1 -Mode fix
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-utf8.ps1 -Mode fix
                                                :: 动过任何 .bat 之后跑（-Mode check 已并入 check-format）
 cd designer && npx tsc --noEmit && npx vite build   :: 改了画布时
 ```
@@ -238,11 +238,14 @@ cd designer && npx tsc --noEmit && npx vite build   :: 改了画布时
    改格式必须跑 `tools\check-format.bat`，防止"画布能存、程序起不来"。
 3. **界面之外的能力由 `cg_kit` 提供**（文件/配置/编码/剪贴板/注册表）——不要为了这些去
    include `windows.h`：那样业务代码就绑死在 Win32 上了，而且画布「支持库」页签里也查不到。
-4. **bat 必须存成 GBK（cp936）+ CRLF、无 BOM**。cmd 解析 bat 用的是"启动这个 cmd 进程时的
-   控制台代码页"，中文 Windows 双击时是 936 —— UTF-8 的中文会被按 2 字节/字解码、行定位错位，
-   注释后半句会被当命令执行（满屏 `"... is not recognized ..."`）。改完 bat 跑
-   `tools\bat-gbk.ps1 -Mode fix` 归位，`-Mode check` 已并入 `tools\check-format.bat`。
-   （`designer\src\codegen.ts` 生成的导出脚本只能按 UTF-8 写，所以那边保持纯 ASCII。）
+4. **bat 存成 UTF-8（无 BOM）+ CRLF，开头放一段纯 ASCII 前导**。cmd 用"启动这个 cmd 进程时的
+   控制台代码页"解码 bat，中文 Windows 双击时是 936 —— UTF-8 的中文会被按 2 字节/字解码、行定位
+   错位，注释后半句被当命令执行（满屏 `"... is not recognized ..."`）。前导先把代码页切成 65001、
+   再用 `cmd /c "%~f0"` 让同一个文件在**新进程**里重跑一遍，那一趟从头按 UTF-8 解码且中途不再切页，
+   中文注释与中文输出都正常（双击和 UTF-8 终端都验证过）。另外：**带中文的 bat 里不能出现
+   `goto` / `call :label`**（cmd 找标签按字节偏移扫描，UTF-8 中文会把它扫歪，表现为结尾多一行
+   `"*"` 报错或莫名 `Press any key`）—— 子过程要拆成独立 .bat（如 `tools\gen-launcher.bat`）。
+   改完跑 `tools\bat-utf8.ps1 -Mode fix` 归位，`-Mode check` 已并入 `tools\check-format.bat`。
 
 ---
 
@@ -309,7 +312,8 @@ CStackGUI\
   tools\                       开发期检查工具
     run-tests.bat              C 层单测入口（编译 tests\ 并运行；可 --memcheck / --grep）
     check-format.bat           格式契约回归（画布写的 .cgui 必须被 C 侧读懂）
-    bat-gbk.ps1                检查/转换仓库 bat 的编码（GBK + CRLF + 无 BOM）
+    bat-utf8.ps1               检查/修复仓库 bat 的编码与 ASCII 前导（UTF-8 + CRLF，无 BOM）
+    gen-launcher.bat           生成工程级启动脚本（不含 goto/标签，UTF-8 前导 + 版本标记幂等）
     check-support.mjs          画布「支持库」表 vs cstackgui.h 的一致性检查
     check-kit.bat              cg_kit 基础能力冒烟测试（编译并运行 kit-test.c）
     kit-test.c                 上面那个测试的源码（文件/配置/编码/剪贴板/注册表）
