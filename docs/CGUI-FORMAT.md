@@ -112,7 +112,7 @@
 | `events` | 对象 | 否 | 见第 3 节 |
 | `children` | 数组 | 否 | 只有容器类型（`group` / `box` / `card` / `tabs`）能带；**非容器带 children 会被运行时判为错误** |
 | `page` | 整数 | 否 | 属于父 `tabs` 的第几页（0 起）。缺省 0 |
-| `src` | 字符串 | 否 | `image` 的图片路径，见 2.4 |
+| `src` | 字符串 | 否 | 图片路径：`image` 的内容图、`iconbutton` 的图标、`button` 的背景图，见 2.4 |
 | `format` | 字符串 | 否 | `datepicker` 的细分格式：`date`（缺省）/ `time` / `datetime`；`shape` 的外形：`rect`（缺省）/ `roundrect` / `ellipse`；`splitter` 的方向：`col`（缺省，左右分栏）/ `row`（上下分行）；`terminal` 的显示模式：留空（文本）/ `hex`；`chart` 的图形：`line`（缺省）/ `bar`；`led` 的形状：`round`（缺省，圆）/ `square`（方）；`meter` 的样式：`arc`（缺省，270° 圆弧）/ `half`（半圆 180°）|
 | `hint` | 字符串 | 否 | 鼠标悬停提示（tooltip），**所有控件通用**；不写 / 空 = 无提示 |
 | `bind` | 对象 | 否 | 控件绑定：值/文字/勾选跟着另一个控件走，见 2.8 |
@@ -434,6 +434,10 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `tick` | 时钟控件的周期到了（`period` 毫秒一次） | 只有时钟 |
 | `check` | 表格勾选列的行勾选状态变了 | 只有表格（`.cgui` 里开 `check`） |
 | `gotfocus` / `lostfocus` | 控件获得 / 失去键盘焦点 | 有焦点概念的原生控件（输入类、按钮、开关勾选、滑块、列表/下拉/树/表格/标签页）|
+| `mousedown` / `mouseup` | 按下 / 松开左键 | 窗口（客户区）+ `button`（控件内）|
+| `rdown` / `rup` | 按下 / 松开右键 | 同上 |
+| `mousemove` | 鼠标移动（触发频繁，别做重活） | 同上 |
+| `keydown` / `keyup` / `char` / `wheel` | 按键 / 放键 / 字符输入 / 滚轮 | 窗口（全窗口）+ `button`（控件持有焦点时）|
 | `close` | 用户点了关闭按钮，窗口关之前 | 只有窗口 |
   不认识的键会被运行时**忽略**（不报错），方便向后兼容。
 - 一个函数名可以被多个控件、多个事件共用。
@@ -447,7 +451,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 
 | `type` | 中文名 | 容器 | 默认尺寸 | 默认文本 | 支持的 `events` | Win32 实现 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `button` | 按钮 | 否 | 120×40 | `按钮` | `click`、`dblclick` | `BUTTON`+`BS_OWNERDRAW`（M3 自绘）|
+| `button` | 按钮 | 否 | 120×40 | `按钮` | `click`、`dblclick`、`gotfocus`、`lostfocus`、鼠标全套（`mousedown`/`mouseup`/`rdown`/`rup`/`mousemove`）、键盘全套（`keydown`/`keyup`/`char`/`wheel`）| `BUTTON`+`BS_OWNERDRAW`（M3 自绘；`src` 指定背景图）|
 | `iconbutton` | 图标按钮 | 否 | 48×48 | — | `click`、`dblclick` | `BUTTON` 自绘（`src` 指定图片）|
 | `label` | 标签 | 否 | 160×24 | `标签` | **无**（纯显示） | `STATIC` |
 | `link` | 链接 | 否 | 160×24 | `链接` | `click`、`dblclick` | `STATIC`+`SS_NOTIFY`（手型光标、蓝色下划线）|
@@ -517,14 +521,15 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `idle` | 消息队列空着时（别在这里做耗时活）|
 | `tray` | 托盘图标被点，`cg_tray_action()` 给 1=单击 / 2=双击 / 3=右键 |
 | `show` / `hide` | 被显示 / 被隐藏 |
-| `mousedown`/`mouseup`/`rdown`/`rup`/`mousemove` | 在窗口空白处按/放左键、按/放右键、移动鼠标 |
-| `dblclick` | 在窗口空白处双击 |
+| `mousedown`/`mouseup`/`rdown`/`rup`/`mousemove` | 在窗口客户区按/放左键、按/放右键、移动鼠标 |
+| `dblclick` | 在窗口客户区双击 |
 | `gotfocus` / `lostfocus` | 窗口获得 / 失去键盘焦点 |
 | `keydown` / `keyup` | 按下 / 放开按键（`cg_event_key()` 键码、`cg_event_keys()` 功能键）|
 | `char` | 输入了可打印字符（中文输入法也走这里）|
 | `wheel` | 滚轮滚动（`cg_event_delta()` 滚动量，正数向上）|
 
-鼠标/键盘/滚轮事件的参数因为回调签名固定（只有 `self`/`ev`/`user`），存在窗口对象上，
+鼠标/键盘/滚轮事件的参数因为回调签名固定（只有 `self`/`ev`/`user`），存在**派发目标**上
+（窗口事件存在窗口对象上；`button` 的控件级鼠标/键盘事件存在该控件上），
 用 `cg_event_x/y/keys/key/delta` 和 `cg_tray_action` 读（`self` 传回调收到的那个控件即可）。
 
 `close` 回调里可以调 `cg_cancel_close(app)` 取消这次关闭（比如还有没保存的内容）。
@@ -534,6 +539,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 - 能点的才有 `click` / `dblclick`；能改内容的才有 `change`
 - 有"选择"概念的才有 `select`；只有树有 `expand` / `collapse`
 - 只有滑块有 `release`（拖动中发 `change`，松手才发 `release`）
+- 只有 `button` 有控件级的鼠标/键盘/滚轮事件（坐标相对控件客户区；窗口级那套坐标相对窗口客户区）
 - 纯显示或只被程序写的控件（标签/进度条/状态栏/容器）一个事件都没有
 
 画布只列出某控件支持的事件；手写 `.cgui` 绑了不支持的事件时，运行时启动会打
@@ -550,6 +556,8 @@ C 侧 `runtime/src/core/cg_doc_kind.c` 的 `k_kinds`，画布侧 `designer/src/m
   控件显示格式跟这个写法对齐，不受系统区域设置影响。
 - `monthcal` 同样把选中的日期放在 `text` 里（`2026-09-19`），启动前给它 `text` 就定位到那天。
 - `iconbutton` 用 `src` 指定图片（png/jpg/bmp/gif），等比缩放到控件内；没图就画个占位框。
+- `button` 的 `src` 是**背景图**：拉伸铺满整个按钮（圆角裁切），文字画在图上；
+  悬停/按下/禁用在图上叠一层半透明蒙版做反馈。没图就照常画纯色按钮。
 - `timer` 不写 `period` 就等于关着（C 侧缺省 0）；画布新建时钟会给 1000，运行时用 `cg_widget_set_period()` 改。
 - `colorpicker` 的当前颜色存在 `value`（`0xRRGGBB`），点色块弹系统取色器。**要程序改颜色别用
   `cg_widget_set_value()`** —— 那条路会按 `min`/`max` 截断，颜色不是区间值。
@@ -818,4 +826,5 @@ void   cg_set_title(cg_app_t *app, const char *title);
 | `events` 里有不认识的键 | 忽略 |
 | 控件 id 重复 | 不报错，但 `cg_find` 命中的是**后建**的那个（运行时按创建顺序倒序查找）；`cg_widget_add` 造重名会直接失败并报错 |
 | `image` 的 `src` 找不到图片 | 只警告，控件显示成虚线占位框（把路径画在中间便于排查） |
+| `button` / `iconbutton` 的 `src` 找不到图片 | 只警告；`button` 照常画纯色按钮、`iconbutton` 画占位框 |
 | `cg_tree_add` / `cg_table_add_row` 等用在错的控件类型上 | 打印一行 `需要 xxx 控件，实际给的是 yyy`，返回 -1，不做任何修改 |
