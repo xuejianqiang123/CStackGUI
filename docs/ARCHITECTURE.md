@@ -406,13 +406,37 @@ make-release.bat     :: 全量构建 -> 打包画布 -> 组装 release\ -> 在 r
 `runtime\src` 现编。物料模板放在 `packaging\`，`make-release.bat` 负责拷进去 ——
 改使用说明或编译脚本改模板，重跑 make-release 即可。
 
-### 6.4 三道验证
+### 6.4 验证入口
 
 ```bat
 examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui  :: 解析 + 控件树 + 合成事件，不开窗
 examples\gallery\gallery.exe --trace    examples\gallery\gallery.cgui  :: 开窗前打印一遍文档树
+tools\run-tests.bat                                             :: C 层单测（tests\）：JSON / .cgui 解析 / 类型表 / 事件表
+tools\run-tests.bat --memcheck                                  :: 同上，再叠一层堆泄漏记账（ld --wrap malloc/free）
 tools\check-format.bat                                          :: 画布写的 .cgui 必须能被 C 侧读进来自检通过
+tools\bat-gbk.ps1                                               :: 仓库 bat 的编码契约（GBK + CRLF + 无 BOM）
 ```
+
+**为什么仓库里的 bat 必须是 GBK（cp936）**：cmd 解析批处理用的是"启动这个 cmd 进程时的控制台
+代码页"（中文 Windows 双击时是 936），文件里的中文会被按 2 字节/字解码 —— UTF-8 的中文是 3 字节/字，
+两边对不上，cmd 在文件里的行定位就越读越偏，最后半句注释被当成命令执行（双击时满屏
+`"... is not recognized ..."`，但编译本身还能跑完，所以很容易被当成"只是显示问题"）。
+文件存成 GBK 后解码长度与文件编码一致，偏移问题消失；纯 ASCII 的 bat 则与代码页无关（用哪种都行）。
+`tools\bat-gbk.ps1 -Mode fix` 负责转换、`-Mode check` 已并入 `check-format`；
+`designer\src\codegen.ts` 生成的导出脚本只能按 UTF-8 写文件，所以那边保持**纯 ASCII**。
+
+`tools\run-tests.bat` 编译 `tests\` 下全部 `.c`（套件用 `CG_TEST_SUITE` 自注册，新增测试文件
+不用改任何清单），链接运行时库后运行。它盯的是**两处"同一个事实有两份"的地方**：
+
+- `k_kinds`（C）↔ `KINDS`（画布）：类型表的每一行都要能被枚举反查、类型名不重复、事件位掩码
+  与 `cg_kind_supports_event()` 完全一致（`tests\unit\test_kind.c`）；
+- `.cgui` 字段语义（C 侧真相）↔ 画布的读写：解析出来的标题/尺寸/样式/事件名/结构化内容都是
+  可执行的契约（`tests\unit\test_doc.c`）。
+
+`--memcheck` 用 `ld --wrap` 拦截测试程序自己（含静态链接进来的运行时库）的
+malloc/free/calloc/realloc，逐套件报告"跑完还剩多少存活堆块"。**不用 ASan 是因为本机
+MinGW-w64 没有 libasan**（实测 `ld: cannot find -lasan`），Windows 上也没有 valgrind；
+它只看得见本程序的分配，所以一旦出现"释放比分配多"就只提示记账不可信，不硬判泄漏。
 
 `--selftest` 会调用 `desc.on_ready`，所以"启动时挂业务数据"那段逻辑也在覆盖范围内。
 
@@ -442,6 +466,7 @@ CStackGUI/
     src/codegen.ts            导出 C 骨架
     electron/main.mjs         文件读写、导出、菜单、项目根记忆（便携版自动识别）
   packaging/                  发布包里的物料模板（编译脚本、使用者说明）
+  tests/                      C 层单元测试（框架 + 套件，套件自注册；入口 tools\run-tests.bat）
   tools/                      开发期检查工具（格式契约回归测试等）
   docs/                       设计文档（本文）+ 格式规范
   build/                      纯中间产物（各 .o + 运行时库，可随时删）

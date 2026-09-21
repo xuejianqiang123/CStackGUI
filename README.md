@@ -156,8 +156,12 @@ build-runtime.bat                :: 只编译运行时库（build-app 会先跑�
 build-app.bat gallery                                            :: 先有 gallery.exe
 examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui  :: 回调闭环自检
 examples\notepad\notepad.exe --selftest examples\notepad\notepad.cgui  :: 真实工具范例自检
-tools\check-format.bat                                           :: 格式契约回归 + 支持库表一致性
-tools\check-kit.bat                                              :: cg_kit 基础能力冒烟测试
+tools\run-tests.bat                                              :: C 层单测（JSON/文档/类型表/事件表）+ cg_kit 冒烟
+tools\run-tests.bat --memcheck                                   :: 再叠一层堆泄漏记账（ld --wrap malloc/free）
+tools\check-format.bat                                           :: 格式契约回归 + 支持库表一致性 + bat 编码
+tools\check-kit.bat                                              :: cg_kit 基础能力冒烟测试（已并入 run-tests）
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-gbk.ps1 -Mode fix
+                                                                 :: 动过 .bat 之后跑：中文 bat 必须是 GBK，否则双击时注释被当命令跑
 
 :: 画布（designer 目录里执行）
 npm install / npm run dev / npm run build / npm run dist
@@ -215,13 +219,17 @@ AI：piv-run-full-loop → 画布建界面（.cgui）→ 生成回调骨架 → 
 ```bat
 build-all.bat                                  :: 运行时 + 所有示例编译通过
 examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui   :: 回 0 才算事件闭环
+tools\run-tests.bat                            :: C 层单测：JSON / .cgui 解析 / 类型表 / 事件表 + cg_kit 冒烟
 tools\check-format.bat                         :: 画布写的 .cgui 必须被 C 侧读懂（改格式/控件时）
                                                :: 顺带查「支持库」表与 cstackgui.h 是否还一致
+                                               :: 再顺带查仓库 bat 是不是 GBK（见下面第 4 条）
 tools\check-kit.bat                            :: cg_kit 基础能力（文件/配置/编码/注册表）冒烟测试
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-gbk.ps1 -Mode fix
+                                               :: 动过任何 .bat 之后跑（-Mode check 已并入 check-format）
 cd designer && npx tsc --noEmit && npx vite build   :: 改了画布时
 ```
 
-### 3.4 让 AI 不踩坑的两条铁律（也是代码评审重点）
+### 3.4 让 AI 不踩坑的几条铁律（也是代码评审重点）
 
 1. **控件类型表有两份，必须同步**：`runtime\src\core\cg_doc_kind.c` 的 `k_kinds` 与
    `designer\src\model.ts` 的 `KINDS`。新增控件 = 两边各加一行 + `cg_win_ctl.c` 的
@@ -230,6 +238,11 @@ cd designer && npx tsc --noEmit && npx vite build   :: 改了画布时
    改格式必须跑 `tools\check-format.bat`，防止"画布能存、程序起不来"。
 3. **界面之外的能力由 `cg_kit` 提供**（文件/配置/编码/剪贴板/注册表）——不要为了这些去
    include `windows.h`：那样业务代码就绑死在 Win32 上了，而且画布「支持库」页签里也查不到。
+4. **bat 必须存成 GBK（cp936）+ CRLF、无 BOM**。cmd 解析 bat 用的是"启动这个 cmd 进程时的
+   控制台代码页"，中文 Windows 双击时是 936 —— UTF-8 的中文会被按 2 字节/字解码、行定位错位，
+   注释后半句会被当命令执行（满屏 `"... is not recognized ..."`）。改完 bat 跑
+   `tools\bat-gbk.ps1 -Mode fix` 归位，`-Mode check` 已并入 `tools\check-format.bat`。
+   （`designer\src\codegen.ts` 生成的导出脚本只能按 UTF-8 写，所以那边保持纯 ASCII。）
 
 ---
 
@@ -286,8 +299,17 @@ CStackGUI\
   build-all.bat                运行时 + 所有示例，一条命令
   make-release.bat             一键打发布包 -> release\（内含自检）
   packaging\                   发布包里的物料模板（编译脚本、使用者说明）
+  tests\                       C 层单元测试（套件自动注册，不用维护清单；入口 tools\run-tests.bat）
+    cg_test.h                  极简框架：断言 + CG_TEST_SUITE 自注册
+    cg_test_main.c             运行器：收集套件、--list / --grep / 汇总退出码
+    cg_test_memcheck.c         --memcheck 的 malloc/free 记账（ld --wrap）
+    unit\test_json.c           JSON 解析：取值兜底 / 转义 / 颜色 / 错误路径
+    unit\test_doc.c            .cgui 解析：窗口属性 / 控件树 / 事件名 / 结构化内容 / 越界修正
+    unit\test_kind.c           类型表与事件掩码、事件名表的双向契约
   tools\                       开发期检查工具
+    run-tests.bat              C 层单测入口（编译 tests\ 并运行；可 --memcheck / --grep）
     check-format.bat           格式契约回归（画布写的 .cgui 必须被 C 侧读懂）
+    bat-gbk.ps1                检查/转换仓库 bat 的编码（GBK + CRLF + 无 BOM）
     check-support.mjs          画布「支持库」表 vs cstackgui.h 的一致性检查
     check-kit.bat              cg_kit 基础能力冒烟测试（编译并运行 kit-test.c）
     kit-test.c                 上面那个测试的源码（文件/配置/编码/剪贴板/注册表）
