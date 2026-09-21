@@ -17,6 +17,26 @@ int g_win_in_notify = 0;
  */
 cg_app_t *g_win_app = NULL;
 
+/** @brief 鼠标消息的按键组合 -> 1=Ctrl 2=Shift 4=Alt（与 cg_win_main.c 的窗口级口径一致） */
+static int widget_mods_from_mouse(WPARAM wp)
+{
+    int m = 0;
+    if (wp & MK_CONTROL) m |= 1;
+    if (wp & MK_SHIFT) m |= 2;
+    if (GetKeyState(VK_MENU) & 0x8000) m |= 4;
+    return m;
+}
+
+/** @brief 键盘消息的按键组合 -> 1=Ctrl 2=Shift 4=Alt */
+static int widget_mods_from_key(void)
+{
+    int m = 0;
+    if (GetKeyState(VK_CONTROL) & 0x8000) m |= 1;
+    if (GetKeyState(VK_SHIFT) & 0x8000) m |= 2;
+    if (GetKeyState(VK_MENU) & 0x8000) m |= 4;
+    return m;
+}
+
 /**
  * @brief 评分/分页的点击判定：按 x 落点换算成星数或翻页方向并派发 change
  * @param w rate / pagination 控件；hwnd 控件窗口；x 点击横坐标（客户区）
@@ -142,6 +162,48 @@ LRESULT CALLBACK cgw_FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
             if (msg == WM_LBUTTONUP &&
                 (cgw_is_t(w, "rate") || cgw_is_t(w, "pagination"))) {
                 rate_or_pag_click(w, hwnd, (short)LOWORD(lp));
+            }
+            /* 控件级鼠标/键盘/滚轮事件：k_kinds 声明了才派发（目前按钮全套支持）。
+             * 坐标/键码等参数与窗口级事件同一套 cg_event_x/y/keys/key/delta 读取，
+             * 存在"派发目标控件"上（窗口事件存在窗口伪控件上，口径一致）。 */
+            cg_event_t wev;
+            int have_wev = 1;
+            switch (msg) {
+            case WM_LBUTTONDOWN:  wev = CG_EVENT_MOUSEDOWN; break;
+            case WM_LBUTTONUP:    wev = CG_EVENT_MOUSEUP;   break;
+            case WM_RBUTTONDOWN:  wev = CG_EVENT_RDOWN;     break;
+            case WM_RBUTTONUP:    wev = CG_EVENT_RUP;       break;
+            case WM_MOUSEMOVE:    wev = CG_EVENT_MOUSEMOVE; break;
+            case WM_MOUSEWHEEL:   wev = CG_EVENT_WHEEL;     break;
+            case WM_KEYDOWN:
+            case WM_SYSKEYDOWN:   wev = CG_EVENT_KEYDOWN;   break;
+            case WM_KEYUP:
+            case WM_SYSKEYUP:     wev = CG_EVENT_KEYUP;     break;
+            case WM_CHAR:         wev = CG_EVENT_CHAR;      break;
+            default:              have_wev = 0;             break;
+            }
+            if (have_wev && cg_kind_supports_event(w->type, wev)) {
+                if (wev == CG_EVENT_WHEEL) {
+                    /* 滚轮消息的坐标是屏幕坐标，先换成控件客户区；MK_ 位在 wParam 低字 */
+                    POINT pt;
+                    pt.x = (int)(short)LOWORD(lp);
+                    pt.y = (int)(short)HIWORD(lp);
+                    ScreenToClient(hwnd, &pt);
+                    w->ev_x = pt.x;
+                    w->ev_y = pt.y;
+                    w->ev_keys = widget_mods_from_mouse(LOWORD(wp));
+                    w->ev_delta = (int)(short)HIWORD(wp);
+                } else if (wev == CG_EVENT_KEYDOWN || wev == CG_EVENT_KEYUP || wev == CG_EVENT_CHAR) {
+                    w->ev_key = (int)wp;
+                    w->ev_keys = widget_mods_from_key();
+                } else {
+                    w->ev_x = (int)(short)LOWORD(lp);
+                    w->ev_y = (int)(short)HIWORD(lp);
+                    w->ev_keys = widget_mods_from_mouse(LOWORD(wp));
+                }
+                g_win_in_notify = 1;
+                cg_dispatch(w, wev);
+                g_win_in_notify = 0;
             }
             /* 自绘按钮：悬停/按下只影响外观，不派发事件（点击仍走 BN_CLICKED） */
             if (cgw_is_t(w, "button") || cgw_is_t(w, "checkbox") || cgw_is_t(w, "radio") || cgw_is_t(w, "switch")) {

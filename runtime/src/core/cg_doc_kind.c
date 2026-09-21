@@ -22,7 +22,10 @@
  * 画布只列出这里声明的事件；.cgui 绑了不支持的事件时，运行时启动会警告、自检会报错。
  */
 static const cg_kind_info_t k_kinds[] = {
-    { "button",     CG_K_BUTTON,     0, 120,  40, "按钮", CG_EV_CLICK | CG_EV_DBLCLICK | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
+    { "button",     CG_K_BUTTON,     0, 120,  40, "按钮", CG_EV_CLICK | CG_EV_DBLCLICK | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS
+                                                    | CG_EV_MOUSEDOWN | CG_EV_MOUSEUP | CG_EV_RDOWN | CG_EV_RUP
+                                                    | CG_EV_MOUSEMOVE | CG_EV_KEYDOWN | CG_EV_KEYUP
+                                                    | CG_EV_CHAR | CG_EV_WHEEL },
     { "iconbutton", CG_K_ICONBUTTON, 0,  48,  48, "",     CG_EV_CLICK | CG_EV_DBLCLICK },
     { "label",      CG_K_LABEL,      0, 160,  24, "标签", 0 },
     { "link",       CG_K_LINK,       0, 160,  24, "链接", CG_EV_CLICK | CG_EV_DBLCLICK },
