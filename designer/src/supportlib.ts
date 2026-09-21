@@ -844,7 +844,7 @@ static void poll(void *user)
     cg_set_timer(app, 50, poll, app);                 /* 一次性定时器：再挂一次 = 周期 */
 }`,
           }),
-          c("cg_net_write", "发送数据", "int cg_net_write(cg_net_t *n, const void *data, int len)", "同步写（带 1s 超时，不是写队列）；返回实际写出的字节数，< 0 表示失败", {
+          c("cg_net_write", "发送数据", "int cg_net_write(cg_net_t *n, const void *data, int len)", "同步写（带 1s 超时，不是写队列）；返回实际写出的字节数，< 0 表示失败。**UDP 句柄上不可用：恒返回 -1**（UDP 没有「流写」这个概念，要用 cg_net_sendto）", {
             params: ["n：连接句柄（监听句柄不能写）", "data：要发的字节；文本直接传字符串", "len：字节数，**必须 > 0**（和 cg_term_write 不一样，它不认 -1）"],
             ret: "实际写出的字节数；失败返回 < 0（原因见 cg_net_last_error）",
             sample: `const char *cmd = "GET / HTTP/1.0\\r\\n\\r\\n";   /* 长度得自己算，len 不支持传 -1 */
@@ -852,7 +852,7 @@ if (cg_net_write(g_cli, cmd, (int)strlen(cmd)) < 0) {
     cg_log(CG_LOG_ERROR, "发送失败：%s", cg_net_last_error(g_cli));
 }`,
           }),
-          c("cg_net_read", "取数据（时钟里读）", "int cg_net_read(cg_net_t *n, void *buf, int cap)", "**非阻塞**取最多 cap 字节；没数据返回 0（不是错误）", {
+          c("cg_net_read", "取数据（时钟里读）", "int cg_net_read(cg_net_t *n, void *buf, int cap)", "**非阻塞**取最多 cap 字节；没数据返回 0（不是错误）。**UDP 句柄上不可用：恒返回 0**，看着像「没数据」其实永远没数据（UDP 要用 cg_net_recvfrom）", {
             params: ["n：连接句柄", "buf：接收缓冲区", "cap：buf 的容量"],
             ret: "取到的字节数；0 = 这一拍没有数据；对端已关闭时也能把剩下的取完",
             sample: `/* ★ 唯一被支持的读法：在时钟回调里主动"取"，而不是等着被"推"。
@@ -889,7 +889,7 @@ static void poll(void *user)
     cg_set_timer(app, 50, poll, app);                  /* 再挂一次 = 50ms 周期 */
 }`,
           }),
-          c("cg_net_available", "还有多少没取", "int cg_net_available(const cg_net_t *n)", "接收缓冲里还剩多少字节 —— 用来判断「这一拍到底有没有东西」，省一次注定返回 0 的 read", {
+          c("cg_net_available", "还有多少没取", "int cg_net_available(const cg_net_t *n)", "接收缓冲里还剩多少字节 —— 用来判断「这一拍到底有没有东西」，省一次注定返回 0 的 read。**UDP 句柄上恒返回 0**（UDP 没有接收缓冲，数据报排在内核队列里，靠 cg_net_recvfrom 取）", {
             ret: "还没被取走的字节数；n 为 NULL 返回 0",
             sample: `/* 取空一条连接的标准循环：先问一句再读，读到空就收工 */
 while (cg_net_available(g_cli) > 0) {
@@ -898,7 +898,7 @@ while (cg_net_available(g_cli) > 0) {
     cg_term_write(term, CG_TERM_RX, buf, n);
 }`,
           }),
-          c("cg_net_connected", "对端还在吗", "int cg_net_connected(const cg_net_t *n)", "对端还在返回 1，对方关闭后变 0 —— **这是判断「掉线」的唯一信号**（监听句柄恒为 0）", {
+          c("cg_net_connected", "对端还在吗", "int cg_net_connected(const cg_net_t *n)", "对端还在返回 1，对方关闭后变 0 —— **这是判断「掉线」的唯一信号**（监听句柄恒为 0）。**UDP 句柄上恒为 0，但这不代表掉线**：UDP 无连接，压根没有「对端在不在」这个概念", {
             ret: "1 = 连接还在；0 = 对端已关闭（或这是监听句柄）",
             sample: `/* 掉线检测：先把缓冲里剩下的取干净，再回收句柄 */
 if (!cg_net_connected(g_cli) && cg_net_available(g_cli) <= 0) {
@@ -941,6 +941,64 @@ cg_net_close(g_cli);   g_cli = NULL;
 for (i = 0; i < g_npeer; i++) cg_net_close(g_peer[i]);
 g_npeer = 0;
 cg_net_close(g_srv);   g_srv = NULL;`,
+          }),
+          c("cg_net_udp_open", "打开 UDP 端口（本机）", "cg_net_t *cg_net_udp_open(int local_port, int broadcast)", "开一个 UDP 句柄：**句柄上没有读线程**，收全靠时钟里 cg_net_recvfrom 自己拉", {
+            params: ["local_port：本机要绑定的端口；**传 0 = 让系统随便分一个**（分到几写在 cg_net_peer 里）", "broadcast：非 0 = 允许往广播地址（如 255.255.255.255）发"],
+            ret: "UDP 句柄（用完 cg_net_close）；失败返回 NULL，原因用 cg_net_last_error(NULL) 取",
+            sample: `/* ★ UDP 和上面那套 TCP 是两套模型，别混着用：
+   这个句柄上**没有读线程**、也没有"连接"这回事 —— 数据报的报文边界与来源地址
+   必须原样交到你手里，而"读线程 + 字节环"会把这两样一起毁掉。所以收是拉取式的（见 cg_net_recvfrom）。 */
+g_udp = cg_net_udp_open(9000, 1);              /* 本地 9000、允许广播 */
+if (!g_udp) {
+    cg_term_write(term, CG_TERM_SYS, cg_net_last_error(NULL), -1);
+    return;
+}
+cg_term_write(term, CG_TERM_SYS, cg_net_peer(g_udp), -1);   /* "UDP 本地 9000（可广播）" */
+cg_set_timer(app, 50, poll, app);              /* 收在时钟里做，见 cg_net_recvfrom */`,
+          }),
+          c("cg_net_sendto", "发一个数据报", "int cg_net_sendto(cg_net_t *n, const char *host, int port, const void *data, int len)", "发一个 UDP 数据报给 host:port（每次调用解析一次主机名）；**len 可以是 0**（空数据报合法）", {
+            params: ["n：cg_net_udp_open 的返回值", "host：目的主机名或 IP；**空串 / NULL 会直接失败**（它不像 cg_net_connect 那样默认 127.0.0.1，要自己兜底）", "port：目的端口，1~65535；不合法同样直接失败", "data：要发的字节；文本直接传字符串", "len：字节数；**可以是 0** —— 空数据报在 UDP 里是合法的"],
+            ret: "实际发出的字节数；< 0 失败（原因见 cg_net_last_error(n)）",
+            sample: `/* 广播发现：往广播地址发一句，谁在听谁回包，回来的包自带它的 IP */
+const char *probe = "WHO?";
+if (cg_net_sendto(g_udp, "255.255.255.255", 9000, probe, (int)strlen(probe)) < 0) {
+    cg_log(CG_LOG_ERROR, "UDP 发送失败：%s", cg_net_last_error(g_udp));
+}
+/* ★ 目的地每次现填（UDP 没有"连上"这回事），所以"地址框留空"这种输入要自己兜成
+   127.0.0.1 —— 本函数对空 host 是直接失败的，不会替你选默认值。 */`,
+          }),
+          c("cg_net_recvfrom", "收一个数据报（时钟里拉）", "int cg_net_recvfrom(cg_net_t *n, char *ip_out, int ip_cap, int *port_out, void *buf, int cap)", "**非阻塞**收一个完整数据报（一次一个，绝不和下一个粘连），并把来源 ip/port 一起带出来", {
+            params: ["n：cg_net_udp_open 的返回值", "ip_out：来源 IP 的输出缓冲；可传 NULL = 不关心来源", "ip_cap：ip_out 的容量（IPv4 给 64 就够）", "port_out：来源端口的输出；同样可传 NULL", "buf：接收缓冲", "cap：buf 的容量（数据报比它大就会被截断）"],
+            ret: "**> 0** = 收到的字节数（来源已经写进 ip_out / port_out）；**= 0** = 收到了一个空数据报（UDP 允许，是\"收到了一帧\"，不是错误）；**= -1** = 这一拍没有数据了（**也不是错误**）。想区分\"没有数据\"和\"出错\"，看 cg_net_last_error(n) 是不是空串",
+            sample: `/* ★ 这是最容易写错的一处：> 0 / = 0 / = -1 三个返回值含义各不相同，
+   而且 UDP 句柄上没有读线程 —— 唯一的收法就是在这里循环"拉"，拉到 -1 为止。
+   1) 一次调用 = 一个完整数据报，报文边界不会丢（所以每条都单独打一行，别自己拼成流）；
+   2) n == 0 是"收到了一个空数据报"，必须也打出来，否则界面上看着像什么都没收到；
+   3) -1 只是"这一拍没有了"；真出错时 cg_net_last_error(n) 才有内容，而且那个串是
+      **粘的**（报过一次就一直非空），别每拍都往日志里刷同一句。 */
+static cg_net_t *g_udp;
+
+static void poll(void *user)
+{
+    cg_app_t    *app  = (cg_app_t *)user;
+    cg_widget_t *term = cg_find(app, "term");
+    char         buf[1472], ip[64];
+    int          n, k, port;
+
+    for (k = 0; k < 16; k++) {                  /* 每拍给个上限，防饿死界面 */
+        char *line;
+
+        port  = 0;
+        ip[0] = '\\0';                           /* inet_ntop 失败时别留着上一拍的地址 */
+        n = cg_net_recvfrom(g_udp, ip, (int)sizeof(ip), &port, buf, (int)sizeof(buf));
+        if (n < 0) break;                       /* -1 = 没有更多数据报了（不是错误） */
+
+        if (n == 0) line = cg_str_format("[%s:%d] （空数据报）", ip, port);
+        else        line = cg_str_format("[%s:%d] %.*s", ip, port, n, buf);
+        if (line) { cg_term_write(term, CG_TERM_RX, line, -1); cg_free(line); }
+    }
+    cg_set_timer(app, 50, poll, app);           /* 一次性定时器：再挂一次 = 周期 */
+}`,
           }),
         ],
       },
