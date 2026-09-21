@@ -1,15 +1,16 @@
 @echo off
 rem ============================================================
-rem  Build the CStackGUI runtime library -> build\lib\libcstackgui.a
+rem  编译 CStackGUI 运行时库 -> build\lib\libcstackgui.a
 rem
-rem  Only needed after editing runtime\ or on first use; normal app
-rem  builds go through build-app.bat (which refreshes it anyway).
+rem  只有改过 runtime\ 或者第一次用时才需要单独跑；平时的工程编译
+rem  都走 build-app.bat（它自己会先刷一遍）。
 rem
-rem  Optional env var:
-rem    MINGW   MinGW-w64 bin dir (default C:\mingw64\bin)
+rem  可选环境变量：
+rem    MINGW   MinGW-w64 的 bin 目录（默认 C:\mingw64\bin）
 rem
-rem  NOTE: keep this file ASCII-only. cmd mis-parses non-ASCII comments
-rem  after `chcp 65001` (the designer's F5 run uses it).
+rem  注意：本文件是 GBK（cp936）+ CRLF 行尾。
+rem  所以 cmd 按"启动这个 cmd 进程时的控制台代码页"解析 bat，UTF-8 的中文会被按 2 字节/字解码，
+rem  行定位错位、注释后半句被当命令执行；改完用 tools\bat-gbk.ps1 -Mode fix 归位（check-format 会查）。
 rem ============================================================
 chcp 65001 >nul
 setlocal enabledelayedexpansion
@@ -27,28 +28,27 @@ if errorlevel 1 (
 if not exist build\obj mkdir build\obj
 if not exist build\lib mkdir build\lib
 
-rem Sources are grouped by layer under runtime\src:
-rem   core\   backend-agnostic: JSON, doc + kind table, widget model, events, lifecycle
-rem   win32\  Win32 backend: window, native controls, message mapping, dialogs, tray
-rem   skin\   GDI+ appearance layer (replace the whole folder to swap in a D2D kernel)
-rem   kit\    platform services that are not UI: files, paths, INI, text/encoding, registry
-rem Each layer is on the include path so the files can include each other by bare name;
-rem runtime\src itself is deliberately NOT on it -- cross-layer includes must be explicit.
+rem 源码在 runtime\src 下按层分组：
+rem   core\   与后端无关：JSON、文档 + 类型表、控件模型、事件、生命周期
+rem   win32\  Win32 后端：窗口、原生控件、消息映射、对话框、托盘
+rem   skin\   GDI+ 外观层（整个目录换掉就能换成 D2D 内核）
+rem   kit\    非界面的平台服务：文件、路径、INI、文本/编码、注册表
+rem 每一层都在 include 路径上，层内文件可以直接用裸文件名互相包含；
+rem runtime\src 本身故意不在路径里 —— 跨层包含必须写清楚是哪一层。
 set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include -Iruntime\src\core -Iruntime\src\win32 -Iruntime\src\skin -Iruntime\src\kit
 set CHANGED=
 set OBJS=
 
-rem Compile every .c under core\ win32\ skin\ kit\ -- no hand-maintained file list to forget.
-rem Object name = source basename (build\obj\<name>.o), so two folders must never hold
-rem files with the same name. The naming convention guarantees it:
-rem core = cg_*, backend = cg_win_*, appearance = cg_skin_*, platform services = cg_kit_*.
-rem Incremental: only recompile a source whose .o is missing or not strictly newer
-rem than it. The "YYYY/MM/DD HH:MM" timestamp compares chronologically as a string;
-rem "not strictly newer" counts as stale so a same-minute edit is never missed.
-rem A header change must invalidate every object too: these headers declare the
-rem struct layout / macros the whole library is built on, so a stale .o would
-rem silently link against an old definition. So take the newest header across
-rem runtime\include plus all three layers, and recompile whatever is older.
+rem 把 core\ win32\ skin\ kit\ 下的 .c 全部编一遍 —— 不用手工维护文件清单，也就不会漏。
+rem 目标文件名 = 源文件基础名（build\obj\<名字>.o），所以两个目录绝不能有同名文件，
+rem 命名约定保证了这一点：
+rem core = cg_*、后端 = cg_win_*、外观 = cg_skin_*、平台服务 = cg_kit_*。
+rem 增量编译：只重编 .o 不存在、或者不比源文件新的那些。
+rem 时间戳是 "YYYY/MM/DD HH:MM" 格式，按字符串比较正好等于按时间比较；
+rem 「不比源文件新」也算过期，这样同一分钟内改的代码不会被漏掉。
+rem 改头文件必须让所有目标文件失效：这些头文件声明了整个库赖以构建的结构体
+rem 布局和宏，留着旧 .o 会悄悄链到旧定义上。所以取 runtime\include 加四层里
+rem 最新的头文件时间，比它旧的目标文件全部重编。
 set "HDRT=0"
 for %%h in (runtime\include\*.h) do if "%%~th" GTR "!HDRT!" set "HDRT=%%~th"
 for %%d in (core win32 skin kit) do (
@@ -74,7 +74,7 @@ for %%d in (core win32 skin kit) do (
     )
 )
 
-rem Resource object (manifest + version info + icon): rebuild if its .rc / .ico moved
+rem 资源对象（清单 + 版本信息 + 图标）：它的 .rc / .ico 有变动就重编
 set "RCOBJ=build\obj\cstackgui_res.o"
 set "DO=1"
 if exist "!RCOBJ!" (
@@ -90,7 +90,7 @@ if defined DO (
     set "CHANGED=1"
 )
 
-rem Re-archive only when something actually changed (or the lib is missing)
+rem 只有真的有东西变了（或者库还不存在）才重新打包
 if not exist build\lib\libcstackgui.a set "CHANGED=1"
 if defined CHANGED (
     echo   AR build\lib\libcstackgui.a
@@ -101,8 +101,8 @@ if defined CHANGED (
     echo   (runtime up to date, skipped compile^)
 )
 
-rem Refresh the clangd language-service config (mirrors the flags above).
-rem Silently skipped when node is missing or not at repo root.
+rem 刷新 clangd 语言服务配置（用的参数和上面一致）。
+rem 没装 node 或者不在项目根时会静默跳过。
 where node >nul 2>nul && if exist tools\gen-cc.mjs node tools\gen-cc.mjs >nul 2>nul
 exit /b 0
 

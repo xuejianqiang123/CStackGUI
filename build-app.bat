@@ -1,15 +1,16 @@
 @echo off
 rem ============================================================
-rem  Build a UI project into a standalone exe (source-repo version)
+rem  把界面工程编译成独立 exe（源码仓库内版本）
 rem
-rem  Usage (run at the repo root):
-rem    build-app.bat gallery            debug build (console, printf visible)
-rem    build-app.bat myapp --release    release build (-mwindows, no console)
-rem    build-app.bat                    no args = first project under apps\, else examples\
+rem  用法（在项目根执行）：
+rem    build-app.bat gallery            调试版（带控制台，printf 可见）
+rem    build-app.bat myapp --release    发布版（-mwindows，无控制台）
+rem    build-app.bat                    不带参数 = 取 apps\ 下第一个工程，没有则取 examples\ 下的
 rem
-rem  NOTE: keep this file ASCII-only. cmd mis-parses non-ASCII comments
-rem  after `chcp 65001` (the designer's F5 run uses it), turning rem
-rem  lines into bogus commands. Chinese docs live in README.md.
+rem  注意：本文件是 GBK（cp936）+ CRLF 行尾。
+rem  所以 cmd 按"启动这个 cmd 进程时的控制台代码页"解析 bat，UTF-8 的中文会被按 2 字节/字解码，
+rem  行定位错位、注释后半句被当命令执行；改完用 tools\bat-gbk.ps1 -Mode fix 归位（check-format 会查）。
+rem  中文使用说明见 README.md。
 rem ============================================================
 chcp 65001 >nul
 setlocal enabledelayedexpansion
@@ -18,18 +19,17 @@ set PATH=%MINGW%;%PATH%
 cd /d "%~dp0"
 
 set APP=%~1
-rem The designer passes the project directory via CG_APP_DIR (env, not argv:
-rem cmd quoting of paths inside spawn gets mangled). Manual use stays %1.
+rem 画布（F5 运行）用环境变量 CG_APP_DIR 传工程目录，而不是 argv ——
+rem spawn 出来的 cmd 转义会把路径搞坏；手动执行时仍然走 %1。
 if "%APP%"=="" if not "%CG_APP_DIR%"=="" set "APP=%CG_APP_DIR%"
-rem No argument: build the first project under apps\, else the first example.
-rem (This used to default to "hello", an example that was deleted when the two
-rem  examples were merged into examples\gallery.)
+rem 不带参数：取 apps\ 下第一个工程，没有则取 examples\ 下第一个。
+rem （以前默认是 hello 那个示例，后来两个示例合并成 examples\gallery 时被删了。）
 if "%APP%"=="" for /d %%a in (apps\*) do if not defined APP set "APP=%%~nxa"
 if "%APP%"=="" for /d %%a in (examples\*) do if not defined APP set "APP=%%~nxa"
 set MODE=%~2
 
-rem %APP% is a bare project name (apps\<name> / examples\<name>) or a path
-rem relative to this root -- the designer passes e.g. "apps\gallery".
+rem %APP% 既可以是裸工程名（apps\<名字> / examples\<名字>），也可以是相对本根的路径 ——
+rem 画布传进来的就是 "apps\gallery" 这种。
 set APPDIR=
 if exist "apps\%APP%\"     set APPDIR=apps\%APP%
 if not defined APPDIR if exist "examples\%APP%\" set APPDIR=examples\%APP%
@@ -51,46 +51,43 @@ if errorlevel 1 (
     exit /b 1
 )
 
-rem Always refresh the runtime lib first: after editing runtime\, skipping
-rem this gives confusing "undefined reference to cg_xxx" link errors.
-rem (build-all.bat refreshes once and sets CSTACKGUI_SKIP_RUNTIME=1)
+rem 先刷一遍运行时库：改过 runtime\ 之后跳过这一步，链接时会报一堆
+rem 莫名其妙的 "undefined reference to cg_xxx"。
+rem （build-all.bat 已经刷过一次，会设 CSTACKGUI_SKIP_RUNTIME=1 跳过。）
 if not "%CSTACKGUI_SKIP_RUNTIME%"=="1" (
     echo [info] refreshing runtime library
     call build-runtime.bat
     if errorlevel 1 exit /b 1
 )
 
-rem Keep a copy of the runtime lib in the project dir, so the folder can
-rem be moved away and still rebuild.
+rem 往工程目录里留一份运行时库的拷贝：这样整个目录被挪走之后还能自己重编。
 if not exist "%APPDIR%\lib" mkdir "%APPDIR%\lib"
 copy /y build\lib\libcstackgui.a "%APPDIR%\lib\libcstackgui.a" >nul
 if errorlevel 1 (
     echo [fail] cannot copy runtime lib to %APPDIR%\lib
     exit /b 1
 )
-rem The resource object (manifest + version info) has no code symbols, so the
-rem linker never pulls it out of the static lib -- it must be linked directly,
-rem otherwise the exe gets no v6 common controls (classic ugly tabs/progress).
+rem 资源对象（清单 + 版本信息）里没有代码符号，链接器不会主动从静态库里取它 ——
+rem 必须显式链接，否则 exe 拿不到 v6 通用控件（页签/进度条会退回老外观）。
 copy /y build\obj\cstackgui_res.o "%APPDIR%\lib\cstackgui_res.o" >nul
 if errorlevel 1 (
     echo [fail] cannot copy resource object to %APPDIR%\lib
     exit /b 1
 )
 
-rem gdiplus is only used to load images (png/jpg/bmp/gif), shipped with Windows
-rem comdlg32 is used by the common dialogs (open/save file, choose color)
+rem gdiplus 只用来加载图片（png/jpg/bmp/gif），Windows 自带
+rem comdlg32 供通用对话框（打开/保存文件、选颜色）使用
 set LDFLAGS=-lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32
-rem Callbacks have fixed signatures; unused self/ev/user args must not warn
+rem 回调签名是固定的，没用到的 self/ev/user 参数不应该报警告
 set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include
 
-rem exe name = project folder name (basename of %APP%)
+rem exe 名 = 工程目录名（%APP% 的最后一段）
 for %%I in ("%APP%") do set NAME=%%~nxI
 set OUT=%APPDIR%\%NAME%.exe
 
-rem A project-level <name>.rc (written by the designer's "program config" dialog)
-rem replaces the generic runtime one: it carries this app's product name / version /
-rem author / icon. It is UTF-8 (Chinese strings inside), hence --codepage=65001;
-rem -I runtime\res lets it pull the v6 common-controls manifest.
+rem 工程自带的 <名字>.rc（画布「程序配置」对话框生成的）会顶掉运行时那份通用版本：
+rem 里面是本程序的产品名 / 版本 / 作者 / 图标。它是 UTF-8（含中文字符串），
+rem 所以加 --codepage=65001；-I runtime\res 让它能引用到 v6 通用控件清单。
 set RESOBJ=%APPDIR%\lib\cstackgui_res.o
 if exist "%APPDIR%\%NAME%.rc" (
     echo   RC %APPDIR%\%NAME%.rc
@@ -102,11 +99,10 @@ if exist "%APPDIR%\%NAME%.rc" (
     set RESOBJ=%APPDIR%\lib\%NAME%_res.o
 )
 
-rem Incremental: compile each <project>\*.c to lib\<name>.o, but only when the .o is
-rem missing or not strictly newer than the source. A newer project header or the public
-rem cstackgui.h also forces a recompile, so nothing silently links old code. Deleted
-rem sources just drop out of the link list. (The runtime lib is always re-linked, so it
-rem deliberately does NOT gate the app compile -- otherwise every relink would be stale.)
+rem 增量编译：把 <工程>\*.c 逐个编成 lib\<名字>.o，只在该 .o 不存在、或者不比源文件
+rem 新时才编。工程内的头文件和公开头 cstackgui.h 变新同样会触发重编，避免悄悄链上
+rem 旧代码。删掉的源文件自然从链接列表里消失。（运行时库每次都会重新链接，所以
+rem 故意不拿它判定工程要不要重编 —— 否则每次重链之后工程都会判成过期。）
 set "HDRT=0"
 for %%h in ("%APPDIR%\*.h") do if "%%~th" GTR "!HDRT!" set "HDRT=%%~th"
 for %%x in ("runtime\include\cstackgui.h") do if "%%~tx" GTR "!HDRT!" set "HDRT=%%~tx"
@@ -144,7 +140,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-rem Drop a launcher into the project dir so double-click rebuilds it
+rem 往工程目录里放一个启动脚本，双击就能重编本工程
 call :make_launcher %APP%
 
 echo [ok] %OUT%
@@ -153,26 +149,42 @@ echo     run it (double-click works):   %OUT%
 echo     self-check without window:     %OUT% --selftest
 echo     rebuild this project:          %APPDIR%\build-app.bat
 
-rem Refresh the clangd language-service config (tools\gen-cc.mjs mirrors the
-rem flags used here). Silently skipped when node is missing or not at repo root.
+rem 刷新 clangd 语言服务配置（tools\gen-cc.mjs 里的编译参数和这里保持一致）。
+rem 没装 node 或者不在项目根时会静默跳过。
 where node >nul 2>nul && if exist tools\gen-cc.mjs node tools\gen-cc.mjs >nul 2>nul
 exit /b 0
 
 :make_launcher
-rem %1 = project name (the folder name at generation time)
+rem 参数 %1 = 工程名（生成时所在目录的名字）
+rem 生成的启动脚本里踩过两个坑，每个都够调半天：
+rem  - echo 的文本里不能出现半角括号：if 块里某行 echo 带上右括号，
+rem    会让整个 if 块提前收尾，后面的 exit /b 1 就变成无条件执行 ——
+rem    双击启动脚本时看起来就像什么都没发生。
+rem  - 生成物里的中文必须是 GBK（cp936）：cmd 解析 bat 用的代码页是"启动这个 cmd 进程时"
+rem    的控制台代码页，UTF-8 的中文会被按 2 字节/字解码 → 行定位错位 → 注释的后半句被当
+rem    命令执行（双击时满屏 "... is not recognized ..."）。所以下面写文件前先切到 936，
+rem    写完再切回 65001（本脚本自己的输出还是 UTF-8）。tools\bat-gbk.ps1 负责检查。
+rem 生成物必须是 GBK：写文件期间把控制台代码页切到 936。
+chcp 936 >nul
 set L=%APPDIR%\build-app.bat
 > "%L%" echo @echo off
->>"%L%" echo rem Build entry for this project (generated by the repo-root build-app.bat).
->>"%L%" echo rem The real build logic lives in the repo-root build-app.bat, so the two never drift.
+>>"%L%" echo rem 本工程的编译入口（由项目根目录的 build-app.bat 生成）。
+>>"%L%" echo rem 真正的编译逻辑在项目根的 build-app.bat 里，两处不会各自跑偏。
 >>"%L%" echo setlocal
 >>"%L%" echo if "%%CSTACKGUI_HOME%%"=="" set CSTACKGUI_HOME=%%~dp0..\..
 >>"%L%" echo if not exist "%%CSTACKGUI_HOME%%\build-app.bat" ^(
 >>"%L%" echo     echo [fail] project root not found: %%CSTACKGUI_HOME%%
->>"%L%" echo     echo        set CSTACKGUI_HOME to the CStackGUI root dir (the one with runtime\ and apps\)
+>>"%L%" echo     echo        set CSTACKGUI_HOME to the CStackGUI root dir, the one holding runtime\ and apps\
 >>"%L%" echo     exit /b 1
 >>"%L%" echo ^)
->>"%L%" echo rem The project name is THIS folder's name, so renaming the folder is fine.
+>>"%L%" echo rem 工程名就是本目录的名字，所以随便改目录名都没关系。
 >>"%L%" echo for %%%%I in ("%%~dp0.") do set CG_APP=%%%%~nI
 >>"%L%" echo call "%%CSTACKGUI_HOME%%\build-app.bat" %%CG_APP%% %%*
->>"%L%" echo exit /b %%errorlevel%%
+>>"%L%" echo rem 失败时别让窗口一闪而过：双击运行时它会直接关掉，
+>>"%L%" echo rem 错误信息还没看清就没了。
+>>"%L%" echo set CG_RC=%%errorlevel%%
+>>"%L%" echo if not "%%CG_RC%%"=="0" pause
+>>"%L%" echo exit /b %%CG_RC%%
+rem 生成物写完，代码页切回来（本脚本后面的输出仍按 UTF-8 走）。
+chcp 65001 >nul
 exit /b 0

@@ -1,18 +1,19 @@
 @echo off
 rem ============================================================
-rem  Build a UI project into an exe (**release-package version**)
+rem  把界面工程编译成 exe（**发布包版本**）
 rem
-rem  Difference from the source-repo build-app.bat: this one never
-rem  compiles runtime sources, it links the prebuilt runtime\lib\libcstackgui.a.
-rem  The whole package is self-contained: no CStackGUI sources needed.
+rem  与源码仓库里那份 build-app.bat 的区别：这里不编译运行时源码，
+rem  只链接预编译好的 runtime\lib\libcstackgui.a。整个包是自包含的，
+rem  不需要任何 CStackGUI 源码。
 rem
-rem  Usage:
-rem    build-app.bat gallery            build examples\gallery\
-rem    build-app.bat myapp              build apps\myapp\ (your project)
-rem    build-app.bat myapp --release    no console
+rem  用法：
+rem    build-app.bat gallery            编 examples\gallery\
+rem    build-app.bat myapp              编 apps\myapp\（你自己的工程）
+rem    build-app.bat myapp --release    无控制台
 rem
-rem  NOTE: keep this file ASCII-only. cmd mis-parses non-ASCII comments
-rem  after `chcp 65001` (the designer's F5 run uses it).
+rem  注意：本文件是 GBK（cp936）+ CRLF 行尾。
+rem  所以 cmd 按"启动这个 cmd 进程时的控制台代码页"解析 bat，UTF-8 的中文会被按 2 字节/字解码，
+rem  行定位错位、注释后半句被当命令执行；改完用 tools\bat-gbk.ps1 -Mode fix 归位（check-format 会查）。
 rem ============================================================
 chcp 65001 >nul
 setlocal enabledelayedexpansion
@@ -21,15 +22,14 @@ set PATH=%MINGW%;%PATH%
 cd /d "%~dp0"
 
 set APP=%~1
-rem The designer passes the project directory via CG_APP_DIR (env, not argv:
-rem cmd quoting of paths inside spawn gets mangled). Manual use stays %1.
+rem 画布（F5 运行）用环境变量 CG_APP_DIR 传工程目录，而不是 argv ——
+rem spawn 出来的 cmd 转义会把路径搞坏；手动执行时仍然走 %1。
 if "%APP%"=="" if not "%CG_APP_DIR%"=="" set "APP=%CG_APP_DIR%"
 if "%APP%"=="" set APP=gallery
 set MODE=%~2
 
-rem %APP% is either a bare project name (apps\<name> / examples\<name>, old
-rem convention) or a path relative to the package root (any folder the user
-rem put their project in, e.g. "main" or "work\demo").
+rem %APP% 既可以是裸工程名（apps\<名字> / examples\<名字>，老约定），也可以是
+rem 相对发布包根的路径（用户把工程放在任意目录里，比如 "main" 或 "work\demo"）。
 set APPDIR=
 if exist "apps\%APP%\"     set APPDIR=apps\%APP%
 if not defined APPDIR if exist "examples\%APP%\" set APPDIR=examples\%APP%
@@ -44,7 +44,7 @@ if not defined APPDIR (
     exit /b 1
 )
 
-rem exe name = project folder name (basename of %APP%)
+rem exe 名 = 工程目录名（%APP% 的最后一段）
 for %%I in ("%APP%") do set NAME=%%~nxI
 if not defined NAME (
     echo [fail] cannot derive exe name from "%APP%"
@@ -63,17 +63,15 @@ if not exist "runtime\lib\libcstackgui.a" (
     exit /b 1
 )
 
-rem comdlg32 is used by the common dialogs (open/save file, choose color)
+rem comdlg32 供通用对话框（打开/保存文件、选颜色）使用
 set LDFLAGS=-lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32
 set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include
 
-rem The resource object (manifest + version info) has no code symbols, so the
-rem linker never pulls it out of the static lib -- link it directly so the exe
-rem gets the v6 common controls manifest (modern tabs/progress).
-rem A project-level <name>.rc (designer "program config" dialog) replaces the
-rem generic one: it carries this app's product name / version / author / icon.
-rem It is UTF-8 (Chinese inside) so --codepage=65001; -I runtime\res finds the
-rem manifest + default icon it references.
+rem 资源对象（清单 + 版本信息）里没有代码符号，链接器不会主动从静态库里取它 ——
+rem 显式链接，exe 才能拿到 v6 通用控件清单（页签/进度条才是新外观）。
+rem 工程自带的 <名字>.rc（画布「程序配置」对话框生成的）会顶掉通用那份：
+rem 里面是本程序的产品名 / 版本 / 作者 / 图标。它是 UTF-8（含中文），
+rem 所以加 --codepage=65001；-I runtime\res 让它找到清单和默认图标。
 if not exist "%APPDIR%\lib" mkdir "%APPDIR%\lib"
 set RESOBJ=runtime\lib\cstackgui_res.o
 if exist "%APPDIR%\%NAME%.rc" (
@@ -88,10 +86,9 @@ if exist "%APPDIR%\%NAME%.rc" (
 
 set OUT=%APPDIR%\%NAME%.exe
 
-rem Incremental: compile each <project>\*.c to lib\<name>.o, only when the .o is
-rem missing or not strictly newer than the source / project headers / cstackgui.h.
-rem Deleted sources just drop out of the link list. (The runtime lib is always
-rem re-linked, so it deliberately does NOT gate the app compile.)
+rem 增量编译：把 <工程>\*.c 逐个编成 lib\<名字>.o，只在该 .o 不存在、或者不比
+rem 源文件 / 工程头文件 / cstackgui.h 新时才编。删掉的源文件自然从链接列表里
+rem 消失。（运行时库每次都会重新链接，所以故意不拿它判定工程要不要重编。）
 set "HDRT=0"
 for %%h in ("%APPDIR%\*.h") do if "%%~th" GTR "!HDRT!" set "HDRT=%%~th"
 for %%x in ("runtime\include\cstackgui.h") do if "%%~tx" GTR "!HDRT!" set "HDRT=%%~tx"
@@ -134,8 +131,7 @@ echo.
 echo     run it (double-click works):   %OUT%
 echo     self-check without window:     %OUT% --selftest
 
-rem Refresh the clangd language-service config (compile_commands.json, generated
-rem by tools\gen-cc.mjs; used by the clangd plugin in CodeBuddy/VSCode).
-rem Silently skipped when node is missing; does not affect the build.
+rem 刷新 clangd 语言服务配置（compile_commands.json，由 tools\gen-cc.mjs 生成，
+rem 供 CodeBuddy/VSCode 里的 clangd 插件使用）。没装 node 时静默跳过，不影响编译。
 where node >nul 2>nul && if exist tools\gen-cc.mjs node tools\gen-cc.mjs >nul 2>nul
 exit /b 0

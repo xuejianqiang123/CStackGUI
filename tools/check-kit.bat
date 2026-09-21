@@ -1,19 +1,20 @@
 @echo off
 rem ============================================================
-rem  Smoke test for the cg_kit API (files / paths / INI / text+encoding /
-rem  clipboard / external process / registry).
+rem  cg_kit API 冒烟测试（文件 / 路径 / INI / 文本+编码 /
+rem  剪贴板 / 外部进程 / 注册表）。
 rem
-rem  cg_kit is a pile of Win32 wrapper code (BOM, CRLF, where to insert an
-rem  INI key, encoding round-trips) that the designer and the gallery never
-rem  touch -- one wrong line breaks it silently. Run this after editing
-rem  anything under runtime\src\kit\.
+rem  cg_kit 是一堆 Win32 包装代码（BOM、CRLF、INI 键该插在哪、编码往返），
+rem  画布和 gallery 都碰不到它 —— 一行写错就是静默出错。
+rem  改过 runtime\src\kit\ 下的任何文件后，跑一遍这个。
 rem
-rem  It compiles tools\kit-test.c against the freshly built library, then runs
-rem  it inside build\kittest\ so its scratch files never touch the repo.
+rem  它拿刚编出来的库编译 tools\kit-test.c，然后在 build\kittest\ 里运行，
+rem  产生的临时文件不会落到仓库里。
 rem
-rem  Usage: tools\check-kit.bat
+rem  用法：tools\check-kit.bat
 rem
-rem  NOTE: keep this file ASCII-only (cmd mis-parses non-ASCII after chcp).
+rem  注意：本文件是 GBK（cp936）+ CRLF 行尾。
+rem  所以 cmd 按"启动这个 cmd 进程时的控制台代码页"解析 bat，UTF-8 的中文会被按 2 字节/字解码，
+rem  行定位错位、注释后半句被当命令执行；改完用 tools\bat-gbk.ps1 -Mode fix 归位（check-format 会查）。
 rem ============================================================
 chcp 65001 >nul
 setlocal

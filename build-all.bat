@@ -1,31 +1,31 @@
 @echo off
 rem ============================================================
-rem  ä¸€æ¡å‘½ä»¤æŠŠè¯¥ç¼–çš„éƒ½ç¼–äº†ï¼šè¿è¡Œæ—¶åº“ + examples\ ä¸‹æ‰€æœ‰ç¤ºä¾‹
+rem  Ò»ÌõÃüÁî°Ñ¸Ã±àµÄ¶¼±àÁË£ºÔËĞĞÊ±¿â + examples\ ÏÂËùÓĞÊ¾Àı
 rem
-rem  ç”¨æ³•ï¼ˆåœ¨é¡¹ç›®æ ¹æ‰§è¡Œï¼‰ï¼š
-rem    build-all.bat              è°ƒè¯•ç‰ˆ
-rem    build-all.bat --release    å‘å¸ƒç‰ˆï¼ˆæ— æ§åˆ¶å°ï¼‰
+rem  ÓÃ·¨£¨ÔÚÏîÄ¿¸ùÖ´ĞĞ£©£º
+rem    build-all.bat              µ÷ÊÔ°æ
+rem    build-all.bat --release    ·¢²¼°æ£¨ÎŞ¿ØÖÆÌ¨£©
 rem
-rem  ä½ è‡ªå·±çš„å·¥ç¨‹ï¼ˆapps\ ä¸‹ï¼‰ä¸ä¼šè¢«è‡ªåŠ¨ç¼–è¯‘ â€”â€” é‚£äº›æŒ‰éœ€å•ç‹¬ç¼–ï¼š
-rem    build-app.bat <åå­—>
+rem  Äã×Ô¼ºµÄ¹¤³Ì£¨apps\ ÏÂ£©²»»á±»×Ô¶¯±àÒë ¡ª¡ª ÄÇĞ©°´Ğèµ¥¶À±à£º
+rem    build-app.bat <Ãû×Ö>
 rem ============================================================
 chcp 65001 >nul
 setlocal
 cd /d "%~dp0"
 
-echo == è¿è¡Œæ—¶åº“ ==
+echo == ÔËĞĞÊ±¿â ==
 call build-runtime.bat
 if errorlevel 1 exit /b 1
 
-rem è¿è¡Œæ—¶åªç¼–ä¸€æ¬¡ï¼Œåé¢çš„ build-app å°±ä¸è¦å†å„åˆ·ä¸€éäº†
+rem ÔËĞĞÊ±Ö»±àÒ»´Î£¬ºóÃæµÄ build-app ¾Í²»ÒªÔÙ¸÷Ë¢Ò»±éÁË
 set CSTACKGUI_SKIP_RUNTIME=1
 set FAIL=0
 
-rem Build every example, then run its --selftest: compiling only proves the
-rem syntax is fine, the selftest is what proves event names match C functions.
+rem Öğ¸ö±àÒëÊ¾Àı£¬±àÍêÁ¢¿ÌÅÜÒ»´Î --selftest£º±àÒë¹ıÖ»ÄÜËµÃ÷Óï·¨Ã»ÎÊÌâ£¬
+rem ×Ô¼ì¹ı²ÅËµÃ÷ .cgui ÀïµÄÊÂ¼şÃû¶¼ÄÜ¶ÔÉÏ C º¯Êı¡£
 for /d %%a in (examples\*) do (
     echo.
-    echo == ç¤ºä¾‹ %%a ==
+    echo == Ê¾Àı %%a ==
     call build-app.bat %%~nxa %~1
     if errorlevel 1 (
         set FAIL=1
@@ -38,8 +38,8 @@ for /d %%a in (examples\*) do (
 
 echo.
 if "%FAIL%"=="1" (
-    echo [fail] æœ‰ç¤ºä¾‹æ²¡ç¼–è¿‡ï¼Œçœ‹ä¸Šé¢çš„è¾“å‡º
+    echo [fail] ÓĞÊ¾ÀıÃ»±à¹ı£¬¿´ÉÏÃæµÄÊä³ö
     exit /b 1
 )
-echo [ok] å…¨éƒ¨æ„å»ºå®Œæˆ
+echo [ok] È«²¿¹¹½¨Íê³É
 exit /b 0

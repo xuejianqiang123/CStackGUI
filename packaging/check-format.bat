@@ -1,20 +1,19 @@
 @echo off
 rem ============================================================
-rem  Format-contract regression test (**release-package version**)
+rem  格式契约回归测试（**发布包版本**）
 rem
-rem  The seam most likely to break: the designer writes .cgui in TS,
-rem  the runtime reads it in C. If their understanding of a field
-rem  drifts apart, you get "designer saves fine but app won't run".
+rem  最容易出问题的接缝：画布用 TS 写 .cgui，运行时用 C 读它。
+rem  两边对同一个字段的理解一旦跑偏，就会出现「画布存得好好的，程序跑不起来」。
 rem
-rem  How it works: read a .cgui with the bundled prebuilt designer model,
-rem  simulate edits, write it back, then hand it to the runtime
-rem  (--selftest) to really parse. The prebuilt model lives in
-rem  build\modeljs\ - only Node.js is needed, no designer sources.
+rem  做法：用随包预编译的画布模型读一个 .cgui，模拟改动后写回，再交给
+rem  运行时（--selftest）真解析一遍。预编译模型放在 build\modeljs\ ——
+rem  只需要 Node.js，不需要画布源码。
 rem
-rem  Usage: tools\check-format.bat
+rem  用法：tools\check-format.bat
 rem
-rem  NOTE: keep this file ASCII-only. cmd mis-parses non-ASCII comments
-rem  after `chcp 65001`.
+rem  注意：本文件是 GBK（cp936）+ CRLF 行尾。
+rem  所以 cmd 按"启动这个 cmd 进程时的控制台代码页"解析 bat，UTF-8 的中文会被按 2 字节/字解码，
+rem  行定位错位、注释后半句被当命令执行；改完用 tools\bat-gbk.ps1 -Mode fix 归位（check-format 会查）。
 rem ============================================================
 chcp 65001 >nul
 setlocal
@@ -39,7 +38,7 @@ for %%a in (gallery) do (
     )
 )
 
-rem gallery covers everything (basic widgets + tree/table/tabs/image...)
+rem gallery 覆盖面最广（基础控件 + 树/表格/页签/图片……）
 for %%a in (gallery) do (
     echo.
     echo == %%a ==
