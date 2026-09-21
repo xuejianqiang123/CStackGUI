@@ -276,7 +276,9 @@ runtime/
       cg_kit.c          文件/路径/INI 配置/文本编码/剪贴板/外部程序/注册表；
                         有了它业务代码才真的"只 include cstackgui.h"
       cg_serial.c       串口：读线程 + 环形缓冲；业务在时钟里 cg_serial_read 取走（docs/COMM.md）
-      cg_net.c          网口（TCP）：连接 / 监听 / 接受 + 读线程 + 环形缓冲，形状同串口（docs/COMM.md）
+      cg_net.c          网口 TCP：连接 / 监听 / 接受 + 读线程 + 环形缓冲，形状同串口；
+                        网口 UDP：**不开读线程**（报文边界与来源地址必须原样交给业务），
+                        业务在时钟里 cg_net_recvfrom 一次取一个数据报（docs/COMM.md）
   res/                  清单（v6 通用控件 + 每显示器 DPI）与版本资源
 ```
 
@@ -553,11 +555,14 @@ release/
   思路来自同类项目 YMGUI 的 subject-observer，但按我们"原生控件 + `.cgui` 描述界面"的路线
   简化成"值镜像"，不引入独立 subject 对象。
 - **通信层（串口 / 网口）**：`runtime/src/kit/cg_serial.c` 与 `cg_net.c`，业务用 `cg_serial_*` /
-  `cg_net_*` 建链路与收发，业务代码照旧只 include `cstackgui.h`。**运行时的工作线程只出现在这两个文件里** ——
-  读线程只把字节搬进 64KB 环形缓冲（满了丢最老），业务必须在 `cg_set_timer()` 的时钟回调里
-  `cg_serial_read()` / `cg_net_read()` 取走再灌进 `terminal` 控件：控件不是线程安全的，这条线不能破。
-  串口 v1 只有 8N1、一个句柄一条线、不自动重连；网口 v1 只有 TCP、不做 TLS、不自动重连。
-  两层的取舍、可抄代码与排查表都在 `docs/COMM.md`（串口 §1~§6、网口 §7~§9）。
+  `cg_net_*` 建链路与收发，业务代码照旧只 include `cstackgui.h`。**运行时的工作线程只出现在这两个文件里**
+  （且只服务于串口与 TCP —— **UDP 不开读线程**）—— 读线程只把字节搬进 64KB 环形缓冲（满了丢最老），
+  业务必须在 `cg_set_timer()` 的时钟回调里 `cg_serial_read()` / `cg_net_read()` 取走再灌进 `terminal`
+  控件：控件不是线程安全的，这条线不能破。
+  串口 v1 只有 8N1、一个句柄一条线、不自动重连；网口 TCP 不做 TLS、不自动重连；
+  UDP 是另一套句柄（`cg_net_udp_open` / `cg_net_sendto` / `cg_net_recvfrom`），**刻意不套"读线程 + 环形缓冲"**
+  （报文边界与来源地址必须原样交给业务），也没有组播。
+  这三套的取舍、可抄代码与排查表都在 `docs/COMM.md`（串口 §1~§6 / 网口 TCP §7~§9 / UDP §10~§11）。
 - **网口（TCP）**：`cg_net_*` = 客户端 `cg_net_connect()` / 服务端 `cg_net_listen()` + `cg_net_accept()`，
   与串口**完全同构**（每条连接一个读线程 + 一份 64KB 环形缓冲），所以上一条"线程只搬字节"的约束原样适用。
   两处刻意的设计：**`accept` 放在时钟里轮询**（`cg_net_accept(srv, 0)` 不等、没有连接返回 `NULL`

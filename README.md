@@ -49,8 +49,10 @@ tick / check / gotfocus / lostfocus`（+ 窗口级 `close`）。
 读写注册表（做开机自启）、写日志。**所以业务代码从头到尾只 include `cstackgui.h`**，
 不用为了读个配置去 include `windows.h`。这些函数的用法在画布「支持库」页签里一查就有。
 
-**串口与网口也在这套能力里**：`cg_serial_*`（枚举端口 / 打开 / 收发）和 `cg_net_*`（TCP 客户端 / 服务端 / 收发）
-业务侧照样不用 include `windows.h` —— 它们内部各自有读线程（业务在时钟回调里取字节，不碰线程），
+**串口与网口也在这套能力里**：`cg_serial_*`（枚举端口 / 打开 / 收发）、`cg_net_*`（TCP 客户端 / 服务端 / 收发），
+以及同一层的 UDP（`cg_net_udp_open` / `cg_net_sendto` / `cg_net_recvfrom`，数据报收发 —— 广播发现、板子上报都走它）。
+业务侧照样不用 include `windows.h`：串口与 TCP 由运行时在**读线程**里把字节搬进环形缓冲，业务在时钟回调里取；
+**UDP 不开读线程**（数据报的报文边界与来源地址必须原样交给业务，所以它是"时钟里 `recvfrom`"的拉取式）。
 所以用法与坑单独写在 [docs/COMM.md](docs/COMM.md)。
 
 界面里还有一件**不用写代码**的事：**控件绑定**。在画布「属性」里给一个控件选个"源"控件
@@ -89,7 +91,7 @@ tick / check / gotfocus / lostfocus`（+ 窗口级 `close`）。
 | 界面文件 `.cgui` 每个字段是什么意思 | [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md) |
 | 内部为什么这么设计、模块怎么分层 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | 自绘外观（M3）怎么改 | [docs/M3-SKIN.md](docs/M3-SKIN.md) |
-| 怎么读写串口 / 网口（TCP） / 通信层怎么用 | [docs/COMM.md](docs/COMM.md) |
+| 怎么读写串口 / 网口 TCP 与 UDP / 通信层怎么用 | [docs/COMM.md](docs/COMM.md) |
 | 把工程交付给别人、打包发布 | [packaging/](packaging/) |
 | C 代码规范、改动前必读的约定 | `.codebuddy/skills/`（`firmware_code_style` / `designer-modify`）|
 
