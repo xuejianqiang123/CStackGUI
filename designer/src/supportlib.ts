@@ -568,7 +568,7 @@ if (cg_choose_color(self, &rgb)) {
   {
     key: "kit",
     label: "基础能力支持库",
-    hint: "文件、路径、配置(INI)、文本编码、剪贴板、外部程序、注册表",
+    hint: "文件、路径、配置(INI)、文本编码、剪贴板、外部程序、注册表、串口",
     groups: [
       {
         label: "文件",
@@ -692,6 +692,106 @@ char *dir = cg_app_dir();
 cg_reg_write("Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run", "MyApp",
              cg_path_join(dir, "MyApp.exe"));
 cg_free(dir);`,
+          }),
+        ],
+      },
+      {
+        label: "串口（cg_serial）",
+        cmds: [
+          c("cg_serial_list", "枚举串口", "int cg_serial_list(char *buf, int cap)", "把本机可用的串口名写进 buf（每行一个，如 \"COM3\\nCOM7\\n\"），返回写入的字节数；一个都没有返回 0（不是错误）", {
+            params: ["buf：够大的缓冲区，每行一个端口名", "cap：buf 的容量"],
+            ret: "写入的字节数（按 '\\n' 切行就是端口名）；装不下时宁可少列也不截断半行",
+            sample: `char buf[4096];
+int  n = cg_serial_list(buf, (int)sizeof(buf));
+if (n <= 0) cg_term_write(term, CG_TERM_SYS, "没找到任何串口", -1);
+/* 内容形如 "COM3\\nCOM7\\n" —— 按 '\\n' 切行填进下拉框就行 */`,
+          }),
+          c("cg_serial_open", "打开串口", "cg_serial_t *cg_serial_open(const char *port, int baud)", "打开一条串口链路（固定 8N1），内部起一个读线程把字节搬进接收缓冲；失败返回 NULL", {
+            params: ["port：\"COM3\" 或 \"\\\\\\\\.\\\\COM3\" 都收；空串算失败", "baud：波特率，<= 0 算失败"],
+            ret: "链路句柄（用完必须 cg_serial_close）；失败返回 NULL，原因用 cg_serial_last_error(NULL) 取",
+            sample: `/* 打开失败最要紧的是"为什么"，别只报一句"失败了" */
+g_ser = cg_serial_open("COM3", 115200);
+if (!g_ser) {
+    cg_term_write(cg_find(app, "term_log"), CG_TERM_SYS,
+                  cg_serial_last_error(NULL), -1);   /* 端口被占用 / 找不到… */
+    return;
+}
+cg_set_timer(app, 50, poll, app);                    /* 连着就用时钟去取数据 */`,
+          }),
+          c("cg_serial_close", "关闭串口", "void cg_serial_close(cg_serial_t *s)", "关掉链路并回收读线程；**幂等且 NULL 安全**，没连上时直接调也没事", {
+            params: ["s：cg_serial_open 的返回值（可以是 NULL）"],
+            ret: "void 无返回值",
+            sample: `/* 断开按钮和窗口 destroy 回调里都调它，不用自己判"到底连没连" */
+cg_serial_close(g_ser);
+g_ser = NULL;`,
+          }),
+          c("cg_serial_write", "发送数据", "int cg_serial_write(cg_serial_t *s, const void *data, int len)", "同步写（带 1s 超时），不是写队列；返回实际写出的字节数，< 0 表示失败", {
+            params: ["data：要发的字节；文本直接传字符串", "len：字节数，**必须 > 0**（和 cg_term_write 不一样，它不认 -1）"],
+            ret: "实际写出的字节数；失败返回 < 0（原因见 cg_serial_last_error）",
+            sample: `const char *cmd = "AT+GMR\\r\\n";       /* 长度得自己算，len 不支持传 -1 */
+if (cg_serial_write(g_ser, cmd, (int)strlen(cmd)) < 0) {
+    cg_log(CG_LOG_ERROR, "发送失败：%s", cg_serial_last_error(g_ser));
+}`,
+          }),
+          c("cg_serial_read", "取数据（时钟里读）", "int cg_serial_read(cg_serial_t *s, void *buf, int cap)", "**非阻塞**取最多 cap 字节；没数据返回 0（不是错误）", {
+            params: ["buf：接收缓冲区", "cap：buf 的容量"],
+            ret: "取到的字节数；0 = 这一拍没有数据",
+            sample: `/* ★ 唯一被支持的读法：在时钟回调里主动"取"，而不是等着被"推"。
+   原因：cg_serial_open 的读线程只把字节搬进环形缓冲，**它绝不碰控件**
+   （控件只能在建它的线程里碰，这是 Win32 硬约束）。
+   cg_set_timer 是一次性的，"收尾再挂一次"才是周期。 */
+cg_set_timer(app, 50, poll, app);
+
+static void poll(void *user)
+{
+    cg_app_t     *app  = (cg_app_t *)user;
+    cg_widget_t  *term = cg_find(app, "term_log");
+    unsigned char buf[4096];
+    int           n;
+
+    if (!g_ser) return;                                  /* 已断开：就此停表 */
+    while (cg_serial_available(g_ser) > 0) {
+        n = cg_serial_read(g_ser, buf, (int)sizeof(buf)); /* 非阻塞，没数据返回 0 */
+        if (n <= 0) break;
+        cg_term_write(term, CG_TERM_RX, buf, n);          /* 收到多少灌多少，会按 \\n 切行 */
+    }
+    cg_set_timer(app, 50, poll, app);                     /* 再挂一次 = 50ms 周期 */
+}`,
+          }),
+          c("cg_serial_available", "还有多少没取", "int cg_serial_available(const cg_serial_t *s)", "接收缓冲里还剩多少字节 —— 用来判断「这一拍到底有没有东西」，省一次注定返回 0 的 read", {
+            ret: "还没被取走的字节数；s 为 NULL 返回 0",
+            sample: `/* 取空缓冲的标准循环：先问一句再读，读到空就收工 */
+while (cg_serial_available(g_ser) > 0) {
+    int n = cg_serial_read(g_ser, buf, (int)sizeof(buf));
+    if (n <= 0) break;
+    cg_term_write(term, CG_TERM_RX, buf, n);
+}`,
+          }),
+          c("cg_serial_flush_rx", "丢掉未取数据", "void cg_serial_flush_rx(cg_serial_t *s)", "把接收缓冲里还没取走的字节扔掉（「清空接收」按钮用）；NULL 安全", {
+            sample: `/* 清空按钮：缓冲清掉，日志视图也一起清 */
+cg_serial_flush_rx(g_ser);
+cg_term_clear(cg_find(cg_app_of(self), "term_log"));`,
+          }),
+          c("cg_serial_rx_bytes", "累计收到字节", "long long cg_serial_rx_bytes(const cg_serial_t *s)", "从打开到现在一共收到多少字节（只增不减，要归零就重连）", {
+            ret: "累计字节数；s 为 NULL 返回 0",
+            sample: `cg_status_setf(cg_find(app, "sb_main"), 1, "RX %lld B", cg_serial_rx_bytes(g_ser));`,
+          }),
+          c("cg_serial_tx_bytes", "累计发出字节", "long long cg_serial_tx_bytes(const cg_serial_t *s)", "从打开到现在一共发出多少字节（同样只增不减）", {
+            ret: "累计字节数；s 为 NULL 返回 0",
+            sample: `cg_status_setf(cg_find(app, "sb_main"), 2, "TX %lld B", cg_serial_tx_bytes(g_ser));`,
+          }),
+          c("cg_serial_last_error", "最后一次错误", "const char *cg_serial_last_error(const cg_serial_t *s)", "最后一次出错的中文描述（\"端口被占用…\"这种）；没出错返回空串", {
+            params: ["s：链路句柄；**传 NULL 表示问「最近一次打开为什么失败」**（打开失败时没有句柄可问）"],
+            ret: "指向内部缓冲的字符串，不用 free；下次报错会被覆盖，要留就自己拷走",
+            sample: `/* 打开失败：没有句柄，只能问 NULL */
+if (!(g_ser = cg_serial_open(port, baud))) {
+    cg_message_box(self, cg_serial_last_error(NULL), "打不开串口", 2);
+    return;
+}
+/* 写入失败：手里的句柄上有原因 */
+if (cg_serial_write(g_ser, buf, n) < 0) {
+    cg_term_write(term, CG_TERM_SYS, cg_serial_last_error(g_ser), -1);
+}`,
           }),
         ],
       },

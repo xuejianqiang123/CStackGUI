@@ -1,0 +1,160 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "串口助手（cg_serial 示例）",
+    "width": 920,
+    "height": 680,
+    "bg": "#F3EDF7",
+    "events": {
+      "close": "on_close",
+      "destroy": "on_destroy"
+    },
+    "info": {
+      "product": "CStackGUI 串口助手示例",
+      "desc": "通信类工具样板：cg_serial_* 读线程 + 时钟回调取数据，终端/图表/分隔条联动",
+      "version": "1.0.0.0",
+      "author": "CStackGUI"
+    }
+  },
+  "widgets": [
+    {
+      "id": "sb_main",
+      "type": "statusbar",
+      "rect": { "x": 0, "y": 654, "w": 920, "h": 26 },
+      "items": ["未连接", "RX 0 B", "TX 0 B"]
+    },
+    {
+      "id": "lab_port",
+      "type": "label",
+      "rect": { "x": 12, "y": 14, "w": 36, "h": 24 },
+      "text": "端口",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20" }
+    },
+    {
+      "id": "cmb_port",
+      "type": "combo",
+      "rect": { "x": 52, "y": 12, "w": 180, "h": 200 },
+      "items": ["（启动时枚举）"],
+      "hint": "本机串口名（COM3 这种）；插拔设备后点「刷新」重新枚举"
+    },
+    {
+      "id": "lab_baud",
+      "type": "label",
+      "rect": { "x": 244, "y": 14, "w": 52, "h": 24 },
+      "text": "波特率",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20" }
+    },
+    {
+      "id": "cmb_baud",
+      "type": "combo",
+      "rect": { "x": 302, "y": 12, "w": 104, "h": 200 },
+      "items": ["1200", "2400", "4800", "9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600"],
+      "value": 7,
+      "hint": "只支持 8N1（数据位 8 / 无校验 / 停止位 1 固定）"
+    },
+    {
+      "id": "btn_connect",
+      "type": "button",
+      "rect": { "x": 416, "y": 10, "w": 104, "h": 32 },
+      "text": "打开串口",
+      "hint": "打开 / 关闭当前选中的串口",
+      "events": { "click": "on_connect_click" }
+    },
+    {
+      "id": "btn_refresh",
+      "type": "button",
+      "rect": { "x": 528, "y": 10, "w": 72, "h": 32 },
+      "text": "刷新",
+      "hint": "重新枚举本机串口，填进左边的下拉框",
+      "events": { "click": "on_refresh_click" }
+    },
+    {
+      "id": "btn_clear",
+      "type": "button",
+      "rect": { "x": 608, "y": 10, "w": 72, "h": 32 },
+      "text": "清空",
+      "hint": "丢掉还没取走的接收数据，并清空日志视图",
+      "events": { "click": "on_clear_click" }
+    },
+    {
+      "id": "btn_savelog",
+      "type": "button",
+      "rect": { "x": 688, "y": 10, "w": 88, "h": 32 },
+      "text": "保存日志",
+      "hint": "把日志视图存成 UTF-8 文本文件",
+      "events": { "click": "on_save_log_click" }
+    },
+    {
+      "id": "led_link",
+      "type": "led",
+      "rect": { "x": 790, "y": 17, "w": 118, "h": 18 },
+      "text": "未连接",
+      "value": 0,
+      "style": { "fg": "#1B6E33" }
+    },
+    {
+      "id": "term_log",
+      "type": "terminal",
+      "rect": { "x": 8, "y": 48, "w": 904, "h": 470 },
+      "checked": true,
+      "value": 500,
+      "items": [
+        "串口助手就绪。",
+        "先在上面选端口和波特率，再点「打开串口」。",
+        "收发的数据会按行落到这里：RX 绿色（收到）/ TX 蓝色（发出）/ 灰色（程序自己的记录）。"
+      ]
+    },
+    {
+      "id": "sp_main",
+      "type": "splitter",
+      "rect": { "x": 8, "y": 518, "w": 904, "h": 6 },
+      "format": "row",
+      "hint": "上下拖动：日志区变高、下面让位",
+      "events": { "release": "on_split_release" }
+    },
+    {
+      "id": "grp_send",
+      "type": "group",
+      "rect": { "x": 8, "y": 524, "w": 904, "h": 72 },
+      "text": "发送",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20", "bg": "#F7F2FA" },
+      "children": [
+        {
+          "id": "edt_send",
+          "type": "edit",
+          "rect": { "x": 12, "y": 32, "w": 660, "h": 30 },
+          "text": "",
+          "style": { "font": "Microsoft YaHei UI", "size": 10 },
+          "hint": "要发送的内容；勾了 HEX 就写 1A 2B 3C 这种",
+          "events": { "submit": "on_send_submit" }
+        },
+        {
+          "id": "chk_hex",
+          "type": "checkbox",
+          "rect": { "x": 684, "y": 33, "w": 100, "h": 28 },
+          "text": "HEX 发送",
+          "hint": "把输入按十六进制解析成字节再发（空格可有可无）",
+          "events": { "change": "on_hex_change" }
+        },
+        {
+          "id": "btn_send",
+          "type": "button",
+          "rect": { "x": 794, "y": 31, "w": 98, "h": 32 },
+          "text": "发送",
+          "hint": "发送（在输入框里直接回车也一样）",
+          "events": { "click": "on_send_click" }
+        }
+      ]
+    },
+    {
+      "id": "cht_rate",
+      "type": "chart",
+      "rect": { "x": 8, "y": 596, "w": 904, "h": 58 },
+      "items": ["RX 字节/秒"],
+      "value": 60,
+      "min": 0,
+      "max": 256,
+      "format": "line"
+    }
+  ]
+}
