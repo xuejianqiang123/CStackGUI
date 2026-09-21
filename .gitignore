@@ -31,3 +31,8 @@ desktop.ini
 *.exe.WebView2/
 # WebView2 NuGet 包解包目录（nupkg 已入库，可重新解出）
 webview2pkg/
+# 随包附带的 Fixed Version Runtime（近 500MB，重新下载即可，见 webview2.nupkg）
+runtime/res/WebView2Runtime/
+examples/*/WebView2Runtime/
+# 临时下载/解包产物
+build/_wv2fv*

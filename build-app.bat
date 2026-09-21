@@ -146,6 +146,19 @@ if errorlevel 1 (
 echo 往工程目录里放一个启动脚本，双击就能重编本工程
 call "%~dp0tools\gen-launcher.bat" "%APPDIR%"
 
+rem --- ECharts/WebView2 运行时资产（工程用到 echarts 控件时需要）---
+set NEED_WV2=0
+if exist "%APPDIR%\*.cgui" ( findstr /m "echarts" "%APPDIR%\*.cgui" >nul 2>nul && set NEED_WV2=1 )
+if "%NEED_WV2%"=="1" (
+    if exist "runtime\res\echarts.min.js"     copy /y "runtime\res\echarts.min.js" "%APPDIR%\" >nul
+    if exist "runtime\res\WebView2Loader.dll" copy /y "runtime\res\WebView2Loader.dll" "%APPDIR%\" >nul
+    if exist "runtime\res\WebView2Runtime" (
+        if not exist "%APPDIR%\WebView2Runtime" mkdir "%APPDIR%\WebView2Runtime"
+        robocopy "runtime\res\WebView2Runtime" "%APPDIR%\WebView2Runtime" /E /NFL /NDL /NJH /NJS >nul
+        echo   copied fixed-version WebView2 Runtime next to exe
+    )
+)
+
 echo [ok] %OUT%
 echo.
 echo     run it (double-click works):   %OUT%

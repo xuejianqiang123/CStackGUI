@@ -65,6 +65,16 @@ static LONG WINAPI diag_on_crash(EXCEPTION_POINTERS *ep)
         FreeLibrary(hmod);
     }
 
+    if (code == 0xC0000005 && ep && ep->ExceptionRecord &&
+        ep->ExceptionRecord->NumberParameters >= 2) {
+        /* AV：参数0=操作(0读/1写/8执行)，参数1=被访问的非法地址 */
+        ULONG_PTR op = ep->ExceptionRecord->ExceptionInformation[0];
+        void *bad = (void *)ep->ExceptionRecord->ExceptionInformation[1];
+        const char *opname = (op == 1) ? "写" : (op == 8) ? "执行" : "读";
+        cg_log(CG_LOG_ERROR, "访问冲突：尝试%s 地址 %p（出错地址 %p，模块 %s）",
+               opname, bad, addr, mod);
+    }
+
     cg_log(CG_LOG_ERROR, "程序异常退出：code=0x%08lX addr=%p module=%s",
            (unsigned long)code, addr, mod);
     snprintf(msg, sizeof(msg),

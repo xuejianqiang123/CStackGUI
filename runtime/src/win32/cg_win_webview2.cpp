@@ -79,6 +79,29 @@ static wchar_t *to_wide(const char *u8)
     return w;
 }
 
+/* 找到随包附带的 Fixed Version Runtime 目录（含 msedgewebview2.exe）则返回其宽字符路径，
+   否则返回 NULL（交给系统 WebView2 Runtime）。调用方负责 free。 */
+static int cgw_file_exists_a(const char *p)
+{
+    return p && GetFileAttributesA(p) != INVALID_FILE_ATTRIBUTES;
+}
+
+static wchar_t *cgw_find_fixed_runtime(void)
+{
+    char *dir = cg_app_dir();          /* exe 目录，如 C:\...\echarts_demo\ */
+    if (!dir) return NULL;
+    char *rt = cg_path_join(dir, "WebView2Runtime");
+    cg_free(dir);
+    if (!rt) return NULL;
+    char *exe = cg_path_join(rt, "msedgewebview2.exe");
+    int has = cgw_file_exists_a(exe);
+    cg_free(exe);
+    if (!has) { cg_free(rt); return NULL; }
+    wchar_t *w = to_wide(rt);
+    cg_free(rt);
+    return w;
+}
+
 /* WebView2 没起来时画一行占位字 */
 static LRESULT cgw_echarts_placeholder(HWND hwnd)
 {
@@ -289,31 +312,42 @@ void cgw_echarts_init(cg_widget_t *w)
     EnvHandler *h = (EnvHandler *)malloc(sizeof(EnvHandler));
     if (h) new (h) EnvHandler(hwnd);
 
+    /* 优先用随包附带的 Fixed Version Runtime（exe 旁的 WebView2Runtime\），
+       否则回退到系统安装的 WebView2 Runtime（传 NULL）。
+       系统 Runtime 偶尔会在个别机器上初始化即崩溃（如 153.0.4234.48），
+       自带固定版本可彻底绕开这种环境依赖。 */
+    wchar_t *fixed = cgw_find_fixed_runtime();
+    wchar_t *browserFolder = fixed;   /* NULL = 系统 Runtime */
+
     /* WebView2 需要当前线程已初始化 COM Apartment；S_FALSE=已经初始化过，
        RPC_E_CHANGED_MODE=已用其它模式初始化（仍可继续用），都不算失败。 */
     HRESULT hrcom = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     if (FAILED(hrcom) && hrcom != RPC_E_CHANGED_MODE) {
         cg_log(CG_LOG_ERROR, "CoInitializeEx failed: 0x%08X", (unsigned)hrcom);
-        free(wudf); free(h); return;
+        free(wudf); free(h); free(fixed); return;
     }
 
-    /* 先检测系统是否已安装 WebView2 Runtime；没有的话不要继续创建环境。 */
+    /* 检测目标 Runtime 是否可用；没有的话不要继续创建环境。 */
     wchar_t *ver = NULL;
-    HRESULT hrv = g_getVersion(NULL, &ver);
+    HRESULT hrv = g_getVersion(browserFolder, &ver);
     if (FAILED(hrv) || !ver) {
-        cg_log(CG_LOG_ERROR, "WebView2 Runtime not available: 0x%08X", (unsigned)hrv);
-        free(wudf); free(h); return;
+        cg_log(CG_LOG_ERROR, "WebView2 Runtime not available%s: 0x%08X",
+               fixed ? " (fixed-version)" : "", (unsigned)hrv);
+        free(wudf); free(h); free(fixed); return;
     }
-    cg_log(CG_LOG_INFO, "WebView2 Runtime version: %ls", ver);
+    cg_log(CG_LOG_INFO, "WebView2 Runtime version: %ls%s",
+           ver, fixed ? L" (fixed-version)" : L"");
     CoTaskMemFree(ver);
+    if (fixed) cg_log(CG_LOG_INFO, "browserExecutableFolder=%ls", fixed);
 
-    HRESULT hr = g_createEnv(NULL, wudf, NULL, h);
+    HRESULT hr = g_createEnv(browserFolder, wudf, NULL, h);
     if (FAILED(hr)) {
         cg_log(CG_LOG_ERROR, "CreateCoreWebView2Environment failed: 0x%08X", (unsigned)hr);
         free(h);   /* 同步失败：handler 不会被 WebView2 接管 */
     }
     /* 若 Create... 返回 S_OK，handler 由 WebView2 异步回调接管并自行释放（实际上我们 leak 它）。 */
     free(wudf);
+    free(fixed);
 }
 
 /* 宿主窗口过程：转发尺寸/销毁，WebView2 没起来时画占位 */
