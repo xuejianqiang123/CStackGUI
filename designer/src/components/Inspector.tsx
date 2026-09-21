@@ -564,6 +564,53 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
           </p>
         </>
       ) : null}
+      {node.type === "chart" ? (
+        <>
+          <Row label="绘图类型">
+            <select
+              className="input"
+              value={node.format ?? "line"}
+              onChange={(e) => patch((n) => { n.format = e.target.value; })}
+            >
+              <option value="line">折线</option>
+              <option value="bar">柱状</option>
+            </select>
+          </Row>
+          <Row label="窗口点数">
+            <input
+              className="input narrow"
+              type="number"
+              min={2}
+              step={10}
+              value={node.value ?? 120}
+              onChange={(e) => patch((n) => { n.value = Math.max(2, Math.round(Number(e.target.value) || 0)); })}
+            />
+            <span className="muted small">每系列保留多少个点，满了丢最老的</span>
+          </Row>
+          <Row label="Y 轴范围">
+            <input
+              className="input narrow"
+              type="number"
+              value={node.min ?? 0}
+              onChange={(e) => patch((n) => { n.min = Math.round(Number(e.target.value) || 0); })}
+            />
+            <span className="muted small">到</span>
+            <input
+              className="input narrow"
+              type="number"
+              value={node.max ?? 100}
+              onChange={(e) => patch((n) => { n.max = Math.round(Number(e.target.value) || 0); })}
+            />
+          </Row>
+          <p className="muted small">
+            业务按采样节奏推点：<code>cg_chart_push(w, 系列号, 值)</code> 或
+            <code>cg_chart_push_all(w, 数组, 个数)</code>（建议放在 <code>cg_set_timer</code> 里，<b>别开线程</b>）。
+            系列在下面的「系列名」里一行一个，颜色按调色板自动分配。
+            超出 Y 范围的值按边界裁剪后画，不会画到框外；点数超过绘图区像素宽度时按像素列取 min/max
+            画竖线 —— <b>不抽点</b>，所以尖峰不会被抽掉。
+          </p>
+        </>
+      ) : null}
       {node.type === "table" ? (
         <>
           <Row label="多选">
@@ -724,7 +771,11 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
       {info?.listLike ? (
         <Area
           label={
-            node.type === "statusbar" ? "分段文字" : node.type === "tabs" ? "页签文字" : node.type === "toolbar" ? "按钮文字" : "条目"
+            node.type === "statusbar" ? "分段文字"
+              : node.type === "tabs" ? "页签文字"
+              : node.type === "toolbar" ? "按钮文字"
+              : node.type === "chart" ? "系列名"
+              : "条目"
           }
           hint="每行一条"
           value={itemsToText(node.items)}

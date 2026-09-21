@@ -146,6 +146,8 @@ export const KIND_EVENTS: Record<string, CgEvent[]> = {
   card: [],
   /* 终端是只读的：内容由 cg_term_write 灌进去，没有用户操作要通知业务 */
   terminal: [],
+  /* 图表也是纯显示：数据由 cg_chart_push 推，控件本身没有用户操作 */
+  chart: [],
   /* 拖完才发一次（拖动中不发）—— 适合在回调里把布局存进 INI */
   splitter: ["release"],
   shape: [],
@@ -386,6 +388,9 @@ export const KINDS: KindInfo[] = [
   { type: "card", label: "卡片", group: "容器", container: true, w: 280, h: 180, text: "卡片" },
   { type: "splitter", label: "分隔条", group: "容器", container: false, w: 6, h: 200, text: "" },
   { type: "terminal", label: "终端", group: "数据", container: false, w: 360, h: 200, text: "", listLike: true },
+  /* 图表：listLike 是为了用「条目」编辑系列名；**不标 ranged** —— value 是窗口点数，
+     不该被 min/max（Y 轴范围）夹，标了 ranged 画布就会拿 min/max 去夹 value */
+  { type: "chart", label: "图表", group: "数据", container: false, w: 320, h: 160, text: "", listLike: true },
   { type: "separator", label: "分割线", group: "其它", container: false, w: 200, h: 2, text: "" },
   { type: "image", label: "图片", group: "其它", container: false, w: 240, h: 140, text: "" },
   { type: "shape", label: "外形框", group: "其它", container: false, w: 120, h: 120, text: "" },
@@ -593,6 +598,11 @@ export function makeNode(type: string, x: number, y: number): CgNode {
       "[12:00:01] RX OK",
     ];
     node.checked = true;      /* 默认显示时间戳 */
+  } else if (type === "chart") {
+    node.value = 120;         /* 注意：value 在图表上是"窗口点数"，不是当前值 */
+    node.min = 0;
+    node.max = 100;
+    node.items = ["系列一", "系列二"];   /* 两个系列，颜色按调色板自动分配 */
   } else if (type === "timer") {
     node.period = 1000;
   } else if (type === "colorpicker") {
@@ -1089,6 +1099,12 @@ function cleanNode(node: CgNode): CgNode {
     out.max = node.max ?? 100;
   } else if (node.type === "colorpicker") {
     out.value = node.value ?? 0;   /* value 存颜色 0xRRGGBB */
+  } else if (node.type === "chart") {
+    /* 图表的 value 是窗口点数、min/max 是 Y 轴范围，三者都要存；而且 value 不能被 min/max
+       夹 —— "窗口 120 个点 + Y 范围 0~100" 是正常配置，标成 ranged 就会被画布夹成 100 */
+    out.value = Math.max(2, Math.round(node.value ?? 120));
+    out.min = node.min ?? 0;
+    out.max = node.max ?? 100;
   } else if (KIND_MAP[node.type]?.listLike && node.value) {
     /* tabs/listbox/combo 的当前选中项：不存的话重开文件永远回第 0 页/第 0 项 */
     out.value = Math.max(0, Math.round(node.value));

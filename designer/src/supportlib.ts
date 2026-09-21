@@ -306,6 +306,32 @@ cg_splitter_set(cg_find(app, "sp_main"), pos);`,
         ],
       },
       {
+        label: "图表（chart）",
+        cmds: [
+          c("cg_chart_push", "推一个点", "void cg_chart_push(cg_widget_t *w, int series, int value)", "给某个系列追加一个点（满了丢最老的）；series 从 0 起", {
+            sample: `/* 建议在时钟回调里按采样节奏推，不要另开线程碰控件 */
+void on_tick(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_chart_push(cg_find(app, "cht_temp"), 0, read_sensor());
+}`,
+          }),
+          c("cg_chart_push_all", "一次推所有系列", "void cg_chart_push_all(cg_widget_t *w, const int *values, int nvalues)", "多通道采样最常用：一次给每个系列各一个点，只刷新一次界面", {
+            sample: `int vals[2];
+vals[0] = read_temp();
+vals[1] = read_humi();
+cg_chart_push_all(cg_find(app, "cht_env"), vals, 2);`,
+          }),
+          c("cg_chart_clear", "清空曲线", "void cg_chart_clear(cg_widget_t *w)", "点位归零，系列与范围保留"),
+          c("cg_chart_add_series", "加一个系列", "int cg_chart_add_series(cg_widget_t *w, const char *name)", "运行时加曲线，返回系列下标（到上限返回 -1）", {
+            sample: `cg_chart_add_series(cg_find(app, "cht_env"), "压力");`,
+          }),
+          c("cg_chart_series_count", "读系列数", "int cg_chart_series_count(const cg_widget_t *w)", "当前有几条曲线"),
+          c("cg_chart_filled", "读已填点数", "int cg_chart_filled(const cg_widget_t *w, int series)", "这个系列已经攒了多少个点"),
+          c("cg_chart_point", "读一个点", "int cg_chart_point(const cg_widget_t *w, int series, int index)", "下标 0 = 最老的点；越界返回 0"),
+          c("cg_chart_set_range", "改 Y 轴范围", "void cg_chart_set_range(cg_widget_t *w, int min, int max)", "超范围的值按边界裁剪后画"),
+        ],
+      },
+      {
         label: "终端 / 日志（terminal）",
         cmds: [
           c("cg_term_write", "写一行", "void cg_term_write(cg_widget_t *w, int dir, const void *data, int len)", "把收到/发出的数据灌进终端；方向决定行首标记与颜色（RX 绿 / TX 蓝 / SYS 灰）", {

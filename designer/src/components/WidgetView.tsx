@@ -340,6 +340,25 @@ function inner(node: CgNode) {
     case "shape":
       return null;
 
+    case "chart": {
+      /* 画布上给一个"一眼认得出是图"的示意：坐标轴 + 网格 + 两条示意曲线。
+         真实数据是运行期 cg_chart_push 灌的，这里不假装知道它长什么样。 */
+      const two = (node.items?.length ?? 0) > 1;
+      return (
+        <svg className="chart-body" viewBox="0 0 100 60" preserveAspectRatio="none">
+          <line x1="7" y1="6" x2="7" y2="54" className="chart-axis" />
+          <line x1="7" y1="54" x2="97" y2="54" className="chart-axis" />
+          <line x1="7" y1="18" x2="97" y2="18" className="chart-grid" />
+          <line x1="7" y1="30" x2="97" y2="30" className="chart-grid" />
+          <line x1="7" y1="42" x2="97" y2="42" className="chart-grid" />
+          <line x1="37" y1="6" x2="37" y2="54" className="chart-grid" />
+          <line x1="67" y1="6" x2="67" y2="54" className="chart-grid" />
+          <polyline className="chart-s0" points="7,50 25,44 43,47 61,26 79,31 97,12" />
+          {two ? <polyline className="chart-s1" points="7,34 25,36 43,33 61,35 79,32 97,34" /> : null}
+        </svg>
+      );
+    }
+
     case "terminal": {
       /* 画布不知道每行的方向（那是运行时灌内容时才知道的），所以只按行首的
        * RX / TX 字样给个提示色，让画布上的观感和跑起来差不多。 */
