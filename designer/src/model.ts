@@ -151,6 +151,10 @@ export const KIND_EVENTS: Record<string, CgEvent[]> = {
   /* 拖完才发一次（拖动中不发）—— 适合在回调里把布局存进 INI */
   splitter: ["release"],
   shape: [],
+  /* 状态灯是纯显示：状态由 cg_led_set 写，控件本身没有用户操作 */
+  led: [],
+  /* 仪表盘同理：值由 cg_meter_set 写，指针不给用户拖 */
+  meter: [],
 };
 
 /** 这个控件支持的事件；没登记的按"不支持任何事件"处理（C 侧同样会拒绝）。
@@ -402,6 +406,11 @@ export const KINDS: KindInfo[] = [
   { type: "tag", label: "标签片", group: "装饰", container: false, w: 72, h: 28, text: "标签" },
   { type: "rate", label: "评分", group: "装饰", container: false, w: 140, h: 32, text: "", ranged: true },
   { type: "pagination", label: "分页", group: "装饰", container: false, w: 180, h: 32, text: "", ranged: true },
+  /* 状态灯：20×20 的小灯，text 为空时灯占满整个矩形、有文字时灯在左文字在右。
+     不标 ranged/checklist/listLike —— 三种都不是它的行为。 */
+  { type: "led", label: "状态灯", group: "其它", container: false, w: 20, h: 20, text: "" },
+  /* 仪表盘：和滑块一样是被 min/max 夹的值控件，画布显示「值/最小/最大」三行是对的 */
+  { type: "meter", label: "仪表盘", group: "数值", container: false, w: 140, h: 140, text: "°C", ranged: true },
 ];
 
 export const KIND_MAP: Record<string, KindInfo> = Object.fromEntries(KINDS.map((k) => [k.type, k]));
@@ -619,6 +628,15 @@ export function makeNode(type: string, x: number, y: number): CgNode {
     node.src = "about:blank";
   } else if (type === "shape") {
     node.format = "roundrect";
+  } else if (type === "led") {
+    node.value = 0;            /* 0 灭 / 1 亮 / 2 闪 */
+    node.format = "round";     /* 缺省圆形；"square" 才是方的 */
+    node.period = 500;         /* 闪烁周期（仅"闪"时有意义） */
+    node.text = "状态";
+  } else if (type === "meter") {
+    /* value/min/max 已由上面的 ranged 分支给成 40 / 0~100 */
+    node.format = "arc";       /* 缺省 270° 圆弧；"half" 才是半圆 */
+    node.text = "°C";
   }
   return node;
 }
@@ -1061,7 +1079,11 @@ function cleanNode(node: CgNode): CgNode {
       /* 分隔条缺省就是左右分栏（竖条），只有 "row" 需要写出去 */
       (node.type === "splitter" && node.format !== "col") ||
       /* 终端缺省是文本模式，只有 "hex" 需要写出去 */
-      (node.type === "terminal" && !!node.format))
+      (node.type === "terminal" && !!node.format) ||
+      /* 状态灯缺省是圆的，只有 "square" 需要写出去 */
+      (node.type === "led" && node.format !== "round") ||
+      /* 仪表盘缺省是 270° 圆弧，只有 "half" 需要写出去 */
+      (node.type === "meter" && node.format !== "arc"))
   ) {
     out.format = node.format;
   }
@@ -1105,6 +1127,11 @@ function cleanNode(node: CgNode): CgNode {
     out.value = Math.max(2, Math.round(node.value ?? 120));
     out.min = node.min ?? 0;
     out.max = node.max ?? 100;
+  } else if (node.type === "led") {
+    /* 状态灯的 value 是 0 灭 / 1 亮 / 2 闪 —— 0 也是合法状态，必须一直写出去，
+       不能像 checked 那样"等于默认值就不写"（那会把"灭"变成"没配过"） */
+    const st = typeof node.value === "number" && Number.isFinite(node.value) ? Math.round(node.value) : 0;
+    out.value = Math.max(0, Math.min(2, st));
   } else if (KIND_MAP[node.type]?.listLike && node.value) {
     /* tabs/listbox/combo 的当前选中项：不存的话重开文件永远回第 0 页/第 0 项 */
     out.value = Math.max(0, Math.round(node.value));

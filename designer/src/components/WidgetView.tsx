@@ -378,6 +378,76 @@ function inner(node: CgNode) {
       );
     }
 
+    case "led": {
+      /* 灯只有三态，画布上直接照着画：0 灭（灰）/ 1 亮（style.fg 或缺省绿）/ 2 闪。
+         闪的可视化就用"亮色 + 虚线边框"，不真做动画 —— 编辑时画面一直晃太干扰。 */
+      const state = Math.max(0, Math.min(2, Math.round(node.value ?? 0)));
+      const color = state === 0 ? "#CAC4D0" : node.style?.fg || "#1B6E33";
+      const lamp = (
+        <span
+          className={`led-lamp ${node.format === "square" ? "led-square" : "led-round"}`}
+          style={{
+            background: color,
+            borderColor: state === 2 ? "#1D1B20" : color,
+            borderStyle: state === 2 ? "dashed" : "solid",
+          }}
+        />
+      );
+      /* text 非空 = 灯在左（固定成方形）、文字在右；text 为空 = 灯自己占满整个矩形 */
+      return node.text ? (
+        <div className="ctl-led">
+          {lamp}
+          {/* 说明文字固定用默认字色：led 的 style.fg 在这控件上含义是"灯色"，不是文字色 */}
+          <span className="led-text" style={{ color: "#1D1B20" }}>{node.text}</span>
+        </div>
+      ) : (
+        <div className="ctl-led led-only">{lamp}</div>
+      );
+    }
+
+    case "meter": {
+      /* 仪表盘示意：底弧 + 按 value 比例的彩色值弧 + 指针 + 中心两行文字。
+         format "arc"（缺省）= 270° 缺口朝下，"half" = 半圆。真值由 cg_meter_set 写，
+         画布不假装知道实时数据。 */
+      const lo = node.min ?? 0;
+      const hi = node.max ?? 100;
+      const span = hi - lo || 1;
+      const ratio = Math.max(0, Math.min(1, ((node.value ?? 0) - lo) / span));
+      const half = node.format === "half";
+      const cx = 50;
+      const cy = 54;
+      const r = 40;
+      const startDeg = half ? 180 : 135;
+      const sweepDeg = half ? 180 : 270;
+      const color = node.style?.fg || "#6750A4";
+      /* 角度按"y 轴向下"的屏幕坐标算：0° = 右，90° = 下，所以角度增大 = 顺时针 */
+      const pt = (deg: number, radius: number) => {
+        const a = (deg * Math.PI) / 180;
+        return { x: cx + radius * Math.cos(a), y: cy + radius * Math.sin(a) };
+      };
+      const arcPath = (from: number, sweep: number) => {
+        if (sweep <= 0.01) return "";
+        const a = pt(from, r);
+        const b = pt(from + sweep, r);
+        return `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} A ${r} ${r} 0 ${sweep > 180 ? 1 : 0} 1 ${b.x.toFixed(2)} ${b.y.toFixed(2)}`;
+      };
+      const tip = pt(startDeg + sweepDeg * ratio, r - 14);
+      return (
+        <svg className="meter-body" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+          <path className="meter-track" d={arcPath(startDeg, sweepDeg)} />
+          <path className="meter-value" d={arcPath(startDeg, sweepDeg * ratio)} style={{ stroke: color }} />
+          <line className="meter-needle" x1={cx} y1={cy} x2={tip.x.toFixed(2)} y2={tip.y.toFixed(2)} style={{ stroke: color }} />
+          <circle className="meter-hub" cx={cx} cy={cy} r="2.6" style={{ fill: color }} />
+          <text className="meter-num" x={cx} y={half ? 84 : 76} textAnchor="middle">
+            {node.value ?? 0}
+          </text>
+          <text className="meter-unit" x={cx} y={half ? 94 : 88} textAnchor="middle">
+            {node.text || ""}
+          </text>
+        </svg>
+      );
+    }
+
     default:
       return null;
   }

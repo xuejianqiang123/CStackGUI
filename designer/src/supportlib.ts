@@ -356,6 +356,30 @@ cg_term_set_hex(term, !cg_term_hex(term));`,
         ],
       },
       {
+        label: "状态灯 / 仪表盘（led / meter）",
+        cmds: [
+          c("cg_led_set", "设灯状态", "void cg_led_set(cg_widget_t *w, int state)", "0 灭 / 1 亮 / 2 闪（越界夹到 0..2）；状态只能由程序写，灯本身没有事件", {
+            sample: `/* 连上就点亮、断了就灭 */
+cg_led_set(cg_find(app, "led_link"), ok ? 1 : 0);
+
+/* 2 = 一闪一闪；节奏在画布「闪烁周期」里配（缺省 500ms，最小 100） */
+cg_led_set(cg_find(app, "led_busy"), 2);`,
+          }),
+          c("cg_led_state", "读灯状态", "int cg_led_state(const cg_widget_t *w)", "返回 0 灭 / 1 亮 / 2 闪"),
+          c("cg_led_set_color", "改灯色", "void cg_led_set_color(cg_widget_t *w, unsigned rgb)", "亮起的颜色，0xRRGGBB（缺省绿 0x1B6E33）；画布「亮灯颜色」改的就是它", {
+            sample: `cg_led_set_color(cg_find(app, "led_err"), 0xB3261E);   /* 报警用红 */`,
+          }),
+          c("cg_meter_set", "设仪表值", "void cg_meter_set(cg_widget_t *w, int value)", "超过量程按边界夹取（和滑块一样走 min/max）；只能由程序写", {
+            sample: `/* 按采样节奏刷新，别另开线程碰控件 */
+void on_tick(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_meter_set(cg_find(app, "mtr_temp"), read_temp_c10() / 10);
+}`,
+          }),
+          c("cg_meter_set_range", "设量程", "void cg_meter_set_range(cg_widget_t *w, int min, int max)", "改最小值 / 最大值；画布上就是「范围」那两格"),
+        ],
+      },
+      {
         label: "列表框 / 下拉框",
         cmds: [
           c("cg_widget_list_add", "加一条", "int cg_widget_list_add(cg_widget_t *w, const char *item)", "往列表框/下拉框/标签页/状态栏追加一项，返回下标"),

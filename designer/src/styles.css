@@ -1401,6 +1401,91 @@ input.narrow {
   border-radius: 6px;
 }
 
+/* 状态灯（led）与仪表盘（meter）都是纯图形控件：不画容器边框，整个矩形留给图形 */
+.widget-led,
+.widget-meter {
+  background: transparent;
+  border: none;
+}
+
+/* 状态灯（led）：画布上就是一盏灯 + 右边可选的说明文字。
+   形状（圆/方）与颜色都由 WidgetView 决定，这里只管尺寸与排布。 */
+.ctl-led {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+}
+.ctl-led .led-lamp {
+  /* 有文字时灯固定成 min(w,h) 大小的方形：高度占满、宽度按高度推 */
+  height: 100%;
+  aspect-ratio: 1;
+  flex: 0 0 auto;
+}
+.ctl-led.led-only .led-lamp {
+  /* 没文字时灯自己占满整个矩形（w/h 可能不等，就不强行正方形了） */
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}
+.led-lamp {
+  display: block;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+}
+.led-round {
+  border-radius: 50%;
+}
+.led-square {
+  border-radius: 2px;
+}
+.led-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.glyph-led {
+  border-radius: 50%;
+  background: #1b6e33;
+  border-color: #1b6e33;
+}
+
+/* 仪表盘（meter）：底弧 + 值弧 + 指针 + 中心两行文字，颜色由 WidgetView 走 style.fg */
+.meter-body {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.meter-track {
+  fill: none;
+  stroke: #e0dae6;
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+.meter-value {
+  fill: none;
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+.meter-needle {
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.meter-num {
+  font-size: 15px;
+  font-weight: 700;
+  fill: #1d1b20;
+}
+.meter-unit {
+  font-size: 9px;
+  fill: var(--on-surface-var);
+}
+.glyph-meter {
+  border-radius: 50% 50% 40% 40%;
+  background: conic-gradient(from 225deg, #6750a4 0 75%, transparent 75% 100%);
+  border: none;
+}
+
 /* 选中手柄 */
 .handles {
   position: absolute;

@@ -185,10 +185,12 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
           }}
         />
       </Row>
-      <Row label="文字">
+      {/* 同样是 text 字段：仪表盘上是单位（画在中心数值下面），灯上是灯右边的说明文字 */}
+      <Row label={node.type === "meter" ? "单位" : "文字"}>
         <input
           className="input"
           value={node.text ?? ""}
+          placeholder={node.type === "meter" ? "°C" : undefined}
           onChange={(e) =>
             patch((n) => {
               n.text = e.target.value;
@@ -257,11 +259,11 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
           粗体
         </label>
       </Row>
-      <Row label="文字色">
+      <Row label={node.type === "led" ? "亮灯颜色" : node.type === "meter" ? "主色" : "文字色"}>
         <input
           className="input color"
           type="color"
-          value={style.fg ?? "#1d1b20"}
+          value={style.fg ?? (node.type === "led" ? "#1b6e33" : node.type === "meter" ? "#6750a4" : "#1d1b20")}
           onChange={(e) =>
             patch((n) => {
               n.style = { ...(n.style ?? {}), fg: e.target.value };
@@ -276,7 +278,7 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
             })
           }
         >
-          跟随系统
+          {node.type === "led" ? "恢复缺省绿" : "跟随系统"}
         </button>
       </Row>
       {transparentBg ? (
@@ -608,6 +610,75 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
             系列在下面的「系列名」里一行一个，颜色按调色板自动分配。
             超出 Y 范围的值按边界裁剪后画，不会画到框外；点数超过绘图区像素宽度时按像素列取 min/max
             画竖线 —— <b>不抽点</b>，所以尖峰不会被抽掉。
+          </p>
+        </>
+      ) : null}
+      {node.type === "led" ? (
+        <>
+          <Row label="状态">
+            <select
+              className="input"
+              value={node.value ?? 0}
+              onChange={(e) => patch((n) => { n.value = Number(e.target.value); })}
+            >
+              <option value={0}>灭</option>
+              <option value={1}>亮</option>
+              <option value={2}>闪</option>
+            </select>
+          </Row>
+          <Row label="形状">
+            <select
+              className="input"
+              value={node.format ?? "round"}
+              onChange={(e) => patch((n) => { n.format = e.target.value; })}
+            >
+              <option value="round">圆</option>
+              <option value="square">方</option>
+            </select>
+          </Row>
+          {/* 周期只在「闪」时才有意义：别的状态显示出来只会让人以为它也在起作用 */}
+          {(node.value ?? 0) === 2 ? (
+            <Row label="闪烁周期">
+              <input
+                className="input narrow"
+                type="number"
+                min={100}
+                step={100}
+                value={node.period ?? 500}
+                onChange={(e) =>
+                  patch((n) => {
+                    n.period = Math.max(100, Math.round(Number(e.target.value) || 500));
+                  })
+                }
+              />
+              <span className="muted small">毫秒，最小 100</span>
+            </Row>
+          ) : null}
+          <p className="muted small">
+            <code>cg_led_set(w, 0/1/2)</code> 改状态：0 灭 / 1 亮 / 2 闪（越界夹到 0..2）；
+            <code>cg_led_set_color(w, rgb)</code> 改灯色，对应上面的「亮灯颜色」。
+            「闪」的节奏由 <code>period</code> 毫秒决定。<b>纯显示控件，没有事件</b>。
+            文字留空时灯自己占满整个矩形。
+          </p>
+        </>
+      ) : null}
+      {node.type === "meter" ? (
+        <>
+          <Row label="样式">
+            <select
+              className="input"
+              value={node.format ?? "arc"}
+              onChange={(e) => patch((n) => { n.format = e.target.value; })}
+            >
+              <option value="arc">圆弧 270°（缺口朝下）</option>
+              <option value="half">半圆 180°</option>
+            </select>
+          </Row>
+          <p className="muted small">
+            <code>cg_meter_set(w, value)</code> 改当前值、<code>cg_meter_set_range(w, min, max)</code> 改量程；
+            <b>超量程的值按边界夹取</b>（和滑块同一套 min/max 语义，上面「值 / 范围」三行就是它）。
+            圆弧与指针的颜色取上面的「主色」，缺省 <code>#6750A4</code>。
+            纯显示控件，没有事件。
           </p>
         </>
       ) : null}
