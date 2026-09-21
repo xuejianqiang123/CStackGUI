@@ -1,0 +1,72 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "ECharts 图表示例",
+    "width": 560,
+    "height": 420,
+    "bg": "#FFFFFF"
+  },
+  "widgets": [
+    {
+      "id": "chart1",
+      "type": "echarts",
+      "rect": {
+        "x": 16,
+        "y": 16,
+        "w": 528,
+        "h": 320
+      },
+      "option": {
+        "title": {
+          "text": "周销量"
+        },
+        "tooltip": {},
+        "legend": {
+          "data": [
+            "销量"
+          ]
+        },
+        "xAxis": {
+          "data": [
+            "周一",
+            "周二",
+            "周三",
+            "周四",
+            "周五",
+            "周六",
+            "周日"
+          ]
+        },
+        "yAxis": {},
+        "series": [
+          {
+            "name": "销量",
+            "type": "bar",
+            "data": [
+              120,
+              200,
+              150,
+              80,
+              70,
+              110,
+              130
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "sb",
+      "type": "statusbar",
+      "rect": {
+        "x": 0,
+        "y": 396,
+        "w": 560,
+        "h": 24
+      },
+      "items": [
+        "ECharts 图表（WebView2 / Edge 渲染）"
+      ]
+    }
+  ]
+}
