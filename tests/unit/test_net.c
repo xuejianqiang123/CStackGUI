@@ -190,6 +190,119 @@ static void test_net_lifecycle(void)
     cg_test_ok("20 轮开关没有崩、没有卡死", ok && port);
 }
 
+/** @brief UDP：开端口、参数校验、以及"流那套 API 在 UDP 上明确拒绝" */
+static void test_udp_open(void)
+{
+    cg_net_t *u;
+    char      buf[16];
+
+    cg_test_note("---- UDP 开端口 ----");
+    cg_test_ok("本地端口 -1 不合法", cg_net_udp_open(-1, 0) == NULL);
+    cg_test_ok("本地端口 70000 不合法", cg_net_udp_open(70000, 0) == NULL);
+    cg_test_ok("失败原因可读", cg_net_last_error(NULL)[0] != '\0');
+
+    u = cg_net_udp_open(0, 0);
+    cg_test_ok("本地端口传 0 = 让系统分一个", u != NULL);
+    if (u) {
+        cg_test_ok("peer 里带上了实际端口", strncmp(cg_net_peer(u), "UDP 本地 ", 9) == 0);
+        printf("        系统分配：%s\n", cg_net_peer(u));
+
+        cg_test_note("---- 流那套 API 在 UDP 句柄上要**明确拒绝**，不许悄悄失败 ----");
+        cg_test_int("write 返回 -1（要发就用 sendto）", cg_net_write(u, "x", 1), -1);
+        cg_test_int("read 返回 0", cg_net_read(u, buf, sizeof(buf)), 0);
+        cg_test_int("available 返回 0", cg_net_available(u), 0);
+        cg_test_int("connected 恒为 0（UDP 没有连接概念）", cg_net_connected(u), 0);
+        cg_net_close(u);
+    }
+
+    u = cg_net_udp_open(0, 1);
+    cg_test_ok("要求广播的端口也能开（SO_BROADCAST 设上了）", u != NULL);
+    if (u) {
+        cg_test_ok("peer 里标了可广播", strstr(cg_net_peer(u), "可广播") != NULL);
+        cg_net_close(u);
+    }
+}
+
+/** @brief UDP 回环：**报文边界与来源地址都得原样保住**（这套拉取式 API 存在的理由） */
+static void test_udp_loopback(void)
+{
+    cg_net_t *a, *b;
+    char      buf[64];
+    char      ip[64];
+    int       port = 0;
+    int       n, waited;
+
+    cg_test_note("---- 两个 UDP 端口在 127.0.0.1 上互发 ----");
+    a = cg_net_udp_open(47861, 0);
+    b = cg_net_udp_open(47862, 1);
+    cg_test_ok("两个端口都开起来了（固定端口，撞了就换个号）", a != NULL && b != NULL);
+    if (!a || !b) { cg_net_close(a); cg_net_close(b); return; }
+
+    cg_test_int("b 发 3 字节给 a", cg_net_sendto(b, "127.0.0.1", 47861, "ABC", 3), 3);
+    n = -1;
+    for (waited = 0; waited < 2000 && n < 0; waited += 10) {
+        n = cg_net_recvfrom(a, ip, (int)sizeof(ip), &port, buf, (int)sizeof(buf) - 1);
+        if (n < 0) Sleep(10);
+    }
+    cg_test_int("a 收到 3 字节", n, 3);
+    if (n > 0) buf[n] = '\0';
+    cg_test_str("内容正确", buf, "ABC");
+    cg_test_str("来源 IP 是回环地址", ip, "127.0.0.1");
+    cg_test_int("来源端口就是 b 的端口 —— 这就是「来源地址没丢」", port, 47862);
+
+    cg_test_note("---- 报文边界：连发两个数据报，必须收到两个独立报文，不能粘成一条流 ----");
+    cg_net_sendto(b, "127.0.0.1", 47861, "ONE", 3);
+    cg_net_sendto(b, "127.0.0.1", 47861, "TWO", 3);
+    {
+        char one[16];
+        char two[16];
+        int  got = 0;
+
+        memset(one, 0, sizeof(one));
+        memset(two, 0, sizeof(two));
+        for (waited = 0; waited < 2000 && got < 2; waited += 10) {
+            n = cg_net_recvfrom(a, NULL, 0, NULL, got == 0 ? one : two, 15);
+            if (n >= 0) got++;
+            else Sleep(10);
+        }
+        cg_test_int("收到两个独立数据报（不是一条 6 字节的流）", got, 2);
+        cg_test_str("第一个是 ONE", one, "ONE");
+        cg_test_str("第二个是 TWO", two, "TWO");
+    }
+
+    cg_test_note("---- 空数据报：返回 0（UDP 允许，是正常现象不是错误） ----");
+    cg_test_int("空数据报发得出去", cg_net_sendto(b, "127.0.0.1", 47861, "", 0), 0);
+    n = -1;
+    for (waited = 0; waited < 2000 && n < 0; waited += 10) {
+        char dummy[8];
+        n = cg_net_recvfrom(a, NULL, 0, NULL, dummy, (int)sizeof(dummy));
+        if (n < 0) Sleep(10);
+    }
+    cg_test_int("收到空数据报，返回值是 0", n, 0);
+    cg_test_ok("这不是错误（last_error 是空的）", cg_net_last_error(a)[0] == '\0');
+
+    cg_test_note("---- 没有数据时返回 -1，同样不是错误 ----");
+    cg_test_int("立刻返回 -1", cg_net_recvfrom(a, NULL, 0, NULL, buf, (int)sizeof(buf)), -1);
+    cg_test_ok("last_error 仍然干净", cg_net_last_error(a)[0] == '\0');
+
+    cg_test_note("---- 累计字节与 NULL 兜底 ----");
+    cg_test_int("a 累计收了 3+3+3+0 = 9", (int)cg_net_rx_bytes(a), 9);
+    cg_test_int("b 累计发了 9", (int)cg_net_tx_bytes(b), 9);
+    cg_test_int("sendto(NULL) 返回 -1", cg_net_sendto(NULL, "127.0.0.1", 1, "x", 1), -1);
+    cg_test_int("recvfrom(NULL) 返回 -1",
+                cg_net_recvfrom(NULL, NULL, 0, NULL, buf, (int)sizeof(buf)), -1);
+    cg_test_int("主机名解析不了时返回 -1",
+                cg_net_sendto(b, "no-such-host.cstackgui.invalid", 1, "x", 1), -1);
+    cg_test_ok("解析失败的原因可读", cg_net_last_error(b)[0] != '\0');
+    cg_net_close(NULL);
+    cg_test_ok("都不会崩", 1);
+
+    cg_net_close(a);
+    cg_net_close(b);
+}
+
 CG_TEST_SUITE("网口：参数与错误路径", test_net_params);
 CG_TEST_SUITE("网口：回环端到端", test_net_loopback);
 CG_TEST_SUITE("网口：开关生命周期", test_net_lifecycle);
+CG_TEST_SUITE("网口 UDP：开端口与流 API 的拒绝", test_udp_open);
+CG_TEST_SUITE("网口 UDP：回环与报文边界", test_udp_loopback);

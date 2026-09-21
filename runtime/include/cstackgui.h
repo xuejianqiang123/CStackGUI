@@ -650,6 +650,42 @@ const char *cg_net_last_error(const cg_net_t *n);
 /** 关掉连接或监听（幂等、NULL 安全；会等读线程退出，所以最坏卡一个收超时周期约 50ms） */
 void cg_net_close(cg_net_t *n);
 
+/* ------------------------------------------------------------ 网口：UDP（数据报）
+ * **为什么不套上面那套"读线程 + 环形缓冲"**：数据报有两样东西必须原样交到业务手里 ——
+ * **报文边界**与**来源地址**。字节环会把两者一起毁掉（把两个数据报粘成一条流、丢掉"谁发的"）。
+ * 所以 UDP 是**拉取式**的：你自己调 cg_net_recvfrom()，一次拿一个完整数据报 + 它的来源。
+ * 于是 UDP 句柄上**没有读线程**，流那套 API 也不适用（见下面的返回语义）。
+ *
+ *   cg_net_t *u = cg_net_udp_open(9000, 1);          // 本地 9000、允许广播
+ *   cg_net_sendto(u, "255.255.255.255", 9000, "hi", 2);   // 广播发现：板子回包就知道它的 IP
+ *
+ *   时钟里（照串口/网口的"在时钟里拉"那一套）：
+ *       char buf[1472], ip[64]; int port = 0, n;
+ *       n = cg_net_recvfrom(u, ip, sizeof ip, &port, buf, sizeof buf);
+ *       if (n >= 0) {                                  // >= 0 才是"收到了一个数据报"
+ *           char *line = cg_str_format("[%s:%d] %.*s", ip, port, n, buf);
+ *           cg_term_write(term, CG_TERM_RX, line, -1);
+ *           cg_free(line);
+ *       }
+ *
+ * **返回值语义（和 TCP 那套不一样，别套）**：
+ *   > 0  收到的字节数（已经带出来源 ip/port）
+ *   = 0  收到了一个**空数据报**（UDP 允许，是正常现象，不是错误）
+ *   = -1 暂时没有数据（**不是错误**）；真出错时 cg_net_last_error() 才有内容
+ * 想区分"没有数据"和"出错"，看 cg_net_last_error() 是不是空的。
+ *
+ * 边界：**UDP 句柄上只有 sendto / recvfrom / close / last_error / rx_bytes / tx_bytes 可用**；
+ * 流那套（read / available / connected / write）在 UDP 句柄上分别返回 0 / 0 / 0 / -1 ——
+ * 与其"悄悄支持"一个语义不对的行为，不如明确拒绝。
+ */
+cg_net_t *cg_net_udp_open(int local_port, int broadcast);
+/** 发一个数据报（每次调用解析一次主机名：填 IP 无所谓，填域名会多花一点时间）。
+ *  返回实际发出的字节数，< 0 失败。*/
+int  cg_net_sendto(cg_net_t *n, const char *host, int port, const void *data, int len);
+/** 收一个数据报（非阻塞，一次一个，带出来源）。
+ *  ip_out 可传 NULL 表示不关心来源；port_out 同理。返回值语义见上面那段。 */
+int  cg_net_recvfrom(cg_net_t *n, char *ip_out, int ip_cap, int *port_out, void *buf, int cap);
+
 /* ------------------------------------------------------------ 通用对话框
  * 都不是控件，是弹系统对话框的函数。parent 传控件（定位用）或 NULL。
  * 路径缓冲区至少 1024 字节。返回 1 = 用户确定，0 = 取消/失败。

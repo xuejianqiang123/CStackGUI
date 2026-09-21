@@ -48,6 +48,7 @@ struct cg_net_t {
     long long        rx_total;
     long long        tx_total;
     int              listening;     /* 1 = 监听套接字（不能读写） */
+    int              udp;           /* 1 = UDP 句柄（只有 sendto/recvfrom，无读线程） */
     int              connected;     /* 对端还在 */
     char             peer[64];      /* "127.0.0.1:5000" 这种 */
     char             err[192];
@@ -415,7 +416,8 @@ int cg_net_write(cg_net_t *n, const void *data, int len)
 {
     int sent;
 
-    if (!n || n->listening || !data || len <= 0) return -1;
+    /* UDP 句柄走 cg_net_sendto：它要目的地，而"流写"没有目的地这个概念 —— 明确拒绝 */
+    if (!n || n->listening || n->udp || !data || len <= 0) return -1;
     sent = send(n->s, (const char *)data, len, 0);
     if (sent == SOCKET_ERROR) {
         net_fail(n, "发送失败", WSAGetLastError());
@@ -432,7 +434,7 @@ int cg_net_read(cg_net_t *n, void *buf, int cap)
 {
     int got;
 
-    if (!n || !buf || cap <= 0) return 0;
+    if (!n || n->udp || !buf || cap <= 0) return 0;
     EnterCriticalSection(&n->lock);
     got = cg_ring_pop(&n->rx, buf, cap);
     LeaveCriticalSection(&n->lock);
@@ -444,17 +446,18 @@ int cg_net_available(const cg_net_t *n)
 {
     int got;
 
-    if (!n) return 0;
+    if (!n || n->udp) return 0;
     EnterCriticalSection((CRITICAL_SECTION *)&n->lock);
     got = cg_ring_count(&n->rx);
     LeaveCriticalSection((CRITICAL_SECTION *)&n->lock);
     return got;
 }
 
-/** @brief 对端还在吗（对方关闭后变 0；监听句柄恒为 0） */
+/** @brief 对端还在吗（对方关闭后变 0；监听句柄与 UDP 句柄恒为 0） */
 int cg_net_connected(const cg_net_t *n)
 {
-    return (n && n->connected) ? 1 : 0;
+    if (!n || n->udp) return 0;
+    return n->connected ? 1 : 0;
 }
 
 /** @brief 累计收 / 发字节数 */
@@ -472,4 +475,128 @@ const char *cg_net_last_error(const cg_net_t *n)
 {
     if (!n) return g_open_err;
     return n->err;
+}
+
+/* ------------------------------------------------------------ UDP（数据报）
+ * 与 TCP 那边刻意不同：**不开读线程**。数据报的报文边界与来源地址必须原样交给业务，
+ * 而"读线程 + 字节环"是给字节流设计的 —— 它会把两个数据报粘成一条流、把"谁发的"丢掉。
+ * 所以这里是拉取式：业务在时钟里 cg_net_recvfrom()，一次一个完整数据报。
+ */
+
+/** @brief 开一个 UDP 端口（local_port 传 0 = 让系统随便分一个；broadcast != 0 时允许广播） */
+cg_net_t *cg_net_udp_open(int local_port, int broadcast)
+{
+    SOCKET             s;
+    struct sockaddr_in sa;
+    struct sockaddr_in me;
+    int                mlen = (int)sizeof(me);
+    cg_net_t          *n;
+    BOOL               yes = TRUE;
+
+    if (!net_wsa()) { snprintf(g_open_err, sizeof(g_open_err), "网络初始化失败"); return NULL; }
+    if (local_port < 0 || local_port > 65535) {
+        snprintf(g_open_err, sizeof(g_open_err), "本地端口不合法（%d）", local_port);
+        return NULL;
+    }
+
+    s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (s == INVALID_SOCKET) {
+        snprintf(g_open_err, sizeof(g_open_err), "创建 UDP 套接字失败");
+        return NULL;
+    }
+    setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (const char *)&yes, sizeof(yes));
+    if (broadcast) setsockopt(s, SOL_SOCKET, SO_BROADCAST, (const char *)&yes, sizeof(yes));
+
+    memset(&sa, 0, sizeof(sa));
+    sa.sin_family = AF_INET;
+    sa.sin_addr.s_addr = htonl(INADDR_ANY);
+    sa.sin_port = htons((u_short)local_port);
+    if (bind(s, (const struct sockaddr *)&sa, sizeof(sa)) == SOCKET_ERROR) {
+        net_fail(NULL, "绑定 UDP 端口失败", WSAGetLastError());
+        closesocket(s);
+        return NULL;
+    }
+
+    n = net_alloc_plain(s, 0);
+    if (!n) { closesocket(s); return NULL; }
+    n->udp = 1;
+
+    /* local_port 传 0 时只有绑完才知道系统分了哪个端口，记下来给日志/界面看 */
+    if (getsockname(s, (struct sockaddr *)&me, &mlen) == 0) {
+        snprintf(n->peer, sizeof(n->peer), "UDP 本地 %d%s",
+                 (int)ntohs(me.sin_port), broadcast ? "（可广播）" : "");
+    }
+    cg_log(CG_LOG_INFO, "已开 UDP 端口：%s", n->peer);
+    return n;
+}
+
+/** @brief 发一个数据报；返回实际发出字节数，< 0 失败 */
+int cg_net_sendto(cg_net_t *n, const char *host, int port, const void *data, int len)
+{
+    struct addrinfo hints;
+    struct addrinfo *res = NULL;
+    char             portstr[16];
+    int              sent;
+
+    if (!n || !n->udp || !data || len < 0) return -1;      /* 空数据报合法（len 可以为 0） */
+    if (!host || !*host || port <= 0 || port > 65535) return -1;
+
+    snprintf(portstr, sizeof(portstr), "%d", port);
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    if (getaddrinfo(host, portstr, &hints, &res) != 0 || !res) {
+        EnterCriticalSection(&n->lock);
+        snprintf(n->err, sizeof(n->err), "主机名解析不了：%s", host);
+        LeaveCriticalSection(&n->lock);
+        return -1;
+    }
+
+    sent = sendto(n->s, (const char *)data, len, 0, res->ai_addr, (int)res->ai_addrlen);
+    freeaddrinfo(res);
+    if (sent == SOCKET_ERROR) {
+        net_fail(n, "发送失败", WSAGetLastError());
+        return -1;
+    }
+    EnterCriticalSection(&n->lock);
+    n->tx_total += sent;
+    LeaveCriticalSection(&n->lock);
+    return sent;
+}
+
+/** @brief 收一个数据报（非阻塞）；> 0 字节数、= 0 空数据报、= -1 暂时没有（不是错误） */
+int cg_net_recvfrom(cg_net_t *n, char *ip_out, int ip_cap, int *port_out, void *buf, int cap)
+{
+    struct sockaddr_in from;
+    int                flen = (int)sizeof(from);
+    int                got;
+    fd_set             rfds;
+    struct timeval     tv;
+
+    if (!n || !n->udp || !buf || cap <= 0) return -1;
+
+    /* 先问"有没有待收的数据报"（零超时 select），有才 recvfrom —— 这样它天然是非阻塞的，
+     * 也不会因为把套接字设成非阻塞模式而影响 sendto */
+    FD_ZERO(&rfds);
+    FD_SET(n->s, &rfds);
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+    if (select(0, &rfds, NULL, NULL, &tv) <= 0) return -1;      /* 没有数据：不是错误 */
+
+    memset(&from, 0, sizeof(from));
+    got = recvfrom(n->s, (char *)buf, cap, 0, (struct sockaddr *)&from, &flen);
+    if (got == SOCKET_ERROR) {
+        int e = WSAGetLastError();
+
+        if (e == WSAEWOULDBLOCK) return -1;
+        net_fail(n, "接收失败", e);
+        return -1;
+    }
+
+    if (ip_out && ip_cap > 0) inet_ntop(AF_INET, (const void *)&from.sin_addr, ip_out, ip_cap);
+    if (port_out) *port_out = (int)ntohs(from.sin_port);
+    EnterCriticalSection(&n->lock);
+    n->rx_total += got;
+    LeaveCriticalSection(&n->lock);
+    return got;
 }
