@@ -100,6 +100,10 @@ struct cg_widget {
     /* 时钟（timer）：周期毫秒，0 = 停。Win32 定时器 id 复用 ctrl_id */
     int          period;
 
+    /* 控件绑定（cg_bind.c）：以谁为源；bind_two 时自己的变化也推回源 */
+    char        *bind_src;
+    int          bind_two;
+
     /* 表格增强：多选 / 勾选列 / 行数值 / 行图标 */
     int          multi;
     int          check;
@@ -162,6 +166,10 @@ struct cg_app {
     int          next_menu_cmd;
     /** .cgui 里绑了该控件不支持的事件：自检据此报错 */
     int          unsupported_events;
+    /** 绑定个数：为 0 时事件派发完全不做绑定传播，等于没有这个功能 */
+    int          nbinds;
+    /** bind.src 指向了不存在的控件：启动时警告，自检据此报错 */
+    int          bad_binds;
     /** close 回调里调 cg_cancel_close() 会把这里置 1，窗口就不关了 */
     int          close_cancel;
 
@@ -275,6 +283,21 @@ void cg_widget_free(cg_widget_t *w);
 
 /** 表格行数变多时把行级附加数组（勾选/数值/图标）一起补长到 want */
 void cg_table_rows_grow(cg_widget_t *w, int want);
+
+/* -------------------------------------------------- 控件绑定（cg_bind.c）
+ * 一个控件的值/文字/勾选变化时，自动抄到另一个控件上。写在 .cgui 的 bind 字段，
+ * 或运行时用 cg_bind()。规则见 cg_bind.c 顶部注释。 */
+
+/** 控件 w 的状态变了：把它的值/文字抄给所有"以它为源"的控件（双向的还要推回源）。
+ *  事件派发与公共 set 都会调它；没有任何绑定时直接返回，开销为零。 */
+void cg_bind_propagate(cg_widget_t *w);
+
+/** 启动时把 .cgui 里的绑定全部应用一次（源控件已经有初值，目标控件跟上）。
+ *  bind.src 找不到的在这里记一笔并警告。 */
+void cg_bind_apply_all(cg_app_t *app);
+
+/** 内部用：把源的值抄到目标，返回 1 表示真的改了（顺便 sync） */
+int cg_bind_copy(cg_widget_t *src, cg_widget_t *dst);
 
 /* ---------------------------------------------- cg_app.c 拆分后的跨模块接口
  * 原来这几个是 cg_app.c 里的 static 助手，拆成 cg_widget.c / cg_event.c 之后

@@ -313,6 +313,7 @@ static void node_free(cg_node_t *n)
     free(n->src);
     free(n->format);
     free(n->hint);
+    free(n->bind_src);
     free(n);
 }
 
@@ -416,6 +417,17 @@ static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
     if (n->period < 0) n->period = 0;
     n->multi = cj_bool(cj_get(o, "multi"), 0);
     n->check = cj_bool(cj_get(o, "check"), 0);
+
+    /* 控件绑定：bind { "src": "源控件id", "two": true }
+     * 只认对象写法；src 空串等于没绑（画布没选源时就是这么写的） */
+    v = cj_get(o, "bind");
+    if (v && v->type == CJ_OBJ) {
+        const char *bind_src = cj_str(cj_get(v, "src"), NULL);
+        if (bind_src && *bind_src) {
+            n->bind_src = dup_str(bind_src);
+            n->bind_two = cj_bool(cj_get(v, "two"), 0);
+        }
+    }
 
     /* 结构化内容 */
     n->items = parse_str_array(cj_get(o, "items"), &n->nitems);
@@ -634,6 +646,7 @@ static void dump_node(const cg_node_t *n, FILE *out, int depth)
     if (n->format) fprintf(out, " format=%s", n->format);
     if (n->hint) fprintf(out, " hint=\"%s\"", n->hint);
     if (n->period) fprintf(out, " period=%d", n->period);
+    if (n->bind_src) fprintf(out, " bind=%s%s", n->bind_src, n->bind_two ? "+two" : "");
     if (n->multi) fputs(" multi", out);
     if (n->check) fputs(" check", out);
     if (n->items) fprintf(out, " items=%lu", (unsigned long)n->nitems);

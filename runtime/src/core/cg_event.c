@@ -175,6 +175,11 @@ int cg_dispatch(cg_widget_t *w, cg_event_t ev)
     if (!w || !w->app) return 0;
     if (!w->enabled && ev != CG_EVENT_CLOSE) return 0;
 
+    /* 控件状态（值/文字/勾选）是后端在派发前刚写好的，这里先把绑定同步做掉：
+     * 回调里看到的界面就已经是一致的，不用自己去刷关联控件。
+     * 注意绑定同步本身不派发事件，所以不会和下面的回调互相触发。 */
+    cg_bind_propagate(w);
+
     /* 事件是按控件特性分配的：不在该类型支持范围里的，直接丢掉。
      * 正常画布不会绑出不支持的事件（画布只列支持的那些）；
      * 手写 .cgui 绑错了，cg_resolve_binding / 自检会报出来。 */

@@ -391,6 +391,7 @@ void cg_tabs_select(cg_widget_t *w, int index)
     if (w->node) w->node->value = index;
     w->items_dirty = 1;
     cg_widget_sync(w);
+    cg_bind_propagate(w);
 }
 
 /** @brief 当前页下标（0 起） */

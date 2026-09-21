@@ -277,6 +277,28 @@ void cg_widget_set_value_range(cg_widget_t *w, int min, int max);
 void cg_widget_set_colors(cg_widget_t *w, unsigned fg, unsigned bg);
 void cg_widget_set_font(cg_widget_t *w, const char *family, int size_pt, int bold);
 
+/* ------------------------------------------------------------ 控件绑定
+ * 让两个控件一直保持一致，省掉"自己写两个回调互相 set"的活。
+ * 最常用的一例：滑块拖动时旁边的标签跟着显示数字。
+ *
+ *   .cgui 里写： { "id": "lab_value", "type": "label",
+ *                  "bind": { "src": "sld_level" } }
+ *   C 代码里写： cg_bind(cg_find(app, "sld_level"), cg_find(app, "lab_value"), 0);
+ *
+ * 抄什么由**目标的类型**决定，不用额外配置：
+ *   滑块/进度/圆环/微调/评分/分页/标签页/列表/下拉/工具栏 -> 抄值
+ *   复选框/单选钮/开关                                    -> 抄勾选状态
+ *   其它（能显示文字的：标签/输入框/状态栏/按钮...）       -> 源是输入框就抄文字，
+ *                                                            否则把源的数值写成十进制
+ *
+ * two_way 非 0 表示双向：目标自己被用户改动时也推回源（滑块配微调框、
+ * 复选框配开关这类"两个入口改同一个值"的用法）。
+ *
+ * 注意：绑定的同步不会触发目标的 change 回调 —— 它是"跟着变"，不是用户操作；
+ * 也因此不存在回调互推的死循环。想在被同步时做事，请绑 change 到源控件上。
+ */
+int cg_bind(cg_widget_t *src, cg_widget_t *dst, int two_way);
+
 void  *cg_widget_get_user(const cg_widget_t *w);
 void   cg_widget_set_user(cg_widget_t *w, void *user);
 

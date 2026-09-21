@@ -182,6 +182,10 @@ typedef struct cg_node {
     char    *hint;
     /** timer 的触发周期（毫秒），0 = 不运行 */
     int      period;
+    /** 控件绑定：源控件 id（.cgui 的 bind.src）；NULL = 没绑 */
+    char    *bind_src;
+    /** 绑定是双向的（源变跟源走，自己也变时也推回源） */
+    int      bind_two;
     /** table：允许多选行 */
     int      multi;
     /** table：显示行首复选框列 */

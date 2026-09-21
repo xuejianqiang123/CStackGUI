@@ -117,6 +117,7 @@ void cg_widget_free(cg_widget_t *w)
     free(w->item_map);
     free(w->src);
     free(w->bitmap_src);
+    free(w->bind_src);
     free(w->id);
     free(w->type);
     free(w->text);
@@ -234,6 +235,11 @@ static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node
     if (n->format) w->format = cg_str_dup(n->format);
     if (n->hint) w->hint = cg_str_dup(n->hint);
     w->period = n->period;
+    if (n->bind_src) {                      /* 控件绑定：真值留着，运行期按 id 找源 */
+        w->bind_src = cg_str_dup(n->bind_src);
+        w->bind_two = n->bind_two;
+        if (w->bind_src) app->nbinds++;
+    }
     w->multi = n->multi;
     w->check = n->check;
     /* 菜单栏和菜单按钮共用同一套菜单行表；tree 虽然也用 nodes，但走的是下面那套摊平 */
@@ -410,6 +416,7 @@ void cg_widget_set_text(cg_widget_t *w, const char *text)
     w->text = cg_str_dup(text ? text : "");
     if (w->node) { free(w->node->text); w->node->text = cg_str_dup(w->text); }
     cg_widget_sync(w);
+    cg_bind_propagate(w);
 }
 
 /** @brief 一次改位置和尺寸（逻辑像素，相对父容器） */
@@ -451,6 +458,7 @@ void cg_widget_set_checked(cg_widget_t *w, int on)
     w->checked = on != 0;
     if (w->node) w->node->checked = w->checked;
     cg_widget_sync(w);
+    cg_bind_propagate(w);
 }
 
 /** @brief 设置当前值，自动夹到 [vmin, vmax] */
@@ -462,6 +470,7 @@ void cg_widget_set_value(cg_widget_t *w, int value)
     w->value = value;
     if (w->node) w->node->value = value;
     cg_widget_sync(w);
+    cg_bind_propagate(w);
 }
 
 /** @brief 设置取值范围；vmax <= vmin 时自动抬到 vmin+1 */
