@@ -275,6 +275,7 @@ runtime/
     kit/               平台服务层：跟界面无关的那一半 Win32（不属于任何后端）
       cg_kit.c          文件/路径/INI 配置/文本编码/剪贴板/外部程序/注册表；
                         有了它业务代码才真的"只 include cstackgui.h"
+      cg_serial.c       串口：读线程 + 环形缓冲；业务在时钟里 cg_serial_read 取走（docs/COMM.md）
   res/                  清单（v6 通用控件 + 每显示器 DPI）与版本资源
 ```
 
@@ -282,7 +283,8 @@ runtime/
 （`-Iruntime\src\core -Iruntime\src\win32 -Iruntime\src\skin -Iruntime\src\kit`），层内互相 include 直接用裸文件名；
 `runtime\src` 本身**故意不上**路径——跨层引用写错就编不过，而不是被悄悄找到。
 对象名取文件名（`build\obj\<名字>.o`），所以各层里的 `.c` 文件名必须唯一，
-命名约定已经保证（core 用 `cg_*`、后端 `cg_win_*`、外观 `cg_skin_*`、平台服务 `cg_kit_*`）。
+命名约定已经保证（core 用 `cg_*`、后端 `cg_win_*`、外观 `cg_skin_*`、平台服务 `cg_kit_*`，
+串口按业务域命名成 `cg_serial_*`，同样落在 `kit/` 里）。
 `kit` 和 `win32` 一样知道 Win32，但**不知道任何界面概念**——它只管文件、配置、编码这些事，
 所以画布和 skin 都不依赖它，把 `runtime\src\kit` 整个删掉也能编过（只剩 public API 声明）。
 
@@ -549,6 +551,11 @@ release/
 - **控件绑定**：`.cgui` 的 `bind` / 运行时的 `cg_bind()`，值·文字·勾选自动同步（见 §3.3）。
   思路来自同类项目 YMGUI 的 subject-observer，但按我们"原生控件 + `.cgui` 描述界面"的路线
   简化成"值镜像"，不引入独立 subject 对象。
+- **通信层（串口）**：`runtime/src/kit/cg_serial.c`，业务用 `cg_serial_*` 枚举端口 / 打开 / 收发，
+  业务代码照旧只 include `cstackgui.h`。**运行时的第一个、也是唯一一个工作线程就在这里** ——
+  kit 的读线程只把串口字节搬进 64KB 环形缓冲（满了丢最老），业务必须在 `cg_set_timer()` 的时钟
+  回调里 `cg_serial_read()` 取走再灌进 `terminal` 控件：控件不是线程安全的，这条线不能破。
+  v1 只有 8N1、一个句柄一条线、不自动重连，见 `docs/COMM.md`。
 
 **限制（都是明确取舍，不是没做完）**
 
