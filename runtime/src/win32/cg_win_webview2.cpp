@@ -41,9 +41,16 @@ static int cgw_wv2_ready(void)
 {
     if (g_wv2) return 1;
     g_wv2 = LoadLibraryW(L"WebView2Loader.dll");
-    if (!g_wv2) return 0;
+    if (!g_wv2) {
+        cg_log(CG_LOG_ERROR, "WebView2Loader.dll not found (%lu)", GetLastError());
+        return 0;
+    }
     g_createEnv = (PFN_CreateEnv)GetProcAddress(g_wv2, "CreateCoreWebView2EnvironmentWithOptions");
-    return g_createEnv ? 1 : 0;
+    if (!g_createEnv) {
+        cg_log(CG_LOG_ERROR, "CreateCoreWebView2EnvironmentWithOptions not exported (%lu)", GetLastError());
+        return 0;
+    }
+    return 1;
 }
 
 /* 前向声明（定义在本文件后面） */
@@ -131,19 +138,24 @@ public:
 /* 环境就绪 -> 建控制器 */
 HRESULT EnvHandler::Invoke(HRESULT res, ICoreWebView2Environment *env)
 {
-    if (SUCCEEDED(res) && env) {
-        CtrlHandler *h = (CtrlHandler *)malloc(sizeof(CtrlHandler));
-        if (h) new (h) CtrlHandler(hwnd);
-        env->CreateCoreWebView2Controller(hwnd, h);   /* 控制器在 CtrlHandler::Invoke 里给回 */
-        env->Release();
+    if (FAILED(res) || !env) {
+        cg_log(CG_LOG_ERROR, "CreateCoreWebView2Environment completed with error: 0x%08X", (unsigned)res);
+        return S_OK;
     }
+    CtrlHandler *h = (CtrlHandler *)malloc(sizeof(CtrlHandler));
+    if (h) new (h) CtrlHandler(hwnd);
+    env->CreateCoreWebView2Controller(hwnd, h);   /* 控制器在 CtrlHandler::Invoke 里给回 */
+    env->Release();
     return S_OK;
 }
 
 /* 控制器就绪 -> 取 webview、设可见、导航到内联图表页 */
 HRESULT CtrlHandler::Invoke(HRESULT res, ICoreWebView2Controller *ctrl)
 {
-    if (FAILED(res) || !ctrl) return S_OK;
+    if (FAILED(res) || !ctrl) {
+        if (FAILED(res)) cg_log(CG_LOG_ERROR, "CreateCoreWebView2Controller failed: 0x%08X", (unsigned)res);
+        return S_OK;
+    }
     cg_echarts_state_t *st = (cg_echarts_state_t *)GetWindowLongPtr(hwnd, GWLP_USERDATA);
     if (!st) { ctrl->Release(); return S_OK; }
 
@@ -266,7 +278,9 @@ void cgw_echarts_init(cg_widget_t *w)
 
     EnvHandler *h = (EnvHandler *)malloc(sizeof(EnvHandler));
     if (h) new (h) EnvHandler(hwnd);
-    g_createEnv(NULL, wudf, NULL, h);
+    HRESULT hr = g_createEnv(NULL, wudf, NULL, h);
+    if (FAILED(hr))
+        cg_log(CG_LOG_ERROR, "CreateCoreWebView2Environment failed: 0x%08X", (unsigned)hr);
     free(wudf);
 }
 
