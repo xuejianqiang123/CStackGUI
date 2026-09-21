@@ -72,6 +72,14 @@ if (!findNode(doc, probeId)) {
   node.text = "画布新增的复选框";
   node.checked = true;
   if (knownCallback) node.events = { change: knownCallback };
+  /* 顺手挂一个控件绑定：它是"画布能存、运行时读不懂"里代价最高的一类 ——
+   * 丢了不报错、不崩，只是两个控件悄悄不同步，没人会发现。下面第 4 步核对它。 */
+  let srcId = "";
+  walk(doc.widgets, (n) => {
+    if (srcId) return;
+    if (n.type === "slider" || n.type === "progress" || n.type === "spinner") srcId = n.id;
+  });
+  if (srcId) node.bind = { src: srcId };
   doc.widgets.push(node);
   touched += 1;
 }
@@ -134,7 +142,28 @@ fs.mkdirSync(path.dirname(output), { recursive: true });
 fs.writeFileSync(output, written, "utf8");
 console.log(`[ok] 画布改动 ${touched} 处，写出 ${output}（${written.length} 字节）`);
 
-/* 3. 交给 C 运行时读 */
+/* 3. 恒等回写核对：写出去的文件再读回来，绑定的源不能变、不能丢。
+ * 只盯 bind 一个字段 —— 它的失效方式是"静默"的（两个控件不再同步），
+ * 光靠 C 侧自检发现不了（没有 bind 的文档照样能通过）。 */
+{
+  const expect = new Map();
+  walk(doc.widgets, (n) => {
+    if (n.bind?.src) expect.set(n.id, n.bind);
+  });
+  const back = parseDoc(written);
+  let lost = 0;
+  for (const [id, b] of expect) {
+    const got = back.doc ? findNode(back.doc, id) : null;
+    if (!got || got.bind?.src !== b.src || (got.bind.two === true) !== (b.two === true)) {
+      console.error(`[fail] 恒等回写丢了 bind：${id} -> ${b.src}${b.two ? " (two)" : ""}`);
+      lost += 1;
+    }
+  }
+  if (lost) process.exit(1);
+  console.log(`[ok] 恒等回写：${expect.size} 处绑定（bind）无损`);
+}
+
+/* 4. 交给 C 运行时读 */
 let out = "";
 let code = 0;
 try {
