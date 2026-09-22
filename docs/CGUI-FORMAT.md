@@ -124,7 +124,7 @@
 | `conv` | 整数 | 否 | `edit`：大小写转换 `1` 大写转小写 / `2` 小写转大写。**不写 = 0 = 不转换**。注意 Windows 的 `ES_UPPERCASE`/`ES_LOWERCASE` 在**写入文本时也会转**，所以初始 `text` 也会被转换（`text: "abc"` + `conv: 2` 显示成 `ABC`）|
 | `input` | 整数 | 否 | `edit`：输入方式。`1` 只读（能选中、改不了）/ `2` 密码（显示成圆点）/ `3` 整数文本 / `4` 小数文本 / `5` 字节 / `6` 短整数 / `7` 整数 / `8` 长整数 / `9` 小数 / `10` 双精度小数 / `11` 日期时间。**不写 = 0 = 通常方式**。`3` 靠 `ES_NUMBER`；`4`~`11` 由运行时把关：**按键**只放行该类型可能出现的字符（数字、负号、小数点、日期分隔符，非法字符连 `char` 事件都不发），**失焦**时能解析就夹到类型范围（字节 0~255、短整数 ±32767、整数 ±21 亿）并重写文本，解析不了就清空（"没填"是合法状态，运行时不会弹窗）|
 | `border` | 整数 | 否 | `edit`：边框样式 `1` 无边框 / `2` 凹入式 / `3` 凸出式 / `4` 浅凹入式 / `5` 镜框式 / `6` 单线边框式。**不写 = 0 = 本工程原本的 M3 圆角描边**（和上面六种并列，方便老文件不动） |
-| `spin` | 整数 | 否 | `edit`：右侧上下调节器 `1` 自动（点一下按 ±1 改数字并夹到 `min`/`max`）/ `2` 手动（只派发 `spin` 事件，文本由业务自己写）。**不写 = 0 = 无调节器** |
+| `spin` | 整数 | 否 | `edit`：右侧上下调节器 `1` 自动（点一下按 ±1 改值并夹到 `min`/`max`）/ `2` 手动（只派发 `spin` 事件，值由业务自己改）。**不写 = 0 = 无调节器**；**写了它就是数值框**：`value` 是真相、显示文本由它派生（`text` 对它不生效），`cg_widget_value()`/`set_value()`/绑定都按值走 —— 这就是原来独立类型 `spinner` 的能力。多行输入框没有调节器 |
 | `items` | 字符串数组 | 否 | `listbox` / `combo` / `tabs`（页签文字）/ `statusbar`（分段文字）/ `toolbar`（按钮文字）的内容 |
 | `nodes` | 对象数组 | 否 | `tree` 的节点树（2.5）或 `menu`/`menubutton` 的菜单项（2.7）|
 | `columns` / `rows` | 数组 | 否 | `table` 的列与行，见 2.6 |
@@ -150,8 +150,8 @@
 | `visible` | 布尔 | `true` | 全部 |
 | `enabled` | 布尔 | `true` | 全部 |
 | `checked` | 布尔 | `false` | `checkbox` / `radio` |
-| `value` | 整数 | `0`（数值类默认 40）| `slider` / `progress` / `listbox`(选中项序号) / `meter`（当前值，按 `min`/`max` 夹） / `led`（`0` 灭 / `1` 亮 / `2` 闪，**不按区间夹**）|
-| `min` / `max` | 整数 | `0` / `100` | `slider` / `progress` / `spinner` / `meter`（量程）/ `rate`（星数 = `max-min`，上限 10）/ `pagination`（页数 = `max-min+1`）。`max <= min` 时自动修正为 `min+1` |
+| `value` | 整数 | `0`（数值类默认 40）| `slider` / `progress` / `listbox`(选中项序号) / `meter`（当前值，按 `min`/`max` 夹） / `led`（`0` 灭 / `1` 亮 / `2` 闪，**不按区间夹**） / **数值输入框**（`edit` + `spin`：值是真相、文本由它派生）|
+| `min` / `max` | 整数 | `0` / `100` | `slider` / `progress` / **数值输入框**（`edit` + `spin`，箭头与手输都夹）/ `meter`（量程）/ `rate`（星数 = `max-min`，上限 10）/ `pagination`（页数 = `max-min+1`）。`max <= min` 时自动修正为 `min+1` |
 
 ### 2.4 `src`：图片路径
 
@@ -263,9 +263,9 @@ static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
 
 | 目标的类型 | 同步内容 |
 | --- | --- |
-| `slider` `progress` `progressring` `spinner` `rate` `pagination` `tabs` `listbox` `combo` `toolbar` | 抄 `value`。**列表类（`tabs`/`listbox`/`combo`/`toolbar`）的下标不按 `min`/`max` 夹**，跟用户点选是同一套语义；其余按目标的 `min`/`max` 夹 |
+| `slider` `progress` `progressring` **数值输入框**（`edit` + `spin`）`rate` `pagination` `tabs` `listbox` `combo` `toolbar` | 抄 `value`。**列表类（`tabs`/`listbox`/`combo`/`toolbar`）的下标不按 `min`/`max` 夹**，跟用户点选是同一套语义；其余按目标的 `min`/`max` 夹 |
 | `checkbox` `radio` `switch` | 抄勾选状态：源也是勾选型就抄 `checked`，否则取「源的值是否为 0」 |
-| 其它能显示文字的（`label` `edit` `multiedit` `richtext` `statusbar` `button` `link` `badge` `tag` …） | 源是文本型（输入框/标签/链接/徽章/标签片/日期）就抄**文字**，否则把源的**数值**写成十进制 |
+| 其它能显示文字的（`label` `edit`（无调节器的普通输入框）`richtext` `statusbar` `button` `link` `badge` `tag` …） | 源是文本型（普通输入框/标签/链接/徽章/标签片/日期）就抄**文字**，否则把源的**数值**写成十进制 |
 
 两条刻意的规矩，知道了才不会误判：
 
@@ -464,10 +464,8 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `label` | 标签 | 否 | 160×24 | `标签` | **无**（纯显示） | `STATIC` |
 | `link` | 链接 | 否 | 160×24 | `链接` | `click`、`dblclick` | `STATIC`+`SS_NOTIFY`（手型光标、蓝色下划线）|
 | `switch` | 开关 | 否 | 56×32 | — | `change` | `BUTTON` 自绘（M3 胶囊）|
-| `edit` | 单行输入 | 否 | 200×32 | — | `change`、`submit`、`spin`（调节钮被按下）、鼠标全套（`mousedown`/`mouseup`/`dblclick`/`rdown`/`rup`/`mousemove`）、键盘全套（`keydown`/`keyup`/`char`/`wheel`）| `EDIT`（圆角+垂直居中自绘；多行 / 滚动条 / 最大长度 / 大小写转换 / 边框 / 输入方式 / 调节器由 `multiline`/`scroll`/`maxlen`/`conv`/`border`/`input`/`spin` 控制，「对齐方式」复用 `style.align` → `ES_LEFT`/`ES_CENTER`/`ES_RIGHT`）|
-| `multiedit` | 多行输入 | 否 | 240×120 | — | `change` | `EDIT` 多行（圆角自绘）|
+| `edit` | 输入框 | 否 | 200×32 | — | `change`、`submit`、`spin`（调节钮被按下）、鼠标全套（`mousedown`/`mouseup`/`dblclick`/`rdown`/`rup`/`mousemove`）、键盘全套（`keydown`/`keyup`/`char`/`wheel`）| `EDIT`（圆角+垂直居中自绘；多行 / 滚动条 / 最大长度 / 大小写转换 / 边框 / 输入方式 / 调节器由 `multiline`/`scroll`/`maxlen`/`conv`/`border`/`input`/`spin` 控制，「对齐方式」复用 `style.align` → `ES_LEFT`/`ES_CENTER`/`ES_RIGHT`）。**多行 = 原来的 `multiedit`，带调节器 = 原来的 `spinner`**（两个类型 2026-09-22 合并进来，老 `.cgui` 自动升级）|
 | `richtext` | 富文本 | 否 | 320×160 | — | `change` | `RICHEDIT50W`（缺库时降级 EDIT）|
-| `spinner` | 数字微调 | 否 | 100×28 | — | `change` | `EDIT` + `msctls_updown32`（文本自管，不用 `UDS_SETBUDDYINT`）|
 | `datepicker` | 日期时间 | 否 | 140×28 | — | `change` | `SysDateTimePick32`（datetime 用两个 HWND）|
 | `monthcal` | 月历 | 否 | 230×180 | — | `select`、`dblclick` | `SysMonthCal32`（选中日期写回 `text`）|
 | `checkbox` | 复选框 | 否 | 160×28 | `复选` | `change` | `BUTTON`+`BS_OWNERDRAW`（自绘）|
@@ -505,7 +503,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `pagination` | 分页 | 否 | 180×32 | — | `change` | `BUTTON` 自绘（页数 = `max-min+1`）|
 
 > 上表只列每种控件的**主要**事件。凡是有键盘焦点概念的原生控件
-> （`button`/`switch`/`edit`/`multiedit`/`richtext`/`spinner`/`datepicker`/`checkbox`/`radio`/
+> （`button`/`switch`/`edit`/`richtext`/`datepicker`/`checkbox`/`radio`/
 > `listbox`/`combo`/`slider`/`tabs`/`tree`/`table`）都额外支持 `gotfocus` / `lostfocus`。
 
 **窗口本身也是一个"控件"**（伪控件 id 固定为 `__window`，头文件里是 `CG_WINDOW_ID`）。

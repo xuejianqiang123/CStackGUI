@@ -94,7 +94,7 @@ static const cg_binding_t k_bindings[] = {
 | --- | --- | --- | --- |
 | `CG_EVENT_CLICK` | `click` | `BN_CLICKED` / `STN_CLICKED` | button、iconbutton、link、image、菜单类 |
 | `CG_EVENT_DBLCLICK` | `dblclick` | 运行时自己判定（见下）；列表/树/表格用原生 `*_DBLCLK` | 同上 + listbox、tree、table、monthcal |
-| `CG_EVENT_CHANGE` | `change` | `EN_CHANGE` / `BN_CLICKED`(勾选类) / `WM_HSCROLL`(滑块) / `UDN_DELTAPOS`(微调) / `DTN_DATETIMECHANGE` | edit、multiedit、richtext、spinner、datepicker、checkbox、radio、switch、slider |
+| `CG_EVENT_CHANGE` | `change` | `EN_CHANGE` / `BN_CLICKED`(勾选类) / `WM_HSCROLL`(滑块) / `UDN_DELTAPOS`(数值框箭头) / `DTN_DATETIMECHANGE` | edit（含多行与数值框）、richtext、datepicker、checkbox、radio、switch、slider |
 | `CG_EVENT_SUBMIT` | `submit` | 回车（`IsDialogMessage` → `IDOK`，落在当前焦点的输入框上） | 只有 edit |
 | `CG_EVENT_SELECT` | `select` | `LBN_SELCHANGE` / `CBN_SELCHANGE` / `TCN_SELCHANGE` / `TVN_*` / `LVN_ITEMCHANGED` / `MCN_SELECT` | listbox、combo、tabs、tree、table、monthcal |
 | `CG_EVENT_RELEASE` | `release` | 滑块 `TB_ENDTRACK`（拖动中只发 `change`） | 只有 slider |
@@ -139,9 +139,7 @@ void cb(cg_widget_t *self, cg_event_t ev, void *user);
 | --- | --- | --- | --- |
 | `button` | 按钮 | 否 | `BUTTON` + `BS_PUSHBUTTON` |
 | `label` | 标签 | 否 | `STATIC`（`SS_LEFT/CENTER/RIGHT`）|
-| `edit` | 单行输入 | 否 | `EDIT` + `ES_AUTOHSCROLL` |
-| `multiedit` | 多行输入 | 否 | `EDIT` + `ES_MULTILINE` |
-| `spinner` | 数字微调 | 否 | `EDIT` + `msctls_updown32`（**一个控件两个 HWND**，见 4.1）|
+| `edit` | 输入框 | 否 | `EDIT`；多行加 `ES_MULTILINE`，带调节器（`spin`）时加 `msctls_updown32`（**此时一个控件两个 HWND**，见 4.1）。原来的 `multiedit`/`spinner` 已合并进它 |
 | `checkbox` / `radio` | 复选/单选 | 否 | `BUTTON` + `BS_OWNERDRAW`，父窗口处理 `WM_DRAWITEM` 自绘 |
 | `switch` | 开关 | 否 | `BUTTON` + `BS_OWNERDRAW`，父窗口处理 `WM_DRAWITEM` 自绘药丸 |
 | `listbox` | 列表框 | 否 | `LISTBOX` + `LBS_NOTIFY` |
@@ -299,7 +297,7 @@ runtime/
 2. **同步逻辑要防重入。** 回调里改控件会触发原生通知（`EN_CHANGE` 等），再回到回调就递归了。
    `cg_win_event.c` 用 `g_win_in_notify` 挡住这种嵌套：`cgw_sync_widget()` 外层包一层（保存/恢复原值），
    `cgw_notify_from()` / `cgw_notify_common()` 也各包一层。
-3. **一个控件可能有第二个 HWND。** `spinner` = 输入框 + 上下箭头两个窗口，
+3. **一个控件可能有第二个 HWND。** 数值输入框（`edit` + `spin`）= 输入框 + 上下箭头两个窗口，
    所以按控件句柄反查控件要用 `cgw_widget_by_hwnd()`（同时比对 `native` 和 `native2`），
    只按 `GetDlgCtrlID()` 找会漏掉箭头那条消息。
 4. **子窗口的通知先到父窗口。** 控件把 `WM_COMMAND` / `WM_NOTIFY` / `WM_DRAWITEM` / `WM_HSCROLL` /
@@ -484,7 +482,7 @@ CStackGUI/
   make-release.bat            一键打发布包 -> release\（可随时删掉重打）
   runtime/                    C 运行时库（画布不依赖它，业务 exe 依赖它）
   examples/                   仓库自带的示例
-    gallery/                  控件陈列室·三合一（39 种控件+13 种事件都用到了）
+    gallery/                  控件陈列室·三合一（42 种控件+13 种事件都用到了）
   apps/                       用户自己的工程（画布「导出 C 骨架」默认导到这里）
     README.md                 说明这个目录是干嘛的
   designer/                   画布（Electron + React + TS）

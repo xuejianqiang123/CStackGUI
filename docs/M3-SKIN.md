@@ -29,7 +29,7 @@
   `DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE=ROUND)` 给整窗圆角
   （`dwmapi.dll` 动态加载，老系统无此 API 自动跳过，零链接依赖）。
 - `runtime/src/skin/cg_skin.c`（新增）：所有绘制逻辑，靠 `cg_internal.h` 的 `cg_widget_by_hwnd()` 反查控件。
-- `runtime/src/skin/cg_skin_edit.c`：输入框（edit / multiedit / spinner）的圆角裁切 + 单行文字垂直居中，
+- `runtime/src/skin/cg_skin_edit.c`：输入框（edit：单行 / 多行 / 数值框）的圆角裁切 + 单行文字垂直居中，
   靠 `SetWindowSubclass` 挂子类实现（EDIT 不支持 owner-draw）。
 - `runtime/src/core/cg_internal.h`：`cg_widget_t` 加 `hot` / `pressed` 两个 int 状态位（calloc 默认 0）。
 - `build-runtime.bat`：不用改——它自动扫 `runtime\src\core|win32|skin\` 下的全部 `.c`，
