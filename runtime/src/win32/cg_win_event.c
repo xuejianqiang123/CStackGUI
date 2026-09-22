@@ -101,12 +101,12 @@ LRESULT CALLBACK cgw_FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
         break;
     case WM_HSCROLL:
     case WM_VSCROLL:
-        /* 只转发滑块/微调的滚动通知（它们要送回主窗口换算成值）。
+        /* 只转发滑块 / 数值框（带调节器的 edit）的滚动通知（它们要送回主窗口换算成值）。
          * listbox / tree / table 的滚动条消息是发给控件自己、由控件自己处理的，
          * 无条件转发会把这些消息劫走——表现为滚动条拖了没反应。 */
         if (g_win_app && g_win_app->hwnd && (HWND)g_win_app->hwnd != hwnd) {
             cg_widget_t *sw = cgw_widget_by_hwnd(g_win_app, (HWND)lp);
-            if (sw && (cgw_is_t(sw, "slider") || cgw_is_t(sw, "spinner"))) {
+            if (sw && (cgw_is_t(sw, "slider") || cg_widget_is_numedit(sw))) {
                 return SendMessageW((HWND)g_win_app->hwnd, msg, wp, lp);
             }
         }

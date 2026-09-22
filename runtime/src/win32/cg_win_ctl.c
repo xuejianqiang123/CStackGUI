@@ -27,8 +27,7 @@ const wchar_t *cgw_class_of(const cg_widget_t *w)
     if (!strcmp(w->type, "iconbutton"))return L"BUTTON";      /* BS_OWNERDRAW：画图标 */
     if (!strcmp(w->type, "label"))     return L"STATIC";      /* 静态文本，SS_* 决定对齐 */
     if (!strcmp(w->type, "link"))      return L"STATIC";      /* SS_NOTIFY 才有 STN_CLICKED */
-    if (!strcmp(w->type, "edit"))      return L"EDIT";        /* 单行输入框（运行时做圆角） */
-    if (!strcmp(w->type, "multiedit")) return L"EDIT";        /* 多行输入框（运行时做圆角） */
+    if (!strcmp(w->type, "edit"))      return L"EDIT";        /* 输入框：单行/多行/数值框都走它（运行时做圆角） */
     if (!strcmp(w->type, "richtext"))  return g_win_richedit_class ? g_win_richedit_class : L"EDIT";  /* 富文本，Msftedit 降级到 EDIT */
     /* 终端也用 RichEdit（只读）：为了逐行着色 + 能选中复制，降级到 EDIT 时只是没有颜色 */
     if (!strcmp(w->type, "terminal"))  return g_win_richedit_class ? g_win_richedit_class : L"EDIT";
@@ -45,7 +44,6 @@ const wchar_t *cgw_class_of(const cg_widget_t *w)
     if (!strcmp(w->type, "tree"))      return WC_TREEVIEWW;   /* 树形视图 */
     if (!strcmp(w->type, "table"))     return WC_LISTVIEWW;    /* 列表视图（报表模式） */
     if (!strcmp(w->type, "statusbar")) return STATUSCLASSNAMEW;/* 状态栏 */
-    if (!strcmp(w->type, "spinner"))   return L"EDIT";        /* 数字框：edit + 箭头 native2 */
     if (!strcmp(w->type, "datepicker"))return DATETIMEPICK_CLASSW; /* 日期/时间选择 */
     if (!strcmp(w->type, "toolbar"))   return TOOLBARCLASSNAMEW;  /* 工具栏 */
     if (!strcmp(w->type, "monthcal"))  return MONTHCAL_CLASSW;   /* 月历 */
@@ -118,21 +116,32 @@ static int cgw_edit_date_ok(const wchar_t *s)
     return (i == 10 || i == 16);
 }
 
+/** @brief 校验/过滤用的输入方式档位。
+ *  数值输入框（edit + 调节器）没写 input 时按「整数」办：value 是整数，
+ *  放任字母进来只会被 wcstol 解析成 0（原来独立类型 spinner 是写死 ES_NUMBER 挡住的）。
+ *  作者显式写了档位（含只读 1 / 密码 2 / 整数文本 3）就听作者的。 */
+static int edit_input_mode(const cg_widget_t *w)
+{
+    if (cg_widget_is_numedit(w) && w->input == 0) return 7;   /* 整数 */
+    return w->input;
+}
+
 /** @brief 这个字符要不要吞掉（由 cg_win_event.c 的 WM_CHAR 调用） */
 int cgw_edit_char_reject(const cg_widget_t *w, HWND hwnd, wchar_t ch)
 {
     DWORD   sel_a = 0, sel_b = 0;
     wchar_t buf[64];
-    int     signed_ok, dot_ok;
+    int     mode, signed_ok, dot_ok;
 
     if (!w || strcmp(w->type, "edit")) return 0;
-    if (w->input < 4) return 0;              /* 通常/只读/密码/整数文本：不在这里拦 */
+    mode = edit_input_mode(w);
+    if (mode < 4) return 0;                  /* 通常/只读/密码/整数文本：不在这里拦 */
     if (ch < 32) return 0;                   /* 退格 / 回车 / 粘贴用的控制字符一律放行 */
     if (ch >= L'0' && ch <= L'9') return 0;
 
-    signed_ok = (w->input == 4 || w->input == 6 || w->input == 7 ||
-                 w->input == 8 || w->input == 9 || w->input == 10);
-    dot_ok    = (w->input == 4 || w->input == 9 || w->input == 10);
+    signed_ok = (mode == 4 || mode == 6 || mode == 7 ||
+                 mode == 8 || mode == 9 || mode == 10);
+    dot_ok    = (mode == 4 || mode == 9 || mode == 10);
 
     if (signed_ok && ch == L'-') {
         SendMessageW(hwnd, EM_GETSEL, (WPARAM)&sel_a, (LPARAM)&sel_b);
@@ -142,7 +151,7 @@ int cgw_edit_char_reject(const cg_widget_t *w, HWND hwnd, wchar_t ch)
         if (GetWindowTextW(hwnd, buf, 64) > 0 && wcschr(buf, L'.')) return 1;  /* 只许一个小数点 */
         return 0;
     }
-    if (w->input == 11 && (ch == L'-' || ch == L':' || ch == L' ')) return 0;
+    if (mode == 11 && (ch == L'-' || ch == L':' || ch == L' ')) return 0;
     return 1;
 }
 
@@ -150,18 +159,19 @@ int cgw_edit_char_reject(const cg_widget_t *w, HWND hwnd, wchar_t ch)
 void cgw_edit_validate(cg_widget_t *w, HWND hwnd)
 {
     wchar_t buf[128];
-    int     len;
+    int     len, mode;
 
     if (!w || !hwnd || strcmp(w->type, "edit")) return;
-    if (w->input < 4) return;
+    mode = edit_input_mode(w);
+    if (mode < 4) return;
     len = GetWindowTextW(hwnd, buf, 128);
     if (len <= 0 || len >= 128) return;      /* 空 = 没填，合法 */
 
-    if (w->input == 11) {
+    if (mode == 11) {
         if (!cgw_edit_date_ok(buf)) SetWindowTextW(hwnd, L"");
         return;
     }
-    if (w->input == 4 || w->input == 9 || w->input == 10) {
+    if (mode == 4 || mode == 9 || mode == 10) {
         wchar_t *end = NULL;
         wcstod(buf, &end);
         if (!end || *end) SetWindowTextW(hwnd, L"");   /* 还剩字符 = 不是个数 */
@@ -171,7 +181,7 @@ void cgw_edit_validate(cg_widget_t *w, HWND hwnd)
         long long lo = LLONG_MIN, hi = LLONG_MAX, v;
         wchar_t  *end = NULL;
         wchar_t   nb[32];
-        switch (w->input) {
+        switch (mode) {
         case 5: lo = 0;                    hi = 255;                 break;   /* 字节 */
         case 6: lo = -32768;               hi = 32767;               break;   /* 短整数 */
         case 7: lo = -2147483647LL - 1;    hi = 2147483647LL;        break;   /* 整数 */
@@ -220,7 +230,9 @@ DWORD cgw_style_of(const cg_widget_t *w)
     }
     if (!strcmp(w->type, "edit")) {
         /* 单行/多行、滚动条、对齐、大小写转换、只读/密码/整数，全部由 .cgui 字段决定；
-         * 字段全缺省 = 原来的单行左对齐输入框。对齐复用 style.align（和标签是同一个字段）。 */
+         * 字段全缺省 = 单行左对齐输入框。多行=原来的 multiedit，调节器（数值框）=
+         * 原来的 spinner（箭头是独立窗口，见 cg_win_create.c）。
+         * 对齐复用 style.align（和标签是同一个字段）。 */
         DWORD s = WS_CHILD | WS_VISIBLE | WS_TABSTOP;
         s |= (w->style.align == CG_ALIGN_CENTER) ? ES_CENTER
            : (w->style.align == CG_ALIGN_RIGHT)  ? ES_RIGHT : ES_LEFT;
@@ -235,7 +247,6 @@ DWORD cgw_style_of(const cg_widget_t *w)
         else if (w->input == 3) s |= ES_NUMBER;
         return s;
     }
-    if (!strcmp(w->type, "multiedit")) return WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_WANTRETURN;
     if (!strcmp(w->type, "checkbox"))  return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;  /* 自绘勾选框 */
     if (!strcmp(w->type, "radio"))     return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW | WS_GROUP;  /* 自绘单选圆，WS_GROUP 标记组首 */
     if (!strcmp(w->type, "listbox"))   return WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | LBS_NOTIFY;
@@ -258,8 +269,6 @@ DWORD cgw_style_of(const cg_widget_t *w)
     if (!strcmp(w->type, "browser"))   return g_win_atl_ok ? (WS_CHILD | WS_VISIBLE | WS_TABSTOP)
                                                        : (WS_CHILD | WS_VISIBLE | SS_CENTER | SS_CENTERIMAGE);
     if (!strcmp(w->type, "statusbar")) return WS_CHILD | WS_VISIBLE;
-    /* 微调框：数字左对齐（原先 ES_RIGHT 在窄框里会贴着箭头，很难看） */
-    if (!strcmp(w->type, "spinner"))   return WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_NUMBER | ES_LEFT | ES_AUTOHSCROLL;
     /* group / box：自己注册的面板类，能装子控件。
      * 边框和标题都自己画，**不能用 WS_BORDER** —— 系统重绘非客户区时会盖掉标题，
      * 看起来就是"边框线穿过文字"。 */
@@ -269,10 +278,9 @@ DWORD cgw_style_of(const cg_widget_t *w)
 /** @brief 控件 -> 扩展样式位（输入类控件给立体边框） */
 DWORD cgw_exstyle_of(const cg_widget_t *w)
 {
-    /* edit/multiedit 的边框由 cg_skin 自绘（灰圆角+聚焦紫），
+    /* edit 的边框由 cg_skin 自绘（六种边框样式 + 聚焦紫），
      * WS_EX_CLIENTEDGE 的凹陷立体边和圆角裁切叠加会把内容切没 */
     if (!strcmp(w->type, "edit"))    return 0;
-    if (!strcmp(w->type, "multiedit")) return 0;
     if (!strcmp(w->type, "richtext")) return WS_EX_CLIENTEDGE;
     if (!strcmp(w->type, "listbox")) return WS_EX_CLIENTEDGE;
     return 0;

@@ -5,7 +5,7 @@
  *          不直接碰 Win32 控件创建逻辑，所以换一套外观时这里改完即可，上层零改动。
  *          GDI+ 已经被 image / canvas 控件初始化（cg_win_window.c 的 cgw_win_init 调 GdiplusStartup），
  *          本文件只负责在 WM_DRAWITEM 时往 DC 上画；GDI+ 万一没起来，自动回退 GDI RoundRect。
- *          输入框（edit / multiedit / spinner）的圆角裁切与垂直居中在 cg_skin_edit.c。
+ *          输入框（edit：单行 / 多行 / 数值框）的圆角裁切与垂直居中在 cg_skin_edit.c。
  */
 /* 明确走 W 系列 API：必须在 windows.h 之前定义 */
 #define UNICODE

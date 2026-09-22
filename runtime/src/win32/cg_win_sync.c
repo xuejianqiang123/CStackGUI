@@ -12,9 +12,6 @@
 
 /* ------------------------------------------------------------ 状态同步 */
 
-/* spinner 的箭头宽度（逻辑像素） */
-#define CG_SPIN_ARROW_W 18
-
 /* ------------------------------------------------------------ 终端（terminal）
  * core 把行攒在 items[] 里（**首字节是方向标记**），这里只负责把"还没推过的行"
  * 追加进只读 RichEdit 并按方向着色。整体重灌只在裁剪/清空之后发生
@@ -494,15 +491,9 @@ static void sync_widget_body(cg_widget_t *w)
         }
     }
 
-    /* 位置尺寸 */
-    if (cgw_is_t(w, "spinner")) {
-        /* 输入框让出右侧给箭头 */
-        int arrow = cgw_scale_px(app, CG_SPIN_ARROW_W);
-        int width = cgw_scale_px(app, w->w);
-        SetWindowPos(h, NULL, cgw_scale_px(app, w->x), cgw_scale_px(app, w->y),
-                     width > arrow ? width - arrow : width, cgw_scale_px(app, w->h),
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-    } else if (cgw_is_t(w, "datepicker") && cgw_is_datetime(w) && w->native2) {
+    /* 位置尺寸（数值框不用在这里让位给箭头：箭头由 cg_skin_edit_fit_spin 摆在
+     * 客户区内侧，是浮在输入框上面的独立窗口，输入框本身仍是整块尺寸） */
+    if (cgw_is_t(w, "datepicker") && cgw_is_datetime(w) && w->native2) {
         /* 日期在左半边，时间在右半边 */
         int x = cgw_scale_px(app, w->x), y = cgw_scale_px(app, w->y);
         int width = cgw_scale_px(app, w->w), height = cgw_scale_px(app, w->h);
@@ -522,8 +513,9 @@ static void sync_widget_body(cg_widget_t *w)
         !strcmp(w->type, "checkbox") || !strcmp(w->type, "radio") ||
         !strcmp(w->type, "group") || !strcmp(w->type, "box") ||
         cgw_is_editlike(w)) {
-        /* spinner 的显示文本 = value（.cgui 的 text 字段一般是空的） */
-        if (!strcmp(w->type, "spinner")) {
+        /* 数值框（edit + 调节器）：显示文本 = value 的十进制。value 是真相，
+         * .cgui 的 text 只是初始快照（程序要改就调 cg_widget_set_value）。 */
+        if (cg_widget_is_numedit(w)) {
             wchar_t wbuf[32];
             swprintf(wbuf, 32, L"%d", w->value);
             if (!cgw_hwnd_text_is(h, wbuf)) SetWindowTextW(h, wbuf);
@@ -614,7 +606,8 @@ static void sync_widget_body(cg_widget_t *w)
         /* 自绘勾选/单选按 w->checked 画（cg_skin_draw_check），这里只需触发重绘；
          * BM_SETCHECK 对 BS_OWNERDRAW 按钮没有视觉效果，是无效调用。 */
         InvalidateRect(h, NULL, TRUE);
-    } else if (!strcmp(w->type, "spinner")) {
+    } else if (cg_widget_is_numedit(w)) {
+        /* 数值框：把范围与当前位置推给上下箭头（文本已由上面那段按 value 写好） */
         HWND up = (HWND)w->native2;
         if (up) {
             SendMessageW(up, UDM_SETRANGE32, (WPARAM)w->vmin, (LPARAM)w->vmax);
@@ -660,7 +653,7 @@ static void sync_widget_body(cg_widget_t *w)
 
     EnableWindow(h, w->enabled ? TRUE : FALSE);
 
-    /* 标签页的子控件要按当前页显隐（spinner/datetime 的 native2 同进同退） */
+    /* 标签页的子控件要按当前页显隐（数值框 / datetime 的 native2 同进同退） */
     apply_visible(w);
     InvalidateRect(h, NULL, TRUE);
 }

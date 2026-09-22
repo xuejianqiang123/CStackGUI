@@ -111,7 +111,7 @@ COLORREF cgw_to_colorref(unsigned c);
 HBRUSH cgw_brush_for(unsigned rgb);
 /** @brief 控件类型判断（NULL 安全） */
 int cgw_is_t(const cg_widget_t *w, const char *type);
-/** @brief 是否输入类控件（edit/multiedit/spinner/richtext） */
+/** @brief 是否输入类控件（edit/richtext）；数值框判定见 cg_widget_is_numedit() */
 int cgw_is_editlike(const cg_widget_t *w);
 /** 输入框的「输入方式」限制：这个字符要不要吞掉（WM_CHAR 过滤，见 cg_win_ctl.c） */
 int cgw_edit_char_reject(const cg_widget_t *w, HWND hwnd, wchar_t ch);

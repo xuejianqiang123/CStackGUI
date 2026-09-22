@@ -140,10 +140,12 @@ int cgw_is_t(const cg_widget_t *w, const char *type)
     return w && w->type && strcmp(w->type, type) == 0;
 }
 
-/** @brief 是否输入类控件（edit/multiedit/spinner/richtext，文字要拉回模型的那类） */
+/** @brief 是否输入类控件（edit/richtext，文字要拉回模型的那类）。
+ *  多行与数值框都是 edit，所以这里只剩两种类型 —— 要区分是不是数值框用
+ *  cg_widget_is_numedit()（core/cg_widget.c）。 */
 int cgw_is_editlike(const cg_widget_t *w)
 {
-    return cgw_is_t(w, "edit") || cgw_is_t(w, "multiedit") || cgw_is_t(w, "spinner") || cgw_is_t(w, "richtext");
+    return cgw_is_t(w, "edit") || cgw_is_t(w, "richtext");
 }
 
 /**

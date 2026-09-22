@@ -5,7 +5,7 @@
  */
 #include "cg_win_internal.h"
 
-/** 按原生窗口反查控件：spinner 这类一个控件有两个 HWND，按 ctrl id 找会漏 */
+/** 按原生窗口反查控件：数值框（edit + 调节器）这类一个控件有两个 HWND，按 ctrl id 找会漏 */
 cg_widget_t *cgw_widget_by_hwnd(cg_app_t *app, HWND h)
 {
     if (!app || !h) return NULL;
@@ -77,14 +77,14 @@ void cgw_create_native(cg_widget_t *w)
     w->native = h;
 
 
-    /* 输入框圆角 + 单行文字垂直居中（spinner 的输入框也是 EDIT，同样要）
+    /* 输入框圆角 + 单行文字垂直居中（多行 / 数值框都是 edit，一样要）
      * Subclass 在 resize/换字体时重算，Win32 原生 EDIT 不支持 owner-draw */
-    if (!strcmp(type, "edit") || !strcmp(type, "multiedit") || !strcmp(type, "spinner"))
+    if (!strcmp(type, "edit"))
         cg_skin_apply_edit(w);
 
     /* 最大允许长度：只能靠 EM_SETLIMITTEXT 设（没有对应的窗口样式位）。
      * maxlen=0 保持系统默认，不去动它 —— 免得"没填"变成"限 0 个字符"。 */
-    if ((!strcmp(type, "edit") || !strcmp(type, "multiedit")) && w->maxlen > 0)
+    if (!strcmp(type, "edit") && w->maxlen > 0)
         SendMessageW(h, EM_SETLIMITTEXT, (WPARAM)w->maxlen, 0);
 
     /* 自绘窗口类（CG_*_CLASS）的窗口过程要靠 GWLP_USERDATA 反查 app 和控件，
@@ -109,34 +109,15 @@ void cgw_create_native(cg_widget_t *w)
         }
     }
 
-    /* 数字微调：输入框 + 右侧上下箭头，是两个原生窗口拼出来的一个控件。
-     * 不用 UDS_SETBUDDYINT：那个样式会在内部位置一变就用 SetWindowText 重写 buddy
-     * 文本、把光标/选区清回 0（点箭头或敲数字后光标总在最前面）。文本由我们自管。 */
-    if (!strcmp(type, "spinner")) {
-        HWND up = CreateWindowExW(0, UPDOWN_CLASSW, L"",
-                                  WS_CHILD | WS_VISIBLE | UDS_ALIGNRIGHT | UDS_ARROWKEYS | UDS_NOTHOUSANDS,
-                                  0, 0, 0, 0, parent, NULL, GetModuleHandleW(NULL), NULL);
-        if (up) {
-            wchar_t wbuf[32];
-            SendMessageW(up, UDM_SETBUDDY, (WPARAM)h, 0);
-            SendMessageW(up, UDM_SETRANGE32, (WPARAM)w->vmin, (LPARAM)w->vmax);
-            SendMessageW(up, UDM_SETPOS32, 0, (LPARAM)w->value);
-            w->native2 = up;
-            /* 无 SETBUDDYINT 时 SETPOS32 不写 buddy 文本，初始值要自己写一遍 */
-            swprintf(wbuf, 32, L"%d", w->value);
-            SetWindowTextW(h, wbuf);
-            /* UDS_ALIGNRIGHT 的箭头会给 buddy 重设边距、把我们的左边距清成 0（文字顶到
-             * 圆角边框上）。这里重设左边距；右边距留给箭头，别覆盖。 */
-            SendMessageW(h, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(CG_EDIT_TEXT_MARGIN, 0));
-        }
-    }
-
-    /* 单行输入框的调节器（.cgui 的 spin）：右侧一列上下箭头，和 spinner 一样由
-     * 「输入框 + UPDOWN」两个原生窗口拼出来。自动方式点箭头就改文本（见 cg_win_notify.c
-     * 的 UDN_DELTAPOS），手动方式只派发「调节钮被按下」让业务自己处理。 */
-    if (!strcmp(type, "edit") && w->spin) {
-        /* 注意：**不带 UDS_ALIGNRIGHT** —— 那个样式按窗口矩形贴右，会把箭头压在自绘边框上。
-         * 位置交给 cg_skin_edit_fit_spin()（按客户区内侧摆），尺寸变化时自绘层会重摆。 */
+    /* 调节器（.cgui 的 spin）：右侧一列上下箭头，由「输入框 + UPDOWN」两个原生窗口
+     * 拼成（原来的独立类型 spinner 就是这么做的，2026-09-22 合并进 edit）。
+     * 自动方式点箭头就改值 + 写文本（见 cg_win_notify.c 的 UDN_DELTAPOS），
+     * 手动方式只派发「调节钮被按下」让业务自己改。多行输入框不给箭头（没意义）。
+     * **不带 UDS_ALIGNRIGHT** —— 那个样式按窗口矩形贴右，会把箭头压在自绘边框上；
+     * 位置交给 cg_skin_edit_fit_spin()（按客户区内侧摆），尺寸变化时自绘层会重摆。
+     * 也不用 UDS_SETBUDDYINT：它会在位置一变就用 SetWindowText 重写 buddy 文本、
+     * 把光标/选区清回 0（点箭头或敲数字后光标总在最前面）。文本由我们自管。 */
+    if (!strcmp(type, "edit") && w->spin && !w->multiline) {
         HWND up = CreateWindowExW(0, UPDOWN_CLASSW, L"",
                                   WS_CHILD | WS_VISIBLE | UDS_ARROWKEYS | UDS_NOTHOUSANDS,
                                   0, 0, 0, 0, parent, NULL, GetModuleHandleW(NULL), NULL);
@@ -161,9 +142,8 @@ void cgw_create_native(cg_widget_t *w)
 
     cgw_sync_widget(w);
 
-    /* 字体/箭头设置都可能把 spinner 的 buddy 边距清掉：全部就位后再补一次左边距
-     * （带调节器的输入框同理：UDS_ALIGNRIGHT 会把我们的左边距清成 0） */
-    if (!strcmp(type, "spinner") || (!strcmp(type, "edit") && w->spin))
+    /* 建箭头 / 设字体都可能把输入框左边距清掉：全部就位后再补一次 */
+    if (!strcmp(type, "edit") && w->spin)
         SendMessageW(h, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(CG_EDIT_TEXT_MARGIN, 0));
 
     /* 调节器建好了：交给自绘层按客户区内侧摆位（并给右边留出箭头宽度） */
@@ -186,7 +166,7 @@ void cgw_create_native_tree(cg_widget_t *parent)
 void cgw_destroy_native(cg_widget_t *w)
 {
     if (w->native2) {
-        DestroyWindow((HWND)w->native2);       /* spinner 的箭头 */
+        DestroyWindow((HWND)w->native2);       /* 数值框的上下箭头 */
         w->native2 = NULL;
     }
     if (w->bitmap) {                            /* 图片控件的位图 */

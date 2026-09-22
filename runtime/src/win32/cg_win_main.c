@@ -148,7 +148,7 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             HWND focus = GetFocus();
             if (focus) {
                 cg_widget_t *fw = cg_widget_by_ctrl_id(app, GetDlgCtrlID(focus));
-                if (fw && (!strcmp(fw->type, "edit") || !strcmp(fw->type, "multiedit"))) {
+                if (fw && !strcmp(fw->type, "edit")) {
                     cgw_pull_edit_text(fw, focus);
                     cg_dispatch(fw, CG_EVENT_SUBMIT);
                 }
@@ -171,13 +171,15 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                 cg_dispatch(w, LOWORD(wp) == TB_ENDTRACK ? CG_EVENT_RELEASE : CG_EVENT_CHANGE);
                 return 0;
             }
-            if (w && !strcmp(w->type, "spinner")) {
+            if (w && cg_widget_is_numedit(w)) {
+                /* 数值框的箭头滚动（键盘上下键之类）：位置是箭头自己的，取回来落进
+                 * value 并刷文本，再报一次 change。走 cg_widget_set_value 是为了
+                 * 顺手夹到 min/max 并把文本同步成新值。 */
                 HWND up = (HWND)w->native2;
                 if (up && !g_win_in_notify) {
                     DWORD pos = (DWORD)SendMessageW(up, UDM_GETPOS32, 0, 0);
                     g_win_in_notify = 1;
-                    w->value = (int)pos;
-                    if (w->node) w->node->value = (int)pos;
+                    cg_widget_set_value(w, (int)pos);
                     cg_dispatch(w, CG_EVENT_CHANGE);
                     g_win_in_notify = 0;
                 }

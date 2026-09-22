@@ -153,8 +153,8 @@ void cgw_notify_body(cg_app_t *app, cg_widget_t *w, HWND hwnd, int code, int cmd
     }
     if (cgw_is_editlike(w)) {
         if (code == EN_CHANGE) {
-            if (strcmp(w->type, "spinner") == 0) {
-                /* 微调框要让 value 跟上手输的数字。
+            if (cg_widget_is_numedit(w)) {
+                /* 数值框（edit + 调节器）要让 value 跟上手输的数字。
                  * 顺序是关键：先把文本算成 int 落进 w->value / updown 内部位置，
                  * 最后再 cgw_pull_edit_text —— pull 会经 cg_widget_set_text 触发一次 sync，
                  * sync 按 w->value 重写 buddy 文本；若 value 还是旧值（如 1），
@@ -284,46 +284,33 @@ LRESULT cgw_notify_common(cg_app_t *app, const NMHDR *hdr)
         const NMUPDOWN *nud = (const NMUPDOWN *)hdr;
         HWND buddy = (HWND)w->native;
 
-        /* 输入框上的调节器（.cgui 的 spin）：只派发「调节钮被按下」，delta 给 ±1。
-         * 自动方式顺手把文本改成夹好的整数 —— 那是程序改文本，按本工程的规矩不派发
-         * change，业务在 spin 回调里读 cg_widget_text 就是最终值。 */
-        if (!strcmp(w->type, "edit")) {
+        /* 上下箭头（.cgui 的 spin，唯一带箭头的控件就是数值框）：
+         *   先派发「调节钮被按下」（ev_delta = ±1，方向由业务读）；
+         *   自动方式（spin=1）再按 ±1 改值并夹到 min/max —— 值真的变了，所以补一次
+         *   「内容变了」（change）。这样绑 change 的（关心值）和绑 spin 的（关心按钮）
+         *   都收得到；手动方式（spin=2）到此为止，值由业务在回调里自己改。 */
+        if (cg_widget_is_numedit(w)) {
             int v = nud->iPos + nud->iDelta;
             if (v < w->vmin) v = w->vmin;
             if (v > w->vmax) v = w->vmax;
             w->ev_delta = nud->iDelta;
-            w->value = v;
-            if (w->native2) SendMessageW((HWND)w->native2, UDM_SETPOS32, 0, (LPARAM)v);
-            if (w->spin == 1 && buddy) {          /* 自动：把 ±1 后的值写进文本 */
-                wchar_t wbuf[32];
-                swprintf(wbuf, 32, L"%d", v);
-                if (!cgw_hwnd_text_is(buddy, wbuf)) SetWindowTextW(buddy, wbuf);
-                SendMessageW(buddy, EM_SETSEL, (WPARAM)(wcslen(wbuf)), (LPARAM)(wcslen(wbuf)));
+            if (w->spin == 1) {
+                w->value = v;
+                if (w->node) w->node->value = v;
+                if (w->native2) SendMessageW((HWND)w->native2, UDM_SETPOS32, 0, (LPARAM)v);
+                if (buddy) {                     /* 把 ±1 后的值写进文本，光标放到末尾 */
+                    wchar_t wbuf[32];
+                    swprintf(wbuf, 32, L"%d", v);
+                    if (!cgw_hwnd_text_is(buddy, wbuf)) SetWindowTextW(buddy, wbuf);
+                    SendMessageW(buddy, EM_SETSEL, (WPARAM)(wcslen(wbuf)), (LPARAM)(wcslen(wbuf)));
+                }
             }
             cg_dispatch(w, CG_EVENT_SPIN);
+            if (w->spin == 1) cg_dispatch(w, CG_EVENT_CHANGE);
             g_win_in_notify = 0;
-            return 1;
+            return 1;    /* 已自管内部位置与 buddy 文本，别让 updown 再算一遍 */
         }
-
-        int v = nud->iPos + nud->iDelta;
-        if (v < w->vmin) v = w->vmin;
-        if (v > w->vmax) v = w->vmax;
-        w->value = v;
-        if (w->node) w->node->value = v;
-        /* 手动把新值写进 buddy 并把光标放到文本末尾，然后返回 1 拦住 updown 自动更新：
-         * 若带 UDS_SETBUDDYINT，updown 自己 SetWindowText 会把光标/选区清回 0
-         * —— 点完箭头光标总停在前面的元凶。文本自此由我们接管。 */
-        {
-            wchar_t wbuf[32];
-            swprintf(wbuf, 32, L"%d", v);
-            if (!cgw_hwnd_text_is(buddy, wbuf)) SetWindowTextW(buddy, wbuf);
-            SendMessageW(buddy, EM_SETSEL, (WPARAM)(wcslen(wbuf)), (LPARAM)(wcslen(wbuf)));
-        }
-        if (w->native2)
-            SendMessageW((HWND)w->native2, UDM_SETPOS32, 0, (LPARAM)v);
-        cg_dispatch(w, CG_EVENT_CHANGE);
-        g_win_in_notify = 0;
-        return 1;    /* 已自管内部位置与 buddy 文本，别让 updown 再算一遍 */
+        break;
     }
     default:
         break;

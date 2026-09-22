@@ -236,7 +236,7 @@ void cgw_draw_own_item(cg_app_t *app, const DRAWITEMSTRUCT *dis)
  */
 void cgw_notify_from(cg_app_t *app, HWND hwnd, int code, int cmd_id)
 {
-    /* 先按窗口句柄找：spinner 有两个 HWND，按 ctrl id 会漏掉箭头 */
+    /* 先按窗口句柄找：数值框有两个 HWND，按 ctrl id 会漏掉箭头 */
     cg_widget_t *w = cgw_widget_by_hwnd(app, hwnd);
     if (!w) w = cg_widget_by_ctrl_id(app, GetDlgCtrlID(hwnd));
 

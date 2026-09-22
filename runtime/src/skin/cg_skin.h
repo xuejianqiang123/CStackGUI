@@ -58,7 +58,7 @@ void cg_skin_draw_progress(cg_widget_t *w, HDC hdc, const RECT *rc);
 void cg_skin_draw_ring(cg_widget_t *w, HDC hdc, const RECT *rc);
 
 /**
- * @brief 给输入框（edit/multiedit/spinner）套圆角 + 单行文字垂直居中
+ * @brief 给输入框（edit：单行 / 多行 / 数值框都是它）套圆角 + 单行文字垂直居中
  * @param w 输入框控件（读 w->native / w->style.radius / w->app->scale）
  * @return void 无返回值；GDI+ 不可用时也照常（圆角仅靠窗口区域，不依赖 GDI+）
  */
