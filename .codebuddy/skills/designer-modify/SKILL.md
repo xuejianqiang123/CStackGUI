@@ -122,13 +122,14 @@ argument-hint: [要改的东西，可以用日常语言，例如 "画布选中�
 | `KIND_EVENTS` / `CG_EVENTS` | `k_kinds[].events` / `CG_EV_*` 同步；`EVENT_LABEL`/`EVENT_HINT` 补中文 |
 | IPC | `preload.cjs` 白名单 + `bridge.ts` 类型 + **浏览器降级分支** |
 | 运行时公共 API（`cstackgui.h`） | `src/supportlib.ts`（「支持库」页签）同步加/改条目；`node tools\check-support.mjs` 必须过 |
-| 纯视觉 | `tsc --noEmit` 过 + 截图肉眼确认 |
+| 纯视觉 | `tsc --noEmit` 过 + 截图肉眼确认；观感通过 `design-taste` 的黑名单与质量地板（对比度/间距节奏/四态齐全） |
 
 报告格式一句话即可："本次动了 X，同步改了 A/B/C，已过 tsc/vite/check-format，截图在 build\shot.png"。
 
 ### 步骤 0：判断改动类型（选一条往下走）
 
-- **纯视觉**（改画布 UI 观感，不改数据）→ 只动 `styles.css` 和 JSX，跑类型检查 + 构建即可
+- **纯视觉**（改画布 UI 观感，不改数据）→ 只动 `styles.css` 和 JSX，跑类型检查 + 构建即可；
+  **观感与交互品质的判断交给 `design-taste`**（设计读盘 + AI 味黑名单 + 质量地板 + 界面文案规则），本技能只管结构不越界
 - **加/改属性字段** → 步骤 1
 - **加/改事件** → 步骤 2
 - **新增控件类型** → 步骤 3

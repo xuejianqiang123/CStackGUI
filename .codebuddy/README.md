@@ -3,8 +3,8 @@
 > **项目**：CStackGUI（画布 + C 运行时）。下面这套体系源自嵌入式固件模板：14 个专项审查技能
 > 里只有一部分对本工程有意义（`firmware_code_style`、`buffer_overflow_check`、`memory_leak_check`、
 > `stack_overflow_check`、`error_handling_check`、`struct_best_practice_check`），其余针对 ESP32/RTOS/外设，
-> 本工程用不到。本工程自己的技能是 `designer-modify`（改画布）、`git-commit-style`（提交格式）等。
-> **用途**：AI 辅助编程的完整工作流体系 = 代码审查（14个专项技能）+ 开发流程（PIV 双循环）+ 辅助工具（caveman / ponytail / tokenzero / analyzing-projects / esp-idf-helper）+ 社区引入（4个）+ 本工程专属（designer-modify / git-commit-style / **safe-file-ops** / **team-parallel-delivery**），共 40 个技能目录（明细见下方目录树）
+> 本工程用不到。本工程自己的技能是 `designer-modify`（改画布）、`design-taste`（界面观感/设计品味）、`git-commit-style`（提交格式）等。
+> **用途**：AI 辅助编程的完整工作流体系 = 代码审查（14个专项技能）+ 开发流程（PIV 双循环）+ 辅助工具（caveman / ponytail / tokenzero / analyzing-projects / esp-idf-helper）+ 社区引入（4个）+ 本工程专属（designer-modify / git-commit-style / **safe-file-ops** / **team-parallel-delivery**），共 41 个技能目录（明细见下方目录树）
 > **核心价值**：质量门禁前置 + 端到端自动化 + 可追溯产出
 > **维护**：请勿随意删除此文件夹，包含项目级配置、审查规则和工作流定义
 
@@ -94,6 +94,7 @@
     │   └── wavedrom-gen/             # 时序描述 → WaveJSON → SVG/PNG/HTML（Datasheet 级 setup/hold 标注）
     └── [本工程专属] CStackGUI 自己的技能
         ├── designer-modify/          # 改画布 designer/ 的说明书（.cgui 契约、新增控件的 7~8 处、验证门禁）
+        ├── design-taste/             # 设计品味门禁：设计读盘+三旋钮 / AI 味黑名单 / 质量地板 / 界面文案规则（画布与 .cgui 两端）
         ├── git-commit-style/         # 提交规范：[类型][模块] 描述（禁用 conventional-commit）
         ├── safe-file-ops/            # 非破坏性文件操作：能不删就不删，删除合并成一次并先说明（默认常驻，见 global-rule §5.3）
         └── team-parallel-delivery/   # 按文件域切分的并行小团队交付法（契约先行 / 逐条回执 / 按模块分批提交，见本工程四轮实践）
@@ -714,6 +715,7 @@ for (int i = 0; i < 16; i++) {
 |------|---------|------|
 | 2026-08-23 | v0.1 初始版本 | 1. 建立完整配置体系，审查规则 + 工作流定义 <br> 2. [完善审查技能]14 个专项审查技能深度完善，150+ 检查项覆盖 <br> 3. [PIV 双循环工作流]新增 12 个开发流程技能（PRD→架构→切片→实现→验证→审查→提交→PR），参考 coleam00/skills <br>  4. [结构化产出 + 原子验证]学习 Archify，新增 JSON Schema 验证机制（实现计划、审查报告）|
 | 2026-08-23 | v0.1 新增社区技能 | 1. [社区技能]完整引入 4 个外部 skill（保留上游原结构，diff 校验一致）：<br> - advise-project-approach（项目策略咨询，无本地依赖）<br> - neuroarxiv（arXiv 先例查证，需联网）<br> - using-codegraph（tree-sitter 代码知识图谱，需 Python + 一次性安装 codegraph CLI）<br> - wavedrom-gen（时序波形图生成，需 Node 20+ 与 npm ci）|
+| 2026-09-22 | v0.2 新增设计品味技能 | 1. [本工程专属]新增 `design-taste`：提炼 anthropics/frontend-design、pbakaus/impeccable(craft-floor)、Leonxlnx/taste-skill、nextlevelbuilder/ui-ux-pro-max、Owl-Listener/designer-skills、ibelick/ui-skills、davila7/claude-code-templates、carmahhawwari/ui-design-brain 八套设计技能，删去 web 专有部分后落到本项目的画布 UI 与 `.cgui` 桌面 App 两端<br> 2. [门禁]global-rule §7 映射表增加"界面观感/界面文案"一行，写界面即自动触发 |
 
 > **当前版本**：v0.1（持续完善中，版本号将在正式发布后更新）
 
