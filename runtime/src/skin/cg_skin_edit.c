@@ -19,6 +19,24 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* .cgui 的 border 字段取值（真相在 cg_doc.h::cg_node_t.border）。
+ * 缺省 0 = 本工程原本的 M3 圆角；1~6 对应属性面板里那六种边框。 */
+#define SK_EDGE_DEFAULT 0
+#define SK_EDGE_NONE    1
+#define SK_EDGE_INSET   2
+#define SK_EDGE_OUTSET  3
+#define SK_EDGE_SOFT    4
+#define SK_EDGE_FRAME   5
+#define SK_EDGE_LINE    6
+
+/* 边框配色（和 styles.css / 画布观感一致）：缺省灰、聚焦紫、3D 明暗、浅灰、硬灰 */
+#define SK_EDGE_GREY    0xB8B2BD
+#define SK_EDGE_SOFT_C  0xCAC4D0
+#define SK_EDGE_LINE_C  0x79747E
+#define SK_EDGE_DARK    0xA9A3AF
+#define SK_EDGE_LIGHT   0xFFFFFF
+#define SK_EDGE_FOCUS   0x6750A4
+
 typedef struct {
     int      rad;      /* 圆角半径 */
     int      single;   /* 单行（edit / spinner）：需要垂直居中；multiedit 保持顶部对齐 */
@@ -27,41 +45,99 @@ typedef struct {
     int      w, h;     /* 控件整块尺寸（比客户区大，含边框与让出来的上边距） */
     int      bw;       /* 边框宽度：客户区四边各内缩这么多 */
     int      left;     /* 左边距（EM_SETMARGINS）；箭头/换字体后会被清，要按它重设 */
+    int      border;   /* 边框样式（.cgui 的 border 字段） */
+    HWND     spin;     /* 调节器（上下箭头）的窗口；没有就是 NULL */
     COLORREF bg;       /* 补上边距用的底色（白或 style.bg） */
 } sk_edit_sub_t;
 
-/** 画上边距的底 + 圆角边框（聚焦时主题紫）。
- *  边框画在客户区之外（客户区已由 WM_NCCALCSIZE 四边内缩 bw），所以控件怎么重绘都盖不掉它。 */
-static void sk_edit_box(HWND hwnd, const sk_edit_sub_t *s, int focus)
+/** 沿边框带画一圈圆角线。
+ *  half 是路径离窗口边缘的距离，调用方给：**2px 笔给 1**（正好压住 [0,2)），
+ *  **1px 笔给 0.5**（正好压住最外那一个像素 [0,1)）。给错就会出现"半像素线/断线"。 */
+static void sk_edit_ring(HDC dc, const sk_edit_sub_t *s, COLORREF col, int penw, int half)
 {
-    HDC dc;
     HPEN pn, op;
     HBRUSH ob;
-    COLORREF col = focus ? 0x6750A4 : 0xB8B2BD;
-    int half = s->bw / 2;
-
-    if (s->w <= 2 * s->bw || s->h <= 2 * s->bw) return;
-    dc = GetWindowDC(hwnd);
-    if (!dc) return;
-
-    /* 让出来的上边距：填成输入框底色，免得露窗口底色 */
-    if (s->pad > 0) {
-        RECT top;
-        HBRUSH fb;
-        top.left = 0; top.top = 0; top.right = s->w; top.bottom = s->pad;
-        fb = CreateSolidBrush(s->bg);
-        FillRect(dc, &top, fb);
-        DeleteObject(fb);
-    }
-
-    /* 路径从 half 起，2px 笔正好压在 [0, bw) 上（贴边画会被窗口区域裁掉一半） */
-    pn = CreatePen(PS_SOLID, s->bw, col);
+    if (s->w <= 2 * half || s->h <= 2 * half) return;
+    pn = CreatePen(PS_SOLID, penw, col);
     op = (HPEN)SelectObject(dc, pn);
     ob = (HBRUSH)SelectObject(dc, GetStockObject(NULL_BRUSH));
     RoundRect(dc, half, half, s->w - half, s->h - half, s->rad * 2, s->rad * 2);
     SelectObject(dc, ob);
     SelectObject(dc, op);
     DeleteObject(pn);
+}
+
+/** 把边框带（上边距 + 左右下）整条填成输入框底色。
+ *  **每次重画都先填**：不然细线样式只覆盖了带内的一个像素，上一次聚焦时画的
+ *  2px 紫环会残留一条紫边（"点亮一次之后边框痕迹不消失"就是这么来的）。 */
+static void sk_edit_fill_edge(HDC dc, const sk_edit_sub_t *s)
+{
+    HBRUSH br = CreateSolidBrush(s->bg);
+    RECT r;
+    if (!br) return;
+    r.left = 0;            r.top = 0;              r.right = s->w;  r.bottom = s->pad > 0 ? s->pad : s->bw;  FillRect(dc, &r, br);
+    r.left = 0;            r.top = s->h - s->bw;   r.right = s->w;  r.bottom = s->h;                        FillRect(dc, &r, br);
+    r.left = 0;            r.top = 0;              r.right = s->bw; r.bottom = s->h;                        FillRect(dc, &r, br);
+    r.left = s->w - s->bw; r.top = 0;              r.right = s->w;  r.bottom = s->h;                        FillRect(dc, &r, br);
+    DeleteObject(br);
+}
+
+/** 3D 边框：整圈先按「下/右」的颜色画圆角线，再用「上/左」的颜色覆盖那两条边。
+ *  outset=0 时上/左暗、下/右亮（凹入式）；outset=1 反过来（凸出式）。 */
+static void sk_edit_bevel(HDC dc, const sk_edit_sub_t *s, int outset)
+{
+    HPEN pn, op;
+    int half = s->bw / 2;
+    int lo = outset ? SK_EDGE_LIGHT : SK_EDGE_DARK;   /* 上/左 */
+    int hi = outset ? SK_EDGE_DARK  : SK_EDGE_LIGHT;  /* 下/右 */
+
+    sk_edit_ring(dc, s, hi, s->bw, s->bw / 2);
+    pn = CreatePen(PS_SOLID, s->bw, lo);
+    op = (HPEN)SelectObject(dc, pn);
+    /* 两端各留出圆角半径，剩下的由圆角线接起来 */
+    MoveToEx(dc, half + s->rad, half, NULL);
+    LineTo(dc, s->w - half - s->rad, half);
+    MoveToEx(dc, half, half + s->rad, NULL);
+    LineTo(dc, half, s->h - half - s->rad);
+    SelectObject(dc, op);
+    DeleteObject(pn);
+}
+
+/** 画上边距的底 + 边框。边框样式由 .cgui 的 border 决定，**聚焦时一律换成主题紫** ——
+ *  键盘用户必须看得见焦点在哪，这条优先级高于边框样式（无边框也一样）。
+ *  边框画在客户区之外（客户区已由 WM_NCCALCSIZE 四边内缩 bw），所以控件怎么重绘都盖不掉它。 */
+static void sk_edit_box(HWND hwnd, const sk_edit_sub_t *s, int focus)
+{
+    HDC dc;
+
+    if (s->w <= 2 * s->bw || s->h <= 2 * s->bw) return;
+    dc = GetWindowDC(hwnd);
+    if (!dc) return;
+
+    /* 第一步永远是把整条边框带（含让出来的上边距）填成底色：
+     * 既补上"非客户区没人画"的部分，也顺手抹掉上一次画过的边框/焦点环。 */
+    sk_edit_fill_edge(dc, s);
+
+    if (focus) {                                  /* 聚焦：统一紫环（优先级高于边框样式） */
+        sk_edit_ring(dc, s, SK_EDGE_FOCUS, s->bw, s->bw / 2);
+        ReleaseDC(hwnd, dc);
+        return;
+    }
+
+    /* 细线样式的边框带只有 1px（见 cg_skin_apply_edit），路径给 0 —— 笔宽 1、坐标整数，
+     * 这样线正好落在带内。给 1 或 0.5 都会画成"半像素线"：一半在带内一半在带外，看着就是断线。 */
+    switch (s->border) {
+    case SK_EDGE_NONE:   break;                          /* 无边框：底色已经填好，不画线 */
+    case SK_EDGE_INSET:  sk_edit_bevel(dc, s, 0); break;
+    case SK_EDGE_OUTSET: sk_edit_bevel(dc, s, 1); break;
+    case SK_EDGE_SOFT:   sk_edit_ring(dc, s, SK_EDGE_SOFT_C, 1, 0); break;
+    case SK_EDGE_FRAME:                                  /* 镜框：外圈 [0,1)、内圈 [2,3)，中间留 1px 底色缝 */
+        sk_edit_ring(dc, s, SK_EDGE_LINE_C, 1, 0);
+        sk_edit_ring(dc, s, SK_EDGE_LINE_C, 1, 2);
+        break;
+    case SK_EDGE_LINE:   sk_edit_ring(dc, s, SK_EDGE_LINE_C, 1, 0); break;
+    default:             sk_edit_ring(dc, s, SK_EDGE_GREY, s->bw, s->bw / 2); break;   /* SK_EDGE_DEFAULT */
+    }
     ReleaseDC(hwnd, dc);
 }
 
@@ -95,6 +171,28 @@ static void sk_edit_resize(HWND hwnd, sk_edit_sub_t *s)
         InflateRect(&tr, -5, -3);
         SendMessageW(hwnd, EM_SETRECT, 0, (LPARAM)&tr);
     }
+}
+
+/** 把调节器（上下箭头）摆到边框内侧的右边，并给输入框右边留出箭头宽度。
+ *  **故意不用 UDS_ALIGNRIGHT**：那个样式按 buddy 的"窗口矩形"贴右，会压在自绘边框上、
+ *  越过上下圆角。这里按客户区内侧算：右让 bw、上下各让 bw。 */
+static void sk_edit_spin_fit(HWND hwnd, const sk_edit_sub_t *s)
+{
+    RECT er, ur;
+    int  uw, uh;
+
+    if (!s->spin || !IsWindow(s->spin)) return;
+    GetWindowRect(hwnd, &er);
+    GetWindowRect(s->spin, &ur);
+    uw = ur.right - ur.left;
+    if (uw <= 0) return;
+    uh = s->h - 2 * s->bw;                 /* 只占圆角框内部的高度 */
+    if (uh < 8) uh = s->h;
+    MapWindowPoints(HWND_DESKTOP, GetParent(hwnd), (POINT *)&er, 2);   /* 换成父窗口坐标 */
+    SetWindowPos(s->spin, NULL, er.left + s->w - s->bw - uw, er.top + s->bw, uw, uh,
+                 SWP_NOZORDER | SWP_NOACTIVATE);
+    /* 文字别钻到箭头底下 */
+    SendMessageW(hwnd, EM_SETMARGINS, EC_RIGHTMARGIN, MAKELPARAM(0, uw + 4));
 }
 
 static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
@@ -136,6 +234,8 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     }
     if (msg == WM_SETFONT) {
         LRESULT r = DefSubclassProc(hwnd, msg, wp, lp);
+        /* 带调节器时：换字体会让箭头重新按 buddy 摆位，补摆一次 */
+        sk_edit_spin_fit(hwnd, s);
         /* spinner 的上下箭头换字体时会重设 buddy 边距、把左边距清成 0：补一次 */
         SendMessageW(hwnd, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(s->left, 0));
         if (s->single && sk_edit_text_height(hwnd) != s->text_h) {
@@ -147,6 +247,7 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     }
     if (msg == WM_SIZE) {
         sk_edit_resize(hwnd, s);
+        sk_edit_spin_fit(hwnd, s);   /* 尺寸变了：箭头跟着摆到新的右边内侧 */
         SendMessageW(hwnd, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(s->left, 0));
         /* resize 时系统按默认非客户区重算客户区，会把让出来的上边距抹掉（spinner 的
          * 上下箭头改 buddy 尺寸就会触发）。补一次 FRAMECHANGED 让 WM_NCCALCSIZE 重新生效；
@@ -165,6 +266,21 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     return DefSubclassProc(hwnd, msg, wp, lp);
 }
 
+void cg_skin_edit_fit_spin(cg_widget_t *w)
+{
+    HWND        h;
+    DWORD_PTR   data = 0;
+    sk_edit_sub_t *s;
+
+    if (!w || !w->native) return;
+    h = (HWND)w->native;
+    /* 子类数据里存着布局信息；取不到说明这个输入框还没挂子类，等挂上再说 */
+    if (!GetWindowSubclass(h, sk_edit_sub, 1, &data) || !data) return;
+    s = (sk_edit_sub_t *)data;
+    s->spin = (HWND)w->native2;            /* 记下来：以后改尺寸/换字体时还要重摆 */
+    sk_edit_spin_fit(h, s);
+}
+
 void cg_skin_apply_edit(cg_widget_t *w)
 {
     HWND hw = (HWND)w->native;
@@ -181,8 +297,17 @@ void cg_skin_apply_edit(cg_widget_t *w)
     memset(s, 0, sizeof(*s));
     s->rad = r;
     s->single = multiline ? 0 : 1;
-    s->bw = CG_EDIT_BORDER;
+    /* 边框带宽度按样式定：细线样式 1px（笔宽 1、坐标才不会落在半像素上），
+     * 镜框式 3px（两圈线 + 中间 1px 缝），其余 2px */
+    switch (w->border) {
+    case SK_EDGE_SOFT:
+    case SK_EDGE_LINE:  s->bw = 1; break;
+    case SK_EDGE_FRAME: s->bw = 3; break;
+    default:            s->bw = CG_EDIT_BORDER; break;
+    }
     s->left = CG_EDIT_TEXT_MARGIN;
+    s->border = w->border;
+    s->spin = (HWND)w->native2;   /* 调节器可能还没建；建好后 create 会再调 fit 补上 */
     s->bg = (w->style.bg != CG_COLOR_NONE)
               ? RGB((w->style.bg >> 16) & 0xFF, (w->style.bg >> 8) & 0xFF, w->style.bg & 0xFF)
               : GetSysColor(COLOR_WINDOW);

@@ -64,6 +64,16 @@ void cg_skin_draw_ring(cg_widget_t *w, HDC hdc, const RECT *rc);
  */
 void cg_skin_apply_edit(cg_widget_t *w);
 
+/**
+ * @brief 把输入框的调节器（上下箭头）摆到边框内侧的右边
+ * @param w 输入框控件（读 w->native / w->native2）
+ * @return void 无返回值
+ * @details 调节器不用 UDS_ALIGNRIGHT：那个样式按"窗口矩形"贴右，会把箭头压在自绘边框
+ *          和圆角上。这里按客户区内侧定位（右边让出边框宽度、上下各让出一半），
+ *          并给输入框加右内边距，文字不会跑到箭头下面。创建后与每次改尺寸/换字体后都要调。
+ */
+void cg_skin_edit_fit_spin(cg_widget_t *w);
+
 /** 输入框边框宽度：客户区四边各让出这么多，圆角边框画在客户区**之外**。
  *  这样控件自己重绘（选中文字 / 滚动 / 光标闪烁）永远盖不掉边框——
  *  否则双击选中时会出现"边框缺口"。EM_SETMARGINS 用 CG_EDIT_TEXT_MARGIN，
