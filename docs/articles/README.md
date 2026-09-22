@@ -13,8 +13,8 @@
 | `03-数值与指示.md` | `examples\lesson03_values\` | 同上；`.cgui` 的 `bind` 例子见 `docs\CGUI-FORMAT.md` 第 2.8 节 |
 | `04-数据与日志.md` | `examples\lesson04_data\` | 同上；`splitter` 的两栏语义见 `docs\CGUI-FORMAT.md` 的 `terminal` 那节 |
 | `05-命令与图形.md` | `examples\lesson05_commands\` | 同上 |
-| `00-导读.md`（可选） | `README.md` + `build-app.bat` | 环境要求、第一次编译的三条命令 |
-| `06-实战：记事本.md`（可选） | `examples\notepad\` | 菜单分发、脏标记、状态栏刷新、编码识别 |
+| `00-导读.md` | `README.md` + `build-app.bat` | 环境要求、第一次编译的三条命令 |
+| `06-实战-记事本.md` | `examples\notepad\` | 菜单分发、脏标记、状态栏刷新、编码识别 |
 
 ## 每篇的固定结构（保持六篇一致，读者才不用重新适应）
 
