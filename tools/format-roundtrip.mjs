@@ -77,7 +77,8 @@ if (!findNode(doc, probeId)) {
   let srcId = "";
   walk(doc.widgets, (n) => {
     if (srcId) return;
-    if (n.type === "slider" || n.type === "progress" || n.type === "spinner") srcId = n.id;
+    /* 绑定的源挑"值语义"的控件：滑块 / 进度条 / 数值输入框（edit + 调节器） */
+    if (n.type === "slider" || n.type === "progress" || (n.type === "edit" && n.spin)) srcId = n.id;
   });
   if (srcId) node.bind = { src: srcId };
   doc.widgets.push(node);

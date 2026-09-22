@@ -25,7 +25,7 @@ static const char *k_doc =
     "  \"app\": { \"title\": \"绑定测试\", \"width\": 420, \"height\": 300 },\n"
     "  \"widgets\": [\n"
     "    { \"id\": \"sld_level\", \"type\": \"slider\", \"min\": 0, \"max\": 500, \"value\": 300 },\n"
-    "    { \"id\": \"spn_level\", \"type\": \"spinner\", \"min\": 0, \"max\": 500, \"value\": 0,\n"
+    "    { \"id\": \"spn_level\", \"type\": \"edit\", \"spin\": 1, \"min\": 0, \"max\": 500, \"value\": 0,\n"
     "      \"bind\": { \"src\": \"sld_level\", \"two\": true } },\n"
     "    { \"id\": \"lab_value\", \"type\": \"label\", \"text\": \"-\",\n"
     "      \"bind\": { \"src\": \"sld_level\" } },\n"
@@ -226,7 +226,9 @@ static void test_bind_api(void)
     app.scale = 1;
 
     a = cg_widget_new(&app, "slider", "a", 0, 0, 100, 20, "");
-    b = cg_widget_new(&app, "spinner", "b", 0, 0, 100, 20, "");
+    /* 值语义的输入框 = edit + 调节器（原来的 spinner 类型）：spin 是那个开关 */
+    b = cg_widget_new(&app, "edit", "b", 0, 0, 100, 20, "");
+    if (b) b->spin = 1;
     lab = cg_widget_new(&app, "label", "lab", 0, 0, 100, 20, "-");
     cg_test_ok("三个控件都建出来了", a && b && lab);
     if (!a || !b || !lab) return;

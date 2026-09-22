@@ -32,7 +32,7 @@ static const char *k_doc =
     "          \"rect\": { \"x\": 12, \"y\": 24, \"w\": 180, \"h\": 30 },\n"
     "          \"hint\": \"在这里输入\",\n"
     "          \"events\": { \"change\": \"on_name_change\", \"submit\": \"on_submit\" } },\n"
-    "        { \"id\": \"spn_age\", \"type\": \"spinner\",\n"
+    "        { \"id\": \"spn_age\", \"type\": \"edit\", \"spin\": 1, \"input\": 7,\n"
     "          \"rect\": { \"x\": 12, \"y\": 64, \"w\": 90, \"h\": 28 },\n"
     "          \"min\": 1, \"max\": 120, \"value\": 24, \"enabled\": false },\n"
     "        { \"id\": \"lst_pick\", \"type\": \"listbox\",\n"
@@ -393,7 +393,64 @@ static void test_doc_dump(void)
     cg_doc_free(doc);
 }
 
+/**
+ * @brief 老写法自动升级：multiedit / spinner 已合并进 edit（2026-09-22）
+ * @details 这两类型名从 k_kinds 删掉之后，未知类型是**整份文档解析失败**，
+ *          所以解析层必须留兼容映射。这里盯的就是它：映射后的字段要正好等于
+ *          以前写死在 style_of 里的那套（多行 + 纵向滚动 / 整数过滤 + 调节器）。
+ *          用户手上那些老工程全靠这段代码还能打开，回归一次就是灾难。
+ */
+static void test_doc_legacy_alias(void)
+{
+    static const char *legacy =
+        "{\n"
+        "  \"cgui\": 1,\n"
+        "  \"app\": { \"title\": \"老写法\", \"width\": 400, \"height\": 300 },\n"
+        "  \"widgets\": [\n"
+        "    { \"id\": \"edt_body\", \"type\": \"multiedit\",\n"
+        "      \"rect\": { \"x\": 10, \"y\": 10, \"w\": 300, \"h\": 120 } },\n"
+        "    { \"id\": \"spn_age\", \"type\": \"spinner\",\n"
+        "      \"rect\": { \"x\": 10, \"y\": 150, \"w\": 100, \"h\": 28 },\n"
+        "      \"min\": 1, \"max\": 120, \"value\": 24 }\n"
+        "  ]\n"
+        "}\n";
+    char      err[256];
+    cg_doc_t *doc;
+
+    cg_test_note("---- 老类型名（multiedit / spinner）自动升级成 edit ----");
+    err[0] = '\0';
+    doc = cg_doc_parse(legacy, err, sizeof(err));
+    cg_test_ok("老写法不再报 unknown widget type", doc != NULL);
+    if (!doc) {
+        printf("        解析失败：%s\n", err);
+        return;
+    }
+    {
+        const cg_node_t *multi = child_by_id(doc->root, "edt_body");
+        const cg_node_t *spin  = child_by_id(doc->root, "spn_age");
+
+        cg_test_ok("multiedit 节点还在", multi != NULL);
+        if (multi) {
+            cg_test_str("multiedit 升级成 edit", multi->type, "edit");
+            cg_test_int("multiedit -> 多行", multi->multiline, 1);
+            cg_test_int("multiedit -> 纵向滚动", multi->scroll, 2);
+        }
+        cg_test_ok("spinner 节点还在", spin != NULL);
+        if (spin) {
+            cg_test_str("spinner 升级成 edit", spin->type, "edit");
+            cg_test_int("spinner -> 自动调节器", spin->spin, 1);
+            cg_test_int("spinner -> 整数输入方式", spin->input, 7);
+            cg_test_int("范围原样保留（min）", spin->vmin, 1);
+            cg_test_int("范围原样保留（max）", spin->vmax, 120);
+            cg_test_int("值原样保留", spin->value, 24);
+            cg_test_int("数值框不写 text（由 value 派生）", (long long)strlen(spin->text), 0);
+        }
+    }
+    cg_doc_free(doc);
+}
+
 CG_TEST_SUITE("文档：窗口属性与控件树", test_doc_skeleton);
+CG_TEST_SUITE("文档：老类型名自动升级", test_doc_legacy_alias);
 CG_TEST_SUITE("文档：事件名解析", test_doc_events);
 CG_TEST_SUITE("文档：结构化内容", test_doc_structured);
 CG_TEST_SUITE("文档：状态与越界修正", test_doc_state_clamp);
