@@ -1,155 +1,199 @@
 {
   "cgui": 1,
   "app": {
-    "title": "入门02 常用输入控件",
-    "width": 520,
-    "height": 460,
+    "title": "入门 02 · 输入与选择",
+    "width": 760,
+    "height": 768,
     "bg": "#F3EDF7"
   },
   "widgets": [
-    {
-      "id": "grp_form",
-      "type": "group",
-      "rect": { "x": 16, "y": 16, "w": 488, "h": 266 },
-      "text": "用户资料（容器里的坐标是相对容器的）",
-      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20", "bg": "#F7F2FA" },
+    { "id": "lab_edt_single", "type": "label", "rect": { "x": 16, "y": 20, "w": 104, "h": 24 }, "text": "edit 单行" },
+    { "id": "edt_single", "type": "edit", "rect": { "x": 128, "y": 16, "w": 224, "h": 32 },
+      "text": "点这里输入",
+      "hint": "单行输入框：文字一变就发 change",
+      "events": { "change": "on_edt_single_change" } },
+
+    { "id": "lab_edt_multi", "type": "label", "rect": { "x": 16, "y": 68, "w": 104, "h": 24 }, "text": "edit 多行" },
+    { "id": "edt_multi", "type": "edit", "rect": { "x": 128, "y": 56, "w": 224, "h": 48 },
+      "text": "第一行\n第二行",
+      "multiline": true,
+      "scroll": 2,
+      "hint": "multiline: true + scroll: 2（2 = 纵向）；Enter 换行，行数多了右侧自己出滚动条",
+      "events": { "change": "on_edt_multi_change" } },
+
+    { "id": "lab_edt_spin_auto", "type": "label", "rect": { "x": 16, "y": 116, "w": 104, "h": 24 }, "text": "edit 数值框 自动" },
+    { "id": "edt_spin_auto", "type": "edit", "rect": { "x": 128, "y": 112, "w": 224, "h": 32 },
+      "min": 1,
+      "max": 120,
+      "value": 24,
+      "spin": 1,
+      "hint": "数值框：value 是真相（所以不写 text），点箭头运行时按 ±1 改值并夹到 1~120",
+      "events": { "spin": "on_edt_spin_auto_spin" } },
+
+    { "id": "lab_edt_spin_manual", "type": "label", "rect": { "x": 16, "y": 156, "w": 104, "h": 24 }, "text": "edit 数值框 手动" },
+    { "id": "edt_spin_manual", "type": "edit", "rect": { "x": 128, "y": 152, "w": 224, "h": 32 },
+      "min": -999,
+      "max": 999,
+      "value": 0,
+      "spin": 2,
+      "hint": "手动方式：运行时只报方向（cg_event_delta），步长 5 由业务自己乘",
+      "events": { "spin": "on_edt_spin_manual_spin" } },
+
+    { "id": "lab_edt_byte", "type": "label", "rect": { "x": 16, "y": 220, "w": 104, "h": 24 }, "text": "edit 字节 0~255" },
+    { "id": "edt_byte", "type": "edit", "rect": { "x": 128, "y": 216, "w": 224, "h": 32 },
+      "text": "200",
+      "input": 5,
+      "hint": "input: 5 = 字节。按键只放行数字，失焦时 0~255 之外夹回、非数字清空",
+      "events": { "lostfocus": "on_edt_byte_blur" } },
+
+    { "id": "lab_edt_int", "type": "label", "rect": { "x": 16, "y": 260, "w": 104, "h": 24 }, "text": "edit 整数" },
+    { "id": "edt_int", "type": "edit", "rect": { "x": 128, "y": 256, "w": 224, "h": 32 },
+      "text": "-1234",
+      "input": 7,
+      "hint": "input: 7 = 整数（可以是负数）。要数字就用数值框，别自己解析文本",
+      "events": { "change": "on_edt_int_change" } },
+
+    { "id": "lab_edt_dt", "type": "label", "rect": { "x": 16, "y": 300, "w": 104, "h": 24 }, "text": "edit 日期时间" },
+    { "id": "edt_dt", "type": "edit", "rect": { "x": 128, "y": 296, "w": 224, "h": 32 },
+      "text": "2026-09-23 10:30",
+      "input": 11,
+      "hint": "input: 11 = 日期时间，形状得是 YYYY-MM-DD 或 YYYY-MM-DD HH:MM",
+      "events": { "change": "on_edt_dt_change" } },
+
+    { "id": "lab_edt_upper", "type": "label", "rect": { "x": 16, "y": 364, "w": 104, "h": 24 }, "text": "edit 转大写" },
+    { "id": "edt_upper", "type": "edit", "rect": { "x": 128, "y": 360, "w": 224, "h": 32 },
+      "text": "abc",
+      "conv": 2,
+      "hint": "conv: 2 = 小写转大写。Windows 写文本时也转，所以初始的 abc 进来就是 ABC",
+      "events": { "change": "on_edt_upper_change" } },
+
+    { "id": "lab_edt_short", "type": "label", "rect": { "x": 16, "y": 404, "w": 104, "h": 24 }, "text": "edit 限长 8" },
+    { "id": "edt_short", "type": "edit", "rect": { "x": 128, "y": 400, "w": 224, "h": 32 },
+      "text": "最多八个字",
+      "maxlen": 8,
+      "hint": "maxlen: 8：第 9 个字符敲不进去，回调里也看不到",
+      "events": { "change": "on_edt_short_change" } },
+
+    { "id": "lab_chk_vip", "type": "label", "rect": { "x": 16, "y": 468, "w": 104, "h": 24 }, "text": "checkbox 复选" },
+    { "id": "chk_vip", "type": "checkbox", "rect": { "x": 128, "y": 466, "w": 124, "h": 28 },
+      "text": "接收更新提醒",
+      "checked": true,
+      "events": { "change": "on_chk_vip_change" } },
+
+    { "id": "lab_chk_locked", "type": "label", "rect": { "x": 16, "y": 508, "w": 104, "h": 24 }, "text": "checkbox 禁用" },
+    { "id": "chk_locked", "type": "checkbox", "rect": { "x": 128, "y": 506, "w": 156, "h": 28 },
+      "text": "协议已锁定（禁用态）",
+      "checked": true,
+      "enabled": false,
+      "hint": "disabled 的控件照样能读状态，只是点不动、也不发事件" },
+
+    { "id": "lab_rad", "type": "label", "rect": { "x": 16, "y": 548, "w": 104, "h": 24 }, "text": "radio 单选" },
+    { "id": "rad_stu", "type": "radio", "rect": { "x": 128, "y": 546, "w": 56, "h": 28 },
+      "text": "学生", "checked": true,
+      "events": { "change": "on_rad_group_change" } },
+    { "id": "rad_emp", "type": "radio", "rect": { "x": 188, "y": 546, "w": 56, "h": 28 },
+      "text": "职员",
+      "events": { "change": "on_rad_group_change" } },
+    { "id": "rad_other", "type": "radio", "rect": { "x": 248, "y": 546, "w": 56, "h": 28 },
+      "text": "其他",
+      "events": { "change": "on_rad_group_change" } },
+
+    { "id": "lab_edt_border_12", "type": "label", "rect": { "x": 392, "y": 20, "w": 104, "h": 24 }, "text": "border 边框 1/2" },
+    { "id": "edt_b1", "type": "edit", "rect": { "x": 504, "y": 16, "w": 108, "h": 32 },
+      "text": "1 无边框",
+      "border": 1,
+      "hint": "border: 1 无边框（聚焦时仍有紫圈）",
+      "events": { "change": "on_form_change" } },
+    { "id": "edt_b2", "type": "edit", "rect": { "x": 620, "y": 16, "w": 108, "h": 32 },
+      "text": "2 凹入式",
+      "border": 2,
+      "hint": "border: 2 凹入式",
+      "events": { "change": "on_form_change" } },
+
+    { "id": "lab_edt_border_34", "type": "label", "rect": { "x": 392, "y": 60, "w": 104, "h": 24 }, "text": "border 边框 3/4" },
+    { "id": "edt_b3", "type": "edit", "rect": { "x": 504, "y": 56, "w": 108, "h": 32 },
+      "text": "3 凸出式",
+      "border": 3,
+      "hint": "border: 3 凸出式",
+      "events": { "change": "on_form_change" } },
+    { "id": "edt_b4", "type": "edit", "rect": { "x": 620, "y": 56, "w": 108, "h": 32 },
+      "text": "4 浅凹入",
+      "border": 4,
+      "hint": "border: 4 浅凹入式",
+      "events": { "change": "on_form_change" } },
+
+    { "id": "lab_edt_border_56", "type": "label", "rect": { "x": 392, "y": 100, "w": 104, "h": 24 }, "text": "border 边框 5/6" },
+    { "id": "edt_b5", "type": "edit", "rect": { "x": 504, "y": 96, "w": 108, "h": 32 },
+      "text": "5 镜框式",
+      "border": 5,
+      "hint": "border: 5 镜框式",
+      "events": { "change": "on_form_change" } },
+    { "id": "edt_b6", "type": "edit", "rect": { "x": 620, "y": 96, "w": 108, "h": 32 },
+      "text": "6 单线框",
+      "border": 6,
+      "hint": "border: 6 单线边框式",
+      "events": { "change": "on_form_change" } },
+
+    { "id": "lab_rt", "type": "label", "rect": { "x": 392, "y": 184, "w": 104, "h": 24 }, "text": "richtext 富文本" },
+    { "id": "rt_note", "type": "richtext", "rect": { "x": 504, "y": 160, "w": 224, "h": 72 },
+      "text": "富文本（RICHEDIT50W）：\n可以选中、有键盘全套\n和 edit 多行是两套控件",
+      "hint": "富文本：值同样走 cg_widget_text()",
+      "events": { "change": "on_rt_note_change" } },
+
+    { "id": "lab_dtp_date", "type": "label", "rect": { "x": 392, "y": 260, "w": 104, "h": 24 }, "text": "datepicker 日期" },
+    { "id": "dtp_date", "type": "datepicker", "rect": { "x": 504, "y": 256, "w": 224, "h": 32 },
+      "text": "2026-09-23",
+      "format": "date",
+      "hint": "format: date，值就是 cg_widget_text()",
+      "events": { "change": "on_dtp_date_change" } },
+
+    { "id": "lab_dtp_time", "type": "label", "rect": { "x": 392, "y": 300, "w": 104, "h": 24 }, "text": "datepicker 时间" },
+    { "id": "dtp_time", "type": "datepicker", "rect": { "x": 504, "y": 296, "w": 224, "h": 32 },
+      "text": "10:30",
+      "format": "time",
+      "hint": "同一个控件换 format: time 就只调时间",
+      "events": { "change": "on_dtp_time_change" } },
+
+    { "id": "lab_cal", "type": "label", "rect": { "x": 392, "y": 420, "w": 104, "h": 24 }, "text": "monthcal 月历" },
+    { "id": "cal_pick", "type": "monthcal", "rect": { "x": 504, "y": 352, "w": 224, "h": 160 },
+      "text": "2026-09-23",
+      "hint": "启动前给 text 就定位到那天；点一天发 select",
+      "events": { "select": "on_cal_pick_select" } },
+
+    { "id": "lab_lst", "type": "label", "rect": { "x": 392, "y": 588, "w": 104, "h": 24 }, "text": "listbox 列表" },
+    { "id": "lst_skill", "type": "listbox", "rect": { "x": 504, "y": 536, "w": 224, "h": 128 },
+      "items": ["C 语言", "Win32 API", "GDI+ 画图", "串口调试"],
+      "value": 0,
+      "hint": "value 是选中下标，文字要用 cg_widget_list_item() 取",
+      "events": { "select": "on_lst_skill_select" } },
+
+    { "id": "lab_cmb", "type": "label", "rect": { "x": 392, "y": 692, "w": 104, "h": 24 }, "text": "combo 下拉" },
+    { "id": "cmb_city", "type": "combo", "rect": { "x": 504, "y": 688, "w": 224, "h": 32 },
+      "items": ["北京", "上海", "广州", "成都"],
+      "value": 0,
+      "hint": "下拉框和 listbox 是同一套下标语义，主要差在长相",
+      "events": { "select": "on_cmb_city_select" } },
+
+    { "id": "grp_user", "type": "group", "rect": { "x": 16, "y": 608, "w": 352, "h": 120 },
+      "text": "用户信息",
+      "hint": "容器里的子控件，rect 坐标是相对容器的（不是相对窗口）",
       "children": [
-        {
-          "id": "lab_name",
-          "type": "label",
-          "rect": { "x": 20, "y": 34, "w": 44, "h": 24 },
-          "text": "姓名",
-          "style": { "font": "Microsoft YaHei UI", "size": 9 }
-        },
-        {
-          "id": "edt_name",
-          "type": "edit",
-          "rect": { "x": 70, "y": 32, "w": 170, "h": 30 },
-          "text": "",
-          "style": { "font": "Microsoft YaHei UI", "size": 10 },
-          "events": { "change": "on_form_change" }
-        },
-        {
-          "id": "lab_age",
-          "type": "label",
-          "rect": { "x": 256, "y": 34, "w": 44, "h": 24 },
-          "text": "年龄",
-          "style": { "font": "Microsoft YaHei UI", "size": 9 }
-        },
-        {
-          "id": "spn_age",
-          "type": "edit",
-          "rect": { "x": 302, "y": 32, "w": 86, "h": 30 },
-          "min": 1,
-          "max": 120,
-          "value": 24,
-          "spin": 1,
-          "input": 7,
-          "events": { "change": "on_form_change" }
-        },
-        {
-          "id": "chk_vip",
-          "type": "checkbox",
-          "rect": { "x": 20, "y": 80, "w": 120, "h": 26 },
-          "text": "VIP 会员",
-          "events": { "change": "on_form_change" }
-        },
-        {
-          "id": "rad_male",
-          "type": "radio",
-          "rect": { "x": 158, "y": 80, "w": 76, "h": 26 },
-          "text": "男",
-          "checked": true,
-          "events": { "change": "on_form_change" }
-        },
-        {
-          "id": "rad_female",
-          "type": "radio",
-          "rect": { "x": 242, "y": 80, "w": 76, "h": 26 },
-          "text": "女",
-          "events": { "change": "on_form_change" }
-        },
-        {
-          "id": "lab_city",
-          "type": "label",
-          "rect": { "x": 20, "y": 122, "w": 44, "h": 24 },
-          "text": "城市",
-          "style": { "font": "Microsoft YaHei UI", "size": 9 }
-        },
-        {
-          "id": "cmb_city",
-          "type": "combo",
-          "rect": { "x": 70, "y": 120, "w": 170, "h": 200 },
-          "items": ["北京", "上海", "广州", "深圳"],
-          "events": { "select": "on_form_change" }
-        },
-        {
-          "id": "lab_level",
-          "type": "label",
-          "rect": { "x": 256, "y": 122, "w": 50, "h": 24 },
-          "text": "满意度",
-          "style": { "font": "Microsoft YaHei UI", "size": 9 }
-        },
-        {
-          "id": "sld_level",
-          "type": "slider",
-          "rect": { "x": 312, "y": 120, "w": 136, "h": 30 },
-          "min": 1,
-          "max": 5,
-          "value": 3,
-          "events": { "change": "on_form_change" }
-        },
-        {
-          "id": "lab_level_val",
-          "type": "label",
-          "rect": { "x": 452, "y": 122, "w": 32, "h": 24 },
-          "text": "3",
-          "style": { "font": "Microsoft YaHei UI", "size": 10, "bold": true, "fg": "#6750A4", "align": "center" },
-          "bind": { "src": "sld_level" }
-        },
-        {
-          "id": "lab_bar",
-          "type": "label",
-          "rect": { "x": 20, "y": 168, "w": 44, "h": 24 },
-          "text": "完成度",
-          "style": { "font": "Microsoft YaHei UI", "size": 9 }
-        },
-        {
-          "id": "prg_done",
-          "type": "progress",
-          "rect": { "x": 70, "y": 170, "w": 378, "h": 18 },
-          "min": 0,
-          "max": 100,
-          "value": 0
-        },
-        {
-          "id": "btn_reset",
-          "type": "button",
-          "rect": { "x": 70, "y": 204, "w": 120, "h": 36 },
-          "text": "重置",
-          "events": { "click": "on_reset_click" }
-        },
-        {
-          "id": "lab_hint",
-          "type": "label",
-          "rect": { "x": 206, "y": 210, "w": 250, "h": 24 },
-          "text": "点「重置」恢复上面所有默认值",
-          "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#79747E" }
-        }
-      ]
-    },
-    {
-      "id": "lab_summary",
-      "type": "label",
-      "rect": { "x": 16, "y": 296, "w": 488, "h": 120 },
-      "text": "",
-      "style": { "font": "Microsoft YaHei UI", "size": 10, "fg": "#1D1B20" }
-    },
-    {
-      "id": "sb_main",
-      "type": "statusbar",
-      "rect": { "x": 0, "y": 436, "w": 520, "h": 24 },
-      "items": ["就绪"]
-    }
+        { "id": "lab_grp_name", "type": "label", "rect": { "x": 12, "y": 26, "w": 40, "h": 24 }, "text": "姓名" },
+        { "id": "edt_grp_name", "type": "edit", "rect": { "x": 56, "y": 22, "w": 224, "h": 32 },
+          "events": { "change": "on_form_change" } },
+        { "id": "lab_grp_plan", "type": "label", "rect": { "x": 12, "y": 74, "w": 40, "h": 24 }, "text": "套餐" },
+        { "id": "rad_grp_a", "type": "radio", "rect": { "x": 56, "y": 71, "w": 56, "h": 28 },
+          "text": "标准", "checked": true,
+          "events": { "change": "on_form_change" } },
+        { "id": "rad_grp_b", "type": "radio", "rect": { "x": 116, "y": 71, "w": 56, "h": 28 },
+          "text": "专业",
+          "events": { "change": "on_form_change" } },
+        { "id": "chk_grp_vip", "type": "checkbox", "rect": { "x": 188, "y": 72, "w": 124, "h": 28 },
+          "text": "含会员折扣",
+          "events": { "change": "on_form_change" } }
+      ] },
+
+    { "id": "sb_main", "type": "statusbar", "rect": { "x": 0, "y": 744, "w": 760, "h": 24 },
+      "items": ["就绪"] }
   ]
 }

@@ -1,420 +1,229 @@
 {
   "cgui": 1,
   "app": {
-    "title": "入门01 编辑框和按钮",
-    "width": 700,
-    "height": 580,
-    "bg": "#F3EDF7"
+    "title": "入门 01 · 基础与容器",
+    "width": 760,
+    "height": 500,
+    "bg": "#F3EDF7",
+    "events": {
+      "ready": "on_app_ready"
+    }
   },
   "widgets": [
     {
-      "id": "lab_tip",
+      "id": "lab_k_button",
       "type": "label",
-      "rect": {
-        "x": 16,
-        "y": 12,
-        "w": 668,
-        "h": 22
-      },
-      "text": "输入框（edit）全功能：左边各种输入限制与调节器，右边六种边框，中间那个框绑了全部 15 种事件。"
+      "rect": { "x": 16, "y": 22, "w": 104, "h": 22 },
+      "text": "button 按钮",
+      "style": { "size": 9, "fg": "#49454F" }
     },
     {
-      "id": "edt_name",
-      "type": "edit",
-      "rect": {
-        "x": 16,
-        "y": 44,
-        "w": 200,
-        "h": 32
-      },
-      "hint": "输入名字后按回车，等于点「打招呼」",
-      "events": {
-        "change": "on_input_change",
-        "submit": "on_hello_submit"
-      }
-    },
-    {
-      "id": "btn_hello",
+      "id": "btn_primary",
       "type": "button",
-      "rect": {
-        "x": 224,
-        "y": 44,
-        "w": 104,
-        "h": 32
-      },
-      "text": "打招呼",
-      "hint": "读输入框里的名字，显示到下面的结果区",
-      "events": {
-        "click": "on_button_click"
-      }
+      "rect": { "x": 120, "y": 16, "w": 104, "h": 32 },
+      "text": "主按钮",
+      "hint": "最常用的控件：点一下就是一次 click 事件",
+      "events": { "click": "on_btn_primary_click" }
     },
     {
-      "id": "btn_clear",
-      "type": "button",
-      "rect": {
-        "x": 336,
-        "y": 44,
-        "w": 88,
-        "h": 32
-      },
-      "text": "清空",
-      "hint": "清空名字输入框和结果区",
-      "events": {
-        "click": "on_button_click"
-      }
+      "id": "lab_k_button_off",
+      "type": "label",
+      "rect": { "x": 16, "y": 66, "w": 104, "h": 22 },
+      "text": "button 禁用态",
+      "style": { "size": 9, "fg": "#49454F" }
     },
     {
-      "id": "btn_full",
+      "id": "btn_disabled",
       "type": "button",
-      "rect": {
-        "x": 432,
-        "y": 44,
-        "w": 124,
-        "h": 40
-      },
-      "text": "",
+      "rect": { "x": 120, "y": 60, "w": 104, "h": 32 },
+      "text": "已禁用",
+      "hint": "enabled: false —— 点不动，文案要写清为什么不能用",
+      "enabled": false
+    },
+    {
+      "id": "lab_k_iconbutton",
+      "type": "label",
+      "rect": { "x": 16, "y": 110, "w": 104, "h": 22 },
+      "text": "iconbutton 图标钮",
+      "style": { "size": 9, "fg": "#49454F" }
+    },
+    {
+      "id": "icb_run",
+      "type": "iconbutton",
+      "rect": { "x": 120, "y": 104, "w": 40, "h": 36 },
       "src": "assets/icon.png",
-      "hint": "带背景图，并演示按钮支持的全部 13 种事件",
-      "style": {
-        "fg": "#FFFFFF"
-      },
-      "events": {
-        "click": "on_full_event",
-        "dblclick": "on_full_event",
-        "mousedown": "on_full_event",
-        "mouseup": "on_full_event",
-        "rdown": "on_full_event",
-        "rup": "on_full_event",
-        "mousemove": "on_full_event",
-        "gotfocus": "on_full_event",
-        "lostfocus": "on_full_event",
-        "keydown": "on_full_event",
-        "keyup": "on_full_event",
-        "char": "on_full_event",
-        "wheel": "on_full_event"
-      }
+      "hint": "只放一张图，没有文字；点击同样是 click 事件",
+      "events": { "click": "on_icb_run_click" }
     },
     {
-      "id": "lab_ev_hint",
+      "id": "lab_k_label",
       "type": "label",
-      "rect": {
-        "x": 16,
-        "y": 92,
-        "w": 400,
-        "h": 18
-      },
-      "text": "事件示范（15 种事件全部绑到 on_edit_event）"
+      "rect": { "x": 16, "y": 154, "w": 104, "h": 22 },
+      "text": "label 标签",
+      "style": { "size": 9, "fg": "#49454F" }
     },
     {
-      "id": "edt_events",
-      "type": "edit",
-      "rect": {
-        "x": 16,
-        "y": 112,
-        "w": 400,
-        "h": 32
-      },
-      "hint": "点我 / 右键点我 / 敲键盘 / 滚轮滚我 / 拖选文字：每次都会写进结果区",
-      "events": {
-        "change": "on_edit_event",
-        "submit": "on_edit_event",
-        "mousedown": "on_edit_event",
-        "mouseup": "on_edit_event",
-        "dblclick": "on_edit_event",
-        "rdown": "on_edit_event",
-        "rup": "on_edit_event",
-        "mousemove": "on_edit_event",
-        "gotfocus": "on_edit_event",
-        "lostfocus": "on_edit_event",
-        "keydown": "on_edit_event",
-        "keyup": "on_edit_event",
-        "char": "on_edit_event",
-        "wheel": "on_edit_event",
-        "spin": "on_edit_event"
-      }
-    },
-    {
-      "id": "lab_spin_hint",
+      "id": "lab_hello",
       "type": "label",
-      "rect": {
-        "x": 432,
-        "y": 92,
-        "w": 252,
-        "h": 18
-      },
-      "text": "调节器：自动夹取 / 手动只报 ±1"
+      "rect": { "x": 120, "y": 154, "w": 224, "h": 22 },
+      "text": "这是一段标签文字"
     },
     {
-      "id": "edt_spin_auto",
-      "type": "edit",
-      "rect": {
-        "x": 432,
-        "y": 112,
-        "w": 120,
-        "h": 32
-      },
-      "value": 50,
-      "hint": "数值框：点右侧上下箭头按 ±1 改值并夹到 0~100（值是真相，文本由它派生）",
-      "min": 0,
-      "max": 100,
-      "spin": 1,
-      "events": {
-        "spin": "on_spin_auto"
-      }
-    },
-    {
-      "id": "edt_spin_manual",
-      "type": "edit",
-      "rect": {
-        "x": 560,
-        "y": 112,
-        "w": 124,
-        "h": 32
-      },
-      "value": 0,
-      "hint": "手动方式：运行时只报 ±1 和方向，步长 5 由业务自己算（自动方式做不到），区间 ±999",
-      "min": -999,
-      "max": 999,
-      "spin": 2,
-      "events": {
-        "spin": "on_spin_manual"
-      }
-    },
-    {
-      "id": "lab_num_hint",
+      "id": "lab_k_link",
       "type": "label",
-      "rect": {
-        "x": 16,
-        "y": 156,
-        "w": 400,
-        "h": 18
-      },
-      "text": "输入方式：字节 0~255 / 整数 / 日期时间（失焦时夹回或清空）"
+      "rect": { "x": 16, "y": 198, "w": 104, "h": 22 },
+      "text": "link 链接",
+      "style": { "size": 9, "fg": "#49454F" }
     },
     {
-      "id": "edt_byte",
-      "type": "edit",
-      "rect": {
-        "x": 16,
-        "y": 176,
-        "w": 120,
-        "h": 32
-      },
-      "text": "200",
-      "hint": "只能输数字；失焦时 0~255 之外会被夹回，非数字会被清空",
-      "input": 5,
-      "events": {
-        "lostfocus": "on_byte_blur"
-      }
+      "id": "lnk_docs",
+      "type": "link",
+      "rect": { "x": 120, "y": 197, "w": 200, "h": 24 },
+      "text": "点我试试（链接）",
+      "hint": "蓝色下划线的可点文字；要真跳转就在回调里调 cg_shell_open(url)",
+      "events": { "click": "on_lnk_docs_click" }
     },
     {
-      "id": "edt_int",
-      "type": "edit",
-      "rect": {
-        "x": 144,
-        "y": 176,
-        "w": 120,
-        "h": 32
-      },
-      "text": "12345",
-      "hint": "整数输入：可以是负数",
-      "input": 7
-    },
-    {
-      "id": "edt_dt",
-      "type": "edit",
-      "rect": {
-        "x": 272,
-        "y": 176,
-        "w": 144,
-        "h": 32
-      },
-      "text": "2026-09-22 10:30",
-      "hint": "日期时间：形状得是 YYYY-MM-DD 或 YYYY-MM-DD HH:MM",
-      "input": 11
-    },
-    {
-      "id": "lab_conv_hint",
+      "id": "lab_k_switch",
       "type": "label",
-      "rect": {
-        "x": 16,
-        "y": 216,
-        "w": 400,
-        "h": 18
-      },
-      "text": "转换方式（只影响新输入的字符）与最大长度"
+      "rect": { "x": 16, "y": 242, "w": 104, "h": 22 },
+      "text": "switch 开关",
+      "style": { "size": 9, "fg": "#49454F" }
     },
     {
-      "id": "edt_upper",
-      "type": "edit",
-      "rect": {
-        "x": 16,
-        "y": 236,
-        "w": 120,
-        "h": 32
-      },
-      "text": "abc",
-      "hint": "输入自动变大写",
-      "conv": 2
+      "id": "sw_notify",
+      "type": "switch",
+      "rect": { "x": 120, "y": 236, "w": 56, "h": 32 },
+      "checked": true,
+      "hint": "开/关两态；勾选状态读作 checked（不是 value）",
+      "events": { "change": "on_sw_notify_change" }
     },
     {
-      "id": "edt_lower",
-      "type": "edit",
-      "rect": {
-        "x": 144,
-        "y": 236,
-        "w": 120,
-        "h": 32
-      },
-      "text": "ABC",
-      "hint": "输入自动变小写",
-      "conv": 1
-    },
-    {
-      "id": "edt_max",
-      "type": "edit",
-      "rect": {
-        "x": 272,
-        "y": 236,
-        "w": 144,
-        "h": 32
-      },
-      "text": "最多八个字",
-      "hint": "超过 8 个字符敲不进去",
-      "maxlen": 8
-    },
-    {
-      "id": "lab_multi_hint",
+      "id": "lab_k_badge",
       "type": "label",
-      "rect": {
-        "x": 16,
-        "y": 276,
-        "w": 400,
-        "h": 18
-      },
-      "text": "多行 + 双向滚动条 + 单线边框（最多 200 字）"
+      "rect": { "x": 16, "y": 286, "w": 104, "h": 22 },
+      "text": "badge 徽章",
+      "style": { "size": 9, "fg": "#49454F" }
     },
     {
-      "id": "edt_multi",
-      "type": "edit",
-      "rect": {
-        "x": 16,
-        "y": 296,
-        "w": 400,
-        "h": 130
-      },
-      "text": "第一行\n第二行\n\n多行输入框：Enter 换行，右侧和下方都有滚动条。\n（滚动条的样式属性和运行时一致）",
-      "multiline": true,
-      "scroll": 3,
-      "maxlen": 200,
-      "border": 6
+      "id": "bad_count",
+      "type": "badge",
+      "rect": { "x": 120, "y": 285, "w": 48, "h": 24 },
+      "text": "12",
+      "hint": "小圆片，只显示一段短文字；纯显示控件，没有事件"
     },
     {
-      "id": "lab_border_hint",
+      "id": "lab_k_tag",
       "type": "label",
-      "rect": {
-        "x": 432,
-        "y": 156,
-        "w": 252,
-        "h": 18
-      },
-      "text": "边框（缺省圆角看左上那个输入框）"
+      "rect": { "x": 16, "y": 330, "w": 104, "h": 22 },
+      "text": "tag 标签片",
+      "style": { "size": 9, "fg": "#49454F" }
     },
     {
-      "id": "edt_b1",
-      "type": "edit",
-      "rect": {
-        "x": 432,
-        "y": 176,
-        "w": 252,
-        "h": 32
-      },
-      "text": "无边框（聚焦时才有紫圈）",
-      "border": 1
+      "id": "tg_demo",
+      "type": "tag",
+      "rect": { "x": 120, "y": 327, "w": 72, "h": 28 },
+      "text": "标签片",
+      "hint": "比徽章长一点的圆角片，可以点",
+      "events": { "click": "on_tg_demo_click" }
     },
     {
-      "id": "edt_b2",
-      "type": "edit",
-      "rect": {
-        "x": 432,
-        "y": 216,
-        "w": 252,
-        "h": 32
-      },
-      "text": "凹入式",
-      "border": 2
-    },
-    {
-      "id": "edt_b3",
-      "type": "edit",
-      "rect": {
-        "x": 432,
-        "y": 256,
-        "w": 252,
-        "h": 32
-      },
-      "text": "凸出式",
-      "border": 3
-    },
-    {
-      "id": "edt_b4",
-      "type": "edit",
-      "rect": {
-        "x": 432,
-        "y": 296,
-        "w": 252,
-        "h": 32
-      },
-      "text": "浅凹入式",
-      "border": 4
-    },
-    {
-      "id": "edt_b5",
-      "type": "edit",
-      "rect": {
-        "x": 432,
-        "y": 336,
-        "w": 252,
-        "h": 32
-      },
-      "text": "镜框式",
-      "border": 5
-    },
-    {
-      "id": "edt_b6",
-      "type": "edit",
-      "rect": {
-        "x": 432,
-        "y": 376,
-        "w": 252,
-        "h": 32
-      },
-      "text": "单线边框式",
-      "border": 6
-    },
-    {
-      "id": "lab_result",
+      "id": "lab_k_sep",
       "type": "label",
-      "rect": {
-        "x": 16,
-        "y": 440,
-        "w": 668,
-        "h": 100
-      },
-      "text": "（结果显示在这里）"
+      "rect": { "x": 16, "y": 374, "w": 104, "h": 22 },
+      "text": "separator 分割线",
+      "style": { "size": 9, "fg": "#49454F" }
     },
+    {
+      "id": "sep_line",
+      "type": "separator",
+      "rect": { "x": 120, "y": 383, "w": 200, "h": 2 },
+      "hint": "一条横线，只负责分隔；没有事件"
+    },
+
+    {
+      "id": "grp_form",
+      "type": "group",
+      "rect": { "x": 392, "y": 16, "w": 352, "h": 150 },
+      "text": "group 分组框",
+      "children": [
+        {
+          "id": "lab_in_grp",
+          "type": "label",
+          "rect": { "x": 16, "y": 30, "w": 320, "h": 22 },
+          "text": "容器里的控件用相对坐标（相对分组框左上角）"
+        },
+        {
+          "id": "btn_in_grp",
+          "type": "button",
+          "rect": { "x": 16, "y": 60, "w": 120, "h": 32 },
+          "text": "组内按钮",
+          "hint": "它的坐标 (16,60) 是相对分组框的，不是相对窗口",
+          "events": { "click": "on_btn_in_grp_click" }
+        },
+        {
+          "id": "sep_in_grp",
+          "type": "separator",
+          "rect": { "x": 16, "y": 108, "w": 320, "h": 2 }
+        }
+      ]
+    },
+    {
+      "id": "box_panel",
+      "type": "box",
+      "rect": { "x": 392, "y": 182, "w": 352, "h": 120 },
+      "text": "box 容器块",
+      "children": [
+        {
+          "id": "sw_in_box",
+          "type": "switch",
+          "rect": { "x": 16, "y": 36, "w": 56, "h": 32 },
+          "checked": false,
+          "events": { "change": "on_sw_in_box_change" }
+        },
+        {
+          "id": "lab_in_box",
+          "type": "label",
+          "rect": { "x": 88, "y": 42, "w": 248, "h": 22 },
+          "text": "box 和 group 都是容器，主题色更浅"
+        }
+      ]
+    },
+    {
+      "id": "card_note",
+      "type": "card",
+      "rect": { "x": 392, "y": 318, "w": 352, "h": 122 },
+      "text": "card 卡片",
+      "children": [
+        {
+          "id": "tg_in_card",
+          "type": "tag",
+          "rect": { "x": 16, "y": 34, "w": 72, "h": 28 },
+          "text": "卡内标签片",
+          "events": { "click": "on_tg_in_card_click" }
+        },
+        {
+          "id": "lnk_in_card",
+          "type": "link",
+          "rect": { "x": 100, "y": 36, "w": 200, "h": 24 },
+          "text": "卡内链接",
+          "events": { "click": "on_lnk_in_card_click" }
+        },
+        {
+          "id": "btn_in_card",
+          "type": "button",
+          "rect": { "x": 16, "y": 72, "w": 120, "h": 32 },
+          "text": "卡内按钮",
+          "events": { "click": "on_btn_in_card_click" }
+        }
+      ]
+    },
+
     {
       "id": "sb_main",
       "type": "statusbar",
-      "rect": {
-        "x": 0,
-        "y": 556,
-        "w": 700,
-        "h": 24
-      },
-      "items": [
-        "就绪"
-      ]
+      "rect": { "x": 0, "y": 476, "w": 760, "h": 24 },
+      "items": ["准备就绪"]
     }
   ]
 }

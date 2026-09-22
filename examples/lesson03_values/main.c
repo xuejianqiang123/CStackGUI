@@ -1,151 +1,214 @@
 /**
  * @file    main.c
- * @brief   入门 03：事件进阶 —— 时钟、键盘、鼠标、关闭拦截
- * @details 入门 01/02 用的都是"控件自己"的事件（click / change / select）。
- *          这一个例子讲另外一大类：**窗口级事件**。它们写在 .cgui 的 app.events 里，
- *          绑在窗口伪控件（id = CG_WINDOW_ID）上，和控件事件共用同一套 CG_BIND 机制：
+ * @brief   入门 03（数值与指示）：把数字显示出来
+ * @details 这一课只讲一件事：**值只有一份，显示方式可以有很多种**。
+ *          界面里那个滑块是"值"的入口，进度条 / 圆环 / 仪表盘 / 数字标签都只是它的显示器。
  *
- *            ready      界面刚建好（还没显示）：适合做初始化
- *            close      用户点了关闭（含 Alt+F4、Esc）：cg_cancel_close() 可以拦下来
- *            mousemove  鼠标在窗口上移动：坐标用 cg_event_x() / cg_event_y() 读
- *            keydown    按下按键：键码用 cg_event_key()，功能键用 cg_event_keys()
+ *          本课控件清单（每个控件的关键 API 一句话）：
+ *            slider        能读能改：读 cg_widget_value()，改 cg_widget_set_value()；
+ *                          change 在拖动中连续发，release 只在松手时发一次
+ *            progress      只被程序写：cg_widget_set_value(w, 0~100) 就是刷新，没有事件
+ *            progressring  同上，同一个值画成一圈
+ *            meter         纯显示：cg_meter_set(w, v) 给值，format 决定 270° 弧 / 半圆
+ *            led           纯显示：cg_led_set(w, 0 灭 / 1 亮 / 2 闪)，闪烁靠 period，不用开时钟
+ *            rate          能点的评分：星数 = max - min，当前值用 cg_widget_value() 读
+ *            pagination    能点的分页：页数 = max - min + 1，当前值 = 当前页
+ *            button        操作脚手架：一个「复位为 60」、一个「切换灯态」，
+ *                          右下那个是 `"enabled": false` 的禁用态：它只会灰掉、点不动，
+ *                          连 click 事件都不会发（禁用不是"看着像"，是 EnableWindow(FALSE)）
+ *            label         说明文字 + 数字显示（纯显示，一个事件都没有）
  *
- *          还有一个特殊的控件：timer（时钟）。它没有窗口，靠 backend 的心跳按 period
- *          毫秒派发 tick 事件 —— 凡是"每隔一会儿做点什么"都用它，别自己开线程。
+ *          三条要记住的规矩：
+ *            1. 读值一律 cg_widget_value()、写值一律 cg_widget_set_value()，不要在回调里
+ *               自己攒一份"影子变量"当真相 —— 控件的 value 就是真相。
+ *            2. **程序改值不会触发 change 回调**：cg_widget_set_value() 只做"重绘 + 绑定传播"，
+ *               不派发事件。所以「复位为 60」和 on_ready 里改完值，必须手动把几种显示刷一遍
+ *               （见 show_level()）。
+ *               界面里留了一组对比，读者一眼能分清两条路（规范 2.8）：
+ *                 lab_level      C 拼串："60 / 100" —— 要拼字符串只能自己写 C；
+ *                 lab_sld_mirror .cgui 里 "bind": { "src": "sld_level" } —— **一行 C 都没有**，
+ *                                值自己跟着滑块走，但它只会**整份抄值**（抄出来是 "60"），
+ *                                拼不出 "60 / 100" —— 这就是 bind 与手写 C 的分工。
+ *            3. 窗口本身也是个控件（CG_WINDOW_ID）：窗口事件写在 .cgui 的 app.events 里，
+ *               和控件事件共用同一张 CG_BIND 表。本课只用 ready / close 两个。
  *
- *          为什么事件参数要用函数读？因为回调签名固定是三参数（self/ev/user），
- *          多出来的坐标、键码、滚轮量只能挂在"最近一次事件"上，用 cg_event_* 系列取。
+ *          想深入看哪一课：键码 / 坐标 / 滚轮这些事件参数见窗口事件专题；表格与日志见入门 04；
+ *          菜单 / 画板 / 媒体见入门 05。
  *
- * 界面在 lesson03_events.cgui 里；本文件只有行为。
- * 编译：在项目根跑 build-app.bat lesson03_events
+ * 界面在 lesson03_values.cgui 里；本文件只有行为。
+ * 编译：在项目根跑 build-app.bat lesson03_values
  */
 #include "cstackgui.h"
 
-#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
 typedef struct {
-    int ticks;        /**< 时钟走了多少下 */
-    int running;      /**< 时钟当前开没开 */
-    int close_asked;  /**< 已经拦过一次关闭 */
+    int level;   /**< 当前等级：sld_level 的值，0~100（只做记录，真相在控件里） */
+    int led;     /**< 状态灯：0 灭 / 1 亮 / 2 闪 */
 } biz_t;
 
 static biz_t s_biz;
 
-/** @brief 往日志框追加一行（printf 风格，顺手滚到最后一行） */
-static void log_line(cg_app_t *app, const char *fmt, ...)
+/* ---------------------------------------- 一个值，四种显示 */
+
+/**
+ * @brief 把一个等级值刷到全部"指示类"控件上（本课的核心函数）
+ * @param app 应用
+ * @param level 新的等级值，运行时按各控件的 min/max 夹取
+ * @return 无
+ * @note 进度条 / 圆环 / 仪表盘都是**只被程序写**的控件：调一次 set 就是刷新，不用手动重绘。
+ */
+static void show_level(cg_app_t *app, int level)
 {
-    char    buf[256];
-    va_list ap;
-    cg_widget_t *log = cg_find(app, "lst_log");
+    char buf[64];
 
-    va_start(ap, fmt);
-    vsnprintf(buf, sizeof(buf), fmt, ap);
-    va_end(ap);
+    s_biz.level = level;
 
-    cg_widget_list_add(log, buf);
-    cg_widget_list_scroll_bottom(log);
-    printf("[log] %s\n", buf);            /* 调试版有控制台，同步印一份 */
+    cg_widget_set_value(cg_find(app, "prg_level"), level);    /* 进度条：横着一条 */
+    cg_widget_set_value(cg_find(app, "ring_level"), level);   /* 圆环：同一个值画成一圈 */
+    cg_meter_set(cg_find(app, "mtr_arc"), level);             /* 仪表盘：270° 弧 */
+    cg_meter_set(cg_find(app, "mtr_half"), level);            /* 仪表盘：半圆（format = half） */
+
+    /* C 这条路得自己拼串：lab_level 显示成 "60 / 100"。
+     * 旁边那个 lab_sld_mirror 一行 C 都不用写 —— .cgui 里 bind 到 sld_level，值自己跟过来；
+     * 但它只会整份抄值（抄出来就是 "60"），所以"要拼字符串"的活仍然得走 C。 */
+    snprintf(buf, sizeof(buf), "%d / 100", level);
+    cg_widget_set_text(cg_find(app, "lab_level"), buf);       /* 数字本体：标签没有事件，只能主动写它 */
 }
 
-/** @brief 时钟周期到（period 毫秒一次） */
-static void on_tick(cg_widget_t *self, cg_event_t ev, void *user)
+/* ---------------------------------------- slider：值的入口 */
+
+/**
+ * @brief 滑块拖动中（change）
+ * @param self 滑块
+ * @param ev change —— 值一变就发，拖动时会连续发好多次
+ * @param user 未使用
+ * @return 无
+ */
+static void on_sld_level_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
-    char     *now;
+    int       v   = cg_widget_value(self);   /* 读值的唯一入口 */
 
     (void)ev;
     (void)user;
 
-    s_biz.ticks++;
-    /* 进度条是"只被程序写"的控件：直接 set_value 就是刷新（不用手动重绘） */
-    cg_widget_set_value(cg_find(app, "prg_tick"), s_biz.ticks % 101);
-
-    /* cg_time_now 返回堆内存：拼完记得还 */
-    now = cg_time_now(NULL);              /* NULL = "2026-09-21 02:33:53" 这种默认格式 */
-    {
-        char *text = cg_str_format("已走 %d 秒　当前时间 %s", s_biz.ticks, now ? now : "?");
-        cg_widget_set_text(cg_find(app, "lab_clock"), text);
-        cg_free(text);
-    }
-    cg_free(now);
-
-    if (s_biz.ticks % 5 == 0) log_line(app, "第 %d 次 tick", s_biz.ticks);   /* 别每下都写日志，太吵 */
+    show_level(app, v);
+    cg_status_setf(cg_find(app, "sb_main"), 0, "拖动中：等级 %d / 100", v);
 }
 
 /**
- * @brief 开始 / 停止共用：用 cg_widget_id() 分辨按钮
- * @param self 被点的按钮
+ * @brief 滑块松手（release）
+ * @param self 滑块
+ * @param ev release —— 整段拖动只发一次，适合做"拖完了再算"的事
+ * @param user 未使用
+ * @return 无
+ */
+static void on_sld_level_release(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev;
+    (void)user;
+
+    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+                   "松手：等级定为 %d（release 只发这一次）", cg_widget_value(self));
+}
+
+/* ---------------------------------------- button：程序改值要自己刷新 */
+
+/**
+ * @brief 「复位为 60」：演示"程序改值不触发 change 回调"
+ * @param self 按钮
  * @param ev click
  * @param user 未使用
+ * @return 无
  */
-static void on_timer_click(cg_widget_t *self, cg_event_t ev, void *user)
+static void on_btn_reset_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app = cg_app_of(self);
-    cg_widget_t *tmr = cg_find(app, "tmr_tick");
-    const char  *id = cg_widget_id(self);
+    cg_widget_t *sld = cg_find(app, "sld_level");
 
     (void)ev;
     (void)user;
 
-    if (cg_str_equal(id, "btn_start")) {
-        /* period 是毫秒；设成 >0 会立刻按新周期重新计时，设成 0 就是停 */
-        cg_widget_set_period(tmr, 1000);
-        s_biz.running = 1;
-        log_line(app, "时钟已启动（period = %d 毫秒）", cg_widget_period(tmr));
-    } else {
-        cg_widget_set_period(tmr, 0);
-        s_biz.running = 0;
-        log_line(app, "时钟已停止");
-    }
+    /* set_value 改的是值本身：会重绘、也会把绑定到它的控件一起带走，
+     * 但**不会**派发 change 事件 —— 所以下面必须手动再刷一遍显示。 */
+    cg_widget_set_value(sld, 60);
+    show_level(app, cg_widget_value(sld));
 
-    /* 两个按钮互相把对方"灰掉"，用户一眼看出当前状态 */
-    cg_widget_set_enabled(cg_find(app, "btn_start"), !s_biz.running);
-    cg_widget_set_enabled(cg_find(app, "btn_stop"), s_biz.running);
-    cg_status_setf(cg_find(app, "sb_main"), 0, "时钟%s，已走 %d 秒",
-                   s_biz.running ? "运行中" : "已停止", s_biz.ticks);
+    cg_status_set(cg_find(app, "sb_main"), 0, "程序把值写回 60：这一步没有触发 change 回调");
 }
 
+/* ---------------------------------------- led：三态状态灯 */
+
 /**
- * @brief 鼠标在窗口上移动（窗口级事件）
- * @param self 窗口伪控件
- * @param ev mousemove
+ * @brief 「切换灯态」：0 灭 → 1 亮 → 2 闪 循环
+ * @param self 按钮
+ * @param ev click
  * @param user 未使用
+ * @return 无
  */
-static void on_mouse_move(cg_widget_t *self, cg_event_t ev, void *user)
+static void on_btn_led_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    static const char *k_led_text[3] = { "灭", "亮", "闪" };
+    cg_app_t    *app = cg_app_of(self);
+    cg_widget_t *led = cg_find(app, "led_state");
+
+    (void)ev;
+    (void)user;
+
+    s_biz.led = (cg_led_state(led) + 1) % 3;          /* 先读回当前状态，再往前推一格 */
+    cg_led_set(led, s_biz.led);                       /* 2 = 闪：闪烁由控件自己按 period 重绘 */
+    cg_widget_set_text(led, k_led_text[s_biz.led]);   /* 灯右边那句说明文字 */
+
+    cg_status_setf(cg_find(app, "sb_main"), 0, "状态灯：%s（period = %d 毫秒）",
+                   k_led_text[s_biz.led], cg_widget_period(led));
+}
+
+/* ---------------------------------------- rate / pagination：能点的"数值" */
+
+/**
+ * @brief 评分变了：星数由 max - min 决定，当前值就是 cg_widget_value()
+ * @param self 评分控件
+ * @param ev change
+ * @param user 未使用
+ * @return 无
+ */
+static void on_rate_star_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev;
     (void)user;
-    /* 坐标是相对窗口客户区的；非鼠标事件会返回 0 */
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0, "鼠标位置 (%d, %d)",
-                   cg_event_x(self), cg_event_y(self));
+
+    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+                   "评分：%d 星（.cgui 里 max - min = 5）", cg_widget_value(self));
 }
 
 /**
- * @brief 按下按键（窗口级事件）
- * @param self 窗口伪控件
- * @param ev keydown
+ * @brief 翻页了：页数由 max - min + 1 决定，当前值就是当前页
+ * @param self 分页控件
+ * @param ev change
  * @param user 未使用
+ * @return 无
  */
-static void on_key_down(cg_widget_t *self, cg_event_t ev, void *user)
+static void on_pg_page_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
-    cg_app_t *app  = cg_app_of(self);
-    int       key  = cg_event_key(self);    /* 虚拟键码，和 Win32 的 VK_* 一样 */
-    int       mods = cg_event_keys(self);   /* 1=Ctrl 2=Shift 4=Alt，可以位或 */
-    char      buf[128];
-
     (void)ev;
     (void)user;
 
-    /* 拼一段长度可控的文字用栈上的 buf 就够，比 cg_str_format 省一次分配/释放。
-     * 要拼不定长内容时才用 cg_str_format —— 那条路返回堆串，必须 cg_free。 */
-    snprintf(buf, sizeof(buf), "刚按下键码 %d（Ctrl=%d Shift=%d Alt=%d）",
-             key, (mods & 1) ? 1 : 0, (mods & 2) ? 1 : 0, (mods & 4) ? 1 : 0);
-    cg_widget_set_text(cg_find(app, "lab_key"), buf);
+    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+                   "翻到第 %d 页（.cgui 里 max - min + 1 = 8 页）", cg_widget_value(self));
 }
 
-/** @brief 界面建好（还没显示）：初始化界面状态放这里最稳 */
+/* ---------------------------------------- 窗口事件（app.events） */
+
+/**
+ * @brief 界面建好、还没显示（ready）
+ * @param self 窗口伪控件（id = CG_WINDOW_ID）
+ * @param ev ready
+ * @param user 未使用
+ * @return 无
+ * @note 窗口事件和控件事件是同一套机制：.cgui 里写函数名，C 侧用 CG_BIND 登记。
+ */
 static void on_ready(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -153,46 +216,39 @@ static void on_ready(cg_widget_t *self, cg_event_t ev, void *user)
     (void)ev;
     (void)user;
 
-    cg_widget_set_period(cg_find(app, "tmr_tick"), 1000);   /* 上来就让时钟走 */
-    s_biz.running = 1;
-    cg_widget_set_enabled(cg_find(app, "btn_start"), 0);
-    log_line(app, "界面就绪，时钟自动启动");
+    /* 按滑块的初值把四种显示对齐一次。.cgui 里每个控件的初值也都写成 60 了，
+     * 这一步是"程序改值要自己刷显示"最稳的写法，也是启动初始化的标准位置。 */
+    show_level(app, cg_widget_value(cg_find(app, "sld_level")));
+    cg_status_set(cg_find(app, "sb_main"), 0, "就绪：拖一下滑块，看其它四个控件跟不跟");
+    cg_log(CG_LOG_INFO, "lesson03 界面就绪：等级初值 %d", s_biz.level);
 }
 
 /**
- * @brief 关闭前：第一次拦下来问一句，第二次放行
+ * @brief 用户点了关闭（close）
  * @param self 窗口伪控件
  * @param ev close
  * @param user 未使用
+ * @return 无
+ * @note 在 close 回调里调 cg_cancel_close(app) 就能拦下这次关闭（入门 05 用过）。本课不拦，只记一笔。
  */
 static void on_close(cg_widget_t *self, cg_event_t ev, void *user)
 {
-    cg_app_t *app = cg_app_of(self);
-
+    (void)self;
     (void)ev;
     (void)user;
 
-    if (s_biz.close_asked) return;      /* 第二次点了：不再拦，窗口正常关闭 */
-
-    s_biz.close_asked = 1;
-    /* --selftest 不开窗（也会走到这里）：先问一句有没有真窗口，
-     * 否则自检会被一个没人点的消息框卡死。 */
-    if (cg_app_has_window(app)) {
-        cg_message_box(cg_find(app, "lst_log"),
-                       "再点一次关闭就真的退出。\n\n（这个提示来自 close 回调里的 cg_cancel_close）",
-                       "确认关闭", 3);
-    }
-    cg_cancel_close(app);               /* 取消这一次关闭 */
-    log_line(app, "拦截了一次关闭");
+    cg_log(CG_LOG_INFO, "窗口关闭：最后的等级是 %d", s_biz.level);
 }
 
 static const cg_binding_t k_bindings[] = {
-    CG_BIND("on_tick",       on_tick),
-    CG_BIND("on_timer_click", on_timer_click),
-    CG_BIND("on_mouse_move", on_mouse_move),
-    CG_BIND("on_key_down",   on_key_down),
-    CG_BIND("on_ready",      on_ready),
-    CG_BIND("on_close",      on_close),
+    CG_BIND("on_sld_level_change",  on_sld_level_change),
+    CG_BIND("on_sld_level_release", on_sld_level_release),
+    CG_BIND("on_btn_reset_click",   on_btn_reset_click),
+    CG_BIND("on_btn_led_click",     on_btn_led_click),
+    CG_BIND("on_rate_star_change",  on_rate_star_change),
+    CG_BIND("on_pg_page_change",    on_pg_page_change),
+    CG_BIND("on_ready",             on_ready),
+    CG_BIND("on_close",             on_close),
     CG_BIND_END
 };
 
@@ -205,9 +261,9 @@ int main(int argc, char **argv)
     desc.auto_locate_cgui = 1;
 
     if (argc > 1 && strcmp(argv[1], "--selftest") == 0) {
-        desc.cgui_path = (argc > 2) ? argv[2] : "lesson03_events.cgui";
+        desc.cgui_path = (argc > 2) ? argv[2] : "lesson03_values.cgui";
         return cg_app_selftest(&desc);
     }
-    desc.cgui_path = (argc > 1) ? argv[1] : "lesson03_events.cgui";
+    desc.cgui_path = (argc > 1) ? argv[1] : "lesson03_values.cgui";
     return cg_app_run(&desc);
 }

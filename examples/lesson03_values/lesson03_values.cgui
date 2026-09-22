@@ -1,86 +1,227 @@
 {
   "cgui": 1,
   "app": {
-    "title": "入门03 事件进阶：时钟 / 键盘 / 鼠标 / 关闭拦截",
-    "width": 460,
-    "height": 400,
+    "title": "入门 03 · 数值与指示",
+    "width": 760,
+    "height": 444,
     "bg": "#F3EDF7",
     "events": {
       "ready": "on_ready",
-      "close": "on_close",
-      "mousemove": "on_mouse_move",
-      "keydown": "on_key_down"
+      "close": "on_close"
     }
   },
   "widgets": [
     {
-      "id": "tmr_tick",
-      "type": "timer",
-      "rect": { "x": 0, "y": 0, "w": 0, "h": 0 },
-      "period": 1000,
-      "events": { "tick": "on_tick" }
-    },
-    {
-      "id": "lab_clock",
+      "id": "lab_tip",
       "type": "label",
-      "rect": { "x": 16, "y": 16, "w": 428, "h": 30 },
-      "text": "时钟还没走起来",
-      "style": { "font": "Microsoft YaHei UI", "size": 12, "bold": true, "fg": "#1D1B20" }
+      "rect": { "x": 16, "y": 16, "w": 728, "h": 20 },
+      "text": "一个值，四种显示：拖动左上角的滑块，进度条 / 圆环 / 仪表盘 / 数字标签一起变。",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#49454F" }
     },
     {
-      "id": "prg_tick",
-      "type": "progress",
-      "rect": { "x": 16, "y": 56, "w": 428, "h": 20 },
+      "id": "lab_sld",
+      "type": "label",
+      "rect": { "x": 16, "y": 48, "w": 104, "h": 32 },
+      "text": "slider 滑块",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#49454F" }
+    },
+    {
+      "id": "sld_level",
+      "type": "slider",
+      "rect": { "x": 128, "y": 48, "w": 224, "h": 32 },
+      "hint": "拖动我：change 在拖动中连续发，release 只在松手时发一次",
+      "value": 60,
       "min": 0,
       "max": 100,
-      "value": 0
+      "events": { "change": "on_sld_level_change", "release": "on_sld_level_release" }
     },
     {
-      "id": "btn_start",
-      "type": "button",
-      "rect": { "x": 16, "y": 92, "w": 120, "h": 36 },
-      "text": "开始",
-      "hint": "让时钟每 1000 毫秒发一次 tick",
-      "events": { "click": "on_timer_click" }
-    },
-    {
-      "id": "btn_stop",
-      "type": "button",
-      "rect": { "x": 152, "y": 92, "w": 120, "h": 36 },
-      "text": "停止",
-      "hint": "period 设成 0 就是停",
-      "events": { "click": "on_timer_click" }
-    },
-    {
-      "id": "sep_line",
-      "type": "separator",
-      "rect": { "x": 16, "y": 144, "w": 428, "h": 2 }
-    },
-    {
-      "id": "lab_mouse",
+      "id": "lab_ring",
       "type": "label",
-      "rect": { "x": 16, "y": 158, "w": 428, "h": 24 },
-      "text": "在窗口空白处移动鼠标（mousemove 是窗口级事件）",
+      "rect": { "x": 392, "y": 48, "w": 140, "h": 20 },
+      "text": "progressring 圆环",
       "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#49454F" }
     },
     {
-      "id": "lab_key",
+      "id": "ring_level",
+      "type": "progressring",
+      "rect": { "x": 392, "y": 72, "w": 140, "h": 140 },
+      "value": 60,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "lab_mtr_arc",
       "type": "label",
-      "rect": { "x": 16, "y": 186, "w": 428, "h": 24 },
-      "text": "点一下窗口空白处再按键（keydown 是窗口级事件）",
+      "rect": { "x": 552, "y": 48, "w": 140, "h": 20 },
+      "text": "meter 270°弧",
       "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#49454F" }
     },
     {
-      "id": "lst_log",
-      "type": "listbox",
-      "rect": { "x": 16, "y": 218, "w": 428, "h": 130 },
-      "items": []
+      "id": "mtr_arc",
+      "type": "meter",
+      "rect": { "x": 552, "y": 72, "w": 140, "h": 140 },
+      "value": 60,
+      "min": 0,
+      "max": 100,
+      "format": "arc",
+      "text": "%"
+    },
+    {
+      "id": "lab_val",
+      "type": "label",
+      "rect": { "x": 16, "y": 92, "w": 104, "h": 24 },
+      "text": "label 数值",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#49454F" }
+    },
+    {
+      "id": "lab_level",
+      "type": "label",
+      "rect": { "x": 128, "y": 92, "w": 224, "h": 24 },
+      "text": "60 / 100",
+      "style": { "font": "Microsoft YaHei UI", "size": 12, "bold": true, "fg": "#6750A4" }
+    },
+    {
+      "id": "lab_val_bind",
+      "type": "label",
+      "rect": { "x": 16, "y": 124, "w": 104, "h": 24 },
+      "text": "label 绑定",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#49454F" }
+    },
+    {
+      "id": "lab_sld_mirror",
+      "type": "label",
+      "rect": { "x": 128, "y": 124, "w": 224, "h": 24 },
+      "text": "60",
+      "hint": "这个标签没绑任何回调：它跟着滑块走，是 .cgui 里的 bind 实现的（见 CGUI-FORMAT 2.8）",
+      "bind": { "src": "sld_level" },
+      "style": { "font": "Microsoft YaHei UI", "size": 12, "bold": true, "fg": "#6750A4" }
+    },
+    {
+      "id": "lab_prg",
+      "type": "label",
+      "rect": { "x": 16, "y": 156, "w": 104, "h": 28 },
+      "text": "progress 进度条",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#49454F" }
+    },
+    {
+      "id": "prg_level",
+      "type": "progress",
+      "rect": { "x": 128, "y": 156, "w": 224, "h": 28 },
+      "value": 60,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "lab_btn",
+      "type": "label",
+      "rect": { "x": 16, "y": 192, "w": 104, "h": 32 },
+      "text": "button 按钮",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#49454F" }
+    },
+    {
+      "id": "btn_reset",
+      "type": "button",
+      "rect": { "x": 128, "y": 192, "w": 224, "h": 32 },
+      "text": "复位为 60",
+      "hint": "程序改值（cg_widget_set_value）不会触发 change 回调，四个显示控件得手动跟着刷",
+      "events": { "click": "on_btn_reset_click" }
+    },
+    {
+      "id": "lab_mtr_half",
+      "type": "label",
+      "rect": { "x": 16, "y": 240, "w": 140, "h": 20 },
+      "text": "meter 半圆",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#49454F" }
+    },
+    {
+      "id": "mtr_half",
+      "type": "meter",
+      "rect": { "x": 16, "y": 264, "w": 140, "h": 140 },
+      "value": 60,
+      "min": 0,
+      "max": 100,
+      "format": "half",
+      "text": "%"
+    },
+    {
+      "id": "lab_led",
+      "type": "label",
+      "rect": { "x": 392, "y": 240, "w": 104, "h": 32 },
+      "text": "led 状态灯",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#49454F" }
+    },
+    {
+      "id": "led_state",
+      "type": "led",
+      "rect": { "x": 496, "y": 240, "w": 80, "h": 32 },
+      "value": 1,
+      "format": "round",
+      "period": 500,
+      "text": "亮"
+    },
+    {
+      "id": "btn_led",
+      "type": "button",
+      "rect": { "x": 584, "y": 240, "w": 160, "h": 32 },
+      "text": "切换灯态",
+      "hint": "0 灭 / 1 亮 / 2 闪 循环；闪烁周期由 period 决定，不用自己开时钟",
+      "events": { "click": "on_btn_led_click" }
+    },
+    {
+      "id": "lab_rate",
+      "type": "label",
+      "rect": { "x": 392, "y": 284, "w": 104, "h": 32 },
+      "text": "rate 评分",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#49454F" }
+    },
+    {
+      "id": "rate_star",
+      "type": "rate",
+      "rect": { "x": 496, "y": 284, "w": 248, "h": 32 },
+      "hint": "星数 = max - min = 5",
+      "value": 3,
+      "min": 0,
+      "max": 5,
+      "events": { "change": "on_rate_star_change" }
+    },
+    {
+      "id": "lab_pg",
+      "type": "label",
+      "rect": { "x": 392, "y": 328, "w": 104, "h": 32 },
+      "text": "pagination 分页",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#49454F" }
+    },
+    {
+      "id": "pg_page",
+      "type": "pagination",
+      "rect": { "x": 496, "y": 328, "w": 248, "h": 32 },
+      "hint": "页数 = max - min + 1 = 8",
+      "value": 3,
+      "min": 1,
+      "max": 8,
+      "events": { "change": "on_pg_page_change" }
+    },
+    {
+      "id": "lab_off",
+      "type": "label",
+      "rect": { "x": 392, "y": 372, "w": 160, "h": 32 },
+      "text": "button 禁用态",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#49454F" }
+    },
+    {
+      "id": "btn_off",
+      "type": "button",
+      "rect": { "x": 560, "y": 372, "w": 184, "h": 32 },
+      "text": "故意禁用，点了没反应",
+      "hint": "禁用不是只灰掉：EnableWindow(FALSE) 之后点它连事件都不发",
+      "enabled": false
     },
     {
       "id": "sb_main",
       "type": "statusbar",
-      "rect": { "x": 0, "y": 376, "w": 460, "h": 24 },
-      "items": ["就绪"]
+      "rect": { "x": 0, "y": 420, "w": 760, "h": 24 },
+      "items": ["拖动滑块试试"]
     }
   ]
 }
