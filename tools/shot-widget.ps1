@@ -5,9 +5,19 @@
 # 按**客户区坐标**裁一块再放大保存，还可以先点一下（-ClickX/-ClickY）截"聚焦/选中"后的样子。
 #
 # 用法（在项目根；坐标是控件的客户区坐标，容器里的控件把容器偏移加上）：
-#   powershell -ExecutionPolicy Bypass -File tools\shot-widget.ps1 -Exe examples\lesson01_edit_button\lesson01_edit_button.exe `
+#   powershell -ExecutionPolicy Bypass -File tools\shot-widget.ps1 -Exe examples\lesson01_basics\lesson01_basics.exe `
 #       -QX 16 -QY 296 -QW 400 -QH 130 -Out build\edt_multi.png
 #   powershell ... -ClickX 216 -ClickY 361 -Out build\edt_multi_focus.png   # 先点一下再截
+#
+# ⚠ 点击的坑（lesson02/lesson03 实测）：
+#   1) 窗口不在前台时，**第一次 down/up 会被"激活窗口"吃掉** → 单击常有假阴性（会误判成框架 bug）。
+#      所以 -Clicks 默认设成 2。但：
+#   2) **-Clicks 2 只适合"累加型"目标**（数值框箭头：两下 +5+5）。**会切换的控件**
+#      （checkbox / switch / radio / rate / pagination）点两下 = 回去又回来、像素回到原样，
+#      对它们请：先对一个**空白坐标**空点一下激活窗口，再 -Clicks 1 点目标。
+#   3) **一定要看"点了之后应该变什么"**（状态栏文字 / 选中态 / 数值）—— 失败截图与成功截图
+#      长得一模一样，只有"该变的东西变了"才算证据。要表达时序（先点 A 再点 B）本工具做不到，
+#      改用 EnumChildWindows 找控件 HWND 发真实控件通知（BM_CLICK 等）。
 #
 # 输出：-Out 那张（放大 Zoom 倍）+ 同目录 <名字>_full.png（整窗，便于对照位置）。
 # 说明：坐标必须是**窗口客户区**坐标（和 .cgui 里 rect 的 x/y 一致，但 .cgui 是相对父容器：
@@ -17,6 +27,7 @@ param(
   [string]$Cgui = "",
   [int]$QX = 0, [int]$QY = 0, [int]$QW = 0, [int]$QH = 0,
   [int]$ClickX = -1, [int]$ClickY = -1,
+  [int]$Clicks = 2,
   [int]$Pad = 6,
   [int]$Zoom = 3,
   [int]$WaitSec = 3,
@@ -74,11 +85,13 @@ Write-Output ("window={0},{1} client={2}x{3} clientOrigin={4},{5}" -f $rcWin.L, 
 
 if ($ClickX -ge 0) {
   [Win32WidgetShot]::SetCursorPos(($ptOrg.X + $ClickX), ($ptOrg.Y + $ClickY)) | Out-Null
-  Start-Sleep -Milliseconds 200
-  [Win32WidgetShot]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero)   # LEFTDOWN
-  [Win32WidgetShot]::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero)   # LEFTUP
+  for ($n = 0; $n -lt [Math]::Max(1, $Clicks); $n++) {
+    Start-Sleep -Milliseconds 200
+    [Win32WidgetShot]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero)   # LEFTDOWN
+    [Win32WidgetShot]::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero)   # LEFTUP
+  }
   Start-Sleep -Milliseconds 700
-  Write-Output ("clicked client {0},{1}" -f $ClickX, $ClickY)
+  Write-Output ("clicked client {0},{1} x{2}" -f $ClickX, $ClickY, [Math]::Max(1, $Clicks))
 }
 
 $winW = $rcWin.R - $rcWin.L

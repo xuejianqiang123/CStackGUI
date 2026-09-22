@@ -36,3 +36,5 @@ runtime/res/WebView2Runtime/
 examples/*/WebView2Runtime/
 # 临时下载/解包产物
 build/_wv2fv*
+# 团队协作的运行态（不是工程内容）
+.codebuddy/teams/
