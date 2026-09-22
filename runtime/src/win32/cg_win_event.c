@@ -183,6 +183,11 @@ LRESULT CALLBACK cgw_FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
             default:              have_wev = 0;             break;
             }
             if (have_wev && cg_kind_supports_event(w->type, wev)) {
+                /* 数值/日期输入方式：非法字符直接吞掉 —— 它压根没进输入框，
+                 * 所以也不派发 char 事件（报了反而像"输入成功了"） */
+                if (wev == CG_EVENT_CHAR && cgw_edit_char_reject(w, hwnd, (wchar_t)wp))
+                    return 0;
+
                 if (wev == CG_EVENT_WHEEL) {
                     /* 滚轮消息的坐标是屏幕坐标，先换成控件客户区；MK_ 位在 wParam 低字 */
                     POINT pt;

@@ -82,6 +82,11 @@ void cgw_create_native(cg_widget_t *w)
     if (!strcmp(type, "edit") || !strcmp(type, "multiedit") || !strcmp(type, "spinner"))
         cg_skin_apply_edit(w);
 
+    /* 最大允许长度：只能靠 EM_SETLIMITTEXT 设（没有对应的窗口样式位）。
+     * maxlen=0 保持系统默认，不去动它 —— 免得"没填"变成"限 0 个字符"。 */
+    if ((!strcmp(type, "edit") || !strcmp(type, "multiedit")) && w->maxlen > 0)
+        SendMessageW(h, EM_SETLIMITTEXT, (WPARAM)w->maxlen, 0);
+
     /* 自绘窗口类（CG_*_CLASS）的窗口过程要靠 GWLP_USERDATA 反查 app 和控件，
      * 所以**新增一个自绘控件就必须在这里登记**。漏了它的后果很迷惑：
      * 窗口过程拿到 NULL 的 app，于是控件画不出来（首帧填了兜底色），
@@ -126,6 +131,23 @@ void cgw_create_native(cg_widget_t *w)
         }
     }
 
+    /* 单行输入框的调节器（.cgui 的 spin）：右侧一列上下箭头，和 spinner 一样由
+     * 「输入框 + UPDOWN」两个原生窗口拼出来。自动方式点箭头就改文本（见 cg_win_notify.c
+     * 的 UDN_DELTAPOS），手动方式只派发「调节钮被按下」让业务自己处理。 */
+    if (!strcmp(type, "edit") && w->spin) {
+        /* 注意：**不带 UDS_ALIGNRIGHT** —— 那个样式按窗口矩形贴右，会把箭头压在自绘边框上。
+         * 位置交给 cg_skin_edit_fit_spin()（按客户区内侧摆），尺寸变化时自绘层会重摆。 */
+        HWND up = CreateWindowExW(0, UPDOWN_CLASSW, L"",
+                                  WS_CHILD | WS_VISIBLE | UDS_ARROWKEYS | UDS_NOTHOUSANDS,
+                                  0, 0, 0, 0, parent, NULL, GetModuleHandleW(NULL), NULL);
+        if (up) {
+            SendMessageW(up, UDM_SETBUDDY, (WPARAM)h, 0);
+            SendMessageW(up, UDM_SETRANGE32, (WPARAM)w->vmin, (LPARAM)w->vmax);
+            SendMessageW(up, UDM_SETPOS32, 0, (LPARAM)w->value);
+            w->native2 = up;
+        }
+    }
+
     /* 日期时间：Windows 没有「日期+时间」合一的控件，用两个 DTP 并排拼 */
     if (!strcmp(type, "datepicker") && cgw_is_datetime(w)) {
         HWND t = CreateWindowExW(0, DATETIMEPICK_CLASSW, L"",
@@ -139,9 +161,14 @@ void cgw_create_native(cg_widget_t *w)
 
     cgw_sync_widget(w);
 
-    /* 字体/箭头设置都可能把 spinner 的 buddy 边距清掉：全部就位后再补一次左边距 */
-    if (!strcmp(type, "spinner"))
+    /* 字体/箭头设置都可能把 spinner 的 buddy 边距清掉：全部就位后再补一次左边距
+     * （带调节器的输入框同理：UDS_ALIGNRIGHT 会把我们的左边距清成 0） */
+    if (!strcmp(type, "spinner") || (!strcmp(type, "edit") && w->spin))
         SendMessageW(h, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(CG_EDIT_TEXT_MARGIN, 0));
+
+    /* 调节器建好了：交给自绘层按客户区内侧摆位（并给右边留出箭头宽度） */
+    if (!strcmp(type, "edit") && w->spin)
+        cg_skin_edit_fit_spin(w);
 }
 
 /** 递归建原生控件：父先于子 */

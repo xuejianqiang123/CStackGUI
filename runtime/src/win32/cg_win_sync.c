@@ -528,7 +528,8 @@ static void sync_widget_body(cg_widget_t *w)
             swprintf(wbuf, 32, L"%d", w->value);
             if (!cgw_hwnd_text_is(h, wbuf)) SetWindowTextW(h, wbuf);
         } else {
-            wchar_t *wt = cgw_wc_from_utf8(w->text);
+            /* 多行输入框：逻辑换行 \n 要先展开成 EDIT 认的 \r\n，否则整段挤成一行 */
+            wchar_t *wt = cgw_wc_from_utf8_crlf(w->text);
             if (wt) {
                 /* 内容已经一样就不要再 SetWindowText —— EDIT 收到 WM_SETTEXT 会把选区/光标
                  * 清回 0。而 EN_CHANGE 里会 pull 一次输入框文本再 sync（见 cgw_pull_edit_text），

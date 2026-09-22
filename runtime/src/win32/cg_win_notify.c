@@ -15,6 +15,16 @@ void cgw_pull_edit_text(cg_widget_t *w, HWND hwnd)
     wchar_t *buf = (wchar_t *)malloc(((size_t)len + 1) * sizeof(wchar_t));
     if (!buf) return;
     GetWindowTextW(hwnd, buf, len + 1);
+    /* EDIT 里的换行是 \r\n，模型和 .cgui 统一用 \n：去掉 \r 再入模型，
+     * 否则存回去的文字会带上 \r（画布上看不出来，但字符串比较/写文件都会多一个字节）。 */
+    {
+        wchar_t *d = buf;
+        const wchar_t *s;
+        for (s = buf; *s; s++) {
+            if (*s != L'\r') *d++ = *s;
+        }
+        *d = 0;
+    }
     {
         int need = WideCharToMultiByte(CP_UTF8, 0, buf, -1, NULL, 0, NULL, NULL);
         char *u8 = (char *)malloc((size_t)(need > 0 ? need : 1));
@@ -175,6 +185,10 @@ void cgw_notify_body(cg_app_t *app, cg_widget_t *w, HWND hwnd, int code, int cmd
                 cgw_pull_edit_text(w, hwnd);
             }
             cg_dispatch(w, CG_EVENT_CHANGE);
+        } else if (code == EN_KILLFOCUS) {
+            /* 数值/日期输入方式：离开输入框时把文本收干净（越界夹回、非法清空）。
+             * 走的是"程序改文本"，所以不派发 change —— 业务要拿最终值就读 cg_widget_text。 */
+            cgw_edit_validate(w, hwnd);
         }
         return;
     }
@@ -269,6 +283,28 @@ LRESULT cgw_notify_common(cg_app_t *app, const NMHDR *hdr)
     case UDN_DELTAPOS: {
         const NMUPDOWN *nud = (const NMUPDOWN *)hdr;
         HWND buddy = (HWND)w->native;
+
+        /* 输入框上的调节器（.cgui 的 spin）：只派发「调节钮被按下」，delta 给 ±1。
+         * 自动方式顺手把文本改成夹好的整数 —— 那是程序改文本，按本工程的规矩不派发
+         * change，业务在 spin 回调里读 cg_widget_text 就是最终值。 */
+        if (!strcmp(w->type, "edit")) {
+            int v = nud->iPos + nud->iDelta;
+            if (v < w->vmin) v = w->vmin;
+            if (v > w->vmax) v = w->vmax;
+            w->ev_delta = nud->iDelta;
+            w->value = v;
+            if (w->native2) SendMessageW((HWND)w->native2, UDM_SETPOS32, 0, (LPARAM)v);
+            if (w->spin == 1 && buddy) {          /* 自动：把 ±1 后的值写进文本 */
+                wchar_t wbuf[32];
+                swprintf(wbuf, 32, L"%d", v);
+                if (!cgw_hwnd_text_is(buddy, wbuf)) SetWindowTextW(buddy, wbuf);
+                SendMessageW(buddy, EM_SETSEL, (WPARAM)(wcslen(wbuf)), (LPARAM)(wcslen(wbuf)));
+            }
+            cg_dispatch(w, CG_EVENT_SPIN);
+            g_win_in_notify = 0;
+            return 1;
+        }
+
         int v = nud->iPos + nud->iDelta;
         if (v < w->vmin) v = w->vmin;
         if (v > w->vmax) v = w->vmax;

@@ -5,6 +5,10 @@
  */
 #include "cg_win_internal.h"
 
+#include <limits.h>   /* LLONG_MIN / LLONG_MAX：数值输入方式夹取的范围 */
+#include <stdlib.h>   /* wcstod / wcstoll：失焦时解析文本 */
+#include <wchar.h>    /* wcschr / wcscmp / swprintf */
+
 /* ------------------------------------------------------------ 控件映射 */
 
 /** 富文本控件类：Msftedit.dll 起来后用 RICHEDIT50W，否则退回旧版甚至普通 EDIT。
@@ -81,6 +85,110 @@ int cgw_splitter_is_vert(const cg_widget_t *w)
     return !(w->format && strcmp(w->format, "row") == 0);
 }
 
+/* ------------------------------------------------ 输入框的「输入方式」限制
+ * 输入方式不只是样式位：整数/小数/字节/日期这些档位要在**按键**和**失焦**两处把关。
+ * 规则（写给使用者的版本在 docs/CGUI-FORMAT.md 的 input 字段）：
+ *   按键：只放行这类值可能出现的字符（数字、负号、小数点、日期分隔符），其余吞掉；
+ *   失焦：能解析就夹到该类型的范围里重写，解析不了就清空（"没填"是合法状态，不弹窗）。
+ * 两处都只动文本、不派发 change —— 本工程的规矩是"程序改文本不触发回调"。 */
+
+/** @brief "YYYY-MM-DD" 或 "YYYY-MM-DD HH:MM" 的形状检查（不查日历真假，那是业务的事） */
+static int cgw_edit_date_ok(const wchar_t *s)
+{
+    int i;
+    for (i = 0; s[i]; i++) {
+        if (i < 10) {
+            if (i == 4 || i == 7) {
+                if (s[i] != L'-') return 0;
+            } else if (s[i] < L'0' || s[i] > L'9') {
+                return 0;
+            }
+        } else if (i == 10) {
+            if (s[i] != L' ') return 0;
+        } else if (i < 16) {
+            if (i == 13) {
+                if (s[i] != L':') return 0;
+            } else if (s[i] < L'0' || s[i] > L'9') {
+                return 0;
+            }
+        } else {
+            return 0;                        /* 超过 16 个字符一律不算 */
+        }
+    }
+    return (i == 10 || i == 16);
+}
+
+/** @brief 这个字符要不要吞掉（由 cg_win_event.c 的 WM_CHAR 调用） */
+int cgw_edit_char_reject(const cg_widget_t *w, HWND hwnd, wchar_t ch)
+{
+    DWORD   sel_a = 0, sel_b = 0;
+    wchar_t buf[64];
+    int     signed_ok, dot_ok;
+
+    if (!w || strcmp(w->type, "edit")) return 0;
+    if (w->input < 4) return 0;              /* 通常/只读/密码/整数文本：不在这里拦 */
+    if (ch < 32) return 0;                   /* 退格 / 回车 / 粘贴用的控制字符一律放行 */
+    if (ch >= L'0' && ch <= L'9') return 0;
+
+    signed_ok = (w->input == 4 || w->input == 6 || w->input == 7 ||
+                 w->input == 8 || w->input == 9 || w->input == 10);
+    dot_ok    = (w->input == 4 || w->input == 9 || w->input == 10);
+
+    if (signed_ok && ch == L'-') {
+        SendMessageW(hwnd, EM_GETSEL, (WPARAM)&sel_a, (LPARAM)&sel_b);
+        return sel_a == 0 ? 0 : 1;           /* 负号只能出现在最前面 */
+    }
+    if (dot_ok && ch == L'.') {
+        if (GetWindowTextW(hwnd, buf, 64) > 0 && wcschr(buf, L'.')) return 1;  /* 只许一个小数点 */
+        return 0;
+    }
+    if (w->input == 11 && (ch == L'-' || ch == L':' || ch == L' ')) return 0;
+    return 1;
+}
+
+/** @brief 失焦时校验文本：越界夹回、非法清空（由 cg_win_notify.c 的 EN_KILLFOCUS 调用） */
+void cgw_edit_validate(cg_widget_t *w, HWND hwnd)
+{
+    wchar_t buf[128];
+    int     len;
+
+    if (!w || !hwnd || strcmp(w->type, "edit")) return;
+    if (w->input < 4) return;
+    len = GetWindowTextW(hwnd, buf, 128);
+    if (len <= 0 || len >= 128) return;      /* 空 = 没填，合法 */
+
+    if (w->input == 11) {
+        if (!cgw_edit_date_ok(buf)) SetWindowTextW(hwnd, L"");
+        return;
+    }
+    if (w->input == 4 || w->input == 9 || w->input == 10) {
+        wchar_t *end = NULL;
+        wcstod(buf, &end);
+        if (!end || *end) SetWindowTextW(hwnd, L"");   /* 还剩字符 = 不是个数 */
+        return;
+    }
+    {
+        long long lo = LLONG_MIN, hi = LLONG_MAX, v;
+        wchar_t  *end = NULL;
+        wchar_t   nb[32];
+        switch (w->input) {
+        case 5: lo = 0;                    hi = 255;                 break;   /* 字节 */
+        case 6: lo = -32768;               hi = 32767;               break;   /* 短整数 */
+        case 7: lo = -2147483647LL - 1;    hi = 2147483647LL;        break;   /* 整数 */
+        default: break;                                                        /* 8 长整数 */
+        }
+        v = wcstoll(buf, &end, 10);
+        if (!end || *end) {
+            SetWindowTextW(hwnd, L"");
+            return;
+        }
+        if (v < lo) v = lo;
+        if (v > hi) v = hi;
+        swprintf(nb, 32, L"%lld", v);
+        if (wcscmp(nb, buf) != 0) SetWindowTextW(hwnd, nb);   /* 夹过/去过空格才重写 */
+    }
+}
+
 /** @brief 控件 -> WS 样式位（table 按 multi 决定单/多选） */
 DWORD cgw_style_of(const cg_widget_t *w)
 {
@@ -110,7 +218,23 @@ DWORD cgw_style_of(const cg_widget_t *w)
            : (w->style.align == CG_ALIGN_RIGHT)  ? SS_RIGHT : SS_LEFT;
         return s;
     }
-    if (!strcmp(w->type, "edit"))      return WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL | ES_LEFT;
+    if (!strcmp(w->type, "edit")) {
+        /* 单行/多行、滚动条、对齐、大小写转换、只读/密码/整数，全部由 .cgui 字段决定；
+         * 字段全缺省 = 原来的单行左对齐输入框。对齐复用 style.align（和标签是同一个字段）。 */
+        DWORD s = WS_CHILD | WS_VISIBLE | WS_TABSTOP;
+        s |= (w->style.align == CG_ALIGN_CENTER) ? ES_CENTER
+           : (w->style.align == CG_ALIGN_RIGHT)  ? ES_RIGHT : ES_LEFT;
+        if (w->multiline) s |= ES_MULTILINE | ES_WANTRETURN;
+        if (w->scroll & 1) s |= ES_AUTOHSCROLL | WS_HSCROLL;
+        else if (!w->multiline) s |= ES_AUTOHSCROLL;   /* 单行默认：文字长了横向滚动 */
+        if (w->scroll & 2) s |= ES_AUTOVSCROLL | WS_VSCROLL;
+        if (w->conv == 1) s |= ES_LOWERCASE;
+        else if (w->conv == 2) s |= ES_UPPERCASE;
+        if (w->input == 1) s |= ES_READONLY;
+        else if (w->input == 2) s |= ES_PASSWORD;
+        else if (w->input == 3) s |= ES_NUMBER;
+        return s;
+    }
     if (!strcmp(w->type, "multiedit")) return WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_WANTRETURN;
     if (!strcmp(w->type, "checkbox"))  return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;  /* 自绘勾选框 */
     if (!strcmp(w->type, "radio"))     return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW | WS_GROUP;  /* 自绘单选圆，WS_GROUP 标记组首 */

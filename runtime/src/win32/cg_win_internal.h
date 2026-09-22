@@ -113,6 +113,10 @@ HBRUSH cgw_brush_for(unsigned rgb);
 int cgw_is_t(const cg_widget_t *w, const char *type);
 /** @brief 是否输入类控件（edit/multiedit/spinner/richtext） */
 int cgw_is_editlike(const cg_widget_t *w);
+/** 输入框的「输入方式」限制：这个字符要不要吞掉（WM_CHAR 过滤，见 cg_win_ctl.c） */
+int cgw_edit_char_reject(const cg_widget_t *w, HWND hwnd, wchar_t ch);
+/** 输入框的「输入方式」限制：失焦时校验文本（越界夹回、非法清空） */
+void cgw_edit_validate(cg_widget_t *w, HWND hwnd);
 /** @brief 解析资源路径（相对 .cgui 目录 / exe 目录 / 绝对），成功返回 0 */
 int cgw_resolve_asset(const cg_app_t *app, const char *path, char *out, size_t outsz);
 /** @brief 把图片文件读成 HBITMAP（走 GDI+），失败返回 NULL */
@@ -196,6 +200,8 @@ void cgw_sync_tabs_pages(cg_widget_t *tabs);
 int cgw_imagelist_add_file(cg_widget_t *w, HIMAGELIST il, const char *path, int cell);
 /** @brief 惰性创建表格的 imagelist */
 HIMAGELIST cgw_table_imagelist(HWND h, cg_widget_t *w);
+/** @brief 同 cgw_wc_from_utf8，但把 \n 展开成多行 EDIT 要的 \r\n */
+wchar_t *cgw_wc_from_utf8_crlf(const char *s);
 /** @brief 原生控件当前文本是否已经是 wt */
 int cgw_hwnd_text_is(HWND h, const wchar_t *wt);
 /** @brief 把控件逻辑状态同步到原生控件（入口带防重入保护） */

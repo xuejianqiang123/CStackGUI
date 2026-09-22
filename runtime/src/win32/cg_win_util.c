@@ -5,6 +5,8 @@
  */
 #include "cg_win_internal.h"
 
+#include <wchar.h>   /* wcslen：展开换行时算长度 */
+
 /* ------------------------------------------------------------ 字符串 */
 
 /** @brief UTF-8 转 UTF-16 堆串（调用方 free）；空/失败返回 NULL */
@@ -16,6 +18,36 @@ wchar_t *cgw_wc_from_utf8(const char *s)
     wchar_t *out = (wchar_t *)malloc((size_t)n * sizeof(wchar_t));
     if (!out) return NULL;
     MultiByteToWideChar(CP_UTF8, 0, s, -1, out, n);
+    return out;
+}
+
+/** @brief 同 cgw_wc_from_utf8，但把逻辑换行 `\n` 展开成多行 EDIT 要求的 `\r\n`
+ *  @details 多行 EDIT 只认 `\r\n`：只给 `\n` 的话整段文字会挤成一行（看不出换行）。
+ *           已经是 `\r\n` 的不重复插；没有换行的直接原样返回，不多一次分配。
+ *          拉回来时 cgw_pull_edit_text 会把 `\r` 去掉，模型和 .cgui 里始终只有 `\n`。 */
+wchar_t *cgw_wc_from_utf8_crlf(const char *s)
+{
+    wchar_t *w = cgw_wc_from_utf8(s);
+    wchar_t *out;
+    size_t   need = 0, j = 0, i;
+
+    if (!w) return NULL;
+    for (i = 0; w[i]; i++) {
+        if (w[i] == L'\n' && (i == 0 || w[i - 1] != L'\r')) need++;
+    }
+    if (need == 0) return w;
+
+    out = (wchar_t *)malloc((wcslen(w) + need + 1) * sizeof(wchar_t));
+    if (!out) {
+        free(w);
+        return NULL;
+    }
+    for (i = 0; w[i]; i++) {
+        if (w[i] == L'\n' && (i == 0 || w[i - 1] != L'\r')) out[j++] = L'\r';
+        out[j++] = w[i];
+    }
+    out[j] = 0;
+    free(w);
     return out;
 }
 
