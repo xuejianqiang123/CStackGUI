@@ -348,6 +348,7 @@ static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
     const cg_kind_info_t *ki;
     const char *type;
     char auto_id[32];
+    int alias_multi, alias_spin;
 
     if (!o || o->type != CJ_OBJ) {
         snprintf(err, errsz, "widget entry is not an object");
@@ -355,6 +356,12 @@ static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
     }
 
     type = cj_str(cj_get(o, "type"), "label");
+    /* 老写法自动升级：multiedit、spinner 已合并进 edit（2026-09-22）。
+     * 读到旧名不报错，按新字段补齐（见下面两处），dump 出去就已经是 edit ——
+     * 这份兼容必须留在解析层：未知类型是**整份文档解析失败**，不是降级成标签。 */
+    alias_multi = (strcmp(type, "multiedit") == 0);
+    alias_spin  = (strcmp(type, "spinner") == 0);
+    if (alias_multi || alias_spin) type = "edit";
     ki = cg_kind_lookup(type);
     if (!ki) {
         snprintf(err, errsz, "unknown widget type \"%s\"", type);
@@ -438,6 +445,18 @@ static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
     if (n->border < 0 || n->border > 6) n->border = 0;
     n->spin = cj_int(cj_get(o, "spin"), 0);
     if (n->spin < 0 || n->spin > 2) n->spin = 0;
+
+    /* 旧类型名补齐字段（见函数开头 alias_*）。写在前面的字段优先，作者写了的就不动。 */
+    if (alias_multi) {                     /* multiedit：以前写死 ES_MULTILINE + 纵向滚动 */
+        n->multiline = 1;
+        if (n->scroll == 0) n->scroll = 2;
+    }
+    if (alias_spin) {                      /* spinner：以前是独立的 EDIT + 上下箭头 */
+        if (n->spin == 0) n->spin = 1;     /* 自动：±1 并夹到 min/max */
+        if (n->input == 0) n->input = 7;   /* 整数：字符只放行数字与负号，失焦夹到范围内 */
+        /* 不用管 text：数值框的显示文本由 value 派生（见 cg_widget.c 的 build_node），
+         * 这样老文件里留空的 text 不会被写成一个会和 value 漂移的副本。 */
+    }
 
     /* 控件绑定：bind { "src": "源控件id", "two": true }
      * 只认对象写法；src 空串等于没绑（画布没选源时就是这么写的） */

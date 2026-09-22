@@ -19,8 +19,11 @@
 typedef enum {
     CG_K_BUTTON = 0,
     CG_K_LABEL,
+    /* 输入框只有这一种类型：单行 / 多行 / 数值框都由 edit 的字段表达
+     * （multiline / scroll / spin，见 cg_doc.h 的 cg_node_t）。
+     * 2026-09-22 把原来的 multiedit、spinner 合并进来了，老 .cgui 由 cg_doc.c 的
+     * parse_node 自动升级（读到旧名按新字段填），所以这里不再有它们。 */
     CG_K_EDIT,
-    CG_K_MULTIEDIT,
     CG_K_CHECKBOX,
     CG_K_RADIO,
     CG_K_LISTBOX,
@@ -36,7 +39,6 @@ typedef enum {
     CG_K_TREE,       /* 树 */
     CG_K_TABLE,      /* 表格（列表视图报表模式） */
     CG_K_STATUS,     /* 状态栏 */
-    CG_K_SPINNER,    /* 数字微调（输入框 + 上下箭头） */
     CG_K_MENU,       /* 窗口菜单栏（没有矩形，挂在窗口上） */
     CG_K_MENUBUTTON, /* 按钮 + 弹出菜单 */
     CG_K_RICHTEXT,   /* 富文本（RICHEDIT，多行、能装大文本） */
@@ -211,7 +213,10 @@ typedef struct cg_node {
     /** 边框样式：0 = 缺省（M3 圆角自绘）/ 1 无边框 / 2 凹入式 / 3 凸出式 /
      *  4 浅凹入式 / 5 镜框式 / 6 单线边框式 */
     int      border;
-    /** 调节器（右侧上下箭头）：1 自动（按 ±1 改文本并夹到 min/max）/ 2 手动（只发事件） */
+    /** 调节器（右侧上下箭头）：1 自动（按 ±1 改值并夹到 min/max）/ 2 手动（只发 spin 事件）。
+     *  **非 0 即"数值框"**：此时 `value` 是这个输入框的真相（文本由 value 派生），
+     *  `cg_widget_value()`/`cg_widget_set_value()` 与 bind 抄 value 全部成立 —— 这就是
+     *  原来独立类型 spinner 的能力（2026-09-22 合并进来）。多行输入框不支持调节器。 */
     int      spin;
     /** 各类事件绑定的回调名，NULL 表示没绑 */
     char    *ev[CG_EVENT_COUNT];

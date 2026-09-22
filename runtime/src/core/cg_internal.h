@@ -152,7 +152,7 @@ struct cg_widget {
     int         *tool_ids;
     int          ntool;
 
-    void        *native2;       /* 需要第二个原生窗口的控件（spinner = edit + updown） */
+    void        *native2;       /* 需要第二个原生窗口的控件（数值框 = edit + updown） */
 
     /* 树 / 表格：逻辑下标 -> 原生 item 句柄（后端维护，重建条目时刷新） */
     void       **item_map;
@@ -218,6 +218,9 @@ int cg_dispatch_menu_cmd(cg_app_t *app, int cmd);
 cg_widget_t *cg_widget_by_id(cg_app_t *app, const char *id);
 /** 按 Win32 控件 ID 找控件；找不到返回 NULL */
 cg_widget_t *cg_widget_by_ctrl_id(cg_app_t *app, int ctrl_id);
+/** 是否数值输入框（edit + 调节器且非多行）：value 是真相、文本由 value 派生。
+ *  bind 抄 value、cg_widget_set_value 写文本、backends 同步文本都按它分流。 */
+int cg_widget_is_numedit(const cg_widget_t *w);
 /** 按原生窗口句柄（HWND，以 void* 传入）反查控件；同时比对 native 与 native2；
  *  找不到返回 NULL。自绘外观层（cg_skin.c）用它把 WM_DRAWITEM 的 hwndItem 映射到控件。 */
 cg_widget_t *cg_widget_by_hwnd(cg_app_t *app, void *hwnd);

@@ -38,17 +38,20 @@
 
 static int s_bind_depth;
 
-/** @brief 有值语义：bind 时抄 value 的控件 */
-static int bind_is_value_kind(const char *type)
+/** @brief 有值语义：bind 时抄 value 的控件。
+ *  按控件判而不是按类型名 —— 数值输入框（edit + 调节器）也是值语义，
+ *  但它和普通文本 edit 是同一个类型名。 */
+static int bind_is_value_kind(const cg_widget_t *w)
 {
     static const char *const k[] = {
-        "slider", "progress", "progressring", "spinner", "rate", "pagination",
+        "slider", "progress", "progressring", "rate", "pagination",
         "tabs", "listbox", "combo", "toolbar",
     };
+    if (!w || !w->type) return 0;
     for (size_t i = 0; i < sizeof(k) / sizeof(k[0]); i++) {
-        if (type && strcmp(type, k[i]) == 0) return 1;
+        if (strcmp(w->type, k[i]) == 0) return 1;
     }
-    return 0;
+    return cg_widget_is_numedit(w);   /* 数值输入框：value 是真相 */
 }
 
 /** @brief 勾选语义：bind 时抄 checked 的控件 */
@@ -64,14 +67,17 @@ static int bind_is_list_kind(const char *type)
                     !strcmp(type, "tabs") || !strcmp(type, "toolbar"));
 }
 
-/** @brief 源是"以文字为主"的控件：抄给文字型目标时抄文字而不是数字 */
-static int bind_is_text_kind(const char *type)
+/** @brief 源是"以文字为主"的控件：抄给文字型目标时抄文字而不是数字。
+ *  数值输入框（edit + 调节器）不算 —— 它的文字是从 value 派生的，抄给它等于抄数值。 */
+static int bind_is_text_kind(const cg_widget_t *w)
 {
     static const char *const k[] = {
-        "edit", "multiedit", "richtext", "label", "link", "badge", "tag", "datepicker",
+        "richtext", "label", "link", "badge", "tag", "datepicker",
     };
+    if (!w || !w->type) return 0;
+    if (strcmp(w->type, "edit") == 0) return !cg_widget_is_numedit(w);
     for (size_t i = 0; i < sizeof(k) / sizeof(k[0]); i++) {
-        if (type && strcmp(type, k[i]) == 0) return 1;
+        if (strcmp(w->type, k[i]) == 0) return 1;
     }
     return 0;
 }
@@ -120,7 +126,7 @@ int cg_bind_copy(cg_widget_t *src, cg_widget_t *dst)
 {
     if (!src || !dst || src == dst) return 0;
 
-    if (bind_is_value_kind(dst->type)) {
+    if (bind_is_value_kind(dst)) {
         int v = src->value;
         if (!bind_is_list_kind(dst->type)) {   /* 列表类存的是下标，条目可以超过 100 */
             if (v < dst->vmin) v = dst->vmin;
@@ -138,7 +144,7 @@ int cg_bind_copy(cg_widget_t *src, cg_widget_t *dst)
         if (bind_is_check_kind(src->type)) {
             snprintf(buf, sizeof(buf), "%d", src->checked ? 1 : 0);
             text = buf;
-        } else if (bind_is_text_kind(src->type)) {
+        } else if (bind_is_text_kind(src)) {
             text = src->text ? src->text : "";
         } else {
             snprintf(buf, sizeof(buf), "%d", src->value);

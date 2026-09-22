@@ -251,6 +251,14 @@ static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node
     w->input = n->input;
     w->border = n->border;
     w->spin = n->spin;
+    /* 数值框（edit + 调节器）的显示文本由 value 派生：.cgui 里不用写 text，
+     * 这里补成 value 的十进制，cg_widget_text() 从第一帧起就和界面一致。 */
+    if (cg_widget_is_numedit(w) && (!w->text || !*w->text)) {
+        char vbuf[32];
+        snprintf(vbuf, sizeof(vbuf), "%d", w->value);
+        free(w->text);
+        w->text = cg_str_dup(vbuf);
+    }
     /* 菜单栏和菜单按钮共用同一套菜单行表；tree 虽然也用 nodes，但走的是下面那套摊平 */
     if (n->nodes && (!strcmp(n->type, "menu") || !strcmp(n->type, "menubutton"))) {
         menu_push_doc(app, w, n->nodes, n->nnodes, -1);
@@ -362,7 +370,7 @@ cg_widget_t *cg_widget_by_ctrl_id(cg_app_t *app, int ctrl_id)
     return NULL;
 }
 
-/** @brief 按原生窗口句柄反查控件（同时比对 native 与 native2，spinner 有两个 HWND）；找不到返回 NULL */
+/** @brief 按原生窗口句柄反查控件（同时比对 native 与 native2，数值框有两个 HWND）；找不到返回 NULL */
 cg_widget_t *cg_widget_by_hwnd(cg_app_t *app, void *hwnd)
 {
     if (!app || !hwnd) return NULL;
@@ -412,6 +420,15 @@ int cg_widget_visible(const cg_widget_t *w) { return w ? w->visible : 0; }
 int cg_widget_enabled(const cg_widget_t *w) { return w ? w->enabled : 0; }
 /** @brief 是否勾选；NULL 返回 0 */
 int cg_widget_checked(const cg_widget_t *w) { return w ? w->checked : 0; }
+/** @brief 是否数值输入框：`edit` + 调节器（spin），且不是多行。
+ *  只有这种输入框的 `value` 才是真相（文本由 value 派生）—— 也就是原来独立类型
+ *  spinner 的语义。bind 抄 value、cg_widget_set_value 写文本都按它分流。 */
+int cg_widget_is_numedit(const cg_widget_t *w)
+{
+    if (!w || !w->type || strcmp(w->type, "edit") != 0) return 0;
+    return (w->spin != 0 && !w->multiline);
+}
+
 /** @brief 当前值（滑块位置 / 列表选中下标等）；NULL 返回 0 */
 int cg_widget_value(const cg_widget_t *w)   { return w ? w->value : 0; }
 
@@ -473,11 +490,22 @@ void cg_widget_set_checked(cg_widget_t *w, int on)
 /** @brief 设置当前值，自动夹到 [vmin, vmax] */
 void cg_widget_set_value(cg_widget_t *w, int value)
 {
+    char vbuf[32];
     if (!w) return;
     if (value < w->vmin) value = w->vmin;
     if (value > w->vmax) value = w->vmax;
     w->value = value;
     if (w->node) w->node->value = value;
+    /* 数值框的文本是 value 的派生物：一起更新，cg_widget_text() 才不会读到旧数字 */
+    if (cg_widget_is_numedit(w)) {
+        snprintf(vbuf, sizeof(vbuf), "%d", value);
+        free(w->text);
+        w->text = cg_str_dup(vbuf);
+        if (w->node) {
+            free(w->node->text);
+            w->node->text = cg_str_dup(vbuf);
+        }
+    }
     cg_widget_sync(w);
     cg_bind_propagate(w);
 }
