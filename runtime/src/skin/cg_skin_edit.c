@@ -29,17 +29,19 @@
 #define SK_EDGE_FRAME   5
 #define SK_EDGE_LINE    6
 
-/* 边框配色（和 styles.css / 画布观感一致）：缺省灰、聚焦紫、3D 明暗、浅灰、硬灰 */
-#define SK_EDGE_GREY    0xB8B2BD
-#define SK_EDGE_SOFT_C  0xCAC4D0
-#define SK_EDGE_LINE_C  0x79747E
-#define SK_EDGE_DARK    0xA9A3AF
-#define SK_EDGE_LIGHT   0xFFFFFF
-#define SK_EDGE_FOCUS   0x6750A4
+/* 边框配色（和 styles.css / 画布观感一致）：缺省灰、聚焦紫、3D 明暗、浅灰、硬灰。
+ * **一律用 RGB() 宏写**：COLORREF 的内存布局是 0x00BBGGRR，直接写 0x6750A4 这种
+ * 「看着像 #RRGGBB」的字面量会把红蓝弄反 —— 聚焦环会变成暗红（#A45067）而不是主题紫。 */
+#define SK_EDGE_GREY    RGB(0xB8, 0xB2, 0xBD)
+#define SK_EDGE_SOFT_C  RGB(0xCA, 0xC4, 0xD0)
+#define SK_EDGE_LINE_C  RGB(0x79, 0x74, 0x7E)
+#define SK_EDGE_DARK    RGB(0xA9, 0xA3, 0xAF)
+#define SK_EDGE_LIGHT   RGB(0xFF, 0xFF, 0xFF)
+#define SK_EDGE_FOCUS   RGB(0x67, 0x50, 0xA4)
 
 typedef struct {
     int      rad;      /* 圆角半径 */
-    int      single;   /* 单行（edit / spinner）：需要垂直居中；multiedit 保持顶部对齐 */
+    int      single;   /* 单行（含数值框）：需要垂直居中；多行保持顶部对齐 */
     int      pad;      /* 上方让出的像素（= (控件高 - 文字高) / 2） */
     int      text_h;   /* 当前字体的文字高度（换字号时对比，变了才重排） */
     int      w, h;     /* 控件整块尺寸（比客户区大，含边框与让出来的上边距） */
@@ -52,16 +54,22 @@ typedef struct {
 
 /** 沿边框带画一圈圆角线。
  *  half 是路径离窗口边缘的距离，调用方给：**2px 笔给 1**（正好压住 [0,2)），
- *  **1px 笔给 0.5**（正好压住最外那一个像素 [0,1)）。给错就会出现"半像素线/断线"。 */
+ *  **1px 笔给 0**（正好压住最外那一个像素 [0,1)）。
+ *  另见 rr：1px 笔的右/下两条边要再各往内缩 1px。 */
 static void sk_edit_ring(HDC dc, const sk_edit_sub_t *s, COLORREF col, int penw, int half)
 {
     HPEN pn, op;
     HBRUSH ob;
-    if (s->w <= 2 * half || s->h <= 2 * half) return;
+    /* GDI 的线是"从路径坐标往右下铺"的：1px 笔在坐标 c 上占的是 [c, c+1) 那个像素。
+     * 所以路径写成 x=w / y=h 时，右/下两条边正好落在窗口外 —— 整个控件只剩上/左两条边，
+     * 看着就是"边框少了一半"（多行输入框带滚动条时最明显：右/下那两条本来就被滚动条压着，
+     * 剩下能看见的上/左两条线就更像画错了）。右/下各减 1 才落进最后一个像素。 */
+    int rr = (penw <= 1) ? 1 : 0;
+    if (s->w <= 2 * half + rr || s->h <= 2 * half + rr) return;
     pn = CreatePen(PS_SOLID, penw, col);
     op = (HPEN)SelectObject(dc, pn);
     ob = (HBRUSH)SelectObject(dc, GetStockObject(NULL_BRUSH));
-    RoundRect(dc, half, half, s->w - half, s->h - half, s->rad * 2, s->rad * 2);
+    RoundRect(dc, half, half, s->w - half - rr, s->h - half - rr, s->rad * 2, s->rad * 2);
     SelectObject(dc, ob);
     SelectObject(dc, op);
     DeleteObject(pn);
@@ -236,7 +244,7 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
         LRESULT r = DefSubclassProc(hwnd, msg, wp, lp);
         /* 带调节器时：换字体会让箭头重新按 buddy 摆位，补摆一次 */
         sk_edit_spin_fit(hwnd, s);
-        /* spinner 的上下箭头换字体时会重设 buddy 边距、把左边距清成 0：补一次 */
+        /* 数值框的上下箭头换字体时会重设 buddy 边距、把左边距清成 0：补一次 */
         SendMessageW(hwnd, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(s->left, 0));
         if (s->single && sk_edit_text_height(hwnd) != s->text_h) {
             /* 字号变了 -> 重排一次（SWP_FRAMECHANGED 会再发 WM_NCCALCSIZE） */
@@ -249,7 +257,7 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
         sk_edit_resize(hwnd, s);
         sk_edit_spin_fit(hwnd, s);   /* 尺寸变了：箭头跟着摆到新的右边内侧 */
         SendMessageW(hwnd, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(s->left, 0));
-        /* resize 时系统按默认非客户区重算客户区，会把让出来的上边距抹掉（spinner 的
+        /* resize 时系统按默认非客户区重算客户区，会把让出来的上边距抹掉（数值框的
          * 上下箭头改 buddy 尺寸就会触发）。补一次 FRAMECHANGED 让 WM_NCCALCSIZE 重新生效；
          * 尺寸没变不会递归发 WM_SIZE。 */
         if (s->single)
@@ -314,7 +322,7 @@ void cg_skin_apply_edit(cg_widget_t *w)
 
     sk_edit_resize(hw, s);   /* 初始尺寸 + 圆角区域 */
     /* 左右留边距：文字别怼到圆角边框上（边框在客户区外，垂直居中见 WM_NCCALCSIZE）。
-     * spinner 的箭头稍后会重设边距，WM_SETFONT/WM_SIZE 里会按 s->left 再补。 */
+     * 数值框的箭头稍后会重设边距，WM_SETFONT/WM_SIZE 里会按 s->left 再补。 */
     SendMessageW(hw, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN,
                  MAKELPARAM(CG_EDIT_TEXT_MARGIN, CG_EDIT_TEXT_MARGIN));
     SetWindowSubclass(hw, sk_edit_sub, 1, (DWORD_PTR)s);
