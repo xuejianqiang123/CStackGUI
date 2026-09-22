@@ -1,4 +1,4 @@
-# shot.ps1 -- 跑一个界面并截图，调 GUI 外观用
+﻿# shot.ps1 -- 跑一个界面并截图，调 GUI 外观用
 # 用法（在项目根或发布包根）：
 #   powershell -ExecutionPolicy Bypass -File tools\shot.ps1                          # 默认截 gallery
 #   powershell -ExecutionPolicy Bypass -File tools\shot.ps1 apps\main\main.exe      # 截自己的工程

@@ -1,4 +1,4 @@
-# shot-canvas.ps1 -- 截画布（CStackGUI.exe / electron）窗口，调画布 UI 观感用
+﻿# shot-canvas.ps1 -- 截画布（CStackGUI.exe / electron）窗口，调画布 UI 观感用
 #
 # 为什么需要它：tools\shot.ps1 是给 C 业务 exe 用的（Start-Process + PrintWindow），
 # 画布是 Electron，改了面板/样式之后同样要「放大截图肉眼看一眼」，所以单独留一个。
