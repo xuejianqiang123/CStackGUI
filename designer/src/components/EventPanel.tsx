@@ -57,7 +57,7 @@ export default function EventPanel({ doc, node, onBeginHistory, onApply }: Props
   };
 
   /** 同名函数被哪些控件用着。注意「一个控件把自己的多个事件绑到同一个函数」是常规写法
-   *  （examples\lesson01_edit_button 就是 13 个事件共用一个 on_full_event），不该提示；
+   *  （教学示例里常见：一个控件的十几个事件共用一个回调），不该提示；
    *  只有**跨控件**共用才值得提醒：C 侧只会存在一个函数，回调里得靠 cg_widget_id(self) 分辨是谁。 */
   const widgetsByName = new Map<string, Set<string>>();
   for (const u of collectCallbacks(doc)) {

@@ -323,6 +323,16 @@ cg_term_write(cg_find(app, "term_log"), CG_TERM_TX, "AT+GMR\r\n", -1);   /* 发�
 ] }
 ```
 
+**拖动时的真实行为**（`cg_splitter_apply()`）：只改**两块**的尺寸 —— 分隔条**紧挨着的前一块**、
+以及**同一容器里的最后一块**（吃余量）；夹在中间的其他兄弟**只被平移**（`set_pos`）。于是：
+
+- **一个 pane 只放一个控件**。一个 pane 里想放多个（图表 + 按钮 + 终端），先用
+  `group` / `card` / `box` 包成一个容器，再拿容器当 pane；
+- 两端之外不要再留兄弟 —— 否则一拖就被挤出窗口、被边缘裁掉（表现为"某个按钮只剩半个字"）；
+- 正确样例见 `examples/serialterm/serialterm.cgui`（分隔条后面接的是**一个** `group` 容器）；
+- 同一个窗口里 `statusbar` 也是参与布局的兄弟，**把它写在 `widgets` 数组前面**，
+  别让它成为"最后一块"（否则拖分隔条会去改状态栏的宽度）。
+
 ### 2.10 `chart`：折线 / 柱状图
 
 实时曲线：业务按采样节奏推点，窗口、范围、网格与绘制都由控件管。
@@ -489,7 +499,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `group` | 分组框 | **是** | 260×180 | `分组` | **无** | 自注册面板窗口（边框+标题完全自绘）|
 | `box` | 容器块 | **是** | 200×120 | — | **无** | 自注册面板窗口 |
 | `card` | 卡片 | **是** | 280×180 | `卡片` | **无** | 自注册面板窗口 |
-| `splitter` | 分隔条 | 否 | 6×200 | — | `release` | 自绘窗口：能拖动的分区边界（拖它撑开前一块、后面整体让位、最后一块吃掉余量），见 2.8 |
+| `splitter` | 分隔条 | 否 | 6×200 | — | `release` | 自绘窗口：能拖动的分区边界（**只改两块**：紧邻的前一块 + 同容器最后一块吃余量，中间兄弟只平移 → 一个 pane 只放一个控件），见下面 `terminal` 那节的例子 |
 | `separator` | 分割线 | 否 | 200×2 | — | **无** | `STATIC` + `SS_ETCHEDHORZ` |
 | `image` | 图片 | 否 | 200×120 | — | `click`、`dblclick` | 自绘窗口（GDI+ 读图）|
 | `shape` | 外形框 | 否 | 120×120 | — | **无** | 自注册面板窗口（自绘外形）|
@@ -683,6 +693,7 @@ int  cg_bind(cg_widget_t *src, cg_widget_t *dst, int two_way);
 int  cg_widget_list_add(cg_widget_t *w, const char *item);
 int  cg_widget_list_addf(cg_widget_t *w, const char *fmt, ...);
 void cg_widget_list_clear(cg_widget_t *w);
+int  cg_widget_list_count(const cg_widget_t *w);
 const char *cg_widget_list_item(const cg_widget_t *w, int index);
 
 /* 树 */
@@ -711,6 +722,13 @@ void cg_tabs_select(cg_widget_t *w, int index);
 int  cg_tabs_selected(const cg_widget_t *w);
 void cg_widget_set_image(cg_widget_t *w, const char *path);
 const char *cg_widget_image(const cg_widget_t *w);
+
+/* 纯显示：状态灯 / 仪表盘（都没有事件，值只能被程序写；滑块 / 进度 / 圆环用上面的 cg_widget_set_value） */
+void cg_led_set(cg_widget_t *w, int state);          /* 0 灭 / 1 亮 / 2 闪（闪烁由控件自己定时重绘） */
+int  cg_led_state(const cg_widget_t *w);
+void cg_led_set_color(cg_widget_t *w, unsigned rgb); /* 亮起的颜色，缺省绿（等价 cg_widget_set_colors(w, rgb, CG_COLOR_NONE)） */
+void cg_meter_set(cg_widget_t *w, int value);        /* 被 min/max 夹，和滑块同一套语义 */
+void cg_meter_set_range(cg_widget_t *w, int min, int max);   /* max<=min 会纠正成 min+1 */
 
 /* 表格行级状态（多选 / 勾选列 / 行数值 / 行图标；不是 .cgui 字段，运行时设） */
 void cg_table_set_checked(cg_widget_t *w, int row, int on);
