@@ -26,7 +26,7 @@
  *              句柄上分别返回 0 / 0 / 0 / -1（宁可明确拒绝，也不"悄悄支持"错的语义）。
  *
  *          界面上用到的控件（都在 .cgui 里声明）：
- *            combo（角色）、edit（地址）、spinner（端口）、button ×4、led（链路灯）、
+ *            combo（角色）、edit（地址）、数值框 edit+spin（端口）、button ×4、led（链路灯）、
  *            terminal（收发日志）、splitter（日志区 / 发送区之间）、group（发送区）、
  *            edit + checkbox（发送内容 / HEX）、chart（每秒收到多少字节）、statusbar。
  *

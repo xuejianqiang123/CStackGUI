@@ -38,11 +38,13 @@
         },
         {
           "id": "spn_age",
-          "type": "spinner",
+          "type": "edit",
           "rect": { "x": 302, "y": 32, "w": 86, "h": 30 },
           "min": 1,
           "max": 120,
           "value": 24,
+          "spin": 1,
+          "input": 7,
           "events": { "change": "on_form_change" }
         },
         {

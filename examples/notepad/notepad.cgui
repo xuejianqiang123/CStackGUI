@@ -46,9 +46,11 @@
     },
     {
       "id": "edt_body",
-      "type": "multiedit",
+      "type": "edit",
       "rect": { "x": 12, "y": 12, "w": 736, "h": 500 },
       "style": { "font": "Microsoft YaHei UI", "size": 10 },
+      "multiline": true,
+      "scroll": 2,
       "events": { "change": "on_body_change" }
     },
     {

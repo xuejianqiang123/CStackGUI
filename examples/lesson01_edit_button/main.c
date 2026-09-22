@@ -28,8 +28,9 @@
  *              `conv`（大小写转换）/`border`（六种边框）/`style.align`（对齐方式）；
  *            - 输入方式：`input` 档位决定按键过滤与失焦校验（`edt_byte` 失焦时会看到
  *              0~255 之外的数被夹回、非数字被清空）；
- *            - 调节器：`spin`（右侧上下箭头）自动方式按 ±1 夹到 min/max，手动方式只报
- *              ±1、步长由业务自己写（见 on_spin_manual）。
+ *            - 调节器：`spin`（右侧上下箭头）—— 开了它就是「数值框」：值是真相、显示文本
+ *              由值派生，cg_widget_value()/set_value() 与双向绑定都按值走。自动方式点箭头
+ *              按 ±1 改值并夹到 min/max，手动方式只报 ±1、步长由业务自己写（见 on_spin_manual）。
  *
  * 界面在 lesson01_edit_button.cgui 里；本文件只有行为。
  * 逐项说明见同目录的「按钮与输入框全功能说明.md」。
@@ -275,8 +276,8 @@ static void on_edit_event(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief 调节器（自动方式）被点：文本已经被运行时改好并夹到 min/max，这里只报出来
- * @param self 带调节器的输入框
+ * @brief 调节器（自动方式）被点：值已经被运行时改好并夹到 min/max，这里只报出来
+ * @param self 数值输入框（edit + spin:1）
  * @param ev spin
  * @param user 未使用
  */
@@ -285,35 +286,33 @@ static void on_spin_auto(cg_widget_t *self, cg_event_t ev, void *user)
     (void)ev;
     (void)user;
     /* cg_event_delta() 就是这次箭头给的方向（+1 上 / -1 下）；
-     * 自动方式下 cg_widget_text() 已经是最新值，业务不用自己算。 */
+     * 自动方式下 cg_widget_value()/cg_widget_text() 都已是最新值，业务不用自己算。 */
     cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
-                   "调节器（自动）：%s（delta %+d，夹在 0~100）",
-                   cg_widget_text(self), cg_event_delta(self));
+                   "调节器（自动）：%d（delta %+d，夹在 0~100）",
+                   cg_widget_value(self), cg_event_delta(self));
 }
 
 /**
- * @brief 调节器（手动方式）被点：运行时只报 ±1，值由业务自己算
- * @details 手动方式的用处就在这里 —— 步长、范围、格式全由你定。这里做成"步长 5、区间 ±999"，
- *          自动方式做不到（它只会 ±1）。
- * @param self 带调节器的输入框
+ * @brief 调节器（手动方式）被点：运行时只报 ±1 与方向，值由业务自己算
+ * @details 手动方式的用处就在这里 —— 步长由你定。这里做成"步长 5、区间 ±999"，
+ *          自动方式做不到（它只会 ±1）。数值框的值用 cg_widget_set_value() 写，
+ *          文本会跟着派生；写文本没用（显示文本由值决定）。
+ * @param self 数值输入框（edit + spin:2）
  * @param ev spin
  * @param user 未使用
  */
 static void on_spin_manual(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
-    int       v   = atoi(cg_widget_text(self)) + cg_event_delta(self) * 5;   /* 步长 5 */
-    char      buf[32];
+    int       v   = cg_widget_value(self) + cg_event_delta(self) * 5;   /* 步长 5 */
 
     (void)ev;
     (void)user;
 
-    if (v < -999) v = -999;
-    if (v > 999)  v = 999;
-    snprintf(buf, sizeof(buf), "%d", v);
-    /* 程序改文本不会触发 change（运行时的规矩），所以状态栏自己写一句 */
-    cg_widget_set_text(self, buf);
-    cg_status_setf(cg_find(app, "sb_main"), 0, "调节器（手动）：步长 5 -> %d", v);
+    /* 区间 ±999 由 .cgui 的 min/max 定，set_value 会自动夹在里面 */
+    cg_widget_set_value(self, v);
+    cg_status_setf(cg_find(app, "sb_main"), 0, "调节器（手动）：步长 5 -> %d",
+                   cg_widget_value(self));
 }
 
 /**

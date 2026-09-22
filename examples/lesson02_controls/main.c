@@ -5,7 +5,7 @@
  *          每种都走「读一遍（显示到汇总栏）+ 写一遍（重置按钮）」：
  *
  *            编辑框 edit      -> cg_widget_text()
- *            数字微调 spinner -> cg_widget_value()      （值就是数字）
+ *            数值框 edit+spin -> cg_widget_value()      （带调节器的输入框，值就是数字）
  *            复选框 checkbox  -> cg_widget_checked()
  *            单选钮 radio     -> cg_widget_checked()    （互斥只在"点"的时候自动做）
  *            下拉框 combo     -> cg_widget_value() = 第几项，配合 cg_widget_list_item() 取文字
