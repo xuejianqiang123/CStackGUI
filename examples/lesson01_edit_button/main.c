@@ -14,19 +14,31 @@
  *            - cg_str_format 返回的字符串是堆内存，用完必须 cg_free；
  *            - 想弹消息框的地方先问一句 cg_app_has_window()，否则 --selftest 会被弹窗卡住。
  *
- *          右侧「全功能」按钮演示按钮的全部能力：
+ *          「按钮全功能」按钮演示按钮的全部能力：
  *            - 背景图：`.cgui` 里用 `src: "assets/icon.png"`（png/jpg/bmp/gif 拉伸铺满；
  *              别用自带文字的图，字会叠在按钮文字上）；
  *            - 全部 13 种事件（click/dblclick/mousedown/mouseup/rdown/rup/mousemove/
  *              gotfocus/lostfocus/keydown/keyup/char/wheel）绑到同一个 `on_full_event`，
  *              靠 cg_event_name() / cg_event_x() / cg_event_key() / cg_event_delta() 分流。
  *
+ *          输入框（edit）的全功能也在这个界面里，分四块：
+ *            - `edt_events`：edit 支持的 15 种事件（change/submit/spin + 鼠标/键盘全套）
+ *              全绑到 `on_edit_event`，和按钮那套是同一个手法；
+ *            - 外观与限制：`multiline`（多行）/`scroll`（滚动条）/`maxlen`（最大长度）/
+ *              `conv`（大小写转换）/`border`（六种边框）/`style.align`（对齐方式）；
+ *            - 输入方式：`input` 档位决定按键过滤与失焦校验（`edt_byte` 失焦时会看到
+ *              0~255 之外的数被夹回、非数字被清空）；
+ *            - 调节器：`spin`（右侧上下箭头）自动方式按 ±1 夹到 min/max，手动方式只报
+ *              ±1、步长由业务自己写（见 on_spin_manual）。
+ *
  * 界面在 lesson01_edit_button.cgui 里；本文件只有行为。
+ * 逐项说明见同目录的「按钮与输入框全功能说明.md」。
  * 编译：在项目根跑 build-app.bat lesson01_edit_button
  */
 #include "cstackgui.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* ------------------------------------------------------------ 业务状态
@@ -198,6 +210,136 @@ static void on_full_event(cg_widget_t *self, cg_event_t ev, void *user)
     }
 }
 
+/**
+ * @brief 输入框全功能演示：edit 支持的 15 种事件绑到同一个函数
+ * @details 手法和按钮的 on_full_event 完全一样 —— 一个函数接一堆事件，用 cg_event_name()
+ *          看是谁、用 cg_event_x/y/key/delta 看参数。区别在于输入框的 15 种事件里多了
+ *          change（改字）和 submit（回车），滚动条拖动之类也会发 change。
+ * @param self 触发事件的输入框
+ * @param ev 事件枚举（CG_EVENT_*）
+ * @param user 未使用
+ */
+static void on_edit_event(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t    *app = cg_app_of(self);
+    cg_widget_t *lab = cg_find(app, "lab_result");
+    cg_widget_t *sb  = cg_find(app, "sb_main");
+    int x = cg_event_x(self), y = cg_event_y(self);
+    int k = cg_event_key(self), d = cg_event_delta(self);
+
+    (void)user;
+
+    /* 高频事件只动状态栏：鼠标移动、改字（每敲一个字都要来一次） */
+    switch (ev) {
+    case CG_EVENT_MOUSEMOVE:
+        if (sb) cg_status_setf(sb, 0, "鼠标在「事件示范」框上：(%d, %d)", x, y);
+        return;
+    case CG_EVENT_CHANGE:
+        if (sb) cg_status_setf(sb, 0, "内容被改变：现在 %d 个字符", count_chars(cg_widget_text(self)));
+        return;
+    case CG_EVENT_GOTFOCUS:
+        if (sb) set_status(app, "「事件示范」框获得焦点（现在能收键盘事件）");
+        return;
+    case CG_EVENT_LOSTFOCUS:
+        if (sb) set_status(app, "「事件示范」框失去焦点");
+        return;
+    default:
+        break;
+    }
+
+    /* 其余事件打到结果区，方便对照 .cgui 里写的事件名 */
+    {
+        const char *name = cg_event_name(ev);
+        char        buf[200];
+
+        switch (ev) {
+        case CG_EVENT_SUBMIT:    snprintf(buf, sizeof(buf), "事件：submit（回车提交，内容 \"%s\"）", cg_widget_text(self)); break;
+        case CG_EVENT_MOUSEDOWN: snprintf(buf, sizeof(buf), "事件：mousedown（左键按下）@(%d,%d)", x, y); break;
+        case CG_EVENT_MOUSEUP:   snprintf(buf, sizeof(buf), "事件：mouseup（左键松开）@(%d,%d)", x, y); break;
+        case CG_EVENT_DBLCLICK:  snprintf(buf, sizeof(buf), "事件：dblclick（双击）"); break;
+        case CG_EVENT_RDOWN:     snprintf(buf, sizeof(buf), "事件：rdown（右键按下）@(%d,%d)", x, y); break;
+        case CG_EVENT_RUP:       snprintf(buf, sizeof(buf), "事件：rup（右键松开）@(%d,%d)", x, y); break;
+        case CG_EVENT_KEYDOWN:   snprintf(buf, sizeof(buf), "事件：keydown（虚拟键码 %d）", k); break;
+        case CG_EVENT_KEYUP:     snprintf(buf, sizeof(buf), "事件：keyup（虚拟键码 %d）", k); break;
+        /* 中文输入法送进来的是双字节码，用 %c 会打出乱码，所以只在 ASCII 时打字符 */
+        case CG_EVENT_CHAR:
+            if (k >= 32 && k < 127) snprintf(buf, sizeof(buf), "事件：char（字符 '%c'，码 %d）", k, k);
+            else                    snprintf(buf, sizeof(buf), "事件：char（字符码 %d，中文/宽字符）", k);
+            break;
+        case CG_EVENT_WHEEL:     snprintf(buf, sizeof(buf), "事件：wheel（滚动量 %d，正=上）", d); break;
+        default:                 snprintf(buf, sizeof(buf), "事件：%s", name); break;
+        }
+        if (lab) cg_widget_set_text(lab, buf);
+        if (sb) cg_status_setf(sb, 0, "最近事件：%s", name);
+    }
+}
+
+/**
+ * @brief 调节器（自动方式）被点：文本已经被运行时改好并夹到 min/max，这里只报出来
+ * @param self 带调节器的输入框
+ * @param ev spin
+ * @param user 未使用
+ */
+static void on_spin_auto(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev;
+    (void)user;
+    /* cg_event_delta() 就是这次箭头给的方向（+1 上 / -1 下）；
+     * 自动方式下 cg_widget_text() 已经是最新值，业务不用自己算。 */
+    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+                   "调节器（自动）：%s（delta %+d，夹在 0~100）",
+                   cg_widget_text(self), cg_event_delta(self));
+}
+
+/**
+ * @brief 调节器（手动方式）被点：运行时只报 ±1，值由业务自己算
+ * @details 手动方式的用处就在这里 —— 步长、范围、格式全由你定。这里做成"步长 5、区间 ±999"，
+ *          自动方式做不到（它只会 ±1）。
+ * @param self 带调节器的输入框
+ * @param ev spin
+ * @param user 未使用
+ */
+static void on_spin_manual(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    int       v   = atoi(cg_widget_text(self)) + cg_event_delta(self) * 5;   /* 步长 5 */
+    char      buf[32];
+
+    (void)ev;
+    (void)user;
+
+    if (v < -999) v = -999;
+    if (v > 999)  v = 999;
+    snprintf(buf, sizeof(buf), "%d", v);
+    /* 程序改文本不会触发 change（运行时的规矩），所以状态栏自己写一句 */
+    cg_widget_set_text(self, buf);
+    cg_status_setf(cg_find(app, "sb_main"), 0, "调节器（手动）：步长 5 -> %d", v);
+}
+
+/**
+ * @brief 字节输入框失焦：运行时已经把越界/非法输入收干净了，这里读最终结果
+ * @details `input: 5`（字节）的规矩是：按键只放行数字，失焦时把 0~255 之外的值夹回边界、
+ *          把解析不了的文本清空。回调里读到的就是「收干净之后」的值。
+ * @param self 字节输入框
+ * @param ev lostfocus
+ * @param user 未使用
+ */
+static void on_byte_blur(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t   *app = cg_app_of(self);
+    const char *t   = cg_widget_text(self);
+    char        buf[200];
+
+    (void)ev;
+    (void)user;
+
+    snprintf(buf, sizeof(buf),
+             "字节输入框失焦：最终值 \"%s\"\n（敲 300 会被夹成 255，敲字母会被清空成空）",
+             (t && *t) ? t : "（空）");
+    cg_widget_set_text(cg_find(app, "lab_result"), buf);
+    cg_status_setf(cg_find(app, "sb_main"), 0, "字节输入框：最终值 \"%s\"", (t && *t) ? t : "（空）");
+}
+
 /** @brief 界面建好之后调一次：把"初始状态"设成和业务一致 */
 static void on_ready(cg_app_t *app, void *user)
 {
@@ -215,6 +357,11 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND("on_button_click", on_button_click),
     CG_BIND("on_hello_submit", on_hello_submit),
     CG_BIND("on_full_event", on_full_event),
+    /* 输入框全功能那几块 */
+    CG_BIND("on_edit_event", on_edit_event),
+    CG_BIND("on_spin_auto", on_spin_auto),
+    CG_BIND("on_spin_manual", on_spin_manual),
+    CG_BIND("on_byte_blur", on_byte_blur),
     CG_BIND_END
 };
 

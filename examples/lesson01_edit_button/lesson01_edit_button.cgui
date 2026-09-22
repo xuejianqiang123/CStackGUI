@@ -2,8 +2,8 @@
   "cgui": 1,
   "app": {
     "title": "入门01 编辑框和按钮",
-    "width": 420,
-    "height": 320,
+    "width": 700,
+    "height": 580,
     "bg": "#F3EDF7"
   },
   "widgets": [
@@ -12,31 +12,22 @@
       "type": "label",
       "rect": {
         "x": 16,
-        "y": 16,
-        "w": 388,
-        "h": 24
+        "y": 12,
+        "w": 668,
+        "h": 22
       },
-      "text": "在下面输入名字，然后点「打招呼」；右侧带图按钮演示按钮支持的全部事件。",
-      "style": {
-        "font": "Microsoft YaHei UI",
-        "size": 9,
-        "fg": "#49454F"
-      }
+      "text": "输入框（edit）全功能：左边各种输入限制与调节器，右边六种边框，中间那个框绑了全部 15 种事件。"
     },
     {
       "id": "edt_name",
       "type": "edit",
       "rect": {
         "x": 16,
-        "y": 48,
-        "w": 388,
-        "h": 34
+        "y": 44,
+        "w": 200,
+        "h": 32
       },
       "hint": "输入名字后按回车，等于点「打招呼」",
-      "style": {
-        "font": "Microsoft YaHei UI",
-        "size": 10
-      },
       "events": {
         "change": "on_input_change",
         "submit": "on_hello_submit"
@@ -46,13 +37,13 @@
       "id": "btn_hello",
       "type": "button",
       "rect": {
-        "x": 16,
-        "y": 100,
-        "w": 130,
-        "h": 40
+        "x": 224,
+        "y": 44,
+        "w": 104,
+        "h": 32
       },
       "text": "打招呼",
-      "hint": "读输入框里的名字，显示到下面",
+      "hint": "读输入框里的名字，显示到下面的结果区",
       "events": {
         "click": "on_button_click"
       }
@@ -61,13 +52,13 @@
       "id": "btn_clear",
       "type": "button",
       "rect": {
-        "x": 158,
-        "y": 100,
-        "w": 130,
-        "h": 40
+        "x": 336,
+        "y": 44,
+        "w": 88,
+        "h": 32
       },
       "text": "清空",
-      "hint": "清空输入框和结果",
+      "hint": "清空名字输入框和结果区",
       "events": {
         "click": "on_button_click"
       }
@@ -76,12 +67,13 @@
       "id": "btn_full",
       "type": "button",
       "rect": {
-        "x": 300,
-        "y": 100,
-        "w": 40,
+        "x": 432,
+        "y": 44,
+        "w": 124,
         "h": 40
       },
-      "src": "assets\\icon.png",
+      "text": "",
+      "src": "assets/icon.png",
       "hint": "带背景图，并演示按钮支持的全部 13 种事件",
       "style": {
         "fg": "#FFFFFF"
@@ -89,13 +81,13 @@
       "events": {
         "click": "on_full_event",
         "dblclick": "on_full_event",
-        "gotfocus": "on_full_event",
-        "lostfocus": "on_full_event",
         "mousedown": "on_full_event",
         "mouseup": "on_full_event",
         "rdown": "on_full_event",
         "rup": "on_full_event",
         "mousemove": "on_full_event",
+        "gotfocus": "on_full_event",
+        "lostfocus": "on_full_event",
         "keydown": "on_full_event",
         "keyup": "on_full_event",
         "char": "on_full_event",
@@ -103,28 +95,321 @@
       }
     },
     {
+      "id": "lab_ev_hint",
+      "type": "label",
+      "rect": {
+        "x": 16,
+        "y": 92,
+        "w": 400,
+        "h": 18
+      },
+      "text": "事件示范（15 种事件全部绑到 on_edit_event）"
+    },
+    {
+      "id": "edt_events",
+      "type": "edit",
+      "rect": {
+        "x": 16,
+        "y": 112,
+        "w": 400,
+        "h": 32
+      },
+      "hint": "点我 / 右键点我 / 敲键盘 / 滚轮滚我 / 拖选文字：每次都会写进结果区",
+      "events": {
+        "change": "on_edit_event",
+        "submit": "on_edit_event",
+        "mousedown": "on_edit_event",
+        "mouseup": "on_edit_event",
+        "dblclick": "on_edit_event",
+        "rdown": "on_edit_event",
+        "rup": "on_edit_event",
+        "mousemove": "on_edit_event",
+        "gotfocus": "on_edit_event",
+        "lostfocus": "on_edit_event",
+        "keydown": "on_edit_event",
+        "keyup": "on_edit_event",
+        "char": "on_edit_event",
+        "wheel": "on_edit_event",
+        "spin": "on_edit_event"
+      }
+    },
+    {
+      "id": "lab_spin_hint",
+      "type": "label",
+      "rect": {
+        "x": 432,
+        "y": 92,
+        "w": 252,
+        "h": 18
+      },
+      "text": "调节器：自动夹取 / 手动只报 ±1"
+    },
+    {
+      "id": "edt_spin_auto",
+      "type": "edit",
+      "rect": {
+        "x": 432,
+        "y": 112,
+        "w": 120,
+        "h": 32
+      },
+      "text": "50",
+      "hint": "点右侧上下箭头：运行时按 ±1 改数字并夹到 0~100",
+      "min": 0,
+      "max": 100,
+      "spin": 1,
+      "events": {
+        "spin": "on_spin_auto"
+      }
+    },
+    {
+      "id": "edt_spin_manual",
+      "type": "edit",
+      "rect": {
+        "x": 560,
+        "y": 112,
+        "w": 124,
+        "h": 32
+      },
+      "text": "0",
+      "hint": "手动方式：运行时只报 ±1，步长 5 由业务自己写（自动方式做不到）",
+      "min": 0,
+      "max": 100,
+      "spin": 2,
+      "events": {
+        "spin": "on_spin_manual"
+      }
+    },
+    {
+      "id": "lab_num_hint",
+      "type": "label",
+      "rect": {
+        "x": 16,
+        "y": 156,
+        "w": 400,
+        "h": 18
+      },
+      "text": "输入方式：字节 0~255 / 整数 / 日期时间（失焦时夹回或清空）"
+    },
+    {
+      "id": "edt_byte",
+      "type": "edit",
+      "rect": {
+        "x": 16,
+        "y": 176,
+        "w": 120,
+        "h": 32
+      },
+      "text": "200",
+      "hint": "只能输数字；失焦时 0~255 之外会被夹回，非数字会被清空",
+      "input": 5,
+      "events": {
+        "lostfocus": "on_byte_blur"
+      }
+    },
+    {
+      "id": "edt_int",
+      "type": "edit",
+      "rect": {
+        "x": 144,
+        "y": 176,
+        "w": 120,
+        "h": 32
+      },
+      "text": "12345",
+      "hint": "整数输入：可以是负数",
+      "input": 7
+    },
+    {
+      "id": "edt_dt",
+      "type": "edit",
+      "rect": {
+        "x": 272,
+        "y": 176,
+        "w": 144,
+        "h": 32
+      },
+      "text": "2026-09-22 10:30",
+      "hint": "日期时间：形状得是 YYYY-MM-DD 或 YYYY-MM-DD HH:MM",
+      "input": 11
+    },
+    {
+      "id": "lab_conv_hint",
+      "type": "label",
+      "rect": {
+        "x": 16,
+        "y": 216,
+        "w": 400,
+        "h": 18
+      },
+      "text": "转换方式（只影响新输入的字符）与最大长度"
+    },
+    {
+      "id": "edt_upper",
+      "type": "edit",
+      "rect": {
+        "x": 16,
+        "y": 236,
+        "w": 120,
+        "h": 32
+      },
+      "text": "abc",
+      "hint": "输入自动变大写",
+      "conv": 2
+    },
+    {
+      "id": "edt_lower",
+      "type": "edit",
+      "rect": {
+        "x": 144,
+        "y": 236,
+        "w": 120,
+        "h": 32
+      },
+      "text": "ABC",
+      "hint": "输入自动变小写",
+      "conv": 1
+    },
+    {
+      "id": "edt_max",
+      "type": "edit",
+      "rect": {
+        "x": 272,
+        "y": 236,
+        "w": 144,
+        "h": 32
+      },
+      "text": "最多八个字",
+      "hint": "超过 8 个字符敲不进去",
+      "maxlen": 8
+    },
+    {
+      "id": "lab_multi_hint",
+      "type": "label",
+      "rect": {
+        "x": 16,
+        "y": 276,
+        "w": 400,
+        "h": 18
+      },
+      "text": "多行 + 双向滚动条 + 单线边框（最多 200 字）"
+    },
+    {
+      "id": "edt_multi",
+      "type": "edit",
+      "rect": {
+        "x": 16,
+        "y": 296,
+        "w": 400,
+        "h": 130
+      },
+      "text": "第一行\n第二行\n\n多行输入框：Enter 换行，右侧和下方都有滚动条。\n（滚动条的样式属性和运行时一致）",
+      "multiline": true,
+      "scroll": 3,
+      "maxlen": 200,
+      "border": 6
+    },
+    {
+      "id": "lab_border_hint",
+      "type": "label",
+      "rect": {
+        "x": 432,
+        "y": 156,
+        "w": 252,
+        "h": 18
+      },
+      "text": "边框（缺省圆角看左上那个输入框）"
+    },
+    {
+      "id": "edt_b1",
+      "type": "edit",
+      "rect": {
+        "x": 432,
+        "y": 176,
+        "w": 252,
+        "h": 32
+      },
+      "text": "无边框（聚焦时才有紫圈）",
+      "border": 1
+    },
+    {
+      "id": "edt_b2",
+      "type": "edit",
+      "rect": {
+        "x": 432,
+        "y": 216,
+        "w": 252,
+        "h": 32
+      },
+      "text": "凹入式",
+      "border": 2
+    },
+    {
+      "id": "edt_b3",
+      "type": "edit",
+      "rect": {
+        "x": 432,
+        "y": 256,
+        "w": 252,
+        "h": 32
+      },
+      "text": "凸出式",
+      "border": 3
+    },
+    {
+      "id": "edt_b4",
+      "type": "edit",
+      "rect": {
+        "x": 432,
+        "y": 296,
+        "w": 252,
+        "h": 32
+      },
+      "text": "浅凹入式",
+      "border": 4
+    },
+    {
+      "id": "edt_b5",
+      "type": "edit",
+      "rect": {
+        "x": 432,
+        "y": 336,
+        "w": 252,
+        "h": 32
+      },
+      "text": "镜框式",
+      "border": 5
+    },
+    {
+      "id": "edt_b6",
+      "type": "edit",
+      "rect": {
+        "x": 432,
+        "y": 376,
+        "w": 252,
+        "h": 32
+      },
+      "text": "单线边框式",
+      "border": 6
+    },
+    {
       "id": "lab_result",
       "type": "label",
       "rect": {
         "x": 16,
-        "y": 160,
-        "w": 388,
-        "h": 110
+        "y": 440,
+        "w": 668,
+        "h": 100
       },
-      "text": "（结果显示在这里）",
-      "style": {
-        "font": "Microsoft YaHei UI",
-        "size": 11,
-        "fg": "#6750A4"
-      }
+      "text": "（结果显示在这里）"
     },
     {
       "id": "sb_main",
       "type": "statusbar",
       "rect": {
         "x": 0,
-        "y": 296,
-        "w": 420,
+        "y": 556,
+        "w": 700,
         "h": 24
       },
       "items": [
