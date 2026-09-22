@@ -27,7 +27,7 @@ cg_widget_t *w = cg_find(app, "控件id");       /* 按 id 找别的控件 */
 cg_widget_set_text(w, "文字");                 /* 改文字 */
 const char *s = cg_widget_text(w);            /* 读文字 */
 int on = cg_widget_checked(w);                /* 读勾选（checkbox/radio/switch） */
-double v = cg_widget_value(w);                /* 读值（slider/progress/spinner/tabs页号） */
+double v = cg_widget_value(w);                /* 读值（slider/progress/带 spin 的 edit/tabs页号） */
 cg_widget_set_value(w, 50);                   /* 写值（进度条就是被程序写的） */
 cg_widget_list_addf(list, "日志 %d", n);       /* 往 listbox/statusbar 追加条目 */
 cg_set_timer(app, 1000, on_tick, user);       /* 延迟/周期做事；on_tick 签名 void on_tick(void *user) */

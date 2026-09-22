@@ -32,16 +32,17 @@ description: 手工编辑 .cgui 界面文件（JSON）。触发条件：用户�
 - 文字/样式：`text`、`style: {font,size,bold,fg,bg,radius,align}`（`align`: left/center/right）
 - 事件：`events: { "<事件名>": "<C 函数名>" }`；函数名写错编译不报错，selftest 会揪出来
 - 状态（等于默认值就**不要写**）：`visible`(true)、`enabled`(true)、`checked`(false)；
-  `value/min/max` 只给数值型控件（slider/progress/progressring/spinner）
+  `value/min/max` 只给数值型控件（slider/progress/progressring、带 `spin` 的 `edit`）
 - 容器只有 `group`/`box`/`card`/`tabs` 能带 `children`（非容器带了会被挪到同级）；tabs 的子控件用 `page` 标归属第几页（0 起）
 
 ## 按类型的专有字段
 
-| type（39 种全表） | 专有字段 |
+| type（42 种全表） | 专有字段 |
 | --- | --- |
-| button / iconbutton / label / link / edit / multiedit / checkbox / radio / richtext / monthcal / separator / group / box | `text`（checkbox/radio/switch 另有 `checked`） |
+| button / iconbutton / label / link / edit / checkbox / radio / richtext / monthcal / separator / group / box | `text`（checkbox/radio/switch 另有 `checked`） |
 | switch | `text`、`checked` |
-| spinner / slider / progress / progressring | `value` / `min` / `max` |
+| edit（多行 / 数值框也用它） | `multiline` / `scroll` / `maxlen` / `conv` / `input` / `border` / `spin` / `min` / `max`。多行 = `multiline:true`（原来叫 `multiedit`）；带 `spin` = 数值框（原来是 `spinner`，此时用 `value` 而不是 `text`） |
+| slider / progress / progressring | `value` / `min` / `max` |
 | listbox / combo / toolbar | `items: ["一条", ...]`（toolbar 的当前选中存 `value`，-1 表示无） |
 | tabs | `items: ["页签文字", ...]`（页签文字），当前页 = `value` |
 | statusbar | `items: ["分段1", "分段2", ...]` |
