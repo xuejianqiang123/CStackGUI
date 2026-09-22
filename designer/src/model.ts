@@ -15,6 +15,8 @@ export const CG_EVENTS = [
   "activate", "deactivate", "firstactivate", "idle", "tray", "show", "hide",
   "mousedown", "mouseup", "rdown", "rup", "mousemove",
   "keydown", "keyup", "char", "wheel",
+  /* 输入框右侧调节器的点击（只有 edit 支持） */
+  "spin",
 ] as const;
 export type CgEvent = (typeof CG_EVENTS)[number];
 
@@ -63,7 +65,18 @@ export const EVENT_LABEL: Record<CgEvent, string> = {
   keyup: "放开某键",
   char: "字符输入",
   wheel: "滚轮被滚动",
+  spin: "调节钮被按下",
 };
+
+/** 同一个事件在不同控件上叫法不同时的覆盖表（对齐属性面板的习惯叫法）：
+ *  edit 的 change 是「内容被改变」，而滑块/勾选上它更像「值变化」，所以不能改公共标签。 */
+export const EVENT_LABEL_BY_TYPE: Record<string, Partial<Record<CgEvent, string>>> = {
+  edit: { change: "内容被改变" },
+};
+
+/** 取某个控件上这个事件的中文名（没覆盖就用公共名） */
+export const eventLabel = (type: string, ev: CgEvent): string =>
+  EVENT_LABEL_BY_TYPE[type]?.[ev] ?? EVENT_LABEL[ev];
 
 export const EVENT_HINT: Record<CgEvent, string> = {
   click: "点一下",
@@ -96,6 +109,7 @@ export const EVENT_HINT: Record<CgEvent, string> = {
   rdown: "按下右键",
   rup: "松开右键",
   mousemove: "鼠标移动（触发很频繁，别做重活）",
+  spin: "输入框右侧的上下箭头被点/被拖；cg_event_delta 给 +1 / -1（自动方式下文本已改好）",
   keydown: "按下按键；cg_event_key 给键代码、cg_event_keys 给 Ctrl/Shift/Alt",
   keyup: "松开按键",
   char: "输入了可打印字符（中文输入法也走这里）",
@@ -114,7 +128,10 @@ export const KIND_EVENTS: Record<string, CgEvent[]> = {
   link: ["click", "dblclick"],
   label: [],
   switch: ["change", "gotfocus", "lostfocus"],
-  edit: ["change", "submit", "gotfocus", "lostfocus"],
+  /* 单行输入框：自己的 change/submit + 鼠标/键盘全套（输入时拦按键、点一下做点事都要用）
+   * 必须和 runtime/src/core/cg_doc_kind.c 的 edit 行一致 */
+  edit: ["change", "submit", "mousedown", "mouseup", "dblclick", "rdown", "rup", "mousemove",
+         "gotfocus", "lostfocus", "keydown", "keyup", "char", "wheel", "spin"],
   multiedit: ["change", "gotfocus", "lostfocus"],
   richtext: ["change", "gotfocus", "lostfocus"],
   spinner: ["change", "gotfocus", "lostfocus"],
@@ -237,6 +254,22 @@ export type CgNode = {
   multi?: boolean;
   /** table：显示行首复选框列 */
   check?: boolean;
+  /** edit：允许多行（Enter 变换行） */
+  multiline?: boolean;
+  /** edit：滚动条 1 横向 / 2 纵向 / 3 双向（缺省 0 = 无） */
+  scroll?: number;
+  /** edit：最多允许输入多少字符（缺省 0 = 不限制） */
+  maxlen?: number;
+  /** edit：输入时的大小写转换 1 大写转小写 / 2 小写转大写（缺省 0 = 不转换） */
+  conv?: number;
+  /** edit：输入方式 0 通常 / 1 只读 / 2 密码 / 3 整数文本 / 4 小数文本 /
+   *  5 字节 / 6 短整数 / 7 整数 / 8 长整数 / 9 小数 / 10 双精度小数 / 11 日期时间 */
+  input?: number;
+  /** edit：边框 1 无边框 / 2 凹入式 / 3 凸出式 / 4 浅凹入式 / 5 镜框式 / 6 单线边框式
+   *  （缺省 0 = 本工程原本的 M3 圆角描边） */
+  border?: number;
+  /** edit：右侧上下调节器 1 自动（按 ±1 改文本并夹到 min/max）/ 2 手动（只发 spin 事件） */
+  spin?: number;
   /** listbox / combo / tabs / statusbar 的文本条目 */
   items?: string[];
   /** 树 */
@@ -936,6 +969,20 @@ function coerceNode(raw: unknown, index: number): CgNode | null {
   if (Number.isFinite(Number(o.period))) node.period = Math.max(0, Math.round(Number(o.period)));
   if (o.multi === true) node.multi = true;
   if (o.check === true) node.check = true;
+  /* edit 的输入框行为：只收合法档位，其余一律当没填（旧文件 / 手写脏值都读得进来） */
+  if (o.multiline === true) node.multiline = true;
+  const scroll = Number(o.scroll);
+  if (o.scroll !== undefined && Number.isFinite(scroll) && scroll >= 1 && scroll <= 3) node.scroll = Math.round(scroll);
+  const maxlen = Number(o.maxlen);
+  if (o.maxlen !== undefined && Number.isFinite(maxlen) && maxlen > 0) node.maxlen = Math.round(maxlen);
+  const conv = Number(o.conv);
+  if (o.conv !== undefined && (conv === 1 || conv === 2)) node.conv = conv;
+  const input = Number(o.input);
+  if (o.input !== undefined && Number.isFinite(input) && input >= 1 && input <= 11) node.input = Math.round(input);
+  const border = Number(o.border);
+  if (o.border !== undefined && Number.isFinite(border) && border >= 1 && border <= 6) node.border = Math.round(border);
+  const spin = Number(o.spin);
+  if (o.spin !== undefined && (spin === 1 || spin === 2)) node.spin = spin;
 
   /* 控件绑定：src 空串或不是字符串一律当没绑（画布上「不绑定」就是这么存的） */
   if (o.bind && typeof o.bind === "object") {
@@ -1096,6 +1143,20 @@ function cleanNode(node: CgNode): CgNode {
   if (node.period) out.period = Math.max(0, Math.round(node.period));
   if (node.multi === true) out.multi = true;
   if (node.check === true) out.check = true;
+  /* 输入框的调节器范围：edit 不是 ranged 控件（上面那段会跳过 min/max），
+   * 但挂了调节器就必须把底限/上限写出去，否则运行时夹取范围永远是缺省的 0~100 */
+  if (node.type === "edit" && node.spin) {
+    out.min = Math.round(node.min ?? 0);
+    out.max = Math.round(node.max ?? 100);
+  }
+  /* edit 的输入框行为：等于默认（单行 / 无滚动条 / 不限长 / 不转换 / 通常方式）就不写 */
+  if (node.multiline === true) out.multiline = true;
+  if (node.scroll) out.scroll = node.scroll;
+  if (node.maxlen) out.maxlen = node.maxlen;
+  if (node.conv) out.conv = node.conv;
+  if (node.input) out.input = node.input;
+  if (node.border) out.border = node.border;
+  if (node.spin) out.spin = node.spin;
   if (node.bind?.src) {
     out.bind = node.bind.two ? { src: node.bind.src, two: true } : { src: node.bind.src };
   }

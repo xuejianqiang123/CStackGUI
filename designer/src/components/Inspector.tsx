@@ -53,10 +53,13 @@ function collectBindIds(nodes: CgNode[], skipId: string): string[] {
   return out.sort();
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+/** @param hint 可选说明，鼠标停在标签上时显示（字段含义较长时用，别把面板挤成一团） */
+function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div className="insp-row">
-      <span className="insp-label">{label}</span>
+      <span className="insp-label" title={hint}>
+        {label}
+      </span>
       <span className="insp-value">{children}</span>
     </div>
   );
@@ -257,6 +260,169 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
           </label>
         ))}
       </div>
+
+      {node.type === "edit" ? (
+        <>
+          <div className="insp-section">输入框</div>
+          <Row label="最大长度" hint="最多允许输入多少字符；0 = 不限制">
+            <input
+              className="input narrow"
+              type="number"
+              value={node.maxlen ?? 0}
+              onChange={(e) =>
+                patch((n) => {
+                  const v = Math.max(0, Math.round(Number(e.target.value) || 0));
+                  if (v > 0) n.maxlen = v;
+                  else delete n.maxlen;
+                })
+              }
+            />
+          </Row>
+          <Row label="允许多行" hint="按 Enter 变换行（多行时通常还要配竖向滚动条）">
+            <label className="check-inline">
+              <input
+                type="checkbox"
+                checked={!!node.multiline}
+                onChange={(e) =>
+                  patch((n) => {
+                    if (e.target.checked) n.multiline = true;
+                    else delete n.multiline;
+                  })
+                }
+              />
+              <span className="muted small">Enter 变换行</span>
+            </label>
+          </Row>
+          <Row label="滚动条">
+            <select
+              className="input"
+              value={String(node.scroll ?? 0)}
+              onChange={(e) =>
+                patch((n) => {
+                  const v = Number(e.target.value) || 0;
+                  if (v) n.scroll = v;
+                  else delete n.scroll;
+                })
+              }
+            >
+              <option value="0">无</option>
+              <option value="1">横向滚动条</option>
+              <option value="2">纵向滚动条</option>
+              <option value="3">横向及纵向滚动条</option>
+            </select>
+          </Row>
+          <Row label="边框" hint="缺省 = 本工程的圆角描边；其余六种和属性面板的习惯叫法一致，聚焦时一律变紫">
+            <select
+              className="input"
+              value={String(node.border ?? 0)}
+              onChange={(e) =>
+                patch((n) => {
+                  const v = Number(e.target.value) || 0;
+                  if (v) n.border = v;
+                  else delete n.border;
+                })
+              }
+            >
+              <option value="0">缺省（圆角描边）</option>
+              <option value="1">无边框</option>
+              <option value="2">凹入式</option>
+              <option value="3">凸出式</option>
+              <option value="4">浅凹入式</option>
+              <option value="5">镜框式</option>
+              <option value="6">单线边框式</option>
+            </select>
+          </Row>
+          <Row label="输入方式" hint="只读 = 能选中但改不了；密码 = 显示圆点；数值/日期档位会按键过滤 + 失焦时夹回或清空">
+            <select
+              className="input"
+              value={String(node.input ?? 0)}
+              onChange={(e) =>
+                patch((n) => {
+                  const v = Number(e.target.value) || 0;
+                  if (v) n.input = v;
+                  else delete n.input;
+                })
+              }
+            >
+              <option value="0">通常方式</option>
+              <option value="1">只读方式</option>
+              <option value="2">密码输入</option>
+              <option value="3">整数文本输入</option>
+              <option value="4">小数文本输入</option>
+              <option value="5">输入字节（0~255）</option>
+              <option value="6">输入短整数（±32767）</option>
+              <option value="7">输入整数（±21 亿）</option>
+              <option value="8">输入长整数</option>
+              <option value="9">输入小数</option>
+              <option value="10">输入双精度小数</option>
+              <option value="11">输入日期时间</option>
+            </select>
+          </Row>
+          <Row label="调节器" hint="右侧上下箭头：自动 = 点一下按 ±1 改数字并夹到下面的底限/上限；手动 = 只发「调节钮被按下」，文本自己写">
+            <select
+              className="input"
+              value={String(node.spin ?? 0)}
+              onChange={(e) =>
+                patch((n) => {
+                  const v = Number(e.target.value) || 0;
+                  if (v) n.spin = v;
+                  else delete n.spin;
+                })
+              }
+            >
+              <option value="0">无</option>
+              <option value="1">自动</option>
+              <option value="2">手动</option>
+            </select>
+          </Row>
+          {node.spin ? (
+            <Row label="底限 / 上限" hint="调节器的取值范围（只有自动方式会用来夹取；手动方式仅供业务参考）">
+              <span className="pair">
+                <input
+                  className="input narrow"
+                  type="number"
+                  value={node.min ?? 0}
+                  onChange={(e) =>
+                    patch((n) => {
+                      n.min = Math.round(Number(e.target.value) || 0);
+                    })
+                  }
+                />
+                <input
+                  className="input narrow"
+                  type="number"
+                  value={node.max ?? 100}
+                  onChange={(e) =>
+                    patch((n) => {
+                      n.max = Math.round(Number(e.target.value) || 0);
+                    })
+                  }
+                />
+              </span>
+            </Row>
+          ) : null}
+          <Row label="转换方式" hint="转成大写 / 小写：Windows 在输入时和写入文本时都会转（初始文字也会被转）">
+            <select
+              className="input"
+              value={String(node.conv ?? 0)}
+              onChange={(e) =>
+                patch((n) => {
+                  const v = Number(e.target.value) || 0;
+                  if (v) n.conv = v;
+                  else delete n.conv;
+                })
+              }
+            >
+              <option value="0">无</option>
+              <option value="1">大写转小写</option>
+              <option value="2">小写转大写</option>
+            </select>
+          </Row>
+          <p className="muted small">
+            对齐方式在下面「字体与颜色」区的「对齐」里（左 / 居中 / 右）。
+          </p>
+        </>
+      ) : null}
 
       {node.type === "button" ? (
         <>

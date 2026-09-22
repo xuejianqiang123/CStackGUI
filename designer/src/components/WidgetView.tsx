@@ -4,7 +4,7 @@
  * 所以这里刻意用平实的原生风格，而不是网页风格。
  */
 import type { CSSProperties } from "react";
-import { EVENT_LABEL, CG_EVENTS, type CgNode } from "../model";
+import { eventLabel, CG_EVENTS, type CgNode } from "../model";
 
 const fontOf = (node: CgNode): CSSProperties => {
   const style = node.style ?? {};
@@ -49,8 +49,37 @@ function inner(node: CgNode) {
     case "label":
       return <div className="ctl-label">{node.text || ""}</div>;
 
-    case "edit":
-      return <div className="ctl-edit">{(node.text || "").replace(/\n/g, " ")}</div>;
+    case "edit": {
+      /* 多行/对齐按字段画（原生单行框会把换行压成一行，画布照做，免得两边观感不一致） */
+      const multi = !!node.multiline;
+      const bits: string[] = [];
+      if (node.maxlen) bits.push(`最长 ${node.maxlen} 字`);
+      if (node.scroll) bits.push(["", "横向滚动", "纵向滚动", "双向滚动"][node.scroll] ?? "");
+      if (node.input) {
+        bits.push(
+          ["", "只读", "密码", "整数文本", "小数文本", "字节", "短整数", "整数",
+           "长整数", "小数", "双精度", "日期时间"][node.input] ?? "",
+        );
+      }
+      if (node.conv) bits.push(node.conv === 1 ? "输入转小写" : "输入转大写");
+      if (node.spin) bits.push(node.spin === 1 ? "调节器（自动）" : "调节器（手动）");
+      return (
+        <div
+          className={`ctl-edit${multi ? " ctl-edit-multi" : ""}${
+            node.border ? ` ctl-edit-b${node.border}` : ""
+          }`}
+          style={{ textAlign: node.style?.align ?? "left", position: "relative" }}
+          title={bits.length ? `输入框：${bits.join(" · ")}` : undefined}
+        >
+          {node.spin ? (
+            <span className="ctl-spinchip" title="运行时这里有一列上下箭头">
+              ⇅
+            </span>
+          ) : null}
+          {multi ? node.text || "" : (node.text || "").replace(/\n/g, " ")}
+        </div>
+      );
+    }
 
     case "multiedit":
       return <div className="ctl-edit ctl-edit-multi">{node.text || ""}</div>;
@@ -541,7 +570,7 @@ export default function WidgetView({ node, depth, selectedId, onSelect, onPointe
       ) : null}
 
       {bound.length > 0 && (
-        <span className="event-badge" title={bound.map((b) => `${EVENT_LABEL[b]}: ${node.events?.[b]}`).join("\n")}>
+        <span className="event-badge" title={bound.map((b) => `${eventLabel(node.type, b)}: ${node.events?.[b]}`).join("\n")}>
           {bound.length}
         </span>
       )}

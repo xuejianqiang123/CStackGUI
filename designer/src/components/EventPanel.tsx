@@ -10,7 +10,7 @@
  * 没选中控件时（node 为 null），这里显示「主窗口（window）」的事件，
  * 它们写在 .cgui 的 app.events 里，和「启动窗口」那张事件表对齐。
  */
-import { CG_EVENTS, EVENT_HINT, EVENT_LABEL, eventsOf, WINDOW_EVENTS, type CgDoc, type CgEvent, type CgNode } from "../model";
+import { CG_EVENTS, EVENT_HINT, eventLabel, eventsOf, WINDOW_EVENTS, type CgDoc, type CgEvent, type CgNode } from "../model";
 import { collectCallbacks } from "../codegen";
 
 type Props = {
@@ -160,7 +160,7 @@ export default function EventPanel({ doc, node, onBeginHistory, onApply }: Props
               <div className="ev-head">
                 <span className="ev-name" title={EVENT_HINT[ev]}>
                   <span className="ev-dot" />
-                  {EVENT_LABEL[ev]}
+                  {eventLabel(isWindow ? "window" : node!.type, ev)}
                 </span>
                 <span className="ev-tools">
                   {others.length > 0 ? (
@@ -209,7 +209,7 @@ export default function EventPanel({ doc, node, onBeginHistory, onApply }: Props
               const others = othersOf(name);
               return (
                 <li key={e}>
-                  <code>{EVENT_LABEL[e]}</code> → <code>{name}</code>
+                  <code>{eventLabel(isWindow ? "window" : node!.type, e)}</code> → <code>{name}</code>
                   {others.length > 0 ? <span className="muted"> 同一函数还被 {others.map(labelOf).join("、")} 绑着</span> : null}
                 </li>
               );
