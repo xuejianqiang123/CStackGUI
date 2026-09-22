@@ -69,7 +69,11 @@ for /r tests %%f in (*.c) do set SRC=!SRC! "%%f"
 if not exist build\tests mkdir build\tests
 
 echo   CC tests\ -^> build\tests\cgu-tests.exe
-gcc %CFLAGS% %DEFS% !SRC! -o build\tests\cgu-tests.exe build\lib\libcstackgui.a %LINKFLAGS% -lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32 -luuid -lole32 -loleaut32 -lws2_32
+rem 资源对象必须显式链接（和 build-app.bat 一样）：它只有清单没有代码符号，
+rem 链接器不会主动从静态库里取。少了它 exe 绑的是老版通用控件，而皮肤层用的
+rem GetWindowSubclass 只在 v6 里有 —— 表现是测试程序**加载即失败**（0xC0000139），
+rem 一行测试输出都不会有，很容易误判成"测试挂了"。
+gcc %CFLAGS% %DEFS% !SRC! -o build\tests\cgu-tests.exe build\lib\libcstackgui.a build\obj\cstackgui_res.o %LINKFLAGS% -lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32 -luuid -lole32 -loleaut32 -lws2_32
 if errorlevel 1 (
     echo [fail] compiling the test program failed
     exit /b 1

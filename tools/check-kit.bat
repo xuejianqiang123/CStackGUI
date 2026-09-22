@@ -37,7 +37,9 @@ if not exist build\lib\libcstackgui.a (
 if not exist build\kittest mkdir build\kittest
 
 echo   CC tools\kit-test.c
-gcc -std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include tools\kit-test.c -o build\kittest\kit-test.exe build\lib\libcstackgui.a -lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32 -luuid -lole32 -loleaut32 -lws2_32
+rem 资源对象（v6 通用控件清单）必须显式链接：静态库里带它，但链接器不会主动取，
+rem 少了它 exe 会绑到老版通用控件，皮肤层用的 GetWindowSubclass 缺失 = 加载即失败。
+gcc -std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include tools\kit-test.c -o build\kittest\kit-test.exe build\lib\libcstackgui.a build\obj\cstackgui_res.o -lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32 -luuid -lole32 -loleaut32 -lws2_32
 if errorlevel 1 (
     echo [fail] compiling tools\kit-test.c failed
     exit /b 1
