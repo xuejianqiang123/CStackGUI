@@ -600,7 +600,13 @@ static void sync_widget_body(cg_widget_t *w)
         /* 自绘类直接读 w->value 画，只需触发重绘 */
         InvalidateRect(h, NULL, TRUE);
     } else if (!strcmp(w->type, "slider")) {
+        int page = (w->vmax - w->vmin) / 10;
         SendMessageW(h, TBM_SETRANGE, TRUE, MAKELPARAM(w->vmin, w->vmax));
+        /* 在通道上点一下 = 走一个 page step。**必须显式设**：不设它 page step 就是 0，
+         * 表现为"点轨道毫无反应、只能拖拇指"（lesson03 真机点击测出来的）。
+         * 取量程的 1/10，最少 1（量程是 0~1 时也能动一格）。 */
+        if (page < 1) page = 1;
+        SendMessageW(h, TBM_SETPAGESIZE, 0, page);
         SendMessageW(h, TBM_SETPOS, TRUE, w->value);
     } else if (!strcmp(w->type, "checkbox") || !strcmp(w->type, "radio")) {
         /* 自绘勾选/单选按 w->checked 画（cg_skin_draw_check），这里只需触发重绘；

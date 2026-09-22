@@ -81,4 +81,11 @@ void cg_skin_edit_fit_spin(cg_widget_t *w);
 #define CG_EDIT_BORDER       2
 #define CG_EDIT_TEXT_MARGIN  6
 
+/** 数值框（edit + 调节器）右侧那列上下箭头的宽度（逻辑像素，按 scale 缩放）。
+ *  **客户区右边要让出这个宽度**，箭头就摆在让出来的这块"非客户区"上 ——
+ *  和边框同一个道理：放进客户区里就会被输入框自己的白底重绘盖掉（用户看到的是
+ *  "箭头没了"，但窗口其实还在、还能点），点击也可能被输入框吞掉。
+ *  给足宽度后 cg_skin_edit.c 会按它显式 SetWindowPos，不再依赖控件自报宽度。 */
+#define CG_EDIT_SPIN_W       17
+
 #endif /* CG_SKIN_H */

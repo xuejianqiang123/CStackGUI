@@ -48,6 +48,7 @@ typedef struct {
     int      bw;       /* 边框宽度：客户区四边各内缩这么多 */
     int      left;     /* 左边距（EM_SETMARGINS）；箭头/换字体后会被清，要按它重设 */
     int      border;   /* 边框样式（.cgui 的 border 字段） */
+    int      arrow;    /* 调节器占的宽度（物理像素）；0 = 没有调节器 */
     HWND     spin;     /* 调节器（上下箭头）的窗口；没有就是 NULL */
     COLORREF bg;       /* 补上边距用的底色（白或 style.bg） */
 } sk_edit_sub_t;
@@ -77,16 +78,27 @@ static void sk_edit_ring(HDC dc, const sk_edit_sub_t *s, COLORREF col, int penw,
 
 /** 把边框带（上边距 + 左右下）整条填成输入框底色。
  *  **每次重画都先填**：不然细线样式只覆盖了带内的一个像素，上一次聚焦时画的
- *  2px 紫环会残留一条紫边（"点亮一次之后边框痕迹不消失"就是这么来的）。 */
+ *  2px 紫环会残留一条紫边（"点亮一次之后边框痕迹不消失"就是这么来的）。
+ *
+ *  **右上角那块"垂直居中的上边距"只铺到客户区右边界**：`s->arrow` 那一列是调节器
+ *  箭头的地盘，而箭头范围是 [bw, h-bw) —— 上边距带的高度（pad = bw + 居中量）
+ *  正好压在箭头的上半截上。我们用的是整窗 DC（GDI 不避让同级窗口），
+ *  铺过去就会把"向上箭头"的头顶削掉（用户报的"向上的箭头被遮挡了"）。 */
 static void sk_edit_fill_edge(HDC dc, const sk_edit_sub_t *s)
 {
     HBRUSH br = CreateSolidBrush(s->bg);
-    RECT r;
+    int    cut = s->w - s->bw - s->arrow;   /* 箭头列的左边界 = 客户区右边界 */
+    RECT   r;
     if (!br) return;
-    r.left = 0;            r.top = 0;              r.right = s->w;  r.bottom = s->pad > 0 ? s->pad : s->bw;  FillRect(dc, &r, br);
-    r.left = 0;            r.top = s->h - s->bw;   r.right = s->w;  r.bottom = s->h;                        FillRect(dc, &r, br);
-    r.left = 0;            r.top = 0;              r.right = s->bw; r.bottom = s->h;                        FillRect(dc, &r, br);
-    r.left = s->w - s->bw; r.top = 0;              r.right = s->w;  r.bottom = s->h;                        FillRect(dc, &r, br);
+    /* 上下的**边框带**整宽填：它们在箭头之上 / 之下，和箭头不重叠 */
+    r.left = 0; r.top = 0;            r.right = s->w; r.bottom = s->bw; FillRect(dc, &r, br);
+    r.left = 0; r.top = s->h - s->bw; r.right = s->w; r.bottom = s->h;  FillRect(dc, &r, br);
+    /* 垂直居中的上边距：只铺到客户区右边（右边那条带同理，只填边框宽度） */
+    if (s->pad > s->bw) {
+        r.left = 0; r.top = s->bw; r.right = cut; r.bottom = s->pad; FillRect(dc, &r, br);
+    }
+    r.left = 0;            r.top = 0; r.right = s->bw; r.bottom = s->h; FillRect(dc, &r, br);
+    r.left = s->w - s->bw; r.top = 0; r.right = s->w;  r.bottom = s->h; FillRect(dc, &r, br);
     DeleteObject(br);
 }
 
@@ -181,26 +193,36 @@ static void sk_edit_resize(HWND hwnd, sk_edit_sub_t *s)
     }
 }
 
-/** 把调节器（上下箭头）摆到边框内侧的右边，并给输入框右边留出箭头宽度。
+/** 把调节器（上下箭头）摆到边框内侧的右边。
+ *  **宽度由我们定**（s->arrow），不看控件当前尺寸：up-down 控件建出来是 0x0，
+ *  等它自报宽度就是把命交给系统 —— 有的机器上它一直是 0x0，箭头就"消失"了
+ *  （旧版用的 `uw <= 0 就 return` 正是这么把箭头留成隐形的）。
  *  **故意不用 UDS_ALIGNRIGHT**：那个样式按 buddy 的"窗口矩形"贴右，会压在自绘边框上、
- *  越过上下圆角。这里按客户区内侧算：右让 bw、上下各让 bw。 */
+ *  越过上下圆角。这里按客户区内侧算：右让 bw + arrow、上下各让 bw。 */
 static void sk_edit_spin_fit(HWND hwnd, const sk_edit_sub_t *s)
 {
-    RECT er, ur;
+    RECT er;
     int  uw, uh;
 
-    if (!s->spin || !IsWindow(s->spin)) return;
-    GetWindowRect(hwnd, &er);
-    GetWindowRect(s->spin, &ur);
-    uw = ur.right - ur.left;
-    if (uw <= 0) return;
+    if (!s->spin || !IsWindow(s->spin) || s->arrow <= 0) return;
+    uw = s->arrow;
     uh = s->h - 2 * s->bw;                 /* 只占圆角框内部的高度 */
     if (uh < 8) uh = s->h;
+    GetWindowRect(hwnd, &er);
     MapWindowPoints(HWND_DESKTOP, GetParent(hwnd), (POINT *)&er, 2);   /* 换成父窗口坐标 */
-    SetWindowPos(s->spin, NULL, er.left + s->w - s->bw - uw, er.top + s->bw, uw, uh,
-                 SWP_NOZORDER | SWP_NOACTIVATE);
-    /* 文字别钻到箭头底下 */
-    SendMessageW(hwnd, EM_SETMARGINS, EC_RIGHTMARGIN, MAKELPARAM(0, uw + 4));
+    /* **要提到输入框之上**（HWND_TOP）。子窗口建出来时排在先建的那些**之下**，
+     * 而输入框比箭头先建 —— 于是箭头被输入框的窗口整个压住：看得见看不见全看谁后重绘，
+     * 点击也落在输入框的非客户区上（用户报的"没有上下图标、点不了"就是这个）。
+     * 提起层级后，输入框的 DC 裁剪区会自动排除箭头，两边互不干扰。
+     * 位置仍然是我们算的（不是 UDS_ALIGNRIGHT 那种系统摆位）。 */
+    SetWindowPos(s->spin, HWND_TOP, er.left + s->w - s->bw - uw, er.top + s->bw, uw, uh,
+                 SWP_NOACTIVATE);
+    /* 摆完必须**立刻整块重画**：SetWindowPos 之后系统只让控件重画"它认为失效"的那部分，
+     * 结果常见半个箭头（上下两个按钮只画了一个）——用户看到的就是"没图标了"。
+     * 提层级 + 改尺寸后自己 RedrawWindow 一次，两个按钮都在。 */
+    RedrawWindow(s->spin, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    /* 文字留在客户区里（客户区右边已经让开箭头了），再留一点空隙免得贴着 */
+    SendMessageW(hwnd, EM_SETMARGINS, EC_RIGHTMARGIN, MAKELPARAM(0, 2));
 }
 
 static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
@@ -228,6 +250,11 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
         p->rgrc[0].left += bw;
         p->rgrc[0].right -= bw;
         p->rgrc[0].bottom -= bw;
+        /* 调节器那一列同样让出客户区：箭头摆在非客户区上，输入框自己的白底重绘盖不到它，
+         * 点击也不会被输入框吞掉（留够文字宽度才让，窄控件宁可不要箭头） */
+        if (s->arrow > 0 && win_w - 2 * bw - s->arrow >= 24) {
+            p->rgrc[0].right -= s->arrow;
+        }
         if (s->single) {
             int th = sk_edit_text_height(hwnd);
             int pad = (th > 0) ? (win_h - 2 * bw - th) / 2 : 0;
@@ -263,7 +290,9 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
         if (s->single)
             SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
                          SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-    } else if (msg == WM_PAINT || msg == WM_SETFOCUS || msg == WM_KILLFOCUS) {
+    } else if (msg == WM_PAINT || msg == WM_SETFOCUS || msg == WM_KILLFOCUS || msg == WM_NCPAINT) {
+        /* WM_NCPAINT 也要跟着画：边框和箭头占的那一列都在非客户区上，
+         * 只等 WM_PAINT 的话，"只重画非客户区"的场合（改尺寸、系统重算边框）会留白 */
         LRESULT r;
         if (msg == WM_SETFOCUS)
             SendMessageW(hwnd, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(s->left, 0));
@@ -316,6 +345,10 @@ void cg_skin_apply_edit(cg_widget_t *w)
     s->left = CG_EDIT_TEXT_MARGIN;
     s->border = w->border;
     s->spin = (HWND)w->native2;   /* 调节器可能还没建；建好后 create 会再调 fit 补上 */
+    /* 箭头占位：多行输入框不给箭头（运行时也不建），宽度按 scale 缩放、太窄兜底 12px。
+     * 有了它，WM_NCCALCSIZE 才能把右边这列从客户区让出去。 */
+    s->arrow = (w->spin && !multiline) ? (CG_EDIT_SPIN_W * scale / 100) : 0;
+    if (s->arrow > 0 && s->arrow < 12) s->arrow = 12;
     s->bg = (w->style.bg != CG_COLOR_NONE)
               ? RGB((w->style.bg >> 16) & 0xFF, (w->style.bg >> 8) & 0xFF, w->style.bg & 0xFF)
               : GetSysColor(COLOR_WINDOW);
