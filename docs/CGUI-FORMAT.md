@@ -118,6 +118,13 @@
 | `bind` | 对象 | 否 | 控件绑定：值/文字/勾选跟着另一个控件走，见 2.8 |
 | `period` | 整数 | 否 | `timer` 的触发周期（毫秒）。**不写 = 0 = 不触发**（画布新建时钟时给 1000）；`led` 的闪烁周期（毫秒，仅在状态=闪时有意义；缺省 500，小于 100 兜回缺省）|
 | `multi` / `check` | 布尔 | 否 | `table`：`multi` = 允许整行多选，`check` = 显示行首复选框列（配合 `check` 事件）|
+| `multiline` | 布尔 | 否 | `edit`：允许多行（`ES_MULTILINE` + Enter 变换行）。**不写 = 单行**；多行一般还要配竖向 `scroll` |
+| `scroll` | 整数 | 否 | `edit`：滚动条 `1` 横向 / `2` 纵向 / `3` 双向（位 1 = 横、位 2 = 纵）。**不写 = 0 = 无** |
+| `maxlen` | 整数 | 否 | `edit`：最多允许输入多少字符（`EM_SETLIMITTEXT`）。**不写 = 0 = 不限制**（保持系统默认，不是"限 0 个字符"）|
+| `conv` | 整数 | 否 | `edit`：大小写转换 `1` 大写转小写 / `2` 小写转大写。**不写 = 0 = 不转换**。注意 Windows 的 `ES_UPPERCASE`/`ES_LOWERCASE` 在**写入文本时也会转**，所以初始 `text` 也会被转换（`text: "abc"` + `conv: 2` 显示成 `ABC`）|
+| `input` | 整数 | 否 | `edit`：输入方式。`1` 只读（能选中、改不了）/ `2` 密码（显示成圆点）/ `3` 整数文本 / `4` 小数文本 / `5` 字节 / `6` 短整数 / `7` 整数 / `8` 长整数 / `9` 小数 / `10` 双精度小数 / `11` 日期时间。**不写 = 0 = 通常方式**。`3` 靠 `ES_NUMBER`；`4`~`11` 由运行时把关：**按键**只放行该类型可能出现的字符（数字、负号、小数点、日期分隔符，非法字符连 `char` 事件都不发），**失焦**时能解析就夹到类型范围（字节 0~255、短整数 ±32767、整数 ±21 亿）并重写文本，解析不了就清空（"没填"是合法状态，运行时不会弹窗）|
+| `border` | 整数 | 否 | `edit`：边框样式 `1` 无边框 / `2` 凹入式 / `3` 凸出式 / `4` 浅凹入式 / `5` 镜框式 / `6` 单线边框式。**不写 = 0 = 本工程原本的 M3 圆角描边**（和上面六种并列，方便老文件不动） |
+| `spin` | 整数 | 否 | `edit`：右侧上下调节器 `1` 自动（点一下按 ±1 改数字并夹到 `min`/`max`）/ `2` 手动（只派发 `spin` 事件，文本由业务自己写）。**不写 = 0 = 无调节器** |
 | `items` | 字符串数组 | 否 | `listbox` / `combo` / `tabs`（页签文字）/ `statusbar`（分段文字）/ `toolbar`（按钮文字）的内容 |
 | `nodes` | 对象数组 | 否 | `tree` 的节点树（2.5）或 `menu`/`menubutton` 的菜单项（2.7）|
 | `columns` / `rows` | 数组 | 否 | `table` 的列与行，见 2.6 |
@@ -434,10 +441,11 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `tick` | 时钟控件的周期到了（`period` 毫秒一次） | 只有时钟 |
 | `check` | 表格勾选列的行勾选状态变了 | 只有表格（`.cgui` 里开 `check`） |
 | `gotfocus` / `lostfocus` | 控件获得 / 失去键盘焦点 | 有焦点概念的原生控件（输入类、按钮、开关勾选、滑块、列表/下拉/树/表格/标签页）|
-| `mousedown` / `mouseup` | 按下 / 松开左键 | 窗口（客户区）+ `button`（控件内）|
+| `mousedown` / `mouseup` | 按下 / 松开左键 | 窗口（客户区）+ `button` / `edit`（控件内）|
 | `rdown` / `rup` | 按下 / 松开右键 | 同上 |
 | `mousemove` | 鼠标移动（触发频繁，别做重活） | 同上 |
-| `keydown` / `keyup` / `char` / `wheel` | 按键 / 放键 / 字符输入 / 滚轮 | 窗口（全窗口）+ `button`（控件持有焦点时）|
+| `keydown` / `keyup` / `char` / `wheel` | 按键 / 放键 / 字符输入 / 滚轮 | 窗口（全窗口）+ `button` / `edit`（控件持有焦点时）|
+| `spin` | 输入框右侧的上下调节器被点/被拖 | 只有 `edit`（`.cgui` 里开了 `spin`）。`cg_event_delta` 给 +1 / -1；`1` 自动方式下文本已经被改好并夹到区间 |
 | `close` | 用户点了关闭按钮，窗口关之前 | 只有窗口 |
   不认识的键会被运行时**忽略**（不报错），方便向后兼容。
 - 一个函数名可以被多个控件、多个事件共用。
@@ -456,7 +464,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `label` | 标签 | 否 | 160×24 | `标签` | **无**（纯显示） | `STATIC` |
 | `link` | 链接 | 否 | 160×24 | `链接` | `click`、`dblclick` | `STATIC`+`SS_NOTIFY`（手型光标、蓝色下划线）|
 | `switch` | 开关 | 否 | 56×32 | — | `change` | `BUTTON` 自绘（M3 胶囊）|
-| `edit` | 单行输入 | 否 | 200×32 | — | `change`、`submit` | `EDIT`（圆角+垂直居中自绘）|
+| `edit` | 单行输入 | 否 | 200×32 | — | `change`、`submit`、`spin`（调节钮被按下）、鼠标全套（`mousedown`/`mouseup`/`dblclick`/`rdown`/`rup`/`mousemove`）、键盘全套（`keydown`/`keyup`/`char`/`wheel`）| `EDIT`（圆角+垂直居中自绘；多行 / 滚动条 / 最大长度 / 大小写转换 / 边框 / 输入方式 / 调节器由 `multiline`/`scroll`/`maxlen`/`conv`/`border`/`input`/`spin` 控制，「对齐方式」复用 `style.align` → `ES_LEFT`/`ES_CENTER`/`ES_RIGHT`）|
 | `multiedit` | 多行输入 | 否 | 240×120 | — | `change` | `EDIT` 多行（圆角自绘）|
 | `richtext` | 富文本 | 否 | 320×160 | — | `change` | `RICHEDIT50W`（缺库时降级 EDIT）|
 | `spinner` | 数字微调 | 否 | 100×28 | — | `change` | `EDIT` + `msctls_updown32`（文本自管，不用 `UDS_SETBUDDYINT`）|
