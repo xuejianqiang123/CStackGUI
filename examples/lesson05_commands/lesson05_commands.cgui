@@ -184,7 +184,7 @@
       "type": "browser",
       "rect": { "x": 544, "y": 352, "w": 200, "h": 160 },
       "src": "about:blank",
-      "hint": "靠系统 WebView2；用 cg_browser_navigate(w, \"网址或本地 html\") 换页。空白就是还没载入"
+      "hint": "靠系统 WebBrowser 控件（IE 内核）；用 cg_browser_navigate(w, \"网址或本地 html\") 换页。空白就是还没载入"
     },
     {
       "id": "btn_br_load",

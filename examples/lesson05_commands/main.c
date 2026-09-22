@@ -18,7 +18,7 @@
  *                            鼠标位置用 `cg_event_x/y()`（**相对窗口客户区**，要减掉控件自己的 x/y）
  *            - `shape`       `format` = `rect` / `roundrect` / `ellipse`，颜色走 `style.bg`
  *            - `image`       `src` 是图片路径；换图 `cg_widget_set_image()`
- *            - `browser`     实验性：靠系统 WebView2，`cg_browser_navigate(w, "网址或本地 html")`
+ *            - `browser`     实验性：靠系统 WebBrowser 控件（IE 内核），`cg_browser_navigate(w, "网址或本地 html")`
  *
  *          想深入看哪一课：
  *            - 按钮、标签、链接、开关、徽章、容器  → 入门 01 · 基础与容器
