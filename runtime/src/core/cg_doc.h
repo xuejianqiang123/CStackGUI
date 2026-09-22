@@ -95,6 +95,7 @@ typedef unsigned long long cg_evmask_t;
 #define CG_EV_TRAY          CG_EV_BIT(CG_EVENT_TRAY)
 #define CG_EV_SHOW          CG_EV_BIT(CG_EVENT_SHOW)
 #define CG_EV_HIDE          CG_EV_BIT(CG_EVENT_HIDE)
+#define CG_EV_SPIN          CG_EV_BIT(CG_EVENT_SPIN)
 #define CG_EV_CLOSEQUERY    CG_EV_BIT(CG_EVENT_CLOSEQUERY)
 #define CG_EV_MOUSEDOWN     CG_EV_BIT(CG_EVENT_MOUSEDOWN)
 #define CG_EV_MOUSEUP       CG_EV_BIT(CG_EVENT_MOUSEUP)
@@ -195,6 +196,23 @@ typedef struct cg_node {
     int      multi;
     /** table：显示行首复选框列 */
     int      check;
+    /* ---- edit（单行输入）的输入框行为：缺省 0 = 保持原来的单行左对齐输入框 ---- */
+    /** 允许多行（ES_MULTILINE + ES_WANTRETURN，Enter 变换行） */
+    int      multiline;
+    /** 滚动条：位 1 = 横向、位 2 = 纵向（0 无 / 1 横 / 2 纵 / 3 双向） */
+    int      scroll;
+    /** 最多允许输入多少字符；0 = 不限制（不调 EM_SETLIMITTEXT） */
+    int      maxlen;
+    /** 输入时的大小写转换：1 = 大写转小写、2 = 小写转大写 */
+    int      conv;
+    /** 输入方式：0 通常 / 1 只读 / 2 密码 / 3 整数文本 / 4 小数文本 /
+     *  5 字节 / 6 短整数 / 7 整数 / 8 长整数 / 9 小数 / 10 双精度小数 / 11 日期时间 */
+    int      input;
+    /** 边框样式：0 = 缺省（M3 圆角自绘）/ 1 无边框 / 2 凹入式 / 3 凸出式 /
+     *  4 浅凹入式 / 5 镜框式 / 6 单线边框式 */
+    int      border;
+    /** 调节器（右侧上下箭头）：1 自动（按 ±1 改文本并夹到 min/max）/ 2 手动（只发事件） */
+    int      spin;
     /** 各类事件绑定的回调名，NULL 表示没绑 */
     char    *ev[CG_EVENT_COUNT];
 

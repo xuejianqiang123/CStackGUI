@@ -88,6 +88,7 @@ typedef enum {
     CG_EVENT_KEYUP,         /* 放开某键 */
     CG_EVENT_CHAR,          /* 字符输入 */
     CG_EVENT_WHEEL,         /* 滚轮被滚动 */
+    CG_EVENT_SPIN,          /* 调节钮被按下（输入框右侧的上下箭头，delta 是 ±1） */
     CG_EVENT_COUNT
 } cg_event_t;
 

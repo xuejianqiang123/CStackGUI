@@ -116,6 +116,16 @@ struct cg_widget {
     /* 表格增强：多选 / 勾选列 / 行数值 / 行图标 */
     int          multi;
     int          check;
+
+    /* edit（单行输入）的输入框行为：建原生窗口时由 cgw_style_of 拼成 ES_ 与 WS_ 样式位，
+       maxlen 例外（它只能靠 EM_SETLIMITTEXT 设，见 cg_win_create.c） */
+    int          multiline;
+    int          scroll;
+    int          maxlen;
+    int          conv;
+    int          input;
+    int          border;
+    int          spin;
     unsigned char *row_checked;  /* 每行勾选状态（随行数增长） */
     int            row_cap;      /* row_checked/row_val 的容量 */
     int           *row_val;      /* 每行业务数值（lParam） */

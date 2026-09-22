@@ -30,7 +30,13 @@ static const cg_kind_info_t k_kinds[] = {
     { "label",      CG_K_LABEL,      0, 160,  24, "标签", 0 },
     { "link",       CG_K_LINK,       0, 160,  24, "链接", CG_EV_CLICK | CG_EV_DBLCLICK },
     { "switch",     CG_K_SWITCH,     0,  56,  32, "",     CG_EV_CHANGE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
-    { "edit",       CG_K_EDIT,       0, 200,  32, "",     CG_EV_CHANGE | CG_EV_SUBMIT | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
+    /* 单行输入框：除了自己的 change/submit，鼠标/键盘/滚轮也全套可绑 ——
+     * 要在"输入时拦按键""点一下做点什么"这类场景里都是刚需（和 button 一路子）。 */
+    { "edit",       CG_K_EDIT,       0, 200,  32, "",     CG_EV_CHANGE | CG_EV_SUBMIT | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS
+                                                    | CG_EV_MOUSEDOWN | CG_EV_MOUSEUP | CG_EV_DBLCLICK
+                                                    | CG_EV_RDOWN | CG_EV_RUP | CG_EV_MOUSEMOVE
+                                                    | CG_EV_KEYDOWN | CG_EV_KEYUP | CG_EV_CHAR | CG_EV_WHEEL
+                                                    | CG_EV_SPIN },
     { "multiedit",  CG_K_MULTIEDIT,  0, 240, 120, "",     CG_EV_CHANGE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
     { "richtext",   CG_K_RICHTEXT,   0, 320, 160, "",     CG_EV_CHANGE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
     { "spinner",    CG_K_SPINNER,    0, 100,  28, "",     CG_EV_CHANGE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },

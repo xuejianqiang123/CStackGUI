@@ -47,6 +47,7 @@ static const char *const k_ev_names[CG_EVENT_COUNT] = {
     [CG_EVENT_KEYUP]         = "keyup",
     [CG_EVENT_CHAR]          = "char",
     [CG_EVENT_WHEEL]         = "wheel",
+    [CG_EVENT_SPIN]          = "spin",
 };
 
 /** @brief 事件名的规范写法，也是 .cgui 中 events 对象的键名 */

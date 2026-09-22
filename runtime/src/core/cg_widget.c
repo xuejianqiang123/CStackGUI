@@ -244,6 +244,13 @@ static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node
     }
     w->multi = n->multi;
     w->check = n->check;
+    w->multiline = n->multiline;
+    w->scroll = n->scroll;
+    w->maxlen = n->maxlen;
+    w->conv = n->conv;
+    w->input = n->input;
+    w->border = n->border;
+    w->spin = n->spin;
     /* 菜单栏和菜单按钮共用同一套菜单行表；tree 虽然也用 nodes，但走的是下面那套摊平 */
     if (n->nodes && (!strcmp(n->type, "menu") || !strcmp(n->type, "menubutton"))) {
         menu_push_doc(app, w, n->nodes, n->nnodes, -1);

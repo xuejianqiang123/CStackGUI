@@ -422,6 +422,23 @@ static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
     n->multi = cj_bool(cj_get(o, "multi"), 0);
     n->check = cj_bool(cj_get(o, "check"), 0);
 
+    /* edit（单行输入）的输入框行为。越界值一律退回缺省：.cgui 允许手写，
+     * 一个 scroll=9 不该让输入框变成"没有滚动条但也不能输入"的怪状态。
+     * 对齐方式不在这里 —— 它复用 style.align（和标签同一个字段）。 */
+    n->multiline = cj_bool(cj_get(o, "multiline"), 0);
+    n->scroll = cj_int(cj_get(o, "scroll"), 0);
+    if (n->scroll < 0 || n->scroll > 3) n->scroll = 0;
+    n->maxlen = cj_int(cj_get(o, "maxlen"), 0);
+    if (n->maxlen < 0) n->maxlen = 0;
+    n->conv = cj_int(cj_get(o, "conv"), 0);
+    if (n->conv != 1 && n->conv != 2) n->conv = 0;
+    n->input = cj_int(cj_get(o, "input"), 0);
+    if (n->input < 0 || n->input > 11) n->input = 0;   /* 见 cg_doc.h 的输入方式档位 */
+    n->border = cj_int(cj_get(o, "border"), 0);
+    if (n->border < 0 || n->border > 6) n->border = 0;
+    n->spin = cj_int(cj_get(o, "spin"), 0);
+    if (n->spin < 0 || n->spin > 2) n->spin = 0;
+
     /* 控件绑定：bind { "src": "源控件id", "two": true }
      * 只认对象写法；src 空串等于没绑（画布没选源时就是这么写的） */
     v = cj_get(o, "bind");
@@ -653,6 +670,13 @@ static void dump_node(const cg_node_t *n, FILE *out, int depth)
     if (n->bind_src) fprintf(out, " bind=%s%s", n->bind_src, n->bind_two ? "+two" : "");
     if (n->multi) fputs(" multi", out);
     if (n->check) fputs(" check", out);
+    if (n->multiline) fputs(" multiline", out);
+    if (n->scroll) fprintf(out, " scroll=%d", n->scroll);
+    if (n->maxlen) fprintf(out, " maxlen=%d", n->maxlen);
+    if (n->conv) fprintf(out, " conv=%d", n->conv);
+    if (n->input) fprintf(out, " input=%d", n->input);
+    if (n->border) fprintf(out, " border=%d", n->border);
+    if (n->spin) fprintf(out, " spin=%d", n->spin);
     if (n->items) fprintf(out, " items=%lu", (unsigned long)n->nitems);
     if (n->nodes) fprintf(out, " tree=%lu", (unsigned long)n->nnodes);
     if (n->cols) fprintf(out, " cols=%lu", (unsigned long)n->ncols);
