@@ -9,10 +9,10 @@
 | 文章 | 对应示例 | 事实来源（改代码后要重核这些） |
 | --- | --- | --- |
 | `01-基础与容器.md` | `examples\lesson01_basics\` | `.cgui` 的 `hint`/`text`、`main.c` 的回调名、`--selftest` 的"控件 N 个 / 回调 M 次" |
-| `02-输入与选择.md`（待写） | `examples\lesson02_inputs\` | 同上；输入框字段见 `docs\CGUI-FORMAT.md` 第 2.1 节 |
-| `03-数值与指示.md`（待写） | `examples\lesson03_values\` | 同上；`.cgui` 的 `bind` 例子见 `docs\CGUI-FORMAT.md` 第 2.8 节 |
-| `04-数据与日志.md`（待写） | `examples\lesson04_data\` | 同上；`splitter` 的两栏语义见 `docs\CGUI-FORMAT.md` 的 `terminal` 那节 |
-| `05-命令与图形.md`（待写） | `examples\lesson05_commands\` | 同上 |
+| `02-输入与选择.md` | `examples\lesson02_inputs\` | 同上；输入框字段见 `docs\CGUI-FORMAT.md` 第 2.1 节 |
+| `03-数值与指示.md` | `examples\lesson03_values\` | 同上；`.cgui` 的 `bind` 例子见 `docs\CGUI-FORMAT.md` 第 2.8 节 |
+| `04-数据与日志.md` | `examples\lesson04_data\` | 同上；`splitter` 的两栏语义见 `docs\CGUI-FORMAT.md` 的 `terminal` 那节 |
+| `05-命令与图形.md` | `examples\lesson05_commands\` | 同上 |
 | `00-导读.md`（可选） | `README.md` + `build-app.bat` | 环境要求、第一次编译的三条命令 |
 | `06-实战：记事本.md`（可选） | `examples\notepad\` | 菜单分发、脏标记、状态栏刷新、编码识别 |
 
