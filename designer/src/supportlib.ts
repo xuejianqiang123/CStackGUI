@@ -274,7 +274,7 @@ if (strcmp(who, "btn_add") == 0) { /* ... */ }`,
           c("cg_widget_set_value", "设值", "void cg_widget_set_value(cg_widget_t *w, int value)", "进度条/滑块/列表框选中项等（会按 min/max 截断；颜色选择器别用这个）", {
             sample: `cg_widget_set_value(cg_find(cg_app_of(self), "prg_level"), 60);`,
           }),
-          c("cg_widget_set_value_range", "设取值范围", "void cg_widget_set_value_range(cg_widget_t *w, int min, int max)", "滑块/进度条/spinner/评分/分页的取值范围"),
+          c("cg_widget_set_value_range", "设取值范围", "void cg_widget_set_value_range(cg_widget_t *w, int min, int max)", "滑块/进度条/数值输入框（edit + 调节器）/评分/分页的取值范围"),
           c("cg_widget_set_colors", "改颜色", "void cg_widget_set_colors(cg_widget_t *w, unsigned fg, unsigned bg)", "前景/背景色，0xRRGGBB；bg 传 CG_COLOR_NONE 表示跟系统", {
             sample: `cg_widget_set_colors(w, CG_RGB(0x1D, 0x1B, 0x20), CG_RGB(0xEA, 0xDD, 0xFF));`,
           }),

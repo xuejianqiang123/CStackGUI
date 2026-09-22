@@ -35,7 +35,9 @@ var CG_EVENTS = [
   "keydown",
   "keyup",
   "char",
-  "wheel"
+  "wheel",
+  /* 输入框右侧调节器的点击（只有 edit 支持） */
+  "spin"
 ];
 var WINDOW_EVENTS = [
   "ready",
@@ -99,7 +101,8 @@ var EVENT_LABEL = {
   keydown: "\u6309\u4E0B\u67D0\u952E",
   keyup: "\u653E\u5F00\u67D0\u952E",
   char: "\u5B57\u7B26\u8F93\u5165",
-  wheel: "\u6EDA\u8F6E\u88AB\u6EDA\u52A8"
+  wheel: "\u6EDA\u8F6E\u88AB\u6EDA\u52A8",
+  spin: "\u8C03\u8282\u94AE\u88AB\u6309\u4E0B"
 };
 var INFO_KEYS = [
   "product",
@@ -123,9 +126,9 @@ var KINDS = [
   { type: "label", label: "\u6807\u7B7E", group: "\u57FA\u7840", container: false, w: 160, h: 24, text: "\u6807\u7B7E" },
   { type: "link", label: "\u94FE\u63A5", group: "\u57FA\u7840", container: false, w: 160, h: 24, text: "\u6253\u5F00\u94FE\u63A5" },
   { type: "switch", label: "\u5F00\u5173", group: "\u57FA\u7840", container: false, w: 160, h: 32, text: "\u5F00\u5173", checklist: true },
-  { type: "edit", label: "\u5355\u884C\u8F93\u5165", group: "\u8F93\u5165", container: false, w: 200, h: 32, text: "" },
-  { type: "multiedit", label: "\u591A\u884C\u8F93\u5165", group: "\u8F93\u5165", container: false, w: 240, h: 120, text: "" },
-  { type: "spinner", label: "\u6570\u5B57\u5FAE\u8C03", group: "\u8F93\u5165", container: false, w: 110, h: 28, text: "", ranged: true },
+  /* 唯一的输入框类型：多行与数值框都是它的预设（编辑区里两个开关），
+     所以调色板只有这一项 —— 分成三种类型时它们的能力其实完全重叠。 */
+  { type: "edit", label: "\u8F93\u5165\u6846", group: "\u8F93\u5165", container: false, w: 200, h: 32, text: "" },
   { type: "checkbox", label: "\u590D\u9009\u6846", group: "\u8F93\u5165", container: false, w: 160, h: 28, text: "\u9009\u9879", checklist: true },
   { type: "radio", label: "\u5355\u9009\u94AE", group: "\u8F93\u5165", container: false, w: 160, h: 28, text: "\u9009\u9879", checklist: true },
   { type: "listbox", label: "\u5217\u8868\u6846", group: "\u8F93\u5165", container: false, w: 220, h: 140, text: "", listLike: true },
@@ -146,6 +149,18 @@ var KINDS = [
   { type: "group", label: "\u5206\u7EC4\u6846", group: "\u5BB9\u5668", container: true, w: 260, h: 180, text: "\u5206\u7EC4" },
   { type: "box", label: "\u5BB9\u5668\u5757", group: "\u5BB9\u5668", container: true, w: 200, h: 120, text: "" },
   { type: "card", label: "\u5361\u7247", group: "\u5BB9\u5668", container: true, w: 280, h: 180, text: "\u5361\u7247" },
+  { type: "splitter", label: "\u5206\u9694\u6761", group: "\u5BB9\u5668", container: false, w: 6, h: 200, text: "" },
+  { type: "terminal", label: "\u7EC8\u7AEF", group: "\u6570\u636E", container: false, w: 360, h: 200, text: "", listLike: true },
+  /* 图表：listLike 是为了用「条目」编辑系列名；**不标 ranged** —— value 是窗口点数，
+     不该被 min/max（Y 轴范围）夹，标了 ranged 画布就会拿 min/max 去夹 value */
+  { type: "chart", label: "\u56FE\u8868", group: "\u6570\u636E", container: false, w: 320, h: 160, text: "", listLike: true },
+  /* 状态灯：20×20 的小灯，text 为空时灯占满整个矩形、有文字时灯在左文字在右。
+     不标 ranged/checklist/listLike —— 三种都不是它的行为。 */
+  { type: "led", label: "\u72B6\u6001\u706F", group: "\u5176\u5B83", container: false, w: 20, h: 20, text: "" },
+  /* 仪表盘：和滑块一样是被 min/max 夹的值控件，画布显示「值/最小/最大」三行是对的。
+     text 这里留空是为了和 k_kinds 的 def_text 逐字一致（上面那句"顺序与分组要和 k_kinds
+     保持一致"是这张表的硬约定）；新控件的单位 "°C" 由 makeNode 的种子给，效果一样。 */
+  { type: "meter", label: "\u4EEA\u8868\u76D8", group: "\u6570\u503C", container: false, w: 140, h: 140, text: "", ranged: true },
   { type: "separator", label: "\u5206\u5272\u7EBF", group: "\u5176\u5B83", container: false, w: 200, h: 2, text: "" },
   { type: "image", label: "\u56FE\u7247", group: "\u5176\u5B83", container: false, w: 240, h: 140, text: "" },
   { type: "shape", label: "\u5916\u5F62\u6846", group: "\u5176\u5B83", container: false, w: 120, h: 120, text: "" },
@@ -159,6 +174,9 @@ var KINDS = [
   { type: "pagination", label: "\u5206\u9875", group: "\u88C5\u9970", container: false, w: 180, h: 32, text: "", ranged: true }
 ];
 var KIND_MAP = Object.fromEntries(KINDS.map((k) => [k.type, k]));
+function isNumEdit(node) {
+  return node.type === "edit" && !!node.spin && !node.multiline;
+}
 function walk(nodes, visit, parent = null) {
   for (const n of nodes) {
     visit(n, parent);
@@ -191,20 +209,40 @@ function cleanNode(node) {
   if (node.text) out.text = node.text;
   if (node.page !== void 0 && node.page > 0) out.page = Math.round(node.page);
   if (node.src) out.src = node.src;
-  if (node.format && (node.type === "datepicker" && node.format !== "date" || node.type === "shape")) {
+  if (node.format && (node.type === "datepicker" && node.format !== "date" || node.type === "shape" || /* 分隔条缺省就是左右分栏（竖条），只有 "row" 需要写出去 */
+  node.type === "splitter" && node.format !== "col" || /* 终端缺省是文本模式，只有 "hex" 需要写出去 */
+  node.type === "terminal" && !!node.format || /* 状态灯缺省是圆的，只有 "square" 需要写出去 */
+  node.type === "led" && node.format !== "round" || /* 仪表盘缺省是 270° 圆弧，只有 "half" 需要写出去 */
+  node.type === "meter" && node.format !== "arc")) {
     out.format = node.format;
   }
   if (node.hint) out.hint = node.hint;
   if (node.period) out.period = Math.max(0, Math.round(node.period));
   if (node.multi === true) out.multi = true;
   if (node.check === true) out.check = true;
+  if (isNumEdit(node)) {
+    const v = Math.round(node.value ?? 0);
+    out.value = v;
+    out.min = Math.round(node.min ?? 0);
+    out.max = Math.round(node.max ?? 100);
+    out.text = String(v);
+  }
+  if (node.multiline === true) out.multiline = true;
+  if (node.scroll) out.scroll = node.scroll;
+  if (node.maxlen) out.maxlen = node.maxlen;
+  if (node.conv) out.conv = node.conv;
+  if (node.input) out.input = node.input;
+  if (node.border) out.border = node.border;
+  if (node.spin) out.spin = node.spin;
+  if (node.bind?.src) {
+    out.bind = node.bind.two ? { src: node.bind.src, two: true } : { src: node.bind.src };
+  }
   if (node.items && node.items.length) out.items = [...node.items];
   if (node.nodes && node.nodes.length) out.nodes = node.nodes.map(cleanTree);
   if (node.columns && node.columns.length) {
     out.columns = node.columns.map((c) => c.w && c.w > 0 ? { title: c.title, w: Math.round(c.w) } : { title: c.title });
   }
   if (node.rows && node.rows.length) out.rows = node.rows.map((r) => [...r]);
-  if (node.option !== void 0) out.option = node.option;
   const style = node.style ?? {};
   const kept = {};
   if (style.font) kept.font = style.font;
@@ -225,6 +263,13 @@ function cleanNode(node) {
     out.max = node.max ?? 100;
   } else if (node.type === "colorpicker") {
     out.value = node.value ?? 0;
+  } else if (node.type === "chart") {
+    out.value = Math.max(2, Math.round(node.value ?? 120));
+    out.min = node.min ?? 0;
+    out.max = node.max ?? 100;
+  } else if (node.type === "led") {
+    const st = typeof node.value === "number" && Number.isFinite(node.value) ? Math.round(node.value) : 0;
+    out.value = Math.max(0, Math.min(2, st));
   } else if (KIND_MAP[node.type]?.listLike && node.value) {
     out.value = Math.max(0, Math.round(node.value));
   }
@@ -500,20 +545,32 @@ int main(int argc, char **argv)
 }
 `;
   const buildBat = `@echo off
+rem ---- ASCII prelude: keep everything above the next marker ASCII-only ----
+rem cmd decodes a .bat with the console code page captured when it started, so a
+rem UTF-8 file must be (re)entered by a process whose console is already 65001;
+rem otherwise the Chinese lines below get cut in the middle and run as commands.
+for /f "tokens=2 delims=:" %%c in ('chcp') do set "CG_CP=%%c"
+if not "%CG_CP: =%"=="65001" (
+    chcp 65001 >nul
+    cmd /c "%~f0" %*
+    exit /b %errorlevel%
+)
+rem ---- UTF-8 content starts here: Chinese is fine below ----
 rem Build this UI project into a standalone exe.
 rem The folder can live anywhere: the script walks up from here to find the
 rem CStackGUI root (the one holding build-app.bat + runtime\\lib), so the
 rem project may sit under CStackGUI\\apps\\, beside CStackGUI.exe, or in any
 rem folder of your own; CSTACKGUI_HOME can also point at the root directly.
-rem Keep this file pure ASCII (see tools\\bat-gbk.ps1 for why).
 setlocal enabledelayedexpansion
-if not "%CSTACKGUI_HOME%"=="" goto have_home
-set "SEARCH=%~dp0"
-for /L %%%%i in (1,1,10) do (
-    if not defined CSTACKGUI_HOME if exist "!SEARCH!build-app.bat" if exist "!SEARCH!runtime\\lib\\libcstackgui.a" set "CSTACKGUI_HOME=!SEARCH!"
-    if not defined CSTACKGUI_HOME set "SEARCH=!SEARCH!..\\"
+rem No goto / call :label in this file: cmd looks a label up by byte offset and
+rem Chinese text below the prelude would make that scan drift (see tools\\bat-utf8.ps1).
+if "%CSTACKGUI_HOME%"=="" (
+    set "SEARCH=%~dp0"
+    for /L %%%%i in (1,1,10) do (
+        if not defined CSTACKGUI_HOME if exist "!SEARCH!build-app.bat" if exist "!SEARCH!runtime\\lib\\libcstackgui.a" set "CSTACKGUI_HOME=!SEARCH!"
+        if not defined CSTACKGUI_HOME set "SEARCH=!SEARCH!..\\"
+    )
 )
-:have_home
 if "%CSTACKGUI_HOME:~-1%" NEQ "\\" set "CSTACKGUI_HOME=%CSTACKGUI_HOME%\\"
 if "%CSTACKGUI_HOME%"=="\\" (
     echo [fail] cannot find the CStackGUI root ^(a folder with build-app.bat + runtime\\lib^).

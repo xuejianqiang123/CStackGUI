@@ -4,7 +4,7 @@
  * 所以这里刻意用平实的原生风格，而不是网页风格。
  */
 import type { CSSProperties } from "react";
-import { eventLabel, CG_EVENTS, type CgNode } from "../model";
+import { eventLabel, isNumEdit, CG_EVENTS, type CgNode } from "../model";
 
 const fontOf = (node: CgNode): CSSProperties => {
   const style = node.style ?? {};
@@ -50,8 +50,10 @@ function inner(node: CgNode) {
       return <div className="ctl-label">{node.text || ""}</div>;
 
     case "edit": {
-      /* 多行/对齐按字段画（原生单行框会把换行压成一行，画布照做，免得两边观感不一致） */
+      /* 多行/对齐按字段画（原生单行框会把换行压成一行，画布照做，免得两边观感不一致）。
+         数值框（调节器）显示的是 value —— 运行时那边文本也是从 value 派生的。 */
       const multi = !!node.multiline;
+      const num = isNumEdit(node);
       const bits: string[] = [];
       if (node.maxlen) bits.push(`最长 ${node.maxlen} 字`);
       if (node.scroll) bits.push(["", "横向滚动", "纵向滚动", "双向滚动"][node.scroll] ?? "");
@@ -62,7 +64,15 @@ function inner(node: CgNode) {
         );
       }
       if (node.conv) bits.push(node.conv === 1 ? "输入转小写" : "输入转大写");
-      if (node.spin) bits.push(node.spin === 1 ? "调节器（自动）" : "调节器（手动）");
+      if (node.spin) {
+        bits.push(
+          node.spin === 1
+            ? `调节器（自动，夹在 ${node.min ?? 0}~${node.max ?? 100}）`
+            : "调节器（手动）",
+        );
+      }
+      if (num) bits.push(`数值框，值是 ${node.value ?? 0}`);
+      const shown = num ? String(node.value ?? 0) : node.text || "";
       return (
         <div
           className={`ctl-edit${multi ? " ctl-edit-multi" : ""}${
@@ -76,13 +86,10 @@ function inner(node: CgNode) {
               ⇅
             </span>
           ) : null}
-          {multi ? node.text || "" : (node.text || "").replace(/\n/g, " ")}
+          {multi ? shown : shown.replace(/\n/g, " ")}
         </div>
       );
     }
-
-    case "multiedit":
-      return <div className="ctl-edit ctl-edit-multi">{node.text || ""}</div>;
 
     case "checkbox":
       return (
@@ -138,17 +145,6 @@ function inner(node: CgNode) {
           {node.text ? <span className="ctl-switch-label">{node.text}</span> : null}
           <span className={`ctl-switch-track${node.checked ? " on" : ""}`}>
             <span className="ctl-switch-knob" />
-          </span>
-        </div>
-      );
-
-    case "spinner":
-      return (
-        <div className="ctl-spinner">
-          <span className="ctl-spinner-text">{node.value ?? 0}</span>
-          <span className="ctl-spinner-arrows">
-            <span>▲</span>
-            <span>▼</span>
           </span>
         </div>
       );

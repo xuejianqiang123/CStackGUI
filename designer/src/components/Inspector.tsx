@@ -7,6 +7,7 @@ import { getBridge } from "../bridge";
 import {
   KIND_MAP,
   findParent,
+  isNumEdit,
   itemsToText,
   menuToText,
   tableColumnsToText,
@@ -225,19 +226,22 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
           }}
         />
       </Row>
-      {/* 同样是 text 字段：仪表盘上是单位（画在中心数值下面），灯上是灯右边的说明文字 */}
-      <Row label={node.type === "meter" ? "单位" : "文字"}>
-        <input
-          className="input"
-          value={node.text ?? ""}
-          placeholder={node.type === "meter" ? "°C" : undefined}
-          onChange={(e) =>
-            patch((n) => {
-              n.text = e.target.value;
-            })
-          }
-        />
-      </Row>
+      {/* 同样是 text 字段：仪表盘上是单位（画在中心数值下面），灯上是灯右边的说明文字。
+          数值框（edit + 调节器）没有这一行 —— 它的显示文本由「值」派生，写了也不生效。 */}
+      {isNumEdit(node) ? null : (
+        <Row label={node.type === "meter" ? "单位" : "文字"}>
+          <input
+            className="input"
+            value={node.text ?? ""}
+            placeholder={node.type === "meter" ? "°C" : undefined}
+            onChange={(e) =>
+              patch((n) => {
+                n.text = e.target.value;
+              })
+            }
+          />
+        </Row>
+      )}
 
       <div className="insp-section">位置与尺寸</div>
       {node.type === "menu" ? (
@@ -264,6 +268,52 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
       {node.type === "edit" ? (
         <>
           <div className="insp-section">输入框</div>
+          {/* 预设：以前调色板里「单行输入 / 多行输入 / 数字微调」是三个类型，合并成 edit
+              之后在这儿一键切回同样的组合，省得挨个改字段。 */}
+          <Row label="预设" hint="多行 = Enter 变换行 + 纵向滚动；数字框 = 右侧箭头 + 整数过滤 + 值/范围">
+            <span className="ev-actions">
+              <button
+                className={!node.multiline && !node.spin ? "mini on" : "mini"}
+                onClick={() =>
+                  patch((n) => {
+                    delete n.multiline;
+                    delete n.scroll;
+                    delete n.spin;
+                    delete n.input;
+                  })
+                }
+              >
+                单行
+              </button>
+              <button
+                className={node.multiline ? "mini on" : "mini"}
+                onClick={() =>
+                  patch((n) => {
+                    n.multiline = true;
+                    n.scroll = 2;
+                    delete n.spin;
+                  })
+                }
+              >
+                多行
+              </button>
+              <button
+                className={isNumEdit(node) ? "mini on" : "mini"}
+                onClick={() =>
+                  patch((n) => {
+                    delete n.multiline;
+                    n.spin = 1;
+                    n.input = 7;
+                    if (n.min === undefined) n.min = 0;
+                    if (n.max === undefined || n.max > 999) n.max = 99;
+                    if (n.value === undefined) n.value = 0;
+                  })
+                }
+              >
+                数字框
+              </button>
+            </span>
+          </Row>
           <Row label="最大长度" hint="最多允许输入多少字符；0 = 不限制">
             <input
               className="input narrow"
@@ -358,9 +408,13 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
               <option value="11">输入日期时间</option>
             </select>
           </Row>
-          <Row label="调节器" hint="右侧上下箭头：自动 = 点一下按 ±1 改数字并夹到下面的底限/上限；手动 = 只发「调节钮被按下」，文本自己写">
+          <Row
+            label="调节器"
+            hint="右侧上下箭头，开了它就是「数值框」（值是真相、文本由它派生）：自动 = 点一下按 ±1 改值并夹到下面的底限/上限；手动 = 只发「调节钮被按下」，值由业务在回调里自己改。多行输入框没有箭头"
+          >
             <select
               className="input"
+              disabled={!!node.multiline}
               value={String(node.spin ?? 0)}
               onChange={(e) =>
                 patch((n) => {
@@ -375,8 +429,22 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
               <option value="2">手动</option>
             </select>
           </Row>
+          {isNumEdit(node) ? (
+            <Row label="值" hint="数值框的真相：界面上显示的就是它，箭头 ±1、cg_widget_value()、双向绑定全按它走">
+              <input
+                className="input narrow"
+                type="number"
+                value={node.value ?? 0}
+                onChange={(e) =>
+                  patch((n) => {
+                    n.value = Math.round(Number(e.target.value) || 0);
+                  })
+                }
+              />
+            </Row>
+          ) : null}
           {node.spin ? (
-            <Row label="底限 / 上限" hint="调节器的取值范围（只有自动方式会用来夹取；手动方式仅供业务参考）">
+            <Row label="底限 / 上限" hint="数值框的取值范围：自动方式点箭头时夹取，手输也会夹（手动方式仅供业务参考）">
               <span className="pair">
                 <input
                   className="input narrow"

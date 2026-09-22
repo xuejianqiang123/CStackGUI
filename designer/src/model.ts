@@ -132,9 +132,7 @@ export const KIND_EVENTS: Record<string, CgEvent[]> = {
    * 必须和 runtime/src/core/cg_doc_kind.c 的 edit 行一致 */
   edit: ["change", "submit", "mousedown", "mouseup", "dblclick", "rdown", "rup", "mousemove",
          "gotfocus", "lostfocus", "keydown", "keyup", "char", "wheel", "spin"],
-  multiedit: ["change", "gotfocus", "lostfocus"],
   richtext: ["change", "gotfocus", "lostfocus"],
-  spinner: ["change", "gotfocus", "lostfocus"],
   datepicker: ["change", "gotfocus", "lostfocus"],
   monthcal: ["select", "dblclick"],
   checkbox: ["change", "gotfocus", "lostfocus"],
@@ -403,9 +401,9 @@ export const KINDS: KindInfo[] = [
   { type: "label", label: "标签", group: "基础", container: false, w: 160, h: 24, text: "标签" },
   { type: "link", label: "链接", group: "基础", container: false, w: 160, h: 24, text: "打开链接" },
   { type: "switch", label: "开关", group: "基础", container: false, w: 160, h: 32, text: "开关", checklist: true },
-  { type: "edit", label: "单行输入", group: "输入", container: false, w: 200, h: 32, text: "" },
-  { type: "multiedit", label: "多行输入", group: "输入", container: false, w: 240, h: 120, text: "" },
-  { type: "spinner", label: "数字微调", group: "输入", container: false, w: 110, h: 28, text: "", ranged: true },
+  /* 唯一的输入框类型：多行与数值框都是它的预设（编辑区里两个开关），
+     所以调色板只有这一项 —— 分成三种类型时它们的能力其实完全重叠。 */
+  { type: "edit", label: "输入框", group: "输入", container: false, w: 200, h: 32, text: "" },
   { type: "checkbox", label: "复选框", group: "输入", container: false, w: 160, h: 28, text: "选项", checklist: true },
   { type: "radio", label: "单选钮", group: "输入", container: false, w: 160, h: 28, text: "选项", checklist: true },
   { type: "listbox", label: "列表框", group: "输入", container: false, w: 220, h: 140, text: "", listLike: true },
@@ -452,6 +450,13 @@ export const KINDS: KindInfo[] = [
 ];
 
 export const KIND_MAP: Record<string, KindInfo> = Object.fromEntries(KINDS.map((k) => [k.type, k]));
+
+/** 是否数值输入框：`edit` + 调节器（spin），且不是多行。
+ *  value 是它的真相、显示文本由 value 派生，调色板/属性面板/预览都按它分流。
+ *  **必须和运行时的 cg_widget_is_numedit()（core/cg_widget.c）保持一致**。 */
+export function isNumEdit(node: CgNode): boolean {
+  return node.type === "edit" && !!node.spin && !node.multiline;
+}
 
 export const isContainer = (type: string) => KIND_MAP[type]?.container === true;
 
@@ -591,9 +596,9 @@ export function makeNode(type: string, x: number, y: number): CgNode {
   };
   if (info.text) node.text = info.text;
   if (info.ranged) {
-    node.value = type === "spinner" ? 5 : 40;
+    node.value = 40;
     node.min = 0;
-    node.max = type === "spinner" ? 99 : 100;
+    node.max = 100;
   }
   if (info.container) node.children = [];
 
@@ -722,11 +727,16 @@ export function templateDoc(kind: TemplateKind): CgDoc {
     const doc = emptyDoc();
     doc.app = { ...doc.app, title: "form", width: 520, height: 300 };
     const box = tpl("group", "grp_form", 20, 16, 480, 190, "填写信息");
+    /* 备注是多行输入框：edit + multiline + 纵向滚动（原来是独立的 multiedit 类型，
+       2026-09-22 合并 —— 画布模板也跟着改成新写法，别让模板教老字段） */
+    const memo = tpl("edit", "edt_memo", 90, 80, 360, 92);
+    memo.multiline = true;
+    memo.scroll = 2;
     box.children = [
       tpl("label", "lab_name", 20, 34, 60, 24, "姓名"),
       tpl("edit", "edt_name", 90, 30, 360, 30),
       tpl("label", "lab_memo", 20, 84, 60, 24, "备注"),
-      tpl("multiedit", "edt_memo", 90, 80, 360, 92),
+      memo,
     ];
     const ok = tpl("button", "btn_ok", 290, 226, 100, 38, "确定");
     ok.events = { click: "on_ok_click" };
@@ -930,7 +940,14 @@ function coerceTree(raw: unknown[]): CgTreeItem[] {
 function coerceNode(raw: unknown, index: number): CgNode | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
-  const type = typeof o.type === "string" && KIND_MAP[o.type] ? o.type : "label";
+  /* 老类型名自动升级：multiedit / spinner 已合并进 edit（2026-09-22）。
+     映射必须和运行时 cg_doc.c 的 parse_node 完全一致 —— 否则老 .cgui 在画布上会被
+     下面那句兜底静默降级成 label（结构和事件全丢，还不报错）。 */
+  let rawType = typeof o.type === "string" ? o.type : "";
+  const aliasMulti = rawType === "multiedit";
+  const aliasSpin = rawType === "spinner";
+  if (aliasMulti || aliasSpin) rawType = "edit";
+  const type = KIND_MAP[rawType] ? rawType : "label";
   const info = KIND_MAP[type];
   const flat = { x: o.x, y: o.y, w: o.w, h: o.h } as Record<string, unknown>;
   const rectSource = (o.rect as unknown) ?? flat;
@@ -983,6 +1000,16 @@ function coerceNode(raw: unknown, index: number): CgNode | null {
   if (o.border !== undefined && Number.isFinite(border) && border >= 1 && border <= 6) node.border = Math.round(border);
   const spin = Number(o.spin);
   if (o.spin !== undefined && (spin === 1 || spin === 2)) node.spin = spin;
+
+  /* 旧类型名补齐字段（见函数开头 alias*）：写了的字段优先，没写的按新语义给默认 */
+  if (aliasMulti) {
+    node.multiline = true;                       /* 多行输入：以前写死 ES_MULTILINE */
+    if (!node.scroll) node.scroll = 2;           /* 纵向滚动条 */
+  }
+  if (aliasSpin) {
+    if (!node.spin) node.spin = 1;               /* 自动 ±1 */
+    if (!node.input) node.input = 7;             /* 整数：按键过滤 + 失焦夹取 */
+  }
 
   /* 控件绑定：src 空串或不是字符串一律当没绑（画布上「不绑定」就是这么存的） */
   if (o.bind && typeof o.bind === "object") {
@@ -1143,9 +1170,11 @@ function cleanNode(node: CgNode): CgNode {
   if (node.period) out.period = Math.max(0, Math.round(node.period));
   if (node.multi === true) out.multi = true;
   if (node.check === true) out.check = true;
-  /* 输入框的调节器范围：edit 不是 ranged 控件（上面那段会跳过 min/max），
-   * 但挂了调节器就必须把底限/上限写出去，否则运行时夹取范围永远是缺省的 0~100 */
-  if (node.type === "edit" && node.spin) {
+  /* 数值框（edit + 调节器）：value 是真相、文本由它派生，所以值/范围/文本一起写出去。
+   * edit 本身不是 ranged 控件（上面那段会跳过 min/max），漏了这三行运行时夹取范围
+   * 就永远是缺省的 0~100，而且显示的还是空的。 */
+  if (isNumEdit(node)) {
+    out.value = Math.round(node.value ?? 0);
     out.min = Math.round(node.min ?? 0);
     out.max = Math.round(node.max ?? 100);
   }

@@ -321,12 +321,8 @@ input.narrow {
   border: none;
   background: linear-gradient(to bottom, var(--outline-strong) 0 2px, transparent 2px 5px, var(--outline-strong) 5px 7px, transparent 7px);
 }
-.glyph-edit,
-.glyph-multiedit {
+.glyph-edit {
   border-radius: 2px;
-}
-.glyph-multiedit {
-  height: 14px;
 }
 .glyph-checkbox,
 .glyph-radio {
@@ -368,9 +364,6 @@ input.narrow {
   height: 10px;
   border-radius: 5px;
   background: linear-gradient(to right, var(--seed) 60%, var(--outline) 60%);
-}
-.glyph-spinner {
-  background: linear-gradient(to bottom, #fff 0 48%, var(--outline) 48% 52%, #fff 52%);
 }
 .glyph-tabs {
   border-radius: 4px 4px 2px 2px;
@@ -872,37 +865,6 @@ input.narrow {
 }
 .ctl-switch-track.on .ctl-switch-knob {
   left: 23px;
-}
-
-/* 数字微调 */
-.ctl-spinner {
-  display: flex;
-  align-items: center;
-  height: 100%;
-  background: #fff;
-  border: 2px solid #b8b2bd;
-  border-radius: 2px;
-  overflow: hidden;
-}
-.ctl-spinner-text {
-  flex: 1;
-  padding: 0 6px;
-  text-align: left;
-}
-.ctl-spinner-arrows {
-  display: flex;
-  flex-direction: column;
-  width: 16px;
-  border-left: 1px solid var(--outline);
-  font-size: 5px;
-  line-height: 1;
-  color: var(--on-surface-var);
-}
-.ctl-spinner-arrows span {
-  flex: 1;
-  display: grid;
-  place-items: center;
-  background: var(--surface-2);
 }
 
 /* 标签页 */
