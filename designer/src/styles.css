@@ -1758,13 +1758,54 @@ button.icon-pick svg {
   padding: 6px 8px;
 }
 
-.ev-table {
-  width: 100%;
-  border-collapse: collapse;
+/* 事件绑定行：事件名独占一行（名字长），输入框和操作按钮在下一行 —— 输入框能吃掉
+   整行剩余宽度，回调名完整可见，不会像并成一行时被按钮挤到只剩前几个字。 */
+.ev-legend,
+.ev-note {
+  margin: 2px 0 10px;
+  line-height: 1.55;   /* 说明文字：行距松一点才读得下去 */
 }
-.ev-table td {
-  padding: 4px 4px 4px 0;
-  vertical-align: middle;
+/* 一段说明里的每一句各占一行，别糊成一团 */
+.ev-note > div + div {
+  margin-top: 2px;
+}
+/* 图例清单：左列「标记名」固定一列，右列解释自动对齐 —— 比排成一整段好读 */
+.ev-legend-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 3px 8px;
+  margin: 6px 0;
+}
+.ev-legend-list dt {
+  color: var(--on-surface);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ev-legend-list dd {
+  margin: 0;
+}
+.ev-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.ev-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 1px 0;
+}
+.ev-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.ev-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
 }
 .ev-name {
   white-space: nowrap;
@@ -1780,16 +1821,36 @@ button.icon-pick svg {
   background: var(--outline);
   vertical-align: middle;
 }
-.ev-table tr.bound .ev-dot {
+.ev-row.bound .ev-dot {
   background: #ff5db1;
 }
-.ev-actions {
+/* 「还被 xxx 用着」：中性小胶囊，不用红色——它是说明不是错误。
+   控件名列表过长就省略号，完整清单在 title 里 */
+.ev-others {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 62%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: right;
+  padding: 0 6px;
+  border: 1px solid var(--outline);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--on-surface-var);
+  font-size: 10.5px;
+  line-height: 16px;
+  cursor: help;
 }
-.ev-shared {
-  width: 34px;
-  text-align: right;
+/* 操作按钮跟着事件名一行：按钮不许被压窄，也不许把「自动」折成两行 */
+.ev-tools > button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+/* 输入框独占整行：回调名再长也不会被按钮挤掉 */
+.ev-input {
+  width: 100%;
+  min-width: 0;
 }
 .hint-box {
   margin-top: 12px;

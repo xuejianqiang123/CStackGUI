@@ -290,15 +290,6 @@ export default function App() {
     say(`已导出到 ${res.dir}${skipped}，接着去填 ${baseName}_ui_events.c`);
   }, [bridge, docRef, projectRoot, say, filePath]);
 
-  /* 「代码」按钮：把「导出骨架后要切编辑器找函数」这一跳补上 */
-  const openCallback = useCallback(
-    async (callback: string) => {
-      const res = await bridge.openCallback({ filePath: filePath || undefined, callback });
-      say(res.message);
-    },
-    [bridge, filePath, say],
-  );
-
   const doLocateProject = useCallback(async () => {
     const res = await bridge.locateProject();
     if (res.canceled || !res.projectRoot) return;
@@ -621,7 +612,6 @@ export default function App() {
                 node={selected}
                 onBeginHistory={onBeginHistory}
                 onApply={onApply}
-                onOpenCallback={(name) => void openCallback(name)}
               />
             ) : null}
             {tab === "support" ? <SupportPanel onSay={say} /> : null}

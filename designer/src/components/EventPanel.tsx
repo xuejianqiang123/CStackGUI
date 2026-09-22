@@ -18,11 +18,9 @@ type Props = {
   node: CgNode | null;
   onBeginHistory: () => void;
   onApply: (mutator: (doc: CgDoc) => void) => void;
-  /** 在编辑器里打开这个回调（装了 VS Code 会直接跳到那一行） */
-  onOpenCallback?: (name: string) => void;
 };
 
-export default function EventPanel({ doc, node, onBeginHistory, onApply, onOpenCallback }: Props) {
+export default function EventPanel({ doc, node, onBeginHistory, onApply }: Props) {
   const isWindow = !node;
   const supported = isWindow ? WINDOW_EVENTS : eventsOf(node!.type);
   const curEvents: Partial<Record<CgEvent, string>> = isWindow
@@ -58,9 +56,23 @@ export default function EventPanel({ doc, node, onBeginHistory, onApply, onOpenC
     });
   };
 
-  /** 同名函数被几个控件/事件共用：共用是合法的，但值得提示一下 */
-  const useCount = new Map<string, number>();
-  for (const u of collectCallbacks(doc)) useCount.set(u.name, (useCount.get(u.name) ?? 0) + 1);
+  /** 同名函数被哪些控件用着。注意「一个控件把自己的多个事件绑到同一个函数」是常规写法
+   *  （examples\lesson01_edit_button 就是 13 个事件共用一个 on_full_event），不该提示；
+   *  只有**跨控件**共用才值得提醒：C 侧只会存在一个函数，回调里得靠 cg_widget_id(self) 分辨是谁。 */
+  const widgetsByName = new Map<string, Set<string>>();
+  for (const u of collectCallbacks(doc)) {
+    const set = widgetsByName.get(u.name) ?? new Set<string>();
+    set.add(u.widgetId);
+    widgetsByName.set(u.name, set);
+  }
+  /** 当前这行属于谁（主窗口在 collectCallbacks 里用的是伪 id `__window`） */
+  const selfId = isWindow ? "__window" : node!.id;
+  /** 这个函数名还被哪些**别的**控件绑着。返回的是控件 id，直接显示出来比「共用」两个字
+   *  好懂得多；空数组 = 只有当前控件在用。 */
+  const othersOf = (name: string): string[] =>
+    name ? [...(widgetsByName.get(name) ?? [])].filter((id) => id !== selfId) : [];
+  /** 给用户看的名字：窗口事件挂在伪控件 `__window` 上，别把内部 id 露出去 */
+  const labelOf = (id: string) => (id === "__window" ? "主窗口" : id);
 
   const unsupported = isWindow
     ? []
@@ -83,10 +95,13 @@ export default function EventPanel({ doc, node, onBeginHistory, onApply, onOpenC
       )}
 
       {isWindow ? (
-        <p className="muted small">
-          这些是「启动窗口（主窗口）」的事件，绑在 <code>app.events</code> 上。回调里 <code>self</code> 就是窗口本身，
-          用 <code>cg_app_of(self)</code> 拿 <code>cg_app_t *</code>；和控件事件同一套 <code>CG_BIND</code> 机制。
-        </p>
+        <div className="muted small ev-note">
+          <div>下面是「启动窗口（主窗口）」的事件，绑在 <code>app.events</code> 上。</div>
+          <div>
+            回调里 <code>self</code> 就是窗口本身，用 <code>cg_app_of(self)</code> 拿 <code>cg_app_t *</code>。
+          </div>
+          <div>和控件事件是同一套 <code>CG_BIND</code> 机制。</div>
+        </div>
       ) : null}
 
       {!isWindow && unsupported.length > 0 ? (
@@ -111,61 +126,79 @@ export default function EventPanel({ doc, node, onBeginHistory, onApply, onOpenC
         </p>
       ) : null}
 
-      <table className="ev-table">
-        <tbody>
-          {supported.map((ev) => {
-            const value = curEvents[ev] ?? "";
-            const dup = value !== "" && (useCount.get(value) ?? 0) > 1;
-            return (
-              <tr key={ev} className={value ? "bound" : ""}>
-                <td className="ev-name" title={EVENT_HINT[ev]}>
+      {supported.length > 0 ? (
+        <div className="muted small ev-legend">
+          <div>填上函数名即完成绑定，下面是这一页上各种标记的意思：</div>
+          {/* 两栏清单：左边是「你会看到的东西」，右边是说人话的解释，一眼一行 */}
+          <dl className="ev-legend-list">
+            <dt>自动</dt>
+            <dd>按 <code>on_控件id_事件</code> 生成规范回调名</dd>
+            <dt>×</dt>
+            <dd>清空这一行的绑定</dd>
+            <dt>行首圆点</dt>
+            <dd>变粉 = 这一行已经绑上了函数</dd>
+            <dt>还被 xxx 用着</dt>
+            <dd>
+              同一个函数名别的控件也在绑：C 侧只会存在一个函数，回调里用 <code>cg_widget_id(self)</code> 分辨是谁
+            </dd>
+          </dl>
+          <div>
+            名字填错不会编译报错，但运行时启动会警告、<code>--selftest</code> 会报错。
+          </div>
+        </div>
+      ) : null}
+
+      <div className="ev-list">
+        {supported.map((ev) => {
+          const value = curEvents[ev] ?? "";
+          const others = othersOf(value);
+          const suggested = `on_${(isWindow ? "window" : node!.id).replace(/[^0-9a-zA-Z_]/g, "_")}_${ev}`;
+          return (
+            <div key={ev} className={value ? "ev-row bound" : "ev-row"}>
+              {/* 第一行：事件名 + 操作按钮（名字长、按钮也不能折行，索性各占一行的两侧）；
+                  第二行：输入框独占整行 —— 回调名再长也完整可见，不会被按钮挤掉 */}
+              <div className="ev-head">
+                <span className="ev-name" title={EVENT_HINT[ev]}>
                   <span className="ev-dot" />
                   {EVENT_LABEL[ev]}
-                </td>
-                <td>
-                  <input
-                    className="input mono"
-                    value={value}
-                    placeholder={`on_${isWindow ? "window" : node!.id}_${ev}`}
-                    onChange={(e) => setEvent(ev, e.target.value)}
-                    spellCheck={false}
-                  />
-                </td>
-                <td className="ev-shared">
-                  {dup ? (
-                    <span className="warn small" title="这个函数名同时被别的控件绑定了，C 侧只会有一个函数">
-                      共用
-                    </span>
-                  ) : null}
-                </td>
-                <td className="ev-actions">
-                  {value && onOpenCallback ? (
-                    <button
-                      className="mini"
-                      title={`在编辑器里打开 ${value}（装了 VS Code 会跳到那一行）`}
-                      onClick={() => onOpenCallback(value)}
+                </span>
+                <span className="ev-tools">
+                  {others.length > 0 ? (
+                    <span
+                      className="ev-others"
+                      title={
+                        `同一个函数名还被这些控件绑着：${others.map(labelOf).join("、")}。\n` +
+                        "C 侧只会存在一个函数，回调里用 cg_widget_id(self) 分辨是谁。"
+                      }
                     >
-                      代码
-                    </button>
+                      还被 {others.map(labelOf).join("、")} 用着
+                    </span>
                   ) : null}
                   <button
                     className="mini"
-                    title="用 窗口/控件 + 事件名 生成规范的回调名"
-                    onClick={() => setEvent(ev, `on_${isWindow ? "window" : node!.id.replace(/[^0-9a-zA-Z_]/g, "_")}_${ev}`)}
+                    title={`自动命名：按「控件 id + 事件名」生成规范回调名 ${suggested}`}
+                    onClick={() => setEvent(ev, suggested)}
                   >
                     自动
                   </button>
                   {value ? (
-                    <button className="mini" title="清除" onClick={() => setEvent(ev, "")}>
+                    <button className="mini" title="清除这一行的绑定（等于把输入框清空）" onClick={() => setEvent(ev, "")}>
                       ×
                     </button>
                   ) : null}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                </span>
+              </div>
+              <input
+                className="input mono ev-input"
+                value={value}
+                placeholder={suggested}
+                onChange={(e) => setEvent(ev, e.target.value)}
+                spellCheck={false}
+              />
+            </div>
+          );
+        })}
+      </div>
 
       {Object.keys(curEvents).length > 0 ? (
         <div className="hint-box">
@@ -173,18 +206,18 @@ export default function EventPanel({ doc, node, onBeginHistory, onApply, onOpenC
           <ul className="hint-list">
             {supported.filter((e) => curEvents[e]).map((e) => {
               const name = curEvents[e] ?? "";
-              const shared = (useCount.get(name) ?? 0) > 1;
+              const others = othersOf(name);
               return (
                 <li key={e}>
                   <code>{EVENT_LABEL[e]}</code> → <code>{name}</code>
-                  {shared ? <span className="warn"> 同名函数被多个控件共用</span> : null}
+                  {others.length > 0 ? <span className="muted"> 同一函数还被 {others.map(labelOf).join("、")} 绑着</span> : null}
                 </li>
               );
             })}
           </ul>
           <div className="hint-foot">
-            点「导出 C 骨架」会在导出目录里生成同名空函数和绑定表；每个控件只导出它自己支持的事件。
-            导出之后，点上面的「代码」按钮就能直接跳到 <code>*_ui_events.c</code> 里那个函数（装了 VS Code 会定位到行）。
+            点「导出 C 骨架」会在导出目录里生成同名空函数和绑定表；每个控件只导出它自己支持的事件，
+            函数就在 <code>&lt;工程名&gt;_ui_events.c</code> 里，按名字搜即可。
           </div>
         </div>
       ) : (
