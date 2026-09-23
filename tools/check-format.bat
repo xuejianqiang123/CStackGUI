@@ -92,7 +92,9 @@ rem 现在拿 gallery 当标本（它的 .rc 是手写样板，形状同画布�
 rem 期望值用字符码拼：既避开 .bat 里写中文的编码坑，又能真的抓到"UTF-8 被当 GBK 解"这类退化
 rem —— 真出现那种退化，ProductName 的字符数会变、字符串也对不上。
 rem 0x63A7 0x4EF6 0x9648 0x5217 0x5BA4 = 控件陈列室
-echo   app config -> exe version info (examples\gallery\gallery.rc)
+rem 注意：echo 里别写 "->" —— cmd 会把那个 ">" 当成重定向，凭空建出一个叫 exe 的文件
+rem （2026-09-23 加这一步时踩过，仓库根目录多出一个 59 字节的 "exe"）。
+echo   app config: exe version info (examples\gallery\gallery.rc)
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$exe='examples\gallery\gallery.exe'; if (-not (Test-Path $exe)) { Write-Host '[fail] gallery.exe missing - run build-all first'; exit 1 }; $v=(Get-Item $exe).VersionInfo; $want='CStackGUI ' + [char]0x63A7 + [char]0x4EF6 + [char]0x9648 + [char]0x5217 + [char]0x5BA4; if ($v.FileVersion -ne '0.1.0.0' -or $v.OriginalFilename -ne 'gallery.exe' -or $v.ProductName -ne $want) { Write-Host ('[fail] gallery.exe version info mismatch -> FileVersion=' + $v.FileVersion + ' ProductName=' + $v.ProductName + ' OriginalFilename=' + $v.OriginalFilename); exit 1 }; Write-Host ('  gallery.exe: ' + $v.ProductName + ' ' + $v.FileVersion)"
 if errorlevel 1 exit /b 1
 
