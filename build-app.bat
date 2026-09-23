@@ -65,10 +65,17 @@ if not "%CSTACKGUI_SKIP_RUNTIME%"=="1" (
 
 echo 往工程目录里留一份运行时库的拷贝：这样整个目录被挪走之后还能自己重编。
 if not exist "%APPDIR%\lib" mkdir "%APPDIR%\lib"
-copy /y build\lib\libcstackgui.a "%APPDIR%\lib\libcstackgui.a" >nul
+rem **只在内容真的不同时才拷贝**。无脑 copy /y 会把目标文件的时间刷成"现在"，
+rem 于是它永远比 exe 新，下面那句"没变就跳过链接"就永远不生效 —— 更糟的是它靠
+rem 分钟级时间戳比较，同分钟时会被误判成"库没变"。内容相同就保留旧时间戳。
+fc /b "build\lib\libcstackgui.a" "%APPDIR%\lib\libcstackgui.a" >nul 2>nul
 if errorlevel 1 (
-    echo [fail] cannot copy runtime lib to %APPDIR%\lib
-    exit /b 1
+    copy /y build\lib\libcstackgui.a "%APPDIR%\lib\libcstackgui.a" >nul
+    if errorlevel 1 (
+        echo [fail] cannot copy runtime lib to %APPDIR%\lib
+        exit /b 1
+    )
+    set "CHANGED=1"
 )
 echo 资源对象（清单 + 版本信息）里没有代码符号，链接器不会主动从静态库里取它 ——
 echo 必须显式链接，否则 exe 拿不到 v6 通用控件（页签/进度条会退回老外观）。
@@ -93,13 +100,25 @@ echo 里面是本程序的产品名 / 版本 / 作者 / 图标。它是 UTF-8（
 echo 所以加 --codepage=65001；-I runtime\res 让它能引用到 v6 通用控件清单。
 set RESOBJ=%APPDIR%\lib\cstackgui_res.o
 if exist "%APPDIR%\%NAME%.rc" (
-    echo   RC %APPDIR%\%NAME%.rc
-    windres --codepage=65001 -I "%APPDIR%" -I "runtime\res" -O coff "%APPDIR%\%NAME%.rc" -o "%APPDIR%\lib\%NAME%_res.o"
-    if errorlevel 1 (
-        echo [fail] compiling %APPDIR%\%NAME%.rc failed
-        exit /b 1
-    )
     set RESOBJ=%APPDIR%\lib\%NAME%_res.o
+    rem .rc 和它引用的运行时资源脚本都没变就不重跑 windres —— 和 build-runtime.bat 对自己
+    rem 那份 .rc 的口径一致（那边有新旧判断、这边原先没有，等于每次都白跑一遍）。
+    set "RC_DO=1"
+    if exist "!RESOBJ!" (
+        for %%o in ("!RESOBJ!") do set "OT=%%~to"
+        for %%c in ("%APPDIR%\%NAME%.rc") do set "CT=%%~tc"
+        for %%c in ("runtime\res\cstackgui.rc") do if "%%~tc" GTR "!CT!" set "CT=%%~tc"
+        if "!OT!" GTR "!CT!" set "RC_DO="
+    )
+    if defined RC_DO (
+        echo   RC %APPDIR%\%NAME%.rc
+        windres --codepage=65001 -I "%APPDIR%" -I "runtime\res" -O coff "%APPDIR%\%NAME%.rc" -o "!RESOBJ!"
+        if errorlevel 1 (
+            echo [fail] compiling %APPDIR%\%NAME%.rc failed
+            exit /b 1
+        )
+        set "CHANGED=1"
+    )
 )
 
 echo 增量编译：把 ^<工程^>\*.c 逐个编成 lib\^<名字^>.o，只在该 .o 不存在、或者不比源文件
@@ -127,20 +146,38 @@ for %%f in ("%APPDIR%\*.c") do (
             echo [fail] compiling !SRCF! failed
             exit /b 1
         )
+        set "CHANGED=1"
     )
     set "OBJS=!OBJS! "!OBJ!""
 )
 
-if "%MODE%"=="--release" (
-    echo   LD %OUT% ^(release, no console^)
-    gcc %CFLAGS% -mwindows -o "%OUT%" !OBJS! "%RESOBJ%" "%APPDIR%\lib\libcstackgui.a" %LDFLAGS% -lstdc++
-) else (
-    echo   LD %OUT% ^(debug, with console^)
-    gcc %CFLAGS% -o "%OUT%" !OBJS! "%RESOBJ%" "%APPDIR%\lib\libcstackgui.a" %LDFLAGS% -lstdc++
+rem 只有"真的有东西变了"才重新链接：工程 .c 重编过 / 资源重编过 / exe 还不存在 /
+rem 运行时库或资源对象比 exe 新。**极性取保守**：exe 必须**严格新于**这些才算不用重链
+rem —— 时间戳只到分钟，相等时宁可重链一次，也不能悄悄链上旧库。
+set "LD_DO="
+if not exist "%OUT%" set "LD_DO=1"
+if defined CHANGED set "LD_DO=1"
+rem 极性取保守：exe 必须**严格新于**库和资源对象才允许跳过 —— 时间戳只到分钟，
+rem 相等时宁可多链一次，也不能链上旧库。
+if exist "%OUT%" (
+    for %%o in ("%OUT%") do set "OT=%%~to"
+    for %%l in ("%APPDIR%\lib\libcstackgui.a") do if not "!OT!" GTR "%%~tl" set "LD_DO=1"
+    for %%l in ("%APPDIR%\lib\cstackgui_res.o") do if not "!OT!" GTR "%%~tl" set "LD_DO=1"
 )
-if errorlevel 1 (
-    echo [fail] build of %APP% failed
-    exit /b 1
+if defined LD_DO (
+    if "%MODE%"=="--release" (
+        echo   LD %OUT% ^(release, no console^)
+        gcc %CFLAGS% -mwindows -o "%OUT%" !OBJS! "%RESOBJ%" "%APPDIR%\lib\libcstackgui.a" %LDFLAGS% -lstdc++
+    ) else (
+        echo   LD %OUT% ^(debug, with console^)
+        gcc %CFLAGS% -o "%OUT%" !OBJS! "%RESOBJ%" "%APPDIR%\lib\libcstackgui.a" %LDFLAGS% -lstdc++
+    )
+    if errorlevel 1 (
+        echo [fail] build of %APP% failed
+        exit /b 1
+    )
+) else (
+    echo   -- %OUT% 没变，跳过链接
 )
 
 echo 往工程目录里放一个启动脚本，双击就能重编本工程
@@ -155,5 +192,8 @@ echo     rebuild this project:          %APPDIR%\build-app.bat
 
 echo 刷新 clangd 语言服务配置（tools\gen-cc.mjs 里的编译参数和这里保持一致）。
 echo 没装 node 或者不在项目根时会静默跳过。
-where node >nul 2>nul && if exist tools\gen-cc.mjs node tools\gen-cc.mjs >nul 2>nul
+rem 只在真的重编/重链过时才刷 clangd 配置 —— 起一次 node 有成本，没变化时不必付。
+if defined LD_DO (
+    where node >nul 2>nul && if exist tools\gen-cc.mjs node tools\gen-cc.mjs >nul 2>nul
+)
 exit /b 0
