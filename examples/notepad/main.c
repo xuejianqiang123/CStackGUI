@@ -253,7 +253,12 @@ static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
     } else if (strcmp(id, "m_paste") == 0) {
         char *clip = cg_clip_get_text();
         if (edt && clip) {
-            cg_widget_set_text(edt, cg_str_format("%s%s", cg_widget_text(edt), clip));
+            /* cg_str_format 返回的是**堆内存**，而 cg_widget_set_text 只是拷贝一份
+             * （不接管所有权）—— 所以必须先落到变量、用完 cg_free，
+             * 直接写进 set_text 就是每次粘贴泄漏一块。 */
+            char *merged = cg_str_format("%s%s", cg_widget_text(edt), clip);
+            cg_widget_set_text(edt, merged);
+            cg_free(merged);
             s_biz.dirty = 1;
         }
         cg_free(clip);
