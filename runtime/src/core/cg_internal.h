@@ -75,7 +75,7 @@ struct cg_widget {
      *  后端得整体重灌（见 cg_win_sync.c 的 sync_terminal）。 */
     int          term_pushed;
     /** chart 专用：拍平的点数据（chart_nseries × chart_cap）与每个系列已填的点数。
-     *  系列名存在 items[] 里；缓冲按需建（见 cg_widget_data.c 的 cg_chart_ensure）。 */
+     *  系列名存在 items[] 里；缓冲按需建（见 cg_chart_ensure，在 cg_widget_gauge.c）。 */
     int         *chart_pts;
     int         *chart_fill;
     int          chart_nseries;
@@ -306,6 +306,11 @@ void cg_widget_free(cg_widget_t *w);
 /** 表格行数变多时把行级附加数组（勾选/数值/图标）一起补长到 want */
 void cg_table_rows_grow(cg_widget_t *w, int want);
 
+/** 控件类型守卫：w 的类型等于 type 就返回 1，否则打一行明确的报错并返回 0。
+ *  cg_widget_data.c 拆成七个文件后由多个控件族共用（定义在 cg_widget_tree.c），
+ *  提升到这里声明，免得每个文件各写一份。 */
+int want_type(const cg_widget_t *w, const char *type, const char *who);
+
 /* -------------------------------------------------- 控件绑定（cg_bind.c）
  * 一个控件的值/文字/勾选变化时，自动抄到另一个控件上。写在 .cgui 的 bind 字段，
  * 或运行时用 cg_bind()。规则见 cg_bind.c 顶部注释。 */
@@ -321,7 +326,7 @@ void cg_bind_apply_all(cg_app_t *app);
 /** 内部用：把源的值抄到目标，返回 1 表示真的改了（顺便 sync） */
 int cg_bind_copy(cg_widget_t *src, cg_widget_t *dst);
 
-/* -------------------------------------------------- 分隔条（cg_widget_data.c）
+/* -------------------------------------------------- 分隔条（cg_widget_split.c）
  * 几何计算在 core（纯 rect 运算，可脱窗单测），后端的鼠标处理只负责把位移喂进来。 */
 
 /** 拖动分隔条：撑开前一个兄弟、自己与之后的兄弟整体让位、最后一块吃掉余量。
@@ -357,7 +362,7 @@ void cg_ring_clear(cg_ring_t *r);
  *  失败返回 NULL（此时句柄不被接管，调用方自己关）。name 只用于日志与错误信息。 */
 cg_serial_t *cg_serial_from_handle(void *handle, const char *name, int rx_cap);
 
-/* -------------------------------------------------- 状态灯 / 仪表盘（cg_widget_data.c） */
+/* -------------------------------------------------- 状态灯 / 仪表盘（cg_widget_gauge.c） */
 
 /** led：此刻灯亮着吗（状态 = 闪时按 period 前后半周期翻转）。
  *  算在 core 而不是画的时候，是为了能脱窗单测时序 —— 闪烁算错了不崩、只是"看不出来在闪"。 */
@@ -367,7 +372,7 @@ int cg_led_lit(const cg_widget_t *w, unsigned long now_ms);
  *  值超量程按边界夹取、max<=min 时按 range=1 处理。同样放 core 是为了能脱窗单测。 */
 int cg_meter_angle_deg(const cg_widget_t *w, int value);
 
-/* -------------------------------------------------- 图表（cg_widget_data.c） */
+/* -------------------------------------------------- 图表（cg_widget_gauge.c） */
 
 /** chart：把点缓冲对齐当前配置（items 的系列数 / value 的窗口点数）。
  *  配置变了就重建，**重建会丢已有点**（旧的窗口配不上新的）；配置没变时只是一次比较。
