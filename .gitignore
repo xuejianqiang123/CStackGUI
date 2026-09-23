@@ -38,3 +38,11 @@ examples/*/WebView2Runtime/
 build/_wv2fv*
 # 团队协作的运行态（不是工程内容）
 .codebuddy/teams/
+
+# 测试套件在仓库根目录留下的产物（kit/term 那几个测试把输出写到了当前目录）
+cg_doc_dump.txt
+kit_bom.txt
+kit_dir/
+kit_test.ini
+kit_test.txt
+term_test.txt
