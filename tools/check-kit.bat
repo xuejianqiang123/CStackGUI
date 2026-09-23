@@ -29,9 +29,16 @@ if errorlevel 1 (
     echo [fail] gcc not found. Install MinGW-w64, or set the MINGW env var
     exit /b 1
 )
-if not exist build\lib\libcstackgui.a (
-    call build-runtime.bat
-    if errorlevel 1 exit /b 1
+rem 库的位置有两种布局：源码树在 build\lib\，发布包在 runtime\lib\。
+rem 发布包里**没有** build-runtime.bat，所以不能拿"调它来补库"当兜底 ——
+rem 那条路在发布包里必然 9009 失败，等于发布包自带的自检永远过不去（2026-09-23 审计发现）。
+set "CGLIB=build\lib\libcstackgui.a"
+set "CGRES=build\obj\cstackgui_res.o"
+if not exist "%CGLIB%" if exist "runtime\lib\libcstackgui.a" set "CGLIB=runtime\lib\libcstackgui.a"
+if not exist "%CGRES%" if exist "runtime\lib\cstackgui_res.o" set "CGRES=runtime\lib\cstackgui_res.o"
+if not exist "%CGLIB%" (
+    echo [fail] libcstackgui.a not found ^(looked in build\lib\ and runtime\lib\^)
+    exit /b 1
 )
 
 if not exist build\kittest mkdir build\kittest
@@ -39,7 +46,7 @@ if not exist build\kittest mkdir build\kittest
 echo   CC tools\kit-test.c
 rem 资源对象（v6 通用控件清单）必须显式链接：静态库里带它，但链接器不会主动取，
 rem 少了它 exe 会绑到老版通用控件，皮肤层用的 GetWindowSubclass 缺失 = 加载即失败。
-gcc -std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include tools\kit-test.c -o build\kittest\kit-test.exe build\lib\libcstackgui.a build\obj\cstackgui_res.o -lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32 -luuid -lole32 -loleaut32 -lws2_32
+gcc -std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include tools\kit-test.c -o build\kittest\kit-test.exe "%CGLIB%" "%CGRES%" -lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32 -luuid -lole32 -loleaut32 -lws2_32
 if errorlevel 1 (
     echo [fail] compiling tools\kit-test.c failed
     exit /b 1

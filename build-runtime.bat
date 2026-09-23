@@ -97,6 +97,9 @@ rem 只有真的有东西变了（或者库还不存在）才重新打包
 if not exist build\lib\libcstackgui.a set "CHANGED=1"
 if defined CHANGED (
     echo   AR build\lib\libcstackgui.a
+    rem 先删旧库再打包：`ar rcs` 只增替、**不会删除**已消失的成员 —— 删掉/改名某个 .c 之后
+    rem 重编，旧 .o 仍留在库里，可能被链进最终 exe（静默出错）。
+    if exist build\lib\libcstackgui.a del /q build\lib\libcstackgui.a
     ar rcs build\lib\libcstackgui.a !OBJS! build\obj\cstackgui_res.o
     if errorlevel 1 ( echo [fail] runtime build failed & exit /b 1 )
     echo [ok] build\lib\libcstackgui.a

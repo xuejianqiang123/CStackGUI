@@ -34,6 +34,16 @@ rem 国内网络直连 GitHub 下载二进制（electron zip / winCodeSign 等�
 rem 走 npmmirror 镜像；缓存已齐全时这些变量不起作用。
 set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
 set ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
+rem 前端必须先构建：electron-builder **不会**替你跑 vite build，而 designer\dist\ 被
+rem .gitignore 忽略、干净检出上根本不存在 —— 漏这一步打出来的画布是白屏；本地恰好留着旧
+rem dist 时更糟：静默把旧 UI 打进去。正主配方见 designer\package.json 的 "dist" 脚本。
+echo   VITE build designer
+call npx vite build
+if errorlevel 1 (
+    popd
+    echo [fail] 画布前端构建失败（vite build）
+    exit /b 1
+)
 rem --win 一次出齐 portable + nsis 两个产物，图标/版本保持一致
 call npx electron-builder --win
 if errorlevel 1 (

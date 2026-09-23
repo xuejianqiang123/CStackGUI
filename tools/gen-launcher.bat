@@ -47,7 +47,7 @@ if exist "%L%" findstr /c:"CG_LAUNCHER_V 1" "%L%" >nul && exit /b 0
 >>"%L%" echo ^)
 >>"%L%" echo echo 工程名就是本目录的名字，所以随便改目录名都没关系。
 >>"%L%" echo for %%%%I in ("%%~dp0.") do set CG_APP=%%%%~nI
->>"%L%" echo call "%%CSTACKGUI_HOME%%\build-app.bat" %%CG_APP%% %%*
+>>"%L%" echo call "%%CSTACKGUI_HOME%%\build-app.bat" "%%CG_APP%%" %%*
 >>"%L%" echo echo 失败时别让窗口一闪而过：双击运行时它会直接关掉，
 >>"%L%" echo echo 错误信息还没看清就没了。
 >>"%L%" echo set CG_RC=%%errorlevel%%
