@@ -20,6 +20,11 @@ static void panel_draw_group(cg_app_t *app, HDC dc, cg_widget_t *w, const RECT *
     int top;
     unsigned bg = (w->style.bg != CG_COLOR_NONE) ? w->style.bg
                                                 : cg_win_behind_rgb(app, w->native);
+    /* 标题小块的底色 = **组自己的填充色**，对齐画布（styles.css 的 .ctl-group-title 是
+     * `background: inherit` + `top:-8px`：标题骑在边框线上、底色与组体一致、无上下内边距）。
+     * 2026-09-24 曾试过改成"透出背后"，实测与画布不一致，已回退。
+     * 用户如想要"标题完全在框内、不骑线"的另一种风格，需要画布与运行时一起改。 */
+    unsigned title_bg = bg;
     COLORREF penc = (w->style.fg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.fg)
                                                    : RGB(0x79, 0x74, 0x7E);   /* 画布 --outline-strong */
 
@@ -62,7 +67,7 @@ static void panel_draw_group(cg_app_t *app, HDC dc, cg_widget_t *w, const RECT *
             tr.top = top - sz.cy / 2;
             tr.bottom = tr.top + sz.cy + 2;
             if (tr.top < 0) { tr.bottom -= tr.top; tr.top = 0; }
-            FillRect(dc, &tr, cgw_brush_for(bg));
+            FillRect(dc, &tr, cgw_brush_for(title_bg));   /* 缺口透出"背后"，不是组自己的填充色 */
             SetBkMode(dc, TRANSPARENT);
             SetTextColor(dc, (w->style.fg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.fg)
                                                             : GetSysColor(COLOR_WINDOWTEXT));
