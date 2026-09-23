@@ -67,7 +67,8 @@ typedef enum {
     /* ---------------- 窗口级事件 ----------------
      * 全部绑在窗口伪控件（id = CG_WINDOW_ID）上，写在 .cgui 的 app.events 里。
      */
-    CG_EVENT_READY,         /* 创建完毕：窗口与全部控件建好、首次显示之后 */
+    CG_EVENT_READY,         /* 创建完毕：窗口与全部控件都建好、**还没显示**之前派发
+                             * （所以回调里可以调窗口/控件 API；首次激活 firstactivate 排在它后面） */
     CG_EVENT_DESTROY,       /* 将被销毁（窗口已销毁，进程即将退出） */
     CG_EVENT_MOVE,          /* 位置被改变 */
     CG_EVENT_SIZE,          /* 尺寸被改变 */
