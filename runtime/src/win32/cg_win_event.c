@@ -197,22 +197,26 @@ LRESULT CALLBACK cgw_FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
                 if (wev == CG_EVENT_CHAR && cgw_edit_char_reject(w, hwnd, (wchar_t)wp))
                     return 0;
 
+                /* 控件级事件的坐标也是**逻辑像素**（与窗口级事件、.cgui 同一套口径）：
+                 * 消息给的是物理像素，这里按 DPI 折回，业务拿它算控件内位置才准。 */
+                int sc = (w->app && w->app->scale > 0) ? w->app->scale : 100;
+
                 if (wev == CG_EVENT_WHEEL) {
                     /* 滚轮消息的坐标是屏幕坐标，先换成控件客户区；MK_ 位在 wParam 低字 */
                     POINT pt;
                     pt.x = (int)(short)LOWORD(lp);
                     pt.y = (int)(short)HIWORD(lp);
                     ScreenToClient(hwnd, &pt);
-                    w->ev_x = pt.x;
-                    w->ev_y = pt.y;
+                    w->ev_x = pt.x * 100 / sc;
+                    w->ev_y = pt.y * 100 / sc;
                     w->ev_keys = widget_mods_from_mouse(LOWORD(wp));
                     w->ev_delta = (int)(short)HIWORD(wp);
                 } else if (wev == CG_EVENT_KEYDOWN || wev == CG_EVENT_KEYUP || wev == CG_EVENT_CHAR) {
                     w->ev_key = (int)wp;
                     w->ev_keys = widget_mods_from_key();
                 } else {
-                    w->ev_x = (int)(short)LOWORD(lp);
-                    w->ev_y = (int)(short)HIWORD(lp);
+                    w->ev_x = (int)(short)LOWORD(lp) * 100 / sc;
+                    w->ev_y = (int)(short)HIWORD(lp) * 100 / sc;
                     w->ev_keys = widget_mods_from_mouse(LOWORD(wp));
                 }
                 g_win_in_notify = 1;

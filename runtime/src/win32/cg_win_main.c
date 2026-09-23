@@ -45,9 +45,12 @@ static int mods_from_key(void)
 static void fill_mouse(cg_app_t *app, WPARAM wp, LPARAM lp)
 {
     cg_widget_t *w = app ? app->window : NULL;
+    int sc = (app && app->scale > 0) ? app->scale : 100;
     if (!w) return;
-    w->ev_x = (int)(short)LOWORD(lp);
-    w->ev_y = (int)(short)HIWORD(lp);
+    /* 坐标对业务是**逻辑像素**（与 .cgui、控件坐标同一套）：消息给的是物理像素，
+     * 这里按 DPI 折回 —— 否则业务在缩放屏上自己算布局会差 1.x 倍（2026-09-23 审计）。 */
+    w->ev_x = (int)(short)LOWORD(lp) * 100 / sc;
+    w->ev_y = (int)(short)HIWORD(lp) * 100 / sc;
     w->ev_keys = mods_from_mouse(wp);
 }
 
@@ -291,8 +294,12 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         break;
     case WM_SIZE:
         if (app && app->window) {
-            app->window->ev_x = (int)(short)LOWORD(lp);   /* 尺寸被改变：新的客户区宽高 */
-            app->window->ev_y = (int)(short)HIWORD(lp);
+            /* 尺寸被改变：新的客户区宽高 —— **逻辑像素**（与 .cgui 同一套单位）。
+             * 这样业务在 size 回调里读到的 w×h 可以原样回喂 cg_win_set_size()，
+             * 缩放屏上也不会差 1.x 倍。 */
+            int sc = (app->scale > 0) ? app->scale : 100;
+            app->window->ev_x = (int)(short)LOWORD(lp) * 100 / sc;
+            app->window->ev_y = (int)(short)HIWORD(lp) * 100 / sc;
         }
         cgw_win_emit(app, CG_EVENT_SIZE);
         break;

@@ -413,6 +413,11 @@ void cg_win_set_size(cg_app_t *app, int width, int height)
     RECT rc;
     DWORD style, ex;
     if (!h || width <= 0 || height <= 0) return;
+    /* width/height 是**逻辑像素**（本函数注释与 cstackgui.h 都这么约定）：这里按 DPI 缩放。
+     * 不缩放的话，150% 下业务调 cg_win_set_size(app, 760, 560) 只得到 760 物理像素、
+     * 内容仍被裁 —— 与"窗口建窗时乘 scale"那条口径不统一（2026-09-23 高 DPI 审计）。 */
+    width  = cgw_scale_px(app, width);
+    height = cgw_scale_px(app, height);
     style = (DWORD)GetWindowLongPtrW(h, GWL_STYLE);
     ex = (DWORD)GetWindowLongPtrW(h, GWL_EXSTYLE);
     rc.left = 0; rc.top = 0; rc.right = width; rc.bottom = height;

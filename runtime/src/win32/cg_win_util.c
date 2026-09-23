@@ -80,7 +80,10 @@ HFONT cgw_font_for(cg_app_t *app, const char *family, int size_pt, int bold, int
     }
     height = -MulDiv(size_pt, st->dpi, 72);
 
-    snprintf(key, sizeof(key), "%s|%d|%d|%d", family, size_pt, bold ? 1 : 0, underline ? 1 : 0);
+    /* key 里必须带 dpi：height 是按 dpi 算出来的，跨屏 DPI 变了若命中旧缓存，
+     * 字号就还停在旧比例（2026-09-23 高 DPI 审计发现）。 */
+    snprintf(key, sizeof(key), "%s|%d|%d|%d|%d",
+             family, size_pt, bold ? 1 : 0, underline ? 1 : 0, st->dpi);
     for (node = st->fonts; node; node = node->next) {
         if (strcmp(node->key, key) == 0) return node->hfont;
     }
