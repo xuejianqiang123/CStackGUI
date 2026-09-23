@@ -590,8 +590,6 @@ static void sync_widget_body(cg_widget_t *w)
             build_tree(h, w);
         } else if (!strcmp(w->type, "table")) {
             build_table(h, w);
-        } else if (!strcmp(w->type, "statusbar")) {
-            build_status(h, w);
         } else if (!strcmp(w->type, "toolbar")) {
             cgw_build_toolbar(h, w);
         }
@@ -603,6 +601,11 @@ static void sync_widget_body(cg_widget_t *w)
      * 它每次只是多几行（items_dirty 恒为 0），整体重灌只发生在裁剪/清空之后
      * （sync_terminal 里靠 term_pushed > nitems 判断）。 */
     if (!strcmp(w->type, "terminal")) sync_terminal(h, w);
+
+    /* 状态栏同理不能挂在那里面：分段是按**当前客户区宽**算出来的绝对像素
+     * （SB_SETPARTS），窗口一变宽前几段的分隔线就停在旧位置 —— 只有最后一段是 -1、
+     * 会自己撑开，于是看着"前几段偏窄、最后一段偏宽"。每次同步都重建一遍最省事。 */
+    if (!strcmp(w->type, "statusbar")) build_status(h, w);
 
     /* 值 */
     if (!strcmp(w->type, "progress")) {
