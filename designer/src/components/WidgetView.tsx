@@ -214,7 +214,18 @@ function inner(node: CgNode) {
       return <div className="ctl-link">{node.text || "链接"}</div>;
 
     case "iconbutton":
-      return <div className="ctl-iconbtn">图标</div>;
+      return (
+        <div className="ctl-iconbtn">
+          {node.text || "图标"}
+          {/* 和 button/image 一样：画布不画真图（运行时才画），只在角落提示用了哪张图 ——
+              否则属性面板里填了 src 却什么都不显示，看起来像"填了没用" */}
+          {node.src ? (
+            <span className="ctl-imgchip" title={node.src}>
+              {node.src.split(/[\\/]/).pop()}
+            </span>
+          ) : null}
+        </div>
+      );
 
     case "monthcal":
       return (
