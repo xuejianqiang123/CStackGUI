@@ -32,7 +32,7 @@
 - `runtime/src/skin/cg_skin_edit.c`：输入框（edit：单行 / 多行 / 数值框）的圆角裁切 + 单行文字垂直居中，
   靠 `SetWindowSubclass` 挂子类实现（EDIT 不支持 owner-draw）。
 - `runtime/src/core/cg_internal.h`：`cg_widget_t` 加 `hot` / `pressed` 两个 int 状态位（calloc 默认 0）。
-- `build-runtime.bat`：不用改——它自动扫 `runtime\src\core|win32|skin\` 下的全部 `.c`，
+- `build-runtime.bat`：不用改——它自动扫 `runtime\src\core|win32|skin|kit\` 下的全部 `.c`，
   新文件放进 `skin\` 就行。
 
 ## 3. 状态模型
@@ -48,11 +48,13 @@
 颜色规则：
 - 设了 `style.bg` → 实心主题色，文字按亮度选黑/白（深色底配白字）；
 - 没设 `style.bg` → 中性表面色（`0xEFEFF1`），深色文字；
-- 圆角半径 `style.radius`（未设则 8 逻辑像素），按 `app->scale` 缩放成物理像素。
+- 圆角半径 `style.radius`（未设则**按钮 / 勾选 / 开关 6、输入框 2** 逻辑像素 —— 各控件不同，
+  见 `CGUI-FORMAT.md` 2.2），按 `app->scale` 缩放成物理像素。
 
 ## 4. 最小可跑闭环（本轮交付）
 
-只覆盖 **`button`** 一种控件，证明整条通路：
+覆盖 **`button` / `checkbox` / `radio` / `switch` / `slider` / `progress` / `progressring` 与 `edit` 子类**
+（就是 `runtime/src/skin/cg_skin.h` 导出的那几支）；最早只覆盖 `button` 一种，用来验证整条通路：
 原生控件仍由系统管输入/IME/无障碍（只替换"怎么画"），
 GDI+ 画圆角矩形 + 主题色 + 状态，文字仍走 GDI `DrawTextW`（绘制于 GDI+ 之后，叠在同个 DC 上）。
 GDI+ 不可用时自动回退到 GDI `RoundRect`，保证按钮永不消失。
@@ -67,7 +69,8 @@ examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui
 
 ## 5. 路线图（后续，按价值排序）
 
-1. **覆盖更多控件**：`checkbox`/`radio` 的圆角勾选、`slider`/`progress` 的圆角轨道、`edit` 的圆角边框与浮动标签。
+1. **把自绘铺到剩下的系统控件**：`listbox` / `tree` / `table` / `tabs` 目前是系统原生外观
+   （不吃自定义皮肤）—— 这是 Win32 固有限制（见 README「当前边界」），要么接受、要么换成自绘窗口类。
 2. **窗口级 M3**：圆角已在 `win_init` 做；再加 M3 表面色调、 elevation 阴影。
 3. **波纹（ripple）**：按下时从点击点扩散的水波纹——GDI+ 只能做"近似"动画（WM_TIMER 驱动），真正流畅要靠 D2D 后端。
 4. **`cg_backend_d2d.c`**：等工具链有 `d2d1.h`/`dwrite.h` 时，把 `cg_skin.c` 的绘制内核换成 D2D/DirectWrite，

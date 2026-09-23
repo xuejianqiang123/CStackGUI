@@ -107,7 +107,7 @@
 | `type` | 字符串 | **是** | 见第 4 节类型表。不可识别 → 整个文件加载失败并报出类型名 |
 | `id` | 字符串 | 否 | 事件查找、`cg_find()` 都用它。缺省自动生成 `类型_序号`。**同一文件内必须唯一** |
 | `rect` | 对象 | 否 | 缺省用该类型的默认尺寸（见第 4 节）。也支持扁平的 `x/y/w/h` 四个顶层字段 |
-| `text` | 字符串 | 否 | 显示文字。缺省用类型默认值（按钮 `按钮`、标签 `标签`、分组框 `分组`，输入类为空）|
+| `text` | 字符串 | 否 | 显示文字。**缺省 = 空文字** —— 运行时以 `.cgui` 为唯一真相，**不回填**类型默认值；第 4 节那列"默认文本"是**画布新建控件**时的初值（`cg_widget_add()` 也用它）|
 | `style` | 对象 | 否 | 见 2.2 |
 | `events` | 对象 | 否 | 见第 3 节 |
 | `children` | 数组 | 否 | 只有容器类型（`group` / `box` / `card` / `tabs`）能带；**非容器带 children 会被运行时判为错误** |
@@ -495,7 +495,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `meter` | 仪表盘 | 否 | 140×140 | — | **无**（纯显示） | 自绘窗口类 `CStackGUIMeter`：底弧 + 值弧 + 刻度 + 指针 + 中心值，见 2.12 |
 | `menu` | 菜单栏 | 否 | 无矩形 | — | `click` | 窗口 `HMENU`（一根窗口一根）|
 | `menubutton` | 菜单按钮 | 否 | 130×32 | `菜单` | `click` | `BUTTON` + `TrackPopupMenu` |
-| `toolbar` | 工具栏 | 否 | 400×34 | — | `click` | `ToolbarWindow32`（纯文字按钮）|
+| `toolbar` | 工具栏 | 否 | 400×32 | — | `click` | `ToolbarWindow32`（纯文字按钮）|
 | `group` | 分组框 | **是** | 260×180 | `分组` | **无** | 自注册面板窗口（边框+标题完全自绘）|
 | `box` | 容器块 | **是** | 200×120 | — | **无** | 自注册面板窗口 |
 | `card` | 卡片 | **是** | 280×180 | `卡片` | **无** | 自注册面板窗口 |
@@ -834,6 +834,23 @@ void   cg_kill_timer(cg_timer_t *t);
 void   cg_quit(cg_app_t *app);
 void   cg_set_title(cg_app_t *app, const char *title);
 ```
+
+---
+
+### 6.1 终端 / 图表 / 串口 / 网口 / 对话框 / 窗口（这里不逐条抄签名）
+
+下面这些组**框架都有**，本文不逐条抄签名（抄了容易和头文件跑偏）—— 用之前看
+`runtime/include/cstackgui.h`，或看右侧那列的专文。**别因为速查里没列，就以为框架没有。**
+
+| 组 | 函数（前缀 / 名字） | 深入看 |
+| --- | --- | --- |
+| 终端（日志视图） | `cg_term_write` / `cg_term_clear` / `cg_term_save` / `cg_term_set_hex` / `cg_term_hex` / `cg_term_set_timestamp` / `cg_term_set_max_lines` / `cg_term_count` | 本文 2.9 |
+| 图表 | `cg_chart_` 系列（推点、清空、系列与坐标轴设置） | 本文 2.10 |
+| 串口 | `cg_serial_` 系列（枚举 / 打开 / 收发 / 关闭） | `COMM.md` |
+| 网口 | `cg_net_` 系列（TCP 客户端与服务端、UDP 数据报） | `COMM.md` |
+| 通用对话框 | `cg_open_file_dialog` / `cg_save_file_dialog` / `cg_choose_color` / `cg_message_box` | 本文 6 节上文 |
+| 窗口 | `cg_win_center` / `cg_win_set_pos` / `cg_win_set_size` / `cg_win_show` / `cg_win_set_topmost` / `cg_win_set_state` / `cg_win_set_icon` / `cg_cancel_close` | 本文第 1 节 |
+| 散项 | `cg_splitter_pos` / `cg_splitter_set`、`cg_browser_navigate`、`cg_widget_hint`、`cg_widget_count`、`cg_widget_set_value_range`、`cg_widget_list_scroll_bottom`、`cg_file_exists` / `cg_file_delete` / `cg_file_copy`、`cg_dir_exists` / `cg_dir_create`、`cg_event_name` / `cg_event_from_name`、`cg_dump_doc` | 头文件 |
 
 ---
 
