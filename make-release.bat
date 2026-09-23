@@ -66,17 +66,35 @@ if not exist "designer\dist\index.html" (
 echo.
 echo == 3/4 组装 release\ ==
 if exist release rmdir /s /q release
+if exist release (
+    echo [fail] 旧 release\ 删不掉（exe 或文件被占用？关掉再试）
+    exit /b 1
+)
 mkdir release\runtime\include
 mkdir release\runtime\lib
 mkdir release\runtime\res
+rem 空目录也要建：画布导出 C 骨架默认就落这里，README 的目录清单里也列了它
+mkdir release\apps
 copy /y runtime\include\cstackgui.h release\runtime\include\ >nul
+if errorlevel 1 (
+    echo [fail] 复制 runtime\include\cstackgui.h 失败
+    exit /b 1
+)
 copy /y build\lib\libcstackgui.a release\runtime\lib\ >nul
+if errorlevel 1 (
+    echo [fail] 复制 libcstackgui.a 失败（先跑 build-all.bat）
+    exit /b 1
+)
 copy /y build\obj\cstackgui_res.o release\runtime\lib\ >nul
+if errorlevel 1 (
+    echo [fail] 复制 cstackgui_res.o 失败（先跑 build-all.bat）
+    exit /b 1
+)
 rem runtime\res：带「程序配置」<名字>.rc 的工程会从这里引用清单和默认图标 ——
 rem 少了它 windres 那一步会失败。
 xcopy /e /i /q /y runtime\res release\runtime\res >nul
 if errorlevel 1 (
-    echo [fail] 复制运行时库失败
+    echo [fail] 复制 runtime\res 失败（缺清单/默认图标会让带 .rc 的工程编译失败）
     exit /b 1
 )
 xcopy /e /i /q /y examples release\examples >nul
@@ -87,7 +105,15 @@ if errorlevel 1 (
 rem 示例目录里那份 lib 是用系统路径链接的，发布包里统一用 runtime\lib，删掉避免混淆
 for /d %%a in (release\examples\*) do rmdir /s /q "%%a\lib" 2>nul
 copy /y packaging\build-app.bat release\build-app.bat >nul
+if errorlevel 1 (
+    echo [fail] 复制 build-app.bat 失败
+    exit /b 1
+)
 copy /y packaging\README.release.md release\README.md >nul
+if errorlevel 1 (
+    echo [fail] 复制 README.md 失败
+    exit /b 1
+)
 echo == 3.5 画布安装包（便携每次启动要解包，装一次能常驻，日常用快很多）==
 copy /y designer\release\CStackGUI.exe release\CStackGUI.exe >nul
 if errorlevel 1 (
@@ -109,9 +135,18 @@ copy /y tools\shot.ps1 release\tools\ >nul
 rem cg_kit 冒烟测试也带上：发布包里那份预编译库要能真跑通文件/配置/编码
 copy /y tools\check-kit.bat release\tools\ >nul
 copy /y tools\kit-test.c release\tools\ >nul
+rem 六个工具逐个点名：少一个用户就拿不到对应能力，且不报错
+for %%f in (check-format.bat gen-cc.mjs format-roundtrip.mjs shot.ps1 check-kit.bat kit-test.c) do if not exist "release\tools\%%f" (
+    echo [fail] release\tools\%%f 不在包里
+    exit /b 1
+)
 
 rem AI 编程助手（CodeBuddy 等）的项目级技能：用户用 AI 写 C 回调 / 手改 .cgui 时自动加载
 xcopy /e /i /q /y packaging\codebuddy release\.codebuddy >nul
+if errorlevel 1 (
+    echo [fail] 复制 .codebuddy 技能失败
+    exit /b 1
+)
 
 rem 运行时库必须真的进了包：发布包自带的 build-app.bat 第一件事就是找它，
 rem 缺了的话用户在包里编不了任何东西（2026-09-23 审计发现 release\runtime\lib 曾经是空的）。

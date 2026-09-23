@@ -37,7 +37,8 @@ CStackGUI 是一套「画布 + C 运行时」的桌面 GUI 开发方案，三句
 ### 2.2 本目录里有什么
 
 ```
-CStackGUI.exe          画布：拖拽设计界面、导出 C 骨架
+CStackGUI.exe          画布（便携单文件）：拖拽设计界面、导出 C 骨架
+CStackGUI-Setup.exe    画布的安装版：装一次常驻，便携版每次启动要解包
 build-app.bat          编译某个工程 -> exe（成功后自动刷新 clangd 配置）
 compile_commands.json  clangd 语言服务配置（编译一次后自动生成，给编辑器用）
 README.md              本文件
@@ -55,10 +56,12 @@ runtime\
   res\                 manifest / 默认图标（工程的 <名字>.rc 会引用这里的清单）
 examples\
   lesson01_basics\ ~ lesson06_window\
-                       教学示例：六课（基础与容器 → 输入与选择 → 数值与指示 → 数据与日志 → 命令与图形）
+                       教学示例：六课（基础与容器 → 输入与选择 → 数值与指示 → 数据与日志 → 命令与图形 → 主窗口与窗口事件）
   教学使用说明.md       上面那六课怎么学（先读它）
   gallery\             示例：控件陈列室·三合一（67 个控件，全部控件+事件都用上了）
   notepad\             示例：真实小工具·记事本（菜单 / 文件 / 编码 / cg_kit 全套）
+  serialterm\          示例：串口助手（串口收发 + 后台线程模型）
+  netterm\             示例：网口助手（TCP 客户端/服务端 + UDP）
 apps\                  你自己导出的工程会放在这里（现在还没有）
 build\                 本包的中间产物（可随时删）
 .codebuddy\
@@ -288,17 +291,20 @@ tools\check-kit.bat                                              :: 用到 cg_ki
 
 ### 4.5 示例
 
-发布包里带两个示例：
+发布包里带四组示例：
 
 - `examples\lesson01_basics` ~ `lesson06_window` —— **六课教学示例**：基础与容器 → 输入与选择 →
-  数值与指示 → 数据与日志 → 命令与图形，每课只讲一个主题、只出现本课主题的控件。
+  数值与指示 → 数据与日志 → 命令与图形 → 主窗口与窗口事件，每课只讲一个主题、只出现本课主题的控件。
   **第一次用就从这里开始**，
   路线图与逐课详解见 `examples\教学使用说明.md`。
 - `examples\gallery\` —— **控件陈列室**：67 个控件、47 个回调，三页标签页，当"控件用法字典"翻。
 - `examples\notepad\` —— **真实小工具范例（记事本）**：菜单分发、状态栏刷新、文件读写、
   GBK/UTF-8 识别、INI 记住上次文件与窗口尺寸、关闭前拦截。想写"真东西"时照它抄结构最省事。
+- `examples\serialterm\` / `examples\netterm\` —— **外设接入范例**：串口助手与网口助手
+  （TCP 客户端 / 服务端 + UDP），共用一套后台线程收发模型；要接硬件时照它们抄。
 
-都能直接编译运行：`build-app.bat lesson01_basics` / `build-app.bat gallery` / `build-app.bat notepad`。
+都能直接编译运行：`build-app.bat lesson01_basics` / `build-app.bat gallery` / `build-app.bat notepad`
+/ `build-app.bat serialterm`。
 
 ```bat
 build-app.bat gallery
