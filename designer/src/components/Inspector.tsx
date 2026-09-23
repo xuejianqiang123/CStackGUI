@@ -92,6 +92,14 @@ const FONT_CHOICES: { label: string; value: string }[] = [
 /** 大小候选（磅）；运行时 style.size 缺省跟随系统 UI 字体 */
 const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36];
 
+/** 内容来自 items、运行时不读 w->text 的类型（白名单见 cg_win_sync.c:520-524）：
+ *  填了「文字」也不会出现，所以干脆不显示这一行。 */
+const ITEMS_DRIVEN = new Set(["listbox", "combo", "tabs", "toolbar", "statusbar", "tree", "table"]);
+
+/** 自绘配色写死 M3、运行时不读 style.fg / style.bg 的类型
+ *  （cg_skin.c:414,418,447-451,538,542,560-565,504）：画布上给颜色两行加提示，免得白填。 */
+const FIXED_M3_COLOR = new Set(["switch", "checkbox", "radio"]);
+
 /** 多行内容的编辑器：树/表格/条目都用纯文本编辑，格式简单、一眼能看懂。
  *  撤销栈只在获得焦点时压一次，避免每敲一个字都进历史。 */
 function Area({
@@ -227,8 +235,10 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
         />
       </Row>
       {/* 同样是 text 字段：仪表盘上是单位（画在中心数值下面），灯上是灯右边的说明文字。
-          数值框（edit + 调节器）没有这一行 —— 它的显示文本由「值」派生，写了也不生效。 */}
-      {isNumEdit(node) ? null : (
+          数值框（edit + 调节器）没有这一行 —— 它的显示文本由「值」派生，写了也不生效。
+          items 驱动的类型（列表框/下拉框/标签页/工具栏/状态栏/树/表格）也没有这一行 ——
+          运行时不读它们的 w->text（cg_win_sync.c:520-524 白名单不含），填了也不会出现。 */}
+      {isNumEdit(node) || ITEMS_DRIVEN.has(node.type) ? null : (
         <Row label={node.type === "meter" ? "单位" : "文字"}>
           <input
             className="input"
@@ -652,7 +662,12 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
           粗体
         </label>
       </Row>
-      <Row label={node.type === "led" ? "亮灯颜色" : node.type === "meter" ? "主色" : "文字色"}>
+      <Row
+        label={node.type === "led" ? "亮灯颜色" : node.type === "meter" ? "主色" : "文字色"}
+        hint={FIXED_M3_COLOR.has(node.type)
+          ? "开关 / 复选框 / 单选钮 的配色由控件自绘固定（M3），运行时不读 style.fg，改了不生效"
+          : undefined}
+      >
         <input
           className="input color"
           type="color"
@@ -711,7 +726,12 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
           ) : null}
         </>
       ) : (
-        <Row label="背景色">
+        <Row
+          label="背景色"
+          hint={FIXED_M3_COLOR.has(node.type)
+            ? "开关 / 复选框 / 单选钮 的底色由控件自绘固定（M3），运行时不读 style.bg，改了不生效"
+            : undefined}
+        >
           <input
             className="input color"
             type="color"
@@ -734,7 +754,7 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
           </button>
         </Row>
       )}
-      <Row label="对齐">
+      <Row label="对齐" hint="只对「标签」和「输入框」生效（运行时按这个字段给控件设对齐样式）；其它控件的文字对齐由控件自身决定，改了不生效">
         <select
           className="input"
           value={style.align ?? "left"}
@@ -749,7 +769,7 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
           <option value="right">右对齐</option>
         </select>
       </Row>
-      <Row label="圆角" hint="自绘控件的圆角半径（像素）：按钮 / 复选框 / 开关 / 输入框 / 卡片 / 外形框等用得上；填 0 或清空 = 不写该字段、用控件缺省">
+      <Row label="圆角" hint="自绘控件的圆角半径（像素）：当前由运行时消费的只有 按钮 / 复选框 / 单选钮 / 输入框 / 卡片 / 外形框；开关、列表、表格等改了不生效。填 0 或清空 = 不写该字段、用控件缺省">
         <input
           className="input narrow"
           type="number"
@@ -1127,18 +1147,22 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
         </>
       ) : null}
 
-      <Row label="悬停提示">
-        <input
-          className="input"
-          value={node.hint ?? ""}
-          placeholder="鼠标停上去显示的文字"
-          onChange={(e) =>
-            patch((n) => {
-              n.hint = e.target.value || undefined;
-            })
-          }
-        />
-      </Row>
+      {/* timer / menu 没有原生窗口（timer 见 cg_win_ctl.c:63 直接跳过；menu 无矩形，
+          tooltip 靠窗口句柄挂，见 cg_win_create.c:107），悬停提示永远挂不上，故不显示。 */}
+      {node.type === "timer" || node.type === "menu" ? null : (
+        <Row label="悬停提示">
+          <input
+            className="input"
+            value={node.hint ?? ""}
+            placeholder="鼠标停上去显示的文字"
+            onChange={(e) =>
+              patch((n) => {
+                n.hint = e.target.value || undefined;
+              })
+            }
+          />
+        </Row>
+      )}
 
       <Row label="绑定">
         <select

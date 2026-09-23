@@ -46,8 +46,20 @@ function inner(node: CgNode) {
       );
     }
 
-    case "label":
-      return <div className="ctl-label">{node.text || ""}</div>;
+    case "label": {
+      /* 运行时 label 读 style.align 设 SS_LEFT/CENTER/RIGHT（cg_win_ctl.c:227-228），
+         预览要一致。.ctl-label 是 flex，靠 justifyContent 才真对齐
+         （text-align 落在匿名 flex 项上不生效）。 */
+      const al = node.style?.align ?? "left";
+      return (
+        <div
+          className="ctl-label"
+          style={{ justifyContent: al === "center" ? "center" : al === "right" ? "flex-end" : "flex-start" }}
+        >
+          {node.text || ""}
+        </div>
+      );
+    }
 
     case "edit": {
       /* 多行/对齐按字段画（原生单行框会把换行压成一行，画布照做，免得两边观感不一致）。
@@ -110,13 +122,18 @@ function inner(node: CgNode) {
     case "listbox":
       return <div className="ctl-list" />;
 
-    case "combo":
+    case "combo": {
+      /* 运行时 combo 是 CBS_DROPDOWNLIST：显示的是 items 里的当前选中项，压根不读 w->text
+         （白名单 cg_win_sync.c:520-524 不含 combo；选中项在 :574-586，越界退回第 0 项）。 */
+      const items = node.items ?? [];
+      const sel = node.value && node.value < items.length ? node.value : 0;
       return (
         <div className="ctl-combo">
-          <span>{node.text || ""}</span>
+          <span>{items[sel] ?? ""}</span>
           <span className="ctl-arrow">▾</span>
         </div>
       );
+    }
 
     case "slider":
       return (
@@ -517,7 +534,18 @@ export default function WidgetView({ node, depth, selectedId, onSelect, onPointe
     ...fontOf(node),
   };
   if (node.style?.bg) style.background = node.style.bg;
-  if (node.style?.radius) style.borderRadius = node.style.radius;
+  /* 外形框（shape）的圆角由 format 决定，不走通用的 style.radius（见下面的 shape 分支） */
+  if (node.style?.radius && node.type !== "shape") style.borderRadius = node.style.radius;
+
+  /* 外形框预览对齐运行时的三形态与配色（cg_win_draw.c:477-487）：
+     rect=直角 / roundrect=圆角（缺省 8px，可被 style.radius 覆盖）/ ellipse=椭圆（忽略 radius）。
+     描边色取 style.fg（缺省 #b4b0bb）。是否填充只由上面的 style.bg 决定 —— 不设就是空心描边，
+     这是有意的：画布上"看得见才选得中"，实心填色会把窗口遮死、也没法点中它。 */
+  if (node.type === "shape") {
+    const fmt = node.format ?? "roundrect";
+    style.borderColor = node.style?.fg ?? "#b4b0bb";
+    if (fmt === "roundrect" && node.style?.radius) style.borderRadius = node.style.radius;
+  }
 
   const bound = CG_EVENTS.filter((e) => node.events?.[e]);
   const isGroup = node.type === "group" || node.type === "box" || node.type === "tabs" || node.type === "card";
@@ -533,11 +561,15 @@ export default function WidgetView({ node, depth, selectedId, onSelect, onPointe
       ? (node.children ?? []).filter((c) => (c.page ?? 0) === (node.value ?? 0))
       : (node.children ?? []);
 
+  /* visible:false 的控件在画布上用 35% 幽灵显示（.widget.hidden-widget）而不是真隐藏 ——
+     有意为之：隐藏的控件必须仍可见可选中，否则用户没法把它改回来。别改成 display:none、
+     也别改成运行时那种完全不可见。 */
   return (
     <div
       className={[
         "widget",
         `widget-${node.type}`,
+        node.type === "shape" ? `shape-${node.format ?? "roundrect"}` : "",
         splitterRow ? "widget-splitter-row" : "",
         selectedId === node.id ? "selected" : "",
         node.visible === false ? "hidden-widget" : "",
