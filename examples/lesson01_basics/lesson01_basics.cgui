@@ -13,29 +13,57 @@
     {
       "id": "lab_k_button",
       "type": "label",
-      "rect": { "x": 16, "y": 22, "w": 104, "h": 22 },
+      "rect": {
+        "x": 16,
+        "y": 22,
+        "w": 104,
+        "h": 22
+      },
       "text": "button 按钮",
-      "style": { "size": 9, "fg": "#49454F" }
+      "style": {
+        "size": 9,
+        "fg": "#49454F"
+      }
     },
     {
       "id": "btn_primary",
       "type": "button",
-      "rect": { "x": 120, "y": 16, "w": 104, "h": 32 },
+      "rect": {
+        "x": 120,
+        "y": 16,
+        "w": 104,
+        "h": 32
+      },
       "text": "主按钮",
       "hint": "最常用的控件：点一下就是一次 click 事件",
-      "events": { "click": "on_btn_primary_click" }
+      "events": {
+        "click": "on_btn_primary_click"
+      }
     },
     {
       "id": "lab_k_button_off",
       "type": "label",
-      "rect": { "x": 16, "y": 66, "w": 104, "h": 22 },
+      "rect": {
+        "x": 16,
+        "y": 66,
+        "w": 104,
+        "h": 22
+      },
       "text": "button 禁用态",
-      "style": { "size": 9, "fg": "#49454F" }
+      "style": {
+        "size": 9,
+        "fg": "#49454F"
+      }
     },
     {
       "id": "btn_disabled",
       "type": "button",
-      "rect": { "x": 120, "y": 60, "w": 104, "h": 32 },
+      "rect": {
+        "x": 120,
+        "y": 60,
+        "w": 104,
+        "h": 32
+      },
       "text": "已禁用",
       "hint": "enabled: false —— 点不动，文案要写清为什么不能用",
       "enabled": false
@@ -43,148 +71,287 @@
     {
       "id": "lab_k_iconbutton",
       "type": "label",
-      "rect": { "x": 16, "y": 110, "w": 104, "h": 22 },
+      "rect": {
+        "x": 16,
+        "y": 110,
+        "w": 104,
+        "h": 22
+      },
       "text": "iconbutton 图标钮",
-      "style": { "size": 9, "fg": "#49454F" }
+      "style": {
+        "size": 9,
+        "fg": "#49454F"
+      }
     },
     {
       "id": "icb_run",
       "type": "iconbutton",
-      "rect": { "x": 120, "y": 104, "w": 40, "h": 36 },
+      "rect": {
+        "x": 120,
+        "y": 104,
+        "w": 40,
+        "h": 36
+      },
       "src": "assets/icon.png",
       "hint": "只放一张图，没有文字；点击同样是 click 事件",
-      "events": { "click": "on_icb_run_click" }
+      "events": {
+        "click": "on_icb_run_click"
+      }
     },
     {
       "id": "lab_k_label",
       "type": "label",
-      "rect": { "x": 16, "y": 154, "w": 104, "h": 22 },
+      "rect": {
+        "x": 16,
+        "y": 154,
+        "w": 104,
+        "h": 22
+      },
       "text": "label 标签",
-      "style": { "size": 9, "fg": "#49454F" }
+      "style": {
+        "size": 9,
+        "fg": "#49454F"
+      }
     },
     {
       "id": "lab_hello",
       "type": "label",
-      "rect": { "x": 120, "y": 154, "w": 224, "h": 22 },
+      "rect": {
+        "x": 120,
+        "y": 154,
+        "w": 224,
+        "h": 22
+      },
       "text": "这是一段标签文字"
     },
     {
       "id": "lab_k_link",
       "type": "label",
-      "rect": { "x": 16, "y": 198, "w": 104, "h": 22 },
+      "rect": {
+        "x": 16,
+        "y": 198,
+        "w": 104,
+        "h": 22
+      },
       "text": "link 链接",
-      "style": { "size": 9, "fg": "#49454F" }
+      "style": {
+        "size": 9,
+        "fg": "#49454F"
+      }
     },
     {
       "id": "lnk_docs",
       "type": "link",
-      "rect": { "x": 120, "y": 197, "w": 200, "h": 24 },
+      "rect": {
+        "x": 120,
+        "y": 197,
+        "w": 200,
+        "h": 24
+      },
       "text": "点我试试（链接）",
       "hint": "蓝色下划线的可点文字；要真跳转就在回调里调 cg_shell_open(url)",
-      "events": { "click": "on_lnk_docs_click" }
+      "events": {
+        "click": "on_lnk_docs_click"
+      }
     },
     {
       "id": "lab_k_switch",
       "type": "label",
-      "rect": { "x": 16, "y": 242, "w": 104, "h": 22 },
+      "rect": {
+        "x": 16,
+        "y": 242,
+        "w": 104,
+        "h": 22
+      },
       "text": "switch 开关",
-      "style": { "size": 9, "fg": "#49454F" }
+      "style": {
+        "size": 9,
+        "fg": "#49454F"
+      }
     },
     {
       "id": "sw_notify",
       "type": "switch",
-      "rect": { "x": 120, "y": 236, "w": 56, "h": 32 },
-      "checked": true,
+      "rect": {
+        "x": 120,
+        "y": 236,
+        "w": 56,
+        "h": 32
+      },
       "hint": "开/关两态；勾选状态读作 checked（不是 value）",
-      "events": { "change": "on_sw_notify_change" }
+      "checked": true,
+      "events": {
+        "change": "on_sw_notify_change"
+      }
     },
     {
       "id": "lab_k_badge",
       "type": "label",
-      "rect": { "x": 16, "y": 286, "w": 104, "h": 22 },
+      "rect": {
+        "x": 16,
+        "y": 286,
+        "w": 104,
+        "h": 22
+      },
       "text": "badge 徽章",
-      "style": { "size": 9, "fg": "#49454F" }
+      "style": {
+        "size": 9,
+        "fg": "#49454F"
+      }
     },
     {
       "id": "bad_count",
       "type": "badge",
-      "rect": { "x": 120, "y": 285, "w": 48, "h": 24 },
+      "rect": {
+        "x": 120,
+        "y": 285,
+        "w": 48,
+        "h": 24
+      },
       "text": "12",
       "hint": "小圆片，只显示一段短文字；纯显示控件，没有事件"
     },
     {
       "id": "lab_k_tag",
       "type": "label",
-      "rect": { "x": 16, "y": 330, "w": 104, "h": 22 },
+      "rect": {
+        "x": 16,
+        "y": 330,
+        "w": 104,
+        "h": 22
+      },
       "text": "tag 标签片",
-      "style": { "size": 9, "fg": "#49454F" }
+      "style": {
+        "size": 9,
+        "fg": "#49454F"
+      }
     },
     {
       "id": "tg_demo",
       "type": "tag",
-      "rect": { "x": 120, "y": 327, "w": 72, "h": 28 },
+      "rect": {
+        "x": 120,
+        "y": 327,
+        "w": 72,
+        "h": 28
+      },
       "text": "标签片",
       "hint": "比徽章长一点的圆角片，可以点",
-      "events": { "click": "on_tg_demo_click" }
+      "events": {
+        "click": "on_tg_demo_click"
+      }
     },
     {
       "id": "lab_k_sep",
       "type": "label",
-      "rect": { "x": 16, "y": 374, "w": 104, "h": 22 },
+      "rect": {
+        "x": 16,
+        "y": 374,
+        "w": 104,
+        "h": 22
+      },
       "text": "separator 分割线",
-      "style": { "size": 9, "fg": "#49454F" }
+      "style": {
+        "size": 9,
+        "fg": "#49454F"
+      }
     },
     {
       "id": "sep_line",
       "type": "separator",
-      "rect": { "x": 120, "y": 383, "w": 200, "h": 2 },
+      "rect": {
+        "x": 120,
+        "y": 383,
+        "w": 200,
+        "h": 2
+      },
       "hint": "一条横线，只负责分隔；没有事件"
     },
-
     {
       "id": "grp_form",
       "type": "group",
-      "rect": { "x": 392, "y": 16, "w": 352, "h": 150 },
+      "rect": {
+        "x": 392,
+        "y": 16,
+        "w": 352,
+        "h": 150
+      },
       "text": "group 分组框",
+      "style": {
+        "bg": "#11a298"
+      },
       "children": [
         {
           "id": "lab_in_grp",
           "type": "label",
-          "rect": { "x": 16, "y": 30, "w": 320, "h": 22 },
+          "rect": {
+            "x": 16,
+            "y": 30,
+            "w": 320,
+            "h": 22
+          },
           "text": "容器里的控件用相对坐标（相对分组框左上角）"
         },
         {
           "id": "btn_in_grp",
           "type": "button",
-          "rect": { "x": 16, "y": 60, "w": 120, "h": 32 },
+          "rect": {
+            "x": 16,
+            "y": 60,
+            "w": 120,
+            "h": 32
+          },
           "text": "组内按钮",
           "hint": "它的坐标 (16,60) 是相对分组框的，不是相对窗口",
-          "events": { "click": "on_btn_in_grp_click" }
+          "events": {
+            "click": "on_btn_in_grp_click"
+          }
         },
         {
           "id": "sep_in_grp",
           "type": "separator",
-          "rect": { "x": 16, "y": 108, "w": 320, "h": 2 }
+          "rect": {
+            "x": 16,
+            "y": 108,
+            "w": 320,
+            "h": 2
+          }
         }
       ]
     },
     {
       "id": "box_panel",
       "type": "box",
-      "rect": { "x": 392, "y": 182, "w": 352, "h": 120 },
+      "rect": {
+        "x": 392,
+        "y": 182,
+        "w": 352,
+        "h": 120
+      },
       "text": "box 容器块",
       "children": [
         {
           "id": "sw_in_box",
           "type": "switch",
-          "rect": { "x": 16, "y": 36, "w": 56, "h": 32 },
-          "checked": false,
-          "events": { "change": "on_sw_in_box_change" }
+          "rect": {
+            "x": 16,
+            "y": 36,
+            "w": 56,
+            "h": 32
+          },
+          "events": {
+            "change": "on_sw_in_box_change"
+          }
         },
         {
           "id": "lab_in_box",
           "type": "label",
-          "rect": { "x": 88, "y": 42, "w": 248, "h": 22 },
+          "rect": {
+            "x": 88,
+            "y": 42,
+            "w": 248,
+            "h": 22
+          },
           "text": "box 和 group 都是容器，主题色更浅"
         }
       ]
@@ -192,38 +359,70 @@
     {
       "id": "card_note",
       "type": "card",
-      "rect": { "x": 392, "y": 318, "w": 352, "h": 122 },
+      "rect": {
+        "x": 392,
+        "y": 318,
+        "w": 352,
+        "h": 122
+      },
       "text": "card 卡片",
       "children": [
         {
           "id": "tg_in_card",
           "type": "tag",
-          "rect": { "x": 16, "y": 34, "w": 72, "h": 28 },
+          "rect": {
+            "x": 8,
+            "y": 36,
+            "w": 80,
+            "h": 28
+          },
           "text": "卡内标签片",
-          "events": { "click": "on_tg_in_card_click" }
+          "events": {
+            "click": "on_tg_in_card_click"
+          }
         },
         {
           "id": "lnk_in_card",
           "type": "link",
-          "rect": { "x": 100, "y": 36, "w": 200, "h": 24 },
+          "rect": {
+            "x": 100,
+            "y": 36,
+            "w": 200,
+            "h": 24
+          },
           "text": "卡内链接",
-          "events": { "click": "on_lnk_in_card_click" }
+          "events": {
+            "click": "on_lnk_in_card_click"
+          }
         },
         {
           "id": "btn_in_card",
           "type": "button",
-          "rect": { "x": 16, "y": 72, "w": 120, "h": 32 },
+          "rect": {
+            "x": 16,
+            "y": 72,
+            "w": 120,
+            "h": 32
+          },
           "text": "卡内按钮",
-          "events": { "click": "on_btn_in_card_click" }
+          "events": {
+            "click": "on_btn_in_card_click"
+          }
         }
       ]
     },
-
     {
       "id": "sb_main",
       "type": "statusbar",
-      "rect": { "x": 0, "y": 476, "w": 760, "h": 24 },
-      "items": ["准备就绪"]
+      "rect": {
+        "x": 0,
+        "y": 476,
+        "w": 760,
+        "h": 24
+      },
+      "items": [
+        "准备就绪"
+      ]
     }
   ]
 }
