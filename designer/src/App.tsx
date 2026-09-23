@@ -641,8 +641,12 @@ export default function App() {
                       onChange={(e) => {
                         const v = e.target.value.trim();
                         onApply((d) => {
-                          if (v) d.app.events = { ...(d.app.events ?? {}), close: v };
-                          else delete d.app.events;
+                          /* 只增删 close 这一个键。早先清空时写的是 `delete d.app.events`，
+                           * 会把「事件」页签里绑好的 ready/size/… 全部静默清掉（数据丢失）。 */
+                          const ev = { ...(d.app.events ?? {}) };
+                          if (v) ev.close = v;
+                          else delete ev.close;
+                          d.app.events = Object.keys(ev).length > 0 ? ev : undefined;
                         });
                       }}
                     />
