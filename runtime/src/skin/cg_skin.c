@@ -677,7 +677,7 @@ LRESULT cg_skin_draw_slider_notify(cg_app_t *app, const NMHDR *hdr)
 
 /** 进度条绘制：浅灰圆角轨道 + 主题紫填充，与画布预览一致。
  *  进度条不走原生控件——Win32 的 PROGRESS_CLASS 不支持 custom draw（开不开主题都不发通知），
- *  所以整个控件换成运行时自绘类（cg_win_draw.c 的 cgw_ProgressProc），这里只管往 DC 上画。 */
+ *  所以整个控件换成运行时自绘类（ProgressProc，在 cg_win_draw_canvas.c），这里只管往 DC 上画。 */
 void cg_skin_draw_progress(cg_widget_t *w, HDC hdc, const RECT *rc)
 {
     int x, y, wp, hp, rad, fw;

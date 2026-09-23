@@ -895,7 +895,7 @@ int cg_term_save(cg_widget_t *w, const char *path)
  *   - 点数据在拍平的 chart_pts（chart_nseries × chart_cap）里，按需分配；
  *   - **窗口满了整体左移一格**，不做环形缓冲：cap 只有几十到几百，memmove 一下比维护
  *     读写指针 + 一圈边界判断便宜得多，也不会出现"绕回时算错下标"这种隐蔽 bug。
- * 绘制策略见 cg_win_draw.c 的 ChartProc（点数超过像素宽度时按列画 min/max）。
+ * 绘制策略见 chart_paint / chart_draw_series（点数超过像素宽度时按列画 min/max）。
  */
 
 /** 每系列保留多少点（.cgui 的 value）；小于 2 就按缺省 120 */

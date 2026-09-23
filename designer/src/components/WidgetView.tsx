@@ -537,7 +537,7 @@ export default function WidgetView({ node, depth, selectedId, onSelect, onPointe
   /* 外形框（shape）的圆角由 format 决定，不走通用的 style.radius（见下面的 shape 分支） */
   if (node.style?.radius && node.type !== "shape") style.borderRadius = node.style.radius;
 
-  /* 外形框预览对齐运行时的三形态与配色（cg_win_draw.c:477-487）：
+  /* 外形框预览对齐运行时的三形态与配色（cgw_PanelProc 的 WM_PAINT，见 cg_win_draw_panel.c）：
      rect=直角 / roundrect=圆角（缺省 8px，可被 style.radius 覆盖）/ ellipse=椭圆（忽略 radius）。
      描边色取 style.fg（缺省 #b4b0bb）。是否填充只由上面的 style.bg 决定 —— 不设就是空心描边，
      这是有意的：画布上"看得见才选得中"，实心填色会把窗口遮死、也没法点中它。 */
