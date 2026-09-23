@@ -257,6 +257,8 @@ runtime/
       cg_bind.c         控件绑定：值/文字/勾选自动同步到另一个控件
       cg_app.c          应用生命周期（定位 .cgui / 打开 / 消息循环 / 收尾）与自检
       cg_timer.c        一次性定时器（后端 50ms 心跳驱动）
+      cg_log.c          日志：stderr 镜像 + 追加写文件（CG_LOG_INFO/WARN/ERROR 宏的落点）
+      cg_ringbuf.c      环形字节缓冲（串口/网口的读线程往里扔，业务在时钟里取走）
     win32/              Win32 原生后端：不知道业务的存在
       cg_win_internal.h 后端内部共享接口（各 cg_win_*.c 之间）
       cg_win_util.c     工具：UTF-8 / 字体缓存 / 颜色刷 / 路径与资源 / 时基
@@ -266,12 +268,17 @@ runtime/
       cg_win_notify.c   原生通知 -> 事件映射
       cg_win_event.c    焦点子类与窗口级事件
       cg_win_main.c     主窗口过程
-      cg_win_draw.c     自绘窗口类与过程（image/圆环/进度条/画板/面板）
+      cg_win_draw.c     自绘窗口类的**路标**（9 个类 2026-09-23 拆到下面四个文件了，别往这里加代码）
+      cg_win_draw_canvas.c  image / 圆环 / 进度条 / 画板（各自的窗口类与窗口过程）
+      cg_win_draw_panel.c   面板（group/box/card/shape）与分隔条
+      cg_win_draw_chart.c   图表
+      cg_win_draw_gauge.c   状态灯与仪表盘
       cg_win_ownerdraw.c owner-draw 项绘制与 WM_DRAWITEM 分发
       cg_win_menu.c     菜单与工具栏
       cg_win_window.c   窗口生命周期与窗口/托盘 API
       cg_win_dialog.c   通用对话框（打开/保存/选色/消息框）
       cg_win_api.c      画板 / 表格 API、browser 导航
+      cg_win_diag.c     诊断：日志落点、致命错误弹窗、未处理异常兜底
     skin/              自绘外观层（GDI+，M3 风格）：换 D2D 内核时整目录替换
       cg_skin.{h,c}     按钮/开关/勾选/滑块/进度/圆环
       cg_skin_edit.c    输入框圆角裁切与单行文字垂直居中（EDIT 子类）

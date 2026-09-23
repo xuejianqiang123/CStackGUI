@@ -31,6 +31,22 @@ function read(rel) {
   return fs.readFileSync(path.join(root, rel), "utf8").replace(/\r\n/g, "\n");
 }
 
+/** 递归列出 runtime\src 下所有 .c（契约按函数名定位，不按文件路径 —— 文件是会被拆的） */
+function listRuntimeSources() {
+  const base = path.join(root, "runtime", "src");
+  const out = [];
+  const walk = (dir) => {
+    if (!fs.existsSync(dir)) return;
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith(".c")) out.push(path.relative(root, p).replace(/\\/g, "/"));
+    }
+  };
+  walk(base);
+  return out;
+}
+
 /**
  * 取一个函数体：从含 `name(` 的那一行开始，到第一个**顶格 `}`** 结束。
  * 这个仓库里函数结尾的 `}` 都顶格（col 0），所以不需要真正的括号匹配 ——
@@ -39,8 +55,12 @@ function read(rel) {
  */
 function bodyOf(src, name) {
   const lines = src.split("\n");
-  const re = new RegExp(`\\b${name}\\s*\\(`);
-  let i = lines.findIndex((l) => re.test(l));
+  /* 只认**定义行**：顶格起（col 0）、类型在前、且不是以分号结尾的声明/调用。
+   * 这个工程的函数定义一律写成 `ret-type name(args)` 顶格起、`{` 换行 ——
+   * 少了"顶格 + 无分号"这两条，调用点（缩进的 `foo(...)`）会被误当成定义：
+   * 首版就这么错过（cg_widget_set_value 一度被 6 个文件"同时定义"）。 */
+  const re = new RegExp(`^[A-Za-z_][A-Za-z0-9_ \\t*]*\\b${name}\\s*\\(`);
+  let i = lines.findIndex((l) => re.test(l) && !/;\s*$/.test(l));
   if (i < 0) return null;
   const start = i;
   for (; i < lines.length; i++) {
@@ -151,6 +171,7 @@ const RULES = [
 /* ------------------------------------------------------------------ */
 
 let bad = 0;
+let located = 0;   /* 按函数名定位成功的条数（顺带证明「文件可拆、契约不散」） */
 const sources = new Map();
 function srcOf(rel) {
   if (!sources.has(rel)) {
@@ -161,21 +182,41 @@ function srcOf(rel) {
 }
 
 for (const r of RULES) {
-  const src = srcOf(r.file);
-  if (src === null) {
-    console.log(`[fail] ${r.file} 不存在（契约：${r.why.split("。")[0]}）`);
-    bad++;
-    continue;
+  /* func 类契约**按函数名**在整个 runtime/src 下定位：文件是可以被拆的 —— 2026-09-23 把
+   * cg_win_draw.c 拆成四个文件时就踩到"规则里的路径写死"这个坑。规则里的 file 字段
+   * 只作"它当初住在哪"的备注，定位不依赖它。 */
+  let where = null;
+  let at = r.file;
+
+  if (r.scope === "func") {
+    const hits = listRuntimeSources().filter((f) => bodyOf(read(f), r.func) !== null);
+    if (hits.length === 0) {
+      console.log(`[fail] 在 runtime/src 下找不到函数 ${r.func}()（契约原来记在 ${r.file}）`);
+      console.log(`       它承载着：${r.why}`);
+      bad++;
+      continue;
+    }
+    if (hits.length > 1) {
+      console.log(`[fail] 函数 ${r.func}() 在多个文件里都有定义：${hits.join(" / ")}`);
+      console.log("       静态函数不该重名 —— 重名会让契约指向不确定的实现，请先合并或改名。");
+      bad++;
+      continue;
+    }
+    where = bodyOf(read(hits[0]), r.func);
+    at = `${hits[0]} 的 ${r.func}()`;
+    located++;
+  } else {
+    const src = srcOf(r.file);
+    if (src === null) {
+      console.log(`[fail] ${r.file} 不存在（契约：${r.why.split("。")[0]}）`);
+      bad++;
+      continue;
+    }
+    where = src;
   }
-  const where = r.scope === "func" ? bodyOf(src, r.func) : src;
-  if (where === null) {
-    console.log(`[fail] ${r.file} 里找不到函数 ${r.func}() —— 它承载着：${r.why}`);
-    bad++;
-    continue;
-  }
+
   for (const token of r.must) {
     if (!where.includes(token)) {
-      const at = r.scope === "func" ? `${r.file} 的 ${r.func}()` : r.file;
       console.log(`[fail] ${at} 里找不到「${token}」`);
       console.log(`       这条路径为什么必须在：${r.why}`);
       bad++;
@@ -188,4 +229,7 @@ if (bad > 0) {
   console.log("       这些不是风格问题：每一条都对应一类「声明了却不生效」的真实缺陷。");
   process.exit(1);
 }
-console.log(`[ok] ${RULES.length} 条"改了就红"的运行时契约都还在（事件/字段 -> 原生作用点）`);
+console.log(
+  `[ok] ${RULES.length} 条"改了就红"的运行时契约都还在（事件/字段 -> 原生作用点；` +
+    `其中 ${located} 条按**函数名**定位，与文件路径无关）`,
+);

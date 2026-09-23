@@ -136,6 +136,56 @@ for (const [base, files] of byName) {
   }
 }
 
+/* 6) 文件清单与真实文件互为镜像（docs/ARCHITECTURE.md 里有逐文件的 runtime 清单）
+ *
+ *    这条是被真实事故推出来的：2026-09-23 把 cg_win_draw.c 拆成四个文件后，清单里那行
+ *    "cg_win_draw.c 自绘窗口类与过程"立刻就谎了 —— 读者按清单找代码会找不到。
+ *    两个方向都查，且只认 `cg_*.c` / `cg_*.h` 这种运行时命名（例子里的 main.c、
+ *    build-app.bat 之类不会误报）。因为"提到即算列出"，正文里的引用也算，够用且不脆。
+ */
+{
+  const docPath = path.join(root, "docs", "ARCHITECTURE.md");
+  if (fs.existsSync(docPath)) {
+    const doc = fs.readFileSync(docPath, "utf8");
+    /* `cg_skin.{h,c}` 这种花括号写法展开成 cg_skin.h / cg_skin.c */
+    const listed = new Set();
+    for (const m of doc.matchAll(/cg_[a-z0-9_]*\.\{h,c\}/g)) {
+      const base = m[0].replace(/\.\{h,c\}$/, "");
+      listed.add(`${base}.h`);
+      listed.add(`${base}.c`);
+    }
+    for (const m of doc.matchAll(/cg_[a-z0-9_]+\.(c|h)\b/g)) listed.add(m[0]);
+
+    const actual = new Set();
+    for (const dir of ["runtime/src", "runtime/include"]) {
+      for (const f of listFiles(path.join(root, dir), [".c", ".h"])) {
+        const base = path.basename(f);
+        /* 公共头（include/ 段）在文档里由专门一节说明，不以 cg_ 命名，单列进白名单 */
+        if (base === "cstackgui.h") continue;
+        actual.add(base);
+      }
+    }
+
+    checks++;
+    for (const name of actual) {
+      if (!listed.has(name)) {
+        problems.push(
+          `docs/ARCHITECTURE.md 的文件清单里没有 ${name} ——` +
+            ` 那份清单是读者找代码的入口，新文件要么补进去、要么说明它为什么不用列`,
+        );
+      }
+    }
+    checks++;
+    for (const name of listed) {
+      if (!actual.has(name)) {
+        problems.push(
+          `docs/ARCHITECTURE.md 列了 ${name}，但 runtime/ 下没有这个文件（改名/删除后清单没跟上）`,
+        );
+      }
+    }
+  }
+}
+
 if (problems.length > 0) {
   console.log(`[fail] 分层契约被破坏（${problems.length} 处 / 共检查 ${checks} 项）\n`);
   for (const p of problems) console.log(`  - ${p}`);
