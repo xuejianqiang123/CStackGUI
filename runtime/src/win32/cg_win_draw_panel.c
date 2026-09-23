@@ -134,11 +134,23 @@ LRESULT CALLBACK cgw_PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             if (cgw_is_t(w, "shape") && w->format && strcmp(w->format, "ellipse") == 0) {
                 Ellipse(dc, rc.left + 1, rc.top + 1, rc.right - 1, rc.bottom - 1);
             } else if (cgw_is_t(w, "shape") && (!w->format || strcmp(w->format, "rect") != 0)) {
+                /* 抗锯齿圆角：GDI 的 RoundRect 没有抗锯齿、圆角会"发毛"（用户报的是徽章/标签片，
+                 * 面板圆角是同一个毛病）。形状框没设背景色时**只有描边**，所以填充传 CG_COLOR_NONE。 */
                 int r = cgw_scale_px(app, (w->style.radius > 0) ? w->style.radius : 8);
-                RoundRect(dc, rc.left + 1, rc.top + 1, rc.right - 1, rc.bottom - 1, r, r);
+                RECT rr = { rc.left + 1, rc.top + 1, rc.right - 1, rc.bottom - 1 };
+                cg_skin_fill_round_rect(dc, &rr, r,
+                                        (w->style.bg != CG_COLOR_NONE) ? w->style.bg : CG_COLOR_NONE,
+                                        (w->style.fg != CG_COLOR_NONE) ? w->style.fg : 0xB4B0BBu,
+                                        (float)(inset ? inset : 1));
             } else if (cgw_is_t(w, "card")) {
                 int r = cgw_scale_px(app, (w->style.radius > 0) ? w->style.radius : 12);
-                RoundRect(dc, rc.left + 1, rc.top + 1, rc.right - 1, rc.bottom - 1, r, r);
+                RECT rr = { rc.left + 1, rc.top + 1, rc.right - 1, rc.bottom - 1 };
+                unsigned face = GetSysColor(COLOR_BTNFACE);   /* COLORREF 是 0x00BBGGRR，这里转 0xRRGGBB */
+                unsigned facergb = ((face & 0xFFu) << 16) | (face & 0xFF00u) | ((face >> 16) & 0xFFu);
+                cg_skin_fill_round_rect(dc, &rr, r,
+                                        (w->style.bg != CG_COLOR_NONE) ? w->style.bg : facergb,
+                                        (w->style.fg != CG_COLOR_NONE) ? w->style.fg : 0xB4B0BBu,
+                                        (float)(inset ? inset : 1));
             } else {
                 Rectangle(dc, rc.left + 1, rc.top + 1, rc.right - 1, rc.bottom - 1);
             }

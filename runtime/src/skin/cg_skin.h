@@ -58,6 +58,22 @@ void cg_skin_draw_progress(cg_widget_t *w, HDC hdc, const RECT *rc);
 void cg_skin_draw_ring(cg_widget_t *w, HDC hdc, const RECT *rc);
 
 /**
+ * @brief 抗锯齿的圆角实心矩形（可选描边）—— M3 视觉里"丝滑圆角"的最小原语
+ * @param hdc 目标 DC
+ * @param rc 矩形（物理像素）
+ * @param radius 圆角半径（物理像素）；大于高/宽一半时按一半夹取，半径 = 高即得胶囊形
+ * @param fill_rgb 填充色 0xRRGGBB；传 CG_COLOR_NONE 表示只描边不填充
+ * @param border_rgb 描边色 0xRRGGBB；传 CG_COLOR_NONE 表示不描边
+ * @param border_w 描边宽度（物理像素）；border_rgb 为 CG_COLOR_NONE 时忽略
+ * @return void 无返回值；GDI+ 不可用时回退 GDI RoundRect（有锯齿但不至于不显示）
+ * @details owner-draw 的小控件（徽章 / 标签片）与面板（card / shape 圆角）的 DC 不在皮肤已有
+ *          那几个函数里，所以把这条原语单独导出 —— 免得各处又各自写一遍 GDI `RoundRect`，
+ *          而 GDI 没有抗锯齿，"圆角发毛"就是这么来的（2026-09-24 用户报徽章/标签片锯齿）。
+ */
+void cg_skin_fill_round_rect(HDC hdc, const RECT *rc, int radius,
+                             unsigned fill_rgb, unsigned border_rgb, float border_w);
+
+/**
  * @brief 给输入框（edit：单行 / 多行 / 数值框都是它）套圆角 + 单行文字垂直居中
  * @param w 输入框控件（读 w->native / w->style.radius / w->app->scale）
  * @return void 无返回值；GDI+ 不可用时也照常（圆角仅靠窗口区域，不依赖 GDI+）

@@ -54,7 +54,14 @@
 ## 4. 最小可跑闭环（本轮交付）
 
 覆盖 **`button` / `checkbox` / `radio` / `switch` / `slider` / `progress` / `progressring` 与 `edit` 子类**
-（就是 `runtime/src/skin/cg_skin.h` 导出的那几支）；最早只覆盖 `button` 一种，用来验证整条通路：
+（就是 `runtime/src/skin/cg_skin.h` 导出的那几支）；最早只覆盖 `button` 一种，用来验证整条通路。
+
+另导出**一条形状原语** `cg_skin_fill_round_rect()`（抗锯齿圆角矩形，填充/描边都可选）：
+**徽章**、**标签片**、面板的 **`card`** 与 **`shape` 圆角**都走它。这几处原先各自用 GDI
+`RoundRect` 画 —— GDI 没有抗锯齿，表现为"圆角发毛"（2026-09-24 用户报"徽章和标签片锯齿状、
+没有丝滑 iOS 风格"后改为统一走 GDI+）。**已知未覆盖**：`shape` 的 `format: "ellipse"` 仍用 GDI
+`Ellipse`（同样有锯齿，目前没有示例用到）；输入框的圆角**边框**是 GDI 画笔 + 窗口区域裁剪
+（`cg_skin_edit.c`），因为画在客户区之外、要被 `SetWindowRgn` 裁，不经这条原语。
 原生控件仍由系统管输入/IME/无障碍（只替换"怎么画"），
 GDI+ 画圆角矩形 + 主题色 + 状态，文字仍走 GDI `DrawTextW`（绘制于 GDI+ 之后，叠在同个 DC 上）。
 GDI+ 不可用时自动回退到 GDI `RoundRect`，保证按钮永不消失。

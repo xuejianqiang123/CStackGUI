@@ -86,17 +86,13 @@ static void draw_color_swatch(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 static void draw_badge(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 {
     RECT rc = dis->rcItem;
-    HBRUSH br;
 
     cgw_clear_to_behind(w, dis->hDC, &rc);   /* 先清掉 owner-draw 默认灰底 */
-    br = CreateSolidBrush((w->style.bg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.bg)
-                                                        : RGB(0xB3, 0x26, 0x1E));
-    HGDIOBJ oldbr = SelectObject(dis->hDC, br);
-    HGDIOBJ oldpen = SelectObject(dis->hDC, GetStockObject(NULL_PEN));
-    RoundRect(dis->hDC, rc.left, rc.top, rc.right, rc.bottom, rc.bottom - rc.top, rc.bottom - rc.top);
-    SelectObject(dis->hDC, oldpen);
-    SelectObject(dis->hDC, oldbr);
-    DeleteObject(br);
+    /* 走皮肤的抗锯齿原语：这里原来是 GDI `RoundRect`，没有抗锯齿 —— 圆角是"毛边"的
+     * （2026-09-24 用户报"徽章和标签片锯齿状、没有丝滑 iOS 风格"）。半径 = 高度即胶囊形。 */
+    cg_skin_fill_round_rect(dis->hDC, &rc, rc.bottom - rc.top,
+                            (w->style.bg != CG_COLOR_NONE) ? w->style.bg : 0xB3261Eu,
+                            CG_COLOR_NONE, 0.0f);
     {
         wchar_t *wt = cgw_wc_from_utf8(w->text ? w->text : "");
         if (wt) {
@@ -112,20 +108,14 @@ static void draw_badge(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 static void draw_tag(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 {
     RECT rc = dis->rcItem;
-    HBRUSH br;
+    RECT rr = { rc.left, rc.top, rc.right - 1, rc.bottom - 1 };
 
     cgw_clear_to_behind(w, dis->hDC, &rc);   /* 先清掉 owner-draw 默认灰底 */
-    br = CreateSolidBrush((w->style.bg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.bg)
-                                                        : RGB(0xE8, 0xDE, 0xF8));
-    HPEN pen = CreatePen(PS_SOLID, 1, cgw_to_colorref(widget_fg_or(w, 0x6750A4)));
-    HGDIOBJ oldbr = SelectObject(dis->hDC, br);
-    HGDIOBJ oldpen = SelectObject(dis->hDC, pen);
-    RoundRect(dis->hDC, rc.left, rc.top, rc.right - 1, rc.bottom - 1,
-              rc.bottom - rc.top, rc.bottom - rc.top);
-    SelectObject(dis->hDC, oldpen);
-    SelectObject(dis->hDC, oldbr);
-    DeleteObject(pen);
-    DeleteObject(br);
+    /* 同徽章：原来的 GDI `RoundRect` 没有抗锯齿（边框那圈锯齿最明显）。
+     * 内缩 1px 让 1px 描边完整落在控件里（GDI+ 的笔是以路径为中心画的）。 */
+    cg_skin_fill_round_rect(dis->hDC, &rr, rr.bottom - rr.top,
+                            (w->style.bg != CG_COLOR_NONE) ? w->style.bg : 0xE8DEF8u,
+                            widget_fg_or(w, 0x6750A4), 1.0f);
     {
         wchar_t *wt = cgw_wc_from_utf8(w->text ? w->text : "");
         if (wt) {

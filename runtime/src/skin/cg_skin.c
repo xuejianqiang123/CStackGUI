@@ -137,6 +137,71 @@ static unsigned sk_behind(const cg_widget_t *w)
 }
 
 /**
+ * @brief 抗锯齿的圆角实心矩形（可选描边）—— M3 视觉里"丝滑圆角"的最小原语
+ * @param hdc 目标 DC
+ * @param rc 矩形（物理像素）
+ * @param radius 圆角半径（物理像素）；大于高/宽一半时按一半夹取，半径 = 高即得胶囊形
+ * @param fill_rgb 填充色 0xRRGGBB；CG_COLOR_NONE = 只描边不填充
+ * @param border_rgb 描边色 0xRRGGBB；CG_COLOR_NONE = 不描边
+ * @param border_w 描边宽度（物理像素）；不描边时忽略
+ * @return void 无返回值；GDI+ 不可用时回退 GDI RoundRect（有锯齿但不至于不显示）
+ * @details 独立导出是因为 owner-draw 小控件（徽章/标签片）与面板（card/shape 圆角）拿不到
+ *          皮肤那几个函数里的 DC 通路；各写一遍 GDI `RoundRect` 就没有抗锯齿（圆角发毛）。
+ */
+void cg_skin_fill_round_rect(HDC hdc, const RECT *rc, int radius,
+                             unsigned fill_rgb, unsigned border_rgb, float border_w)
+{
+    int w, h;
+    GpGraphics *g = NULL;
+
+    if (!hdc || !rc) return;
+    w = rc->right - rc->left;
+    h = rc->bottom - rc->top;
+    if (w <= 0 || h <= 0) return;
+    if (radius > w / 2) radius = w / 2;
+    if (radius > h / 2) radius = h / 2;
+    if (radius < 0) radius = 0;
+
+    if (GdipCreateFromHDC(hdc, &g) == SK_GDIP_OK && g) {
+        GpPath *p = NULL;
+        GdipSetSmoothingMode(g, SK_SMOOTH_AA);
+        if (GdipCreatePath(SK_FILL_WINDING, &p) == SK_GDIP_OK && p) {
+            sk_round_rect(p, (REAL)rc->left, (REAL)rc->top, (REAL)w, (REAL)h, (REAL)radius);
+            if (fill_rgb != CG_COLOR_NONE) {
+                GpSolidFill *br = NULL;
+                if (GdipCreateSolidFill(sk_argb(255, fill_rgb), &br) == SK_GDIP_OK && br) {
+                    GdipFillPath(g, (GpBrush *)br, p);
+                    GdipDeleteBrush((GpBrush *)br);
+                }
+            }
+            if (border_rgb != CG_COLOR_NONE) {
+                GpPen *bd = NULL;
+                if (GdipCreatePen1(sk_argb(255, border_rgb), (border_w > 0.0f) ? border_w : 1.0f,
+                                   SK_UNIT_PIXEL, &bd) == SK_GDIP_OK && bd) {
+                    GdipDrawPath(g, bd, p);
+                    GdipDeletePen(bd);
+                }
+            }
+            GdipDeletePath(p);
+        }
+        GdipDeleteGraphics(g);
+    } else {
+        /* 回退：GDI（原实现，圆角有锯齿） */
+        HBRUSH br = (fill_rgb != CG_COLOR_NONE) ? CreateSolidBrush(sk_colorref(fill_rgb)) : NULL;
+        HPEN   pn = (border_rgb != CG_COLOR_NONE)
+                        ? CreatePen(PS_SOLID, (border_w > 1.5f) ? 2 : 1, sk_colorref(border_rgb))
+                        : NULL;
+        HGDIOBJ ob = SelectObject(hdc, br ? (HGDIOBJ)br : GetStockObject(NULL_BRUSH));
+        HGDIOBJ op = SelectObject(hdc, pn ? (HGDIOBJ)pn : GetStockObject(NULL_PEN));
+        RoundRect(hdc, rc->left, rc->top, rc->right, rc->bottom, radius * 2, radius * 2);
+        SelectObject(hdc, ob);
+        SelectObject(hdc, op);
+        if (br) DeleteObject(br);
+        if (pn) DeleteObject(pn);
+    }
+}
+
+/**
  * @brief 圆环进度（progressring）的轨道 + 进度弧，全部走 GDI+ 抗锯齿
  * @param w 圆环控件（读 value/vmin/vmax/style）；hdc 目标 DC；rc 客户区矩形
  * @return void 无返回值；GDI+ 不可用时回退 GDI AngleArc（有锯齿但不至于不显示）
