@@ -94,9 +94,20 @@
 - **UTF-8 ↔ UTF-16：6 份独立实现**（`cg_win_util.c:13` `cgw_wc_from_utf8`、`cg_skin.c:97` `sk_to_wcs`、
   `cg_kit.c:28/43` `kit_w`/`kit_u8`、`cg_serial.c:56/71` `ser_wide`/`ser_u8`、`cg_win_diag.c:18`），
   另有 7 处内联调用 → 建议下沉到一层（如 `core/cg_text.c`）。
+  ⚠ **分层约束（2026-09-24 探测时确认，"合成一处"不能想当然）**：win32 的 `cg_win_*.c` **不能**
+  include kit 的 `kit_w`/`kit_u8`（分层门禁：win32 只走 `cg_win_internal.h`），所以不能靠"让 win32 用 kit 的"来去重。
+  两条可行路线二选一：① 在 `core` 写**平台中立**的手写编解码（**不能**调 `MultiByteToWideChar`，
+  否则破坏"core 平台中立"；可先看 `cg_json.c` 里为 `\u` 转义与代理对写的那套能否复用）；
+  ② 各层各留一份、只把**同层内**的散点收敛（win32 的 5 个文件 → `cg_win_util.c` 现有的 `cgw_wc_from_utf8`；skin 的 2 处 → 一处）。
+  实测现状（Win32 转码 API 的调用点）：`kit/cg_kit_str.c`(8)、`win32/cg_win_util.c`(8)、`win32/cg_win_dialog.c`(4)、
+  `kit/cg_serial.c`(3)、`skin/cg_skin.c`(3)、`win32/cg_win_diag.c`(2)、`win32/cg_win_notify.c`(2)。
 - **`* scale / 100` 内联 17 处**（`cg_skin.c` 13、`cg_skin_edit.c` 4）；`scale = dpi*100/96` 内联 3 处。
   已有 `cgw_scale_px`（`win32/cg_win_util.c:59`）但 **skin 层用不到它**（win32 层符号）→
   建议在 `cg_internal.h` 提供与层无关的 `cg_scale(app, v)`。
+  ✅ **这个落法可行**：`v * scale / 100` 是**纯整数运算**、不碰任何平台 API，所以在 `cg_internal.h` 里放
+  `static inline int cg_scale(const cg_app_t *app, int v)` **不破坏"core 平台中立"**，skin 直接可用。
+  做法要求（皮肤层没有像素级自动化测试，"编译过"证明不了渲染没变）：机械替换后必须对账
+  ——`* scale / 100` 的命中数归零、`cg_scale(` 的命中数 = 原站点数，且 100% DPI 下新旧表达式都等于原值。
   **这一条直接对应本轮修过的 DPI 缺陷**：所有"忘了乘 scale"的地方，都是内联副本。
 - **RGB 打包 4 处**（`cgw_to_colorref` / `sk_colorref` / `sk_argb` / `cg_skin_edit.c:397` 内联）。
 - 小项：`cg_str_dup` / `dup_str` / `dup_or_null` 三份；`cg_serial.c:51` 与 `cg_net.c:58` 各有一份
@@ -151,7 +162,7 @@
 | 2 | ✅ `menu:programConfig` 漏配（§5.1） | 无 | 代码静态可核 |
 | 3 | ✅ `cg_win_draw.c` 拆 4 个（§1.1）—— **已完成**（提交 `7d4314e` + 引用清理 `c1cc6d8`） | **低**（纯搬移、零接口改动） | 已验：函数名集合旧 31 = 新 31（不丢不多）+ 剩余文件非注释行 0 + 全量重编/单测/门禁三道全绿 |
 | 4 | ✅ `cg_kit.c` 拆 4 个（§1.3）—— **已完成**（提交 `bb18e9e` + 清单同步/清警告 `4b3afad`） | 中低 | 已验：函数名集合旧 40 = 新 40、剩余文件非注释行 0、`[ok] 全部构建完成` 且无 `warning`、`55 套件 1800 断言 0 失败`、分层 127 项（`.c` 基名 34→38）。**提升的是 3 个助手不是 4 个**：`kit_base` 经核实只在 fs 内用 |
-| 5 | `cg_widget_data.c` 拆 7 个（§1.2） | 中（提 `want_type`） | 同上 + `test_terminal/chart/led_meter/splitter` |
+| 5 | ✅ `cg_widget_data.c` 拆 7 个（§1.2）—— **已完成**（提交 `591b997` + 清单与指针 `30bcc1b`） | 中（提 `want_type`） | 已验：函数名集合 83=83 零差异、定义行 76=76（**唯一差异 = 有意去掉的 `static`**）、剩余文件非注释行 0、`[ok] 全部构建完成` 且无 warning、`55 套件 1800 断言 0 失败`、分层 147 项（`.c` 基名 38→45）、**完整 `check-format` 端到端通过**（五条往返全绿，往返新增的复选框真被运行时回调）；行为网 `test_terminal/chart/led_meter/splitter` 全绿 |
 | 6 | `w->kind` 收敛（§3.1） | 中高（面广但可分批：先 `cg_win_ctl.c` 三张表） | 门禁 + 全量自检 |
 | 7 | 重复原语下沉（§3.2） | 中（跨层，需定新低层头） | 单测（`test_json`/kit）+ 自检 |
 | 8 | designer 拆分：✅ `model.ts`（§5.2，提交 `20f7fc0`）+ ✅ `Inspector.tsx`（§5.3，提交 `c55ecec`）已完成；剩 `main.mjs`（§5.4） | 中 | 已验：`tsc` 0 错 + `vite build` 成功（产物哈希不变）+ **五个示例的往返门禁全绿**；导出面 59=59、写点 104=104、`patch` 64/64、`<Row>` 46=46（面板无自动化测试，靠这几组静态对账）。**设计器侧不需要同步文件清单**（分层门禁只对账 `runtime/`） |
