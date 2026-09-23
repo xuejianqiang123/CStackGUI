@@ -241,10 +241,8 @@ export default function App() {
   const doSave = useCallback(
     async (forceDialog = false) => {
       const target = lastExport ? `${lastExport.dir}\\${lastExport.appName}.cgui` : filePath;
-      if (!target) {
-        say("先点「导出 C 骨架」：保存位置跟随工程目录，不用自己选");
-        return { canceled: true as const };
-      }
+      /* 「另存为」放最前面处理：它是逃生门，**全新文档**（没导出过、也没保存过）也必须能选
+       * 位置存下来 —— 原来 !target 判断在前，那种情况下「另存为」是死的（只打印一句提示）。 */
       if (forceDialog) {
         /* 「另存为」是逃生门，仍允许选位置 */
         const res = await bridge.saveFile({
@@ -257,6 +255,10 @@ export default function App() {
         setDirty(false);
         say(`已保存 ${res.path ?? ""}`.trim());
         return { canceled: false as const, path: res.path };
+      }
+      if (!target) {
+        say("先点「导出 C 骨架」：保存位置跟随工程目录，不用自己选");
+        return { canceled: true as const };
       }
       const res = await bridge.saveFile({
         filePath: target,
@@ -303,6 +305,7 @@ export default function App() {
     setRunLines([]);
 
     /* 跑之前必须先落盘：改过的界面不保存，跑的还是旧的 */
+    let target = filePath;
     if (dirty || !filePath) {
       const saved = await doSave(!filePath);
       if (saved.canceled) {
@@ -310,11 +313,14 @@ export default function App() {
         setRunOpen(false);
         return;
       }
+      /* 要用**这次保存返回的路径**：闭包里的 filePath 还是旧的（新建文档时甚至是空），
+       * 拿它去 buildAndRun，主进程会驳回"先把 .cgui 保存到磁盘再运行"。 */
+      if (saved.path) target = saved.path;
     }
 
     setRunning(true);
     try {
-      const res = await bridge.buildAndRun({ filePath });
+      const res = await bridge.buildAndRun({ filePath: target });
       if (res.ok) say(res.message);
       else setRunLines((ls) => [...ls, "", `# ${res.message}`]);
     } finally {
@@ -329,6 +335,7 @@ export default function App() {
     setRunLines([]);
 
     /* 发布前必须先落盘：zip 里要打进最新的 .cgui */
+    let target = filePath;
     if (dirty || !filePath) {
       const saved = await doSave(!filePath);
       if (saved.canceled) {
@@ -336,11 +343,12 @@ export default function App() {
         setRunOpen(false);
         return;
       }
+      if (saved.path) target = saved.path;   /* 同上：用刚保存出来的路径 */
     }
 
     setPublishing(true);
     try {
-      const res = await bridge.publish({ filePath });
+      const res = await bridge.publish({ filePath: target });
       if (res.ok) say(res.message);
       else setRunLines((ls) => [...ls, "", `# ${res.message}`]);
     } finally {

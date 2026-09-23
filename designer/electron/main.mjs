@@ -716,7 +716,15 @@ ipcMain.handle("publish:project", async (_e, { filePath }) => {
     await fs.rm(pubDir, { recursive: true, force: true });
     await fs.mkdir(pubDir, { recursive: true });
     await fs.copyFile(exePath, path.join(pubDir, `${name}.exe`));
-    await fs.copyFile(filePath, path.join(pubDir, path.basename(filePath)));
+    /* .cgui 必须按**工程名**落一份：运行时默认找的就是 `<exe 名>.cgui`（找不到才去
+     * ..\apps\ 与 ..\examples\ 里翻），README 也是这么写给用户的。
+     * 早先这里只拷 basename —— 用户「另存为」改过名之后，zip 里那份 .cgui 与 exe 名对不上，
+     * 双击 exe 三条查找路全落空，直接报"找不到界面文件"。
+     * 原名再补一份：万一工程名与文件名不同，两种都能命中（多一份几百字节，换的是"绝不扑空"）。 */
+    await fs.copyFile(filePath, path.join(pubDir, `${name}.cgui`));
+    if (path.basename(filePath) !== `${name}.cgui`) {
+      await fs.copyFile(filePath, path.join(pubDir, path.basename(filePath)));
+    }
     const assetsDir = path.join(appDir, "assets");
     if (existsSync(assetsDir)) await fs.cp(assetsDir, path.join(pubDir, "assets"), { recursive: true });
     await fs.writeFile(path.join(pubDir, "README.txt"), readme, "utf8");
