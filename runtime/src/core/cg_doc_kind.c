@@ -44,7 +44,11 @@ static const cg_kind_info_t k_kinds[] = {
                                                    | CG_EV_SPIN },
     { "richtext",   CG_K_RICHTEXT,   0, 320, 160, "",     CG_EV_CHANGE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
     { "datepicker", CG_K_DATEPICKER, 0, 140,  28, "",     CG_EV_CHANGE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
-    { "monthcal",   CG_K_MONTHCAL,   0, 230, 180, "",     CG_EV_SELECT | CG_EV_DBLCLICK },
+    /* 月历只给 select：MCN_SELECT 已经把"点了哪一天"报全了，而它**从不发 NM_DBLCLK**
+     * （2026-09-23 真机连点两天实测：只进 select、dblclick 一次都没进来 —— 探针的两次点击
+     * 确实落在日期格上，所以是有效阴性）。原先声明的 dblclick 是空头承诺，
+     * 撤掉后绑了它的人会在启动警告/自检里直接看到"不支持"，而不是静默失效。 */
+    { "monthcal",   CG_K_MONTHCAL,   0, 230, 180, "",     CG_EV_SELECT },
     { "checkbox",   CG_K_CHECKBOX,   0, 160,  28, "复选", CG_EV_CHANGE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
     { "radio",      CG_K_RADIO,      0, 160,  28, "单选", CG_EV_CHANGE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
     { "listbox",    CG_K_LISTBOX,    0, 220, 140, "",     CG_EV_SELECT | CG_EV_DBLCLICK | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },

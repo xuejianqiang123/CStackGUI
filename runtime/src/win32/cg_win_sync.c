@@ -440,6 +440,15 @@ static void browser_recreate(cg_widget_t *w)
                         GetModuleHandleW(NULL), NULL);
     free(wurl);
     w->native = h;
+
+    /* 重建出来的是**新 HWND**：建窗只能带 WS_VISIBLE，所以"该不该显示 / 该不该可点"
+     * 必须在这里重新落一遍。否则 visible:false、在非当前标签页里、或 enabled:false 的
+     * 浏览器，一旦导航触发重建就会自己冒出来、还变得可点 —— 因为这条路径是提前 return 的，
+     * 走不到 sync_widget_body 末尾那两句 apply_visible / EnableWindow（2026-09-23 排查发现）。 */
+    if (h) {
+        apply_visible(w);
+        EnableWindow(h, w->enabled ? TRUE : FALSE);
+    }
 }
 
 /** @brief 原生控件当前文本是否已经是 wt
