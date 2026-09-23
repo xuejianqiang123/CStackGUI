@@ -150,7 +150,7 @@
 | `visible` | 布尔 | `true` | 全部 |
 | `enabled` | 布尔 | `true` | 全部 |
 | `checked` | 布尔 | `false` | `checkbox` / `radio` |
-| `value` | 整数 | `0`（数值类默认 40）| `slider` / `progress` / `listbox`(选中项序号) / `meter`（当前值，按 `min`/`max` 夹） / `led`（`0` 灭 / `1` 亮 / `2` 闪，**不按区间夹**） / **数值输入框**（`edit` + `spin`：值是真相、文本由它派生）|
+| `value` | 整数 | `0`（**运行时解析缺省**；画布新建"有范围"的控件时给初值 40，见 `designer/src/model.ts`）| `slider` / `progress` / `listbox` / `combo` / `tabs`（选中项序号，按**项数**夹到 `0..项数-1`，**不按 `min`/`max`**；`cg_widget_set_value()` 也是这套语义） / `meter`（当前值，按 `min`/`max` 夹） / `led`（`0` 灭 / `1` 亮 / `2` 闪，**不按区间夹**） / **数值输入框**（`edit` + `spin`：值是真相、文本由它派生）|
 | `min` / `max` | 整数 | `0` / `100` | `slider` / `progress` / **数值输入框**（`edit` + `spin`，箭头与手输都夹）/ `meter`（量程）/ `rate`（星数 = `max-min`，上限 10）/ `pagination`（页数 = `max-min+1`）。`max <= min` 时自动修正为 `min+1` |
 
 ### 2.4 `src`：图片路径
@@ -441,12 +441,12 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 
 | 事件 | 什么时候发 | 谁支持 |
 | --- | --- | --- |
-| `click` | 点了一下 | 按钮/图标按钮/链接/图片/标签片/菜单类 |
-| `dblclick` | 系统双击间隔内点了第二下 | 同上 + 列表/树/表格/月历/画板 |
+| `click` | 点了一下 | 按钮/图标按钮/链接/输入框（`edit`）/图片/画板/标签片/菜单·菜单按钮·工具栏 |
+| `dblclick` | 系统双击间隔内点了第二下 | 上面那批能点的（按钮/图标按钮/链接/输入框/图片/画板）+ 列表/树/表格 |
 | `change` | 文字/勾选/数值/颜色变了 | 输入类、开关复选、滑块（拖动中）、颜色选择、评分、分页 |
 | `submit` | 单行输入框里按了回车 | 只有单行输入 |
 | `select` | 选中项变了 | 列表/下拉/标签页/树/表格/月历 |
-| `release` | 滑块松手（拖完才发一次） | 只有滑块 |
+| `release` | 滑块/分隔条松手（拖完才发一次） | `slider`、`splitter` |
 | `expand` / `collapse` | 树节点展开/折叠 | 只有树 |
 | `tick` | 时钟控件的周期到了（`period` 毫秒一次） | 只有时钟 |
 | `check` | 表格勾选列的行勾选状态变了 | 只有表格（`.cgui` 里开 `check`） |
@@ -473,21 +473,21 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `iconbutton` | 图标按钮 | 否 | 48×48 | — | `click`、`dblclick` | `BUTTON` 自绘（`src` 指定图片）|
 | `label` | 标签 | 否 | 160×24 | `标签` | **无**（纯显示） | `STATIC` |
 | `link` | 链接 | 否 | 160×24 | `链接` | `click`、`dblclick` | `STATIC`+`SS_NOTIFY`（手型光标、蓝色下划线）|
-| `switch` | 开关 | 否 | 56×32 | — | `change` | `BUTTON` 自绘（M3 胶囊）|
-| `edit` | 输入框 | 否 | 200×32 | — | `change`、`submit`、`spin`（调节钮被按下）、鼠标全套（`mousedown`/`mouseup`/`dblclick`/`rdown`/`rup`/`mousemove`）、键盘全套（`keydown`/`keyup`/`char`/`wheel`）| `EDIT`（圆角+垂直居中自绘；多行 / 滚动条 / 最大长度 / 大小写转换 / 边框 / 输入方式 / 调节器由 `multiline`/`scroll`/`maxlen`/`conv`/`border`/`input`/`spin` 控制，「对齐方式」复用 `style.align` → `ES_LEFT`/`ES_CENTER`/`ES_RIGHT`）。**多行 = 原来的 `multiedit`，带调节器 = 原来的 `spinner`**（两个类型 2026-09-22 合并进来，老 `.cgui` 自动升级）|
-| `richtext` | 富文本 | 否 | 320×160 | — | `change` | `RICHEDIT50W`（缺库时降级 EDIT）|
-| `datepicker` | 日期时间 | 否 | 140×28 | — | `change` | `SysDateTimePick32`（datetime 用两个 HWND）|
-| `monthcal` | 月历 | 否 | 230×180 | — | `select`、`dblclick` | `SysMonthCal32`（选中日期写回 `text`）|
-| `checkbox` | 复选框 | 否 | 160×28 | `复选` | `change` | `BUTTON`+`BS_OWNERDRAW`（自绘）|
-| `radio` | 单选钮 | 否 | 160×28 | `单选` | `change` | `BUTTON`+`BS_OWNERDRAW`（自绘，互斥靠兄弟遍历）|
-| `listbox` | 列表框 | 否 | 220×140 | — | `select`、`dblclick` | `LISTBOX` |
-| `combo` | 下拉框 | 否 | 200×200 | — | `select` | `COMBOBOX` |
-| `slider` | 滑块 | 否 | 200×32 | — | `change`、`release` | `msctls_trackbar32`+`NM_CUSTOMDRAW`（自绘轨道/滑块）|
+| `switch` | 开关 | 否 | 56×32 | — | `change`、`gotfocus`、`lostfocus` | `BUTTON` 自绘（M3 胶囊）|
+| `edit` | 输入框 | 否 | 200×32 | — | `click`（EDIT 自己不发点击通知，由运行时在左键抬起时补派发）、`change`、`submit`、`spin`（调节钮被按下）、`gotfocus`、`lostfocus`、鼠标全套（`mousedown`/`mouseup`/`dblclick`/`rdown`/`rup`/`mousemove`）、键盘全套（`keydown`/`keyup`/`char`/`wheel`）| `EDIT`（圆角+垂直居中自绘；多行 / 滚动条 / 最大长度 / 大小写转换 / 边框 / 输入方式 / 调节器由 `multiline`/`scroll`/`maxlen`/`conv`/`border`/`input`/`spin` 控制，「对齐方式」复用 `style.align` → `ES_LEFT`/`ES_CENTER`/`ES_RIGHT`）。**多行 = 原来的 `multiedit`，带调节器 = 原来的 `spinner`**（两个类型 2026-09-22 合并进来，老 `.cgui` 自动升级）|
+| `richtext` | 富文本 | 否 | 320×160 | — | `change`、`gotfocus`、`lostfocus` | `RICHEDIT50W`（缺库时降级 EDIT）|
+| `datepicker` | 日期时间 | 否 | 140×28 | — | `change`、`gotfocus`、`lostfocus` | `SysDateTimePick32`（datetime 用两个 HWND）|
+| `monthcal` | 月历 | 否 | 230×180 | — | `select`（**没有双击事件**：月历**从不发 `NM_DBLCLK`**，`MCN_SELECT` 已经把"点了哪一天"报全 —— 2026-09-23 真机实测后撤掉） | `SysMonthCal32`（选中日期写回 `text`）|
+| `checkbox` | 复选框 | 否 | 160×28 | `复选` | `change`、`gotfocus`、`lostfocus` | `BUTTON`+`BS_OWNERDRAW`（自绘）|
+| `radio` | 单选钮 | 否 | 160×28 | `单选` | `change`、`gotfocus`、`lostfocus` | `BUTTON`+`BS_OWNERDRAW`（自绘，互斥靠兄弟遍历）|
+| `listbox` | 列表框 | 否 | 220×140 | — | `select`、`dblclick`、`gotfocus`、`lostfocus` | `LISTBOX` |
+| `combo` | 下拉框 | 否 | 200×200 | — | `select`、`gotfocus`、`lostfocus` | `COMBOBOX` |
+| `slider` | 滑块 | 否 | 200×32 | — | `change`、`release`、`gotfocus`、`lostfocus` | `msctls_trackbar32`+`NM_CUSTOMDRAW`（自绘轨道/滑块）|
 | `progress` | 进度条 | 否 | 200×20 | — | **无**（只被写） | 自绘窗口 `CG_PROGRESS_CLASS`（原生不支持 custom draw）|
 | `progressring` | 圆环进度 | 否 | 120×120 | — | **无**（只被写） | 自绘窗口（GDI+ 轨道 + 圆头弧）|
-| `tabs` | 标签页 | **是** | 320×220 | — | `select` | `SysTabControl32`；子控件按 `page` 显隐 |
-| `tree` | 树 | 否 | 220×180 | — | `select`、`dblclick`、`expand`、`collapse` | `SysTreeView32` |
-| `table` | 表格 | 否 | 360×180 | — | `select`、`dblclick`、`check` | `SysListView32` 报表模式（`check`/`multi` 开勾选列与多选）|
+| `tabs` | 标签页 | **是** | 320×220 | — | `select`、`gotfocus`、`lostfocus` | `SysTabControl32`；子控件按 `page` 显隐 |
+| `tree` | 树 | 否 | 220×180 | — | `select`、`dblclick`、`expand`、`collapse`、`gotfocus`、`lostfocus` | `SysTreeView32` |
+| `table` | 表格 | 否 | 360×180 | — | `select`、`dblclick`、`check`、`gotfocus`、`lostfocus` | `SysListView32` 报表模式（`check`/`multi` 开勾选列与多选）|
 | `statusbar` | 状态栏 | 否 | 400×24 | — | **无** | `msctls_statusbar32` |
 | `terminal` | 终端 | 否 | 360×200 | — | **无** | 只读 RichEdit：按行着色（RX 绿 / TX 蓝 / 自己记的灰）、可选中复制，见 2.9 |
 | `chart` | 图表 | 否 | 320×160 | — | **无** | 自绘折线 / 柱状图：滑动窗口 + 超像素密度时按列画 min/max，见 2.10 |
@@ -512,9 +512,8 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `rate` | 评分 | 否 | 140×32 | — | `change` | `BUTTON` 自绘五角星（星数 = `max-min`，上限 10）|
 | `pagination` | 分页 | 否 | 180×32 | — | `change` | `BUTTON` 自绘（页数 = `max-min+1`）|
 
-> 上表只列每种控件的**主要**事件。凡是有键盘焦点概念的原生控件
-> （`button`/`switch`/`edit`/`richtext`/`datepicker`/`checkbox`/`radio`/
-> `listbox`/`combo`/`slider`/`tabs`/`tree`/`table`）都额外支持 `gotfocus` / `lostfocus`。
+> 上表的事件列与 `k_kinds[].events` 位掩码一一对应（`node tools\check-examples.mjs --docs` 会逐行回校）。
+> 鼠标 / 键盘那种"一整类"的写在行内括号里；某类控件不该有的事件，运行时与自检都会明确报出来。
 
 **窗口本身也是一个"控件"**（伪控件 id 固定为 `__window`，头文件里是 `CG_WINDOW_ID`）。
 它的事件写在 `app.events` 里，和控件事件共用同一套 `CG_BIND` 机制：
@@ -545,7 +544,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `wheel` | 滚轮滚动（`cg_event_delta()` 滚动量，正数向上）|
 
 鼠标/键盘/滚轮事件的参数因为回调签名固定（只有 `self`/`ev`/`user`），存在**派发目标**上
-（窗口事件存在窗口对象上；`button` 的控件级鼠标/键盘事件存在该控件上），
+（窗口事件存在窗口对象上；`button` / `edit` 的控件级鼠标/键盘事件存在该控件上），
 用 `cg_event_x/y/keys/key/delta` 和 `cg_tray_action` 读（`self` 传回调收到的那个控件即可）。
 
 `close` 回调里可以调 `cg_cancel_close(app)` 取消这次关闭（比如还有没保存的内容）。
@@ -554,8 +553,8 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 
 - 能点的才有 `click` / `dblclick`；能改内容的才有 `change`
 - 有"选择"概念的才有 `select`；只有树有 `expand` / `collapse`
-- 只有滑块有 `release`（拖动中发 `change`，松手才发 `release`）
-- 只有 `button` 有控件级的鼠标/键盘/滚轮事件（坐标相对控件客户区；窗口级那套坐标相对窗口客户区）
+- 只有 `slider` 与 `splitter` 有 `release`（滑块拖动中发 `change`、松手才发 `release`；分隔条拖完发一次）
+- 控件级的鼠标/键盘/滚轮事件只有 `button` 与 `edit`（坐标相对控件客户区；窗口级那套坐标相对窗口客户区）
 - 纯显示或只被程序写的控件（标签/进度条/状态栏/容器）一个事件都没有
 
 画布只列出某控件支持的事件；手写 `.cgui` 绑了不支持的事件时，运行时启动会打

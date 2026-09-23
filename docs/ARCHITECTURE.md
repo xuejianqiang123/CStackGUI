@@ -90,16 +90,21 @@ static const cg_binding_t k_bindings[] = {
 - 画布：事件面板只列出该控件支持的事件（`model.ts` 的 `KIND_EVENTS`）；
 - 自检：`.cgui` 绑了不支持的事件算失败（返回码 5）。
 
-| `cg_event_t` | `.cgui` 里的键 | 触发来源（Win32 后端） | 谁支持 |
+| `cg_event_t` | `.cgui` 里的键 | 触发来源（Win32 后端） | 谁支持（以 `k_kinds[].events` 掩码为准） |
 | --- | --- | --- | --- |
-| `CG_EVENT_CLICK` | `click` | `BN_CLICKED` / `STN_CLICKED` | button、iconbutton、link、image、菜单类 |
-| `CG_EVENT_DBLCLICK` | `dblclick` | 运行时自己判定（见下）；列表/树/表格用原生 `*_DBLCLK` | 同上 + listbox、tree、table、monthcal |
-| `CG_EVENT_CHANGE` | `change` | `EN_CHANGE` / `BN_CLICKED`(勾选类) / `WM_HSCROLL`(滑块) / `UDN_DELTAPOS`(数值框箭头) / `DTN_DATETIMECHANGE` | edit（含多行与数值框）、richtext、datepicker、checkbox、radio、switch、slider |
+| `CG_EVENT_CLICK` | `click` | `BN_CLICKED` / `STN_CLICKED`（button / iconbutton / link / tag）、菜单与工具栏的 `WM_COMMAND`；`edit` 与 `image` / `canvas` 由窗口过程在 `WM_LBUTTONUP` 补派发（EDIT 自己既不发 `BN_CLICKED`、也没有 `WM_LBUTTONDBLCLK`） | button、iconbutton、link、edit、image、canvas、tag、menu、menubutton、toolbar |
+| `CG_EVENT_DBLCLICK` | `dblclick` | 运行时按系统双击间隔合成（见下）；listbox / tree / table 另有原生 `LBN_DBLCLK` / `NM_DBLCLK` | button、iconbutton、link、edit、image、canvas、listbox、tree、table（**月历没有**：它从不发 `NM_DBLCLK`，点击语义由 `select` 覆盖） |
+| `CG_EVENT_CHANGE` | `change` | `EN_CHANGE` / `BN_CLICKED`(勾选类) / `WM_HSCROLL`(滑块) / `DTN_DATETIMECHANGE` / `UDN_DELTAPOS`(数值框箭头) / 取色·评分·分页的点击 | switch、edit（含多行与数值框）、richtext、datepicker、checkbox、radio、slider、colorpicker、rate、pagination |
 | `CG_EVENT_SUBMIT` | `submit` | 回车（`IsDialogMessage` → `IDOK`，落在当前焦点的输入框上） | 只有 edit |
 | `CG_EVENT_SELECT` | `select` | `LBN_SELCHANGE` / `CBN_SELCHANGE` / `TCN_SELCHANGE` / `TVN_*` / `LVN_ITEMCHANGED` / `MCN_SELECT` | listbox、combo、tabs、tree、table、monthcal |
-| `CG_EVENT_RELEASE` | `release` | 滑块 `TB_ENDTRACK`（拖动中只发 `change`） | 只有 slider |
+| `CG_EVENT_RELEASE` | `release` | 滑块 `TB_ENDTRACK`（拖动中只发 `change`）/ 分隔条拖完的 `WM_LBUTTONUP` | slider、splitter |
+| `CG_EVENT_SPIN` | `spin` | 数值框的 `UDN_DELTAPOS`（`cg_event_delta()` 给 +1 / -1；`spin:1` 之后还会补一次 `change`） | 只有 edit（`.cgui` 里开了 `spin`） |
 | `CG_EVENT_EXPAND` / `COLLAPSE` | `expand` / `collapse` | `TVN_ITEMEXPANDEDW`（回调里 `cg_tree_selected()` 能拿到是哪个节点） | 只有 tree |
-| `CG_EVENT_CLOSE` | `close`（写在 `app.events`） | `WM_CLOSE`，回调里可 `cg_cancel_close()` 拦下 | 只有窗口 |
+| `CG_EVENT_TICK` | `tick` | 后端 50ms 心跳按 `period` 计时 | 只有 timer |
+| `CG_EVENT_CHECK` | `check` | 表格勾选列 `LVN_ITEMCHANGED` | 只有 table（`.cgui` 里开了 `check`） |
+| `CG_EVENT_GOTFOCUS` / `LOSTFOCUS` | `gotfocus` / `lostfocus` | 焦点子类的 `WM_SETFOCUS` / `WM_KILLFOCUS` | button、switch、edit、richtext、datepicker、checkbox、radio、listbox、combo、slider、tabs、tree、table |
+| `CG_EVENT_MOUSEDOWN` / `MOUSEUP` / `RDOWN` / `RUP` / `MOUSEMOVE` / `KEYDOWN` / `KEYUP` / `CHAR` / `WHEEL` | 与枚举名同小写 | 控件内的鼠标 / 键盘 / 滚轮消息（坐标相对**控件客户区**） | 控件级只有 button、edit |
+| `CG_EVENT_CLOSE` / `READY` / `DESTROY` / `MOVE` / `SIZE` / `ACTIVATE` / `DEACTIVATE` / `FIRSTACTIVATE` / `IDLE` / `TRAY` / `SHOW` / `HIDE` / `CLOSEQUERY`（+ 上面那批鼠标 / 键盘事件） | 同名（写在 `app.events` 里） | 主窗口过程；`close` / `closequery` 回调里可 `cg_cancel_close()` 拦下 | 只有窗口（伪控件 `CG_WINDOW_ID`） |
 
 设计动机：把事件和控件类型绑死，用户在画布上就不会给进度条绑出永远不触发的
 `click`；手写 `.cgui` 绑错了，启动时就有明确警告，而不是"点了没反应"自己猜。
@@ -464,7 +469,7 @@ MinGW-w64 没有 libasan**（实测 `ld: cannot find -lasan`），Windows 上也
 
 `--selftest` 会调用 `desc.on_ready`，所以"启动时挂业务数据"那段逻辑也在覆盖范围内。
 
-`--selftest` 是**不开窗口的端到端检查**：它会把每个绑定了回调的控件都合成一次事件并真的调用你的 C 函数，返回码非 0 表示有事件名在 C 侧没登记、或绑了该控件不支持的事件。放在 CI 里就能保证「画布改了事件名但忘了改代码」这类问题不漏。
+`--selftest` 是**不开窗口的端到端检查**：它会把每个绑定了回调的**控件**都合成一次事件并真的调用你的 C 函数（`on_ready` 也会被调一次），返回码非 0 表示有事件名在 C 侧没登记、或绑了该控件不支持的事件。**窗口级事件（写在 `app.events` 里）不合成触发** —— 合出来会真的关窗退出，所以只核对回调名有没有登记（见 `cg_app.c` 的 `selftest_walk()`）。放在 CI 里就能保证「画布改了事件名但忘了改代码」这类问题不漏。
 
 ---
 

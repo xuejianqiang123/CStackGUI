@@ -14,7 +14,7 @@
 | `04-数据与日志.md` | `examples\lesson04_data\` | 同上；`splitter` 的两栏语义见 `docs\CGUI-FORMAT.md` 的 `terminal` 那节 |
 | `05-命令与图形.md` | `examples\lesson05_commands\` | 同上 |
 | `00-导读.md` | `README.md` + `build-app.bat` | 环境要求、第一次编译的三条命令 |
-| `06-主窗口与窗口事件.md` | `examples\lesson06_window\` | 窗口配置 `app.*`、19 种窗口事件、`app.info` 程序信息；自检不合成窗口事件这条也在里面 |
+| `06-主窗口与窗口事件.md` | `examples\lesson06_window\` | 窗口配置 `app.*`、25 种窗口事件、`app.info` 程序信息；自检不合成窗口事件这条也在里面 |
 | `07-实战-记事本.md` | `examples\notepad\` | 菜单分发、脏标记、状态栏刷新、编码识别 |
 
 ## 每篇的固定结构（八篇保持一致，读者才不用重新适应）

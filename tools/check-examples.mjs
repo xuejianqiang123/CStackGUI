@@ -300,6 +300,68 @@ if (wantDocs) {
     });
   }
 
+  // ④.6 逐类型事件表：CGUI-FORMAT 第 4 节"支持的 events"列必须覆盖 cg_doc_kind.c 的掩码。
+  //      2026-09-23 排查的教训是"声明了却不生效"这一整类缺陷（edit 声明 dblclick 却从不派发、
+  //      image 声明 click 却从不派发）—— 掩码本身对不对没法机器判定，但"**掩码与文档脱节**"
+  //      可以：掩码里有、文档没写 = 错（用户发现不了这个能力）；文档写了、掩码里没有 = 警告
+  //      （多半是过时的空头承诺，如撤销前的 monthcal dblclick）。
+  {
+    const kindSrc = fs.readFileSync(path.join(root, "runtime/src/core/cg_doc_kind.c"), "utf8");
+    const evSrc = fs.readFileSync(path.join(root, "runtime/src/core/cg_event.c"), "utf8");
+
+    // CG_EVENT_XXX -> "xxx"（以运行时的事件名表为唯一来源）
+    const evName = new Map();
+    for (const m of evSrc.matchAll(/\[(CG_EVENT_[A-Z]+)\]\s*=\s*"([a-z]+)"/g)) evName.set(m[1], m[2]);
+
+    // 逐类型掩码：行首 `{ "type", CG_K_XXX,` 开始，累积到含 "}," 的那一行结束（掩码会跨行）
+    const masks = new Map();
+    let cur = null;
+    for (const line of kindSrc.split(/\r?\n/)) {
+      if (!cur) {
+        const m = /^\s*\{\s*"([a-z]+)"\s*,\s*CG_K_/.exec(line);
+        if (m) cur = { type: m[1], text: line };
+        else continue;
+      } else {
+        cur.text += " " + line;
+      }
+      if (/\},?\s*$/.test(line) && /CG_K_/.test(cur.text)) {
+        const evs = [...cur.text.matchAll(/CG_EV_([A-Z]+)/g)]
+          .map((x) => evName.get("CG_EVENT_" + x[1]))
+          .filter(Boolean);
+        masks.set(cur.type, new Set(evs));
+        cur = null;
+      }
+    }
+
+    // 文档侧：CGUI-FORMAT 第 4 节的类型表，第 6 列 = 支持的 events
+    const fmtRel = "docs/CGUI-FORMAT.md";
+    const fmtLines = fs.readFileSync(path.join(root, fmtRel), "utf8").split(/\r?\n/);
+    let inTable = false;
+    fmtLines.forEach((line, i) => {
+      if (/^##\s*4\./.test(line)) { inTable = true; return; }
+      if (inTable && /^##\s*5\./.test(line)) { inTable = false; return; }
+      if (!inTable || !line.startsWith("|")) return;
+      const cells = line.split("|");
+      if (cells.length < 7) return;
+      const type = (cells[1] || "").trim().replace(/`/g, "");
+      const mask = masks.get(type);
+      if (!mask) return; // 非类型行（表头/分隔行）或文档里多出来的行，跳过
+      const cell = cells[6] || "";
+      const mentioned = new Set([...cell.matchAll(/`([a-z]+)`/g)].map((m) => m[1]).filter((n) => evName.has("CG_EVENT_" + n.toUpperCase()) || [...evName.values()].includes(n)));
+      claims += 1;
+      for (const ev of mask) {
+        if (!mentioned.has(ev)) {
+          problems.push(`${fmtRel}:${i + 1} — \`${type}\` 的掩码里有 \`${ev}\`，但这一行没写（用户会以为没这个事件）`);
+        }
+      }
+      for (const ev of mentioned) {
+        if (!mask.has(ev)) {
+          console.log(`        提示：${fmtRel}:${i + 1} — \`${type}\` 这一行写了 \`${ev}\`，但掩码里没有（过时的空头承诺？）`);
+        }
+      }
+    });
+  }
+
   // ⑤ 每篇自述的"本篇是第 N 篇"必须等于它在系列里的序号（文件名前缀 + 1：00 导读 = 第 1 篇）
   if (fs.existsSync(ARTICLES_DIR)) {
     for (const f of articles) {

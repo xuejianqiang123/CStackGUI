@@ -16,7 +16,7 @@ CStackGUI 是一套「画布 + C 运行时」的桌面 GUI 开发方案，三句
 - 业务逻辑是普通 C 文件，只写回调函数；**事件按控件特性分配**，画布只列出该控件真正支持的事件。
 - 最终产物是**一个 exe，零依赖**：换台电脑复制过去就能跑。
 
-**42 种控件、13 种事件**（按钮/输入/列表/树/表格/标签页/月历/时钟/画板/颜色选择/评分/分页……），
+**42 种控件**，事件按控件特性分配（能点的才有 `click`/`dblclick`，能改内容的才有 `change`……），
 全部控件和事件的用法都能在自带示例 `examples\gallery\`（控件陈列室·三合一）里找到。
 
 当前边界：按钮/开关/勾选/输入框/滑块/进度条走自绘外观层（吃圆角与配色），系统控件（列表框/树/表格/标签页）不吃；
@@ -119,7 +119,7 @@ void on_ok_click(cg_widget_t *self, cg_event_t ev, void *user)
 ```bat
 build-app.bat <名字>              :: 产物是 apps\<名字>\<名字>.exe
 apps\<名字>\<名字>.exe            :: 双击也行——程序自己找旁边的 .cgui
-apps\<名字>\<名字>.exe --selftest :: 不开窗自检：真调一遍所有回调，名字错了非 0 退出
+apps\<名字>\<名字>.exe --selftest :: 不开窗自检：真调一遍所有控件回调（窗口事件只核对名字），名字错了非 0 退出
 ```
 
 改完界面只要重新存 `.cgui` 直接重跑 exe；改了回调函数体才需要重新 `build-app.bat`。
@@ -215,23 +215,27 @@ tools\check-kit.bat                                              :: 用到 cg_ki
 | --- | --- | --- |
 | 按钮 / 图标按钮 / 链接 / 标签片 | `click`、`dblclick` | 图标按钮用 `src` 指定图片 |
 | 开关 / 复选框 / 单选钮 / 评分 | `change` | 开关是自绘的药丸形 |
-| 单行输入 | `change`、`submit`、`gotfocus`、`lostfocus` | `submit` 是回车 |
-| 多行输入 / 富文本 / 数字微调 / 日期时间 / 颜色选择 | `change` | |
+| 单行输入 | `click`、`change`、`submit`、`gotfocus`、`lostfocus` | `submit` 是回车 |
+| 数值输入框（`edit` + `spin`） | `click`、`change`、`spin` | 右侧上下箭头；`spin` 给 ±1 |
+| 多行输入 / 富文本 / 日期时间 / 颜色选择 | `change` | |
 | 列表框 | `select`、`dblclick`、`gotfocus`、`lostfocus` | |
 | 下拉框 | `select` | |
 | 滑块 | `change`、`release` | 拖动中给 `change`，松手给 `release` |
 | 标签页 | `select` | 子控件用 `page` 指定属于第几页 |
 | 树 | `select`、`dblclick`、`expand`、`collapse` | 展开/折叠时能拿到是哪个节点 |
 | 表格 | `select`、`dblclick`、`check` | `.cgui` 里开 `check`/`multi` 可加勾选列与多选 |
-| 月历 | `select`、`dblclick` | 选中的日期写回 `text` |
+| 月历 | `select` | 选中的日期写回 `text`；月历**没有双击事件**（从不发 `NM_DBLCLK`） |
 | 菜单栏 / 菜单按钮 | `click` | 用 `cg_menu_last_id()` 区分点的是哪一项 |
 | 工具栏 | `click` | 用 `cg_widget_value()` 拿是第几个按钮 |
 | 时钟（timer） | `tick` | `period` 毫秒一跳，回调里周期性干活 |
 | 画板（canvas） | `click`、`dblclick` | 用 `cg_canvas_line/rect/ellipse/text` 画 |
+| 图片（image） | `click`、`dblclick` | 给图片绑点击是有效的 |
+| 分隔条（splitter） | `release` | 拖完发一次，适合在这里存布局 |
 | 徽章 / 进度条 / 圆环 / 状态栏 / 分割线 / 容器 / 外形框 | 无 | 只用来显示，或被程序写入 |
 
-**窗口**本身有一个 `close` 事件（点关闭按钮前触发），在画布右侧「文档」页签里绑，
-回调里 `cg_cancel_close()` 能拦下一次关闭。
+**窗口**本身的事件写在画布右侧「文档」页签里（`app.events`）：`close` / `ready` / `size` /
+`keydown` / `tray` / `wheel`…… 共 25 个，和控件事件共用同一套绑定机制；
+`close` / `closequery` 回调里 `cg_cancel_close()` 能拦下一次关闭。
 
 ### 4.3 常见问题
 

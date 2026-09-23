@@ -40,9 +40,11 @@ apps\<名字>\  业务程序（.cgui + C 文件）──链接──>  apps\<名
 | 其它 | 分割线 / 分隔条（可拖动的分栏边界）/ 图片 / 外形框 / 时钟 / 画板 / 颜色选择 / 状态灯 / 网页浏览（实验性） |
 | 装饰 | 徽章 / 标签片 / 评分 / 分页 |
 
-事件 13 种：`click / dblclick / change / submit / select / release / expand / collapse /
-tick / check / gotfocus / lostfocus`（+ 窗口级 `close`）。
-每种控件支持哪些事件见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md)。
+事件**按控件特性分配**，不是每个控件一套：控件级有 `click / dblclick / change / submit /
+select / release / expand / collapse / tick / check / spin / gotfocus / lostfocus`，外加
+`button` / `edit` 的控件级鼠标键盘全套；窗口级那套（`ready / close / size / keydown / wheel`…）
+写在 `app.events` 里。每种控件支持哪些事件见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md)
+第 4 节（真相在 `runtime/src/core/cg_doc_kind.c` 的 `k_kinds` 掩码）。
 
 界面之外还有一套 **基础能力 API**（`cg_kit`）：读写文件、INI 配置、路径处理、
 文本与编码转换（UTF-8 ↔ GBK）、剪贴板、用默认程序打开文件/网址、启动外部程序、
@@ -159,7 +161,7 @@ tick / check / gotfocus / lostfocus`（+ 窗口级 `close`）。
 
    ```bat
    apps\myapp\myapp.exe                                  :: 双击也行（自动找旁边的 .cgui）
-   apps\myapp\myapp.exe --selftest apps\myapp\myapp.cgui :: 不开窗，解析 + 真调一遍所有回调
+   apps\myapp\myapp.exe --selftest apps\myapp\myapp.cgui :: 不开窗，解析 + 真调一遍所有控件回调（窗口事件只核对名字）
    ```
 
    `--selftest` 是唯一能自动发现"事件名写错"的手段：有名字没登记就非 0 退出。
@@ -329,7 +331,7 @@ CStackGUI\
     lesson03_values\           教学示例 03：数值与指示（滑块/进度/圆环/仪表盘/状态灯/评分）
     lesson04_data\             教学示例 04：数据与日志（标签页/树/表格/终端/图表/分隔条）
     lesson05_commands\         教学示例 05：命令与图形（菜单/工具栏/画板/外形/图片/网页）
-    lesson06_window\           教学示例 06：主窗口与窗口事件（app.* 配置 / 19 种窗口事件 / 程序信息）
+    lesson06_window\           教学示例 06：主窗口与窗口事件（app.* 配置 / 25 种窗口事件 / 程序信息）
     教学使用说明.md             六课路线图 + 每课详解 + 通用知识（学这套示例先读它）
     gallery\                   控件陈列室·三合一（gallery.cgui / main.c / assets\ / 产物）
     notepad\                   真实小工具范例：记事本（菜单/文件/配置/cg_kit 全套）
@@ -391,7 +393,7 @@ cg_node_t 树 ──build_node()──> cg_widget_t 树（状态 + 回调函数�
    │                              create_native_tree()  ← 父先于子，照树序建 HWND
    ↓                                     ↓
 Win32 消息 (WM_COMMAND/WM_NOTIFY/WM_DRAWITEM…)
-   │ notify_from() / notify_common() / FocusProc   ← 原生通知翻译成 13 种事件
+   │ notify_from() / notify_common() / FocusProc   ← 原生通知翻译成事件（映射表见 cg_win_notify.c）
    ↓
 cg_dispatch(w, ev) ──> 按 .cgui 里绑的函数名查表 ──> 你的回调（self, ev, user）
 ```
