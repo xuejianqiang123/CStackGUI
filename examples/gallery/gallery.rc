@@ -1,0 +1,55 @@
+/* gallery.rc -- 程序图标 + v6 控件清单 + 版本信息
+ *
+ * 这份是**手写**的样板，形状与画布「程序配置」对话框生成的一模一样
+ * （生成器见 designer/src/codegen.ts 的 rcFile()）。放在这里有两个用处：
+ *
+ *   ① 让 gallery.exe 真的带上"产品名 / 版本 / 作者"—— 右键属性 → 详细信息能看到；
+ *   ② 让 build-app.bat 里那条 `windres --codepage=65001 -I <工程> -I runtime\res -O coff`
+ *      在仓库里**至少被真跑过一次**。在此之前没有任何示例带 .rc，那套参数（UTF-8 + 中文
+ *      字符串 + 两份 -I）从没被验证过；而它是"画布填的程序配置能进 exe"的唯一通道
+ *      （2026-09-23 打包域审计发现）。
+ *
+ * 文件本身就是 UTF-8（含中文字符串），所以开头有 #pragma code_page(65001)；
+ * 用记事本/编辑器改中文时**别存成 GBK**，否则 exe 里的文字会变乱码。
+ */
+#pragma code_page(65001)
+
+#include <windows.h>
+
+/* 图标：cstackgui.ico 由 -I runtime\res 找到；画布选了自己的图标时，
+ * 生成的 .rc 会换成工程目录里的相对路径（同样靠 -I <工程> 找到）。 */
+1 ICON "cstackgui.ico"
+
+/* v6 通用控件清单：少了它，标签页 / 进度条这些会是老式外观 */
+1 RT_MANIFEST "cstackgui.manifest"
+
+VS_VERSION_INFO VERSIONINFO
+  FILEVERSION    0,1,0,0
+  PRODUCTVERSION 0,1,0,0
+  FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+  FILEFLAGS      0
+  FILEOS         VOS_NT_WINDOWS32
+  FILETYPE       VFT_APP
+  FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "080404B0"
+    BEGIN
+      VALUE "CompanyName", "CStackGUI"
+      VALUE "FileDescription", "控件陈列室：全部控件类型的一屏总览"
+      VALUE "FileVersion", "0.1.0.0"
+      VALUE "InternalName", "gallery"
+      VALUE "LegalCopyright", "CStackGUI 示例"
+      VALUE "OriginalFilename", "gallery.exe"
+      VALUE "ProductName", "CStackGUI 控件陈列室"
+      VALUE "ProductVersion", "0.1.0.0"
+      VALUE "Comments", "本 .rc 是手写样板，形状同画布生成的程序配置；改内容直接改这里"
+      VALUE "Author", "CStackGUI"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x804, 1200
+  END
+END
