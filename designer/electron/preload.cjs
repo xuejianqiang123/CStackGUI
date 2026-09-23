@@ -41,6 +41,11 @@ contextBridge.exposeInMainWorld("cstackgui", {
       "menu:zoomIn",
       "menu:zoomOut",
       "menu:zoomFit",
+      /* 注意：main.mjs 的菜单里每多一个 send("menu:xxx")，这里必须同步加一行 ——
+       * 漏了不会报错，只是那个菜单项静默失效（「程序配置」就这么漏过，2026-09-23 抓到）。
+       * 结构性的修法（通道名单集中成一份常量、preload 与 menu 共用）记在
+       * .codebuddy/plans/refactor-structure.md §5.1。 */
+      "menu:programConfig",
     ];
     for (const ch of channels) {
       ipcRenderer.removeAllListeners(ch);

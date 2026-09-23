@@ -101,6 +101,14 @@ echo   runtime dispatch contract: events and fields really reach the native side
 node tools\check-dispatch.mjs
 if errorlevel 1 exit /b 1
 
+rem 分层契约：core 平台中立 / win32 只走 cg_win_internal.h / skin 不反向依赖 /
+rem kit 不依赖界面 / 四层 .c 基名唯一（撞名会让 build-runtime 的 .o 互相覆盖）。
+rem 结构审查实测这五条当前**全部成立** —— 越干净越值得锁，因为一次图省事的 include
+rem 就能悄悄毁掉"core 可跨平台、后端可替换"，而编译器不会报警。
+echo   layer contract (core / win32 / skin / kit)
+node tools\check-layers.mjs
+if errorlevel 1 exit /b 1
+
 echo   app config: exe version info (examples\gallery\gallery.rc)
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$exe='examples\gallery\gallery.exe'; if (-not (Test-Path $exe)) { Write-Host '[fail] gallery.exe missing - run build-all first'; exit 1 }; $v=(Get-Item $exe).VersionInfo; $want='CStackGUI ' + [char]0x63A7 + [char]0x4EF6 + [char]0x9648 + [char]0x5217 + [char]0x5BA4; if ($v.FileVersion -ne '0.1.0.0' -or $v.OriginalFilename -ne 'gallery.exe' -or $v.ProductName -ne $want) { Write-Host ('[fail] gallery.exe version info mismatch -> FileVersion=' + $v.FileVersion + ' ProductName=' + $v.ProductName + ' OriginalFilename=' + $v.OriginalFilename); exit 1 }; Write-Host ('  gallery.exe: ' + $v.ProductName + ' ' + $v.FileVersion)"
 if errorlevel 1 exit /b 1
