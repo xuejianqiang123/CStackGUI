@@ -487,13 +487,21 @@ void cg_widget_set_checked(cg_widget_t *w, int on)
     cg_bind_propagate(w);
 }
 
-/** @brief 设置当前值，自动夹到 [vmin, vmax] */
+/** @brief 设置当前值，自动夹到 [vmin, vmax]（"下标即 value"的类型夹到项数范围） */
 void cg_widget_set_value(cg_widget_t *w, int value)
 {
     char vbuf[32];
     if (!w) return;
-    if (value < w->vmin) value = w->vmin;
-    if (value > w->vmax) value = w->vmax;
+    /* 列表框 / 下拉框 / 标签页的 value 是"第几项"：范围是 0..项数-1，不是默认的 [0,100]。
+     * 不区分的话，超过 100 项的列表通过公共 API 永远选不中后段 —— 而内部那条路径
+     * （原生通知进来时）本来就绕过了夹取，两边语义应当一致（与 bind 传播的"下标不夹"也一致）。 */
+    if (!strcmp(w->type, "listbox") || !strcmp(w->type, "combo") || !strcmp(w->type, "tabs")) {
+        if (value < 0) value = 0;
+        if (w->nitems > 0 && value > w->nitems - 1) value = w->nitems - 1;
+    } else {
+        if (value < w->vmin) value = w->vmin;
+        if (value > w->vmax) value = w->vmax;
+    }
     w->value = value;
     if (w->node) w->node->value = value;
     /* 数值框的文本是 value 的派生物：一起更新，cg_widget_text() 才不会读到旧数字 */

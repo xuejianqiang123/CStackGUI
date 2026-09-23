@@ -61,6 +61,19 @@ static LRESULT CALLBACK ImageProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         EndPaint(hwnd, &ps);
         return 0;
     }
+    case WM_LBUTTONUP: {
+        /* `image` 在类型表里声明了 click/dblclick（cg_doc_kind.c），但 IMAGE_CLASS 自己
+         * 不发任何通知 —— 所以照画板的做法在这里补一次 click；双击由 cg_dispatch 按
+         * 系统双击间隔合成（core/cg_event.c）。历史上这里漏了：
+         * 给图片绑 click 永远不触发，而 --selftest 是直接调函数指针，所以门禁发现不了。 */
+        cg_widget_t *w = cgw_widget_by_hwnd(app, hwnd);
+        if (w && !g_win_in_notify) {
+            g_win_in_notify = 1;
+            cg_dispatch(w, CG_EVENT_CLICK);
+            g_win_in_notify = 0;
+        }
+        break;
+    }
     default:
         break;
     }

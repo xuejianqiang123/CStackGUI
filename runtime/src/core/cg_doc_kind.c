@@ -33,9 +33,11 @@ static const cg_kind_info_t k_kinds[] = {
     /* 唯一的输入框类型：单行 / 多行 / 数值框全靠字段表达 ——
      *   multiline + scroll（= 原来的 multiedit）、spin（= 原来的 spinner，value 语义）、
      *   maxlen / conv / input / border / 对齐（style.align）。
-     * 事件按"最全的那个"给：change/submit 加鼠标/键盘/滚轮全套 + spin（调节钮被按下）。
-     * 老 .cgui 里的 multiedit / spinner 由 cg_doc.c 的 parse_node 自动升级成本类型。 */
-    { "edit",       CG_K_EDIT,       0, 200,  32, "",     CG_EV_CHANGE | CG_EV_SUBMIT | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS
+     * 事件按"最全的那个"给：change/submit/click 加鼠标/键盘/滚轮全套 + spin（调节钮被按下）。
+     * click/dblclick 是 2026-09-23 补齐的：EDIT 既不发 BN_CLICKED、也不产生
+     * WM_LBUTTONDBLCLK（EDIT 类没有 CS_DBLCLKS），所以由子类在左键抬起时补派发一次 click
+     * （见 cg_win_event.c），双击再由 cg_dispatch 按系统双击间隔合成。 */
+    { "edit",       CG_K_EDIT,       0, 200,  32, "",     CG_EV_CLICK | CG_EV_CHANGE | CG_EV_SUBMIT | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS
                                                    | CG_EV_MOUSEDOWN | CG_EV_MOUSEUP | CG_EV_DBLCLICK
                                                    | CG_EV_RDOWN | CG_EV_RUP | CG_EV_MOUSEMOVE
                                                    | CG_EV_KEYDOWN | CG_EV_KEYUP | CG_EV_CHAR | CG_EV_WHEEL

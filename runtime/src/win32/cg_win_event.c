@@ -163,6 +163,15 @@ LRESULT CALLBACK cgw_FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
                 (cgw_is_t(w, "rate") || cgw_is_t(w, "pagination"))) {
                 rate_or_pag_click(w, hwnd, (short)LOWORD(lp));
             }
+            /* 输入框没有原生 click 通知（EDIT 不发 BN_CLICKED，也没有 WM_LBUTTONDBLCLK），
+             * 但 `edit` 的类型事件表声明了 click/dblclick —— 在这里把左键抬起补成一次 click，
+             * 双击再由 cg_dispatch 按系统双击间隔合成（core/cg_event.c）。
+             * 只给 edit 补：其它类型各有原生通知或合成来源，补了会重复派发。 */
+            if (msg == WM_LBUTTONUP && cgw_is_t(w, "edit")) {
+                g_win_in_notify = 1;
+                cg_dispatch(w, CG_EVENT_CLICK);
+                g_win_in_notify = 0;
+            }
             /* 控件级鼠标/键盘/滚轮事件：k_kinds 声明了才派发（目前按钮全套支持）。
              * 坐标/键码等参数与窗口级事件同一套 cg_event_x/y/keys/key/delta 读取，
              * 存在"派发目标控件"上（窗口事件存在窗口伪控件上，口径一致）。 */

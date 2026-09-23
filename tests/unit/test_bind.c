@@ -187,6 +187,17 @@ static void test_bind_propagate(void)
     cg_test_int("set_value 后微调框跟着变", cg_widget_value(spn), 55);
     cg_test_int("set_value 后列表选中项跟着变", cg_widget_value(lst), 55);
 
+    /* "下标即 value"的类型（listbox/combo/tabs）不该按默认的 [vmin,vmax]=[0,100] 夹取，
+     * 否则超过 100 项的列表通过公共 API 永远选不中后段（2026-09-23 修）。 */
+    {
+        int n0 = cg_widget_list_count(lst);
+        int i;
+        for (i = 0; i < 150; ++i) cg_widget_list_add(lst, "x");
+        cg_widget_set_value(lst, 120);
+        cg_test_int("150 项往后也能选到第 120 项", cg_widget_value(lst), 120);
+        cg_test_int("项数按新增累加", cg_widget_list_count(lst), n0 + 150);
+    }
+
     /* 后端改值后是「先写字段、再 cg_dispatch」，绑定要在派发这一步同步掉 */
     sld->value = 88;
     cg_dispatch(sld, CG_EVENT_CHANGE);

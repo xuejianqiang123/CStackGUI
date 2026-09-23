@@ -659,6 +659,11 @@ static void sync_widget_body(cg_widget_t *w)
 
     EnableWindow(h, w->enabled ? TRUE : FALSE);
 
+    /* 第二个原生窗口（数值框的调节器 UPDOWN、datetime 的第二个 DTP）也要一起禁用。
+     * 只禁主控件的话：enabled:false 的数值框仍能点箭头改值 —— 而那条路径（UDN_DELTAPOS）
+     * 是直接改 value、不走 cg_dispatch，所以连回调都不会发（2026-09-23 排查发现）。 */
+    if (w->native2) EnableWindow(w->native2, w->enabled ? TRUE : FALSE);
+
     /* 标签页的子控件要按当前页显隐（数值框 / datetime 的 native2 同进同退） */
     apply_visible(w);
     InvalidateRect(h, NULL, TRUE);
