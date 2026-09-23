@@ -728,7 +728,10 @@ void cg_skin_draw_progress(cg_widget_t *w, HDC hdc, const RECT *rc)
             if (GdipCreatePath(SK_FILL_WINDING, &fp) == SK_GDIP_OK && fp) {
                 GpSolidFill *ff = NULL;
                 sk_round_rect(fp, (REAL)(x + 1), (REAL)(y + 1), (REAL)fw, (REAL)(hp - 2), (REAL)rad);
-                if (GdipCreateSolidFill(sk_argb(255, 0x6750A4u), &ff) == SK_GDIP_OK && ff) {
+                /* 填充色：设了 style.fg 就用它（与 progressring / meter / led 同一口径），
+                 * 否则用 M3 主色。这里以前写死 —— 于是画布上给进度条设"文字色/主色"
+                 * 看不出任何变化（2026-09-23 字段覆盖审计发现）。 */
+                if (GdipCreateSolidFill(sk_argb(255, (w->style.fg != CG_COLOR_NONE) ? w->style.fg : 0x6750A4u), &ff) == SK_GDIP_OK && ff) {
                     GdipFillPath(g, (GpBrush *)ff, fp);
                     GdipDeleteBrush((GpBrush *)ff);
                 }
@@ -739,7 +742,7 @@ void cg_skin_draw_progress(cg_widget_t *w, HDC hdc, const RECT *rc)
     } else {
         /* 回退：GDI 圆角矩形 */
         HBRUSH bg = CreateSolidBrush(sk_colorref(0xE6E1E9u));
-        HBRUSH fb = CreateSolidBrush(sk_colorref(0x6750A4u));
+        HBRUSH fb = CreateSolidBrush(sk_colorref((w->style.fg != CG_COLOR_NONE) ? w->style.fg : 0x6750A4u));
         HBRUSH ob = (HBRUSH)SelectObject(hdc, bg);
         RoundRect(hdc, x, y, x + wp, y + hp, rad * 2, rad * 2);
         SelectObject(hdc, fb);

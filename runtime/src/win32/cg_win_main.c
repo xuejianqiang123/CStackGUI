@@ -278,7 +278,13 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             app->scale = (int)((long long)dpi * 100 / 96);
             SetWindowPos(hwnd, NULL, r->left, r->top, r->right - r->left, r->bottom - r->top,
                          SWP_NOZORDER | SWP_NOACTIVATE);
-            for (cg_widget_t *w = app->widgets; w; w = w->next) cgw_sync_widget(w);
+            for (cg_widget_t *w = app->widgets; w; w = w->next) {
+                cgw_sync_widget(w);
+                /* 与 scale 绑定的皮肤量不会自己跟着变：输入框的圆角 / 边框带 / 箭头宽度
+                 * 都是建控件时按**旧** scale 算的（cg_skin_apply_edit 只被调用一次），
+                 * 跨到不同 DPI 的显示器后在这里补一次。 */
+                if (!strcmp(w->type, "edit")) cg_skin_edit_rescale(w);
+            }
         }
         return 0;
     }

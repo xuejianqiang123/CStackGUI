@@ -104,6 +104,13 @@ const RULES = [
        + "不折回的话，缩放屏上按坐标画图/算布局会差 1.x 倍。",
   },
   {
+    scope: "func", file: "runtime/src/skin/cg_skin.c", func: "cg_skin_draw_progress",
+    must: ["w->style.fg"],
+    why: "进度条的填充色必须尊重 style.fg（与 progressring / meter / led 同一口径）。"
+       + "以前两处（GDI+ 与 GDI 回退）都写死成 M3 主色，于是画布上给进度条设「文字色」"
+       + "看不出任何变化 —— 典型的「画布能设、运行时不消费」。",
+  },
+  {
     scope: "file", file: "runtime/src/win32/cg_win_window.c",
     must: ["GetDpiForSystem", "cgw_scale_px(app, app->doc.width)"],
     why: "主窗口客户区尺寸必须和控件一样过 DPI 缩放：漏了的话 125%/150% 下窗口还是 1× 大小、"

@@ -74,6 +74,16 @@ void cg_skin_apply_edit(cg_widget_t *w);
  */
 void cg_skin_edit_fit_spin(cg_widget_t *w);
 
+/**
+ * @brief DPI 变化后刷新输入框皮肤里与 scale 绑定的量（圆角 / 边框带 / 箭头占位）
+ * @param w 控件（edit）
+ * @return void 无返回值
+ * @details `cg_skin_apply_edit()` 只在**建控件时**调用一次，而这些量都是按 scale 算的 ——
+ *          窗口跨到另一块不同 DPI 的显示器后，圆角与箭头宽度会停在旧比例。
+ *          本函数只更新子类数据里的那几个值并重排，不重建子类（重建会二次 SetWindowSubclass）。
+ */
+void cg_skin_edit_rescale(cg_widget_t *w);
+
 /** 输入框边框宽度：客户区四边各让出这么多，圆角边框画在客户区**之外**。
  *  这样控件自己重绘（选中文字 / 滚动 / 光标闪烁）永远盖不掉边框——
  *  否则双击选中时会出现"边框缺口"。EM_SETMARGINS 用 CG_EDIT_TEXT_MARGIN，

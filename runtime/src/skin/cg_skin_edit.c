@@ -318,6 +318,50 @@ void cg_skin_edit_fit_spin(cg_widget_t *w)
     sk_edit_spin_fit(h, s);
 }
 
+/**
+ * @brief DPI 变化后刷新输入框皮肤里与 scale 绑定的量（圆角 / 边框带 / 箭头占位）
+ * @param w 控件（edit）
+ * @return void 无返回值
+ * @details 这些量都按 scale 算，而 `cg_skin_apply_edit()` 只在建控件时调用一次 ——
+ *          窗口跨到另一块不同 DPI 的显示器后，圆角与箭头宽度会停在旧比例
+ *          （2026-09-23 高 DPI 审计发现）。这里只更新子类数据里的那几个值并重排：
+ *          不重建子类，因为二次 `SetWindowSubclass` 会叠一层。
+ */
+void cg_skin_edit_rescale(cg_widget_t *w)
+{
+    HWND     hw;
+    DWORD_PTR ref = 0;
+    sk_edit_sub_t *s;
+    int      scale, r, multiline;
+
+    if (!w) return;
+    hw = (HWND)w->native;
+    if (!hw) return;
+    if (!GetWindowSubclass(hw, sk_edit_sub, 1, &ref) || !ref) return;
+    s = (sk_edit_sub_t *)ref;
+
+    scale = (w->app && w->app->scale > 0) ? w->app->scale : 100;
+    r = (w->style.radius > 0 ? w->style.radius : 2) * scale / 100;   /* 与 apply_edit 同口径 */
+    if (r < 1) r = 1;
+    multiline = (GetWindowLongW(hw, GWL_STYLE) & ES_MULTILINE) != 0;
+
+    s->rad  = r;
+    s->spin = (HWND)w->native2;
+    switch (w->border) {
+    case SK_EDGE_SOFT:
+    case SK_EDGE_LINE:  s->bw = 1; break;
+    case SK_EDGE_FRAME: s->bw = 3; break;
+    default:            s->bw = CG_EDIT_BORDER; break;
+    }
+    s->arrow = (s->spin && !multiline) ? (CG_EDIT_SPIN_W * scale / 100) : 0;
+    if (s->arrow > 0 && s->arrow < 12) s->arrow = 12;
+
+    sk_edit_resize(hw, s);
+    sk_edit_spin_fit(hw, s);
+    SetWindowPos(hw, NULL, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+}
+
 void cg_skin_apply_edit(cg_widget_t *w)
 {
     HWND hw = (HWND)w->native;
