@@ -47,7 +47,6 @@ static cg_net_t *listen_any(int *port_out)
 /** @brief 参数校验与错误路径（不需要对端） */
 static void test_net_params(void)
 {
-    cg_net_t *n;
     char      buf[64];
 
     cg_test_note("---- 端口/主机名不合法：干净失败 + 给得出原因 ----");

@@ -283,7 +283,12 @@ runtime/
       cg_skin.{h,c}     按钮/开关/勾选/滑块/进度/圆环
       cg_skin_edit.c    输入框圆角裁切与单行文字垂直居中（EDIT 子类）
     kit/               平台服务层：跟界面无关的那一半 Win32（不属于任何后端）
-      cg_kit.c          文件/路径/INI 配置/文本编码/剪贴板/外部程序/注册表；
+      cg_kit.c          路标：四个子文件各管什么（原 857 行按子系统拆开，别往里加实现）
+      cg_kit_fs.c       文件 / 目录 / 路径 / 程序目录 / 数据目录，外加内存桥 cg_free
+      cg_kit_ini.c      INI 配置读写
+      cg_kit_str.c      文本与编码：格式化 / 裁剪 / 替换 / 比较、UTF-8 ↔ GBK
+      cg_kit_sys.c      剪贴板 / 外部程序 / 时间 / 注册表
+      cg_kit_internal.h kit 层内部头：跨文件共用的三个助手（kit_w / kit_u8 / kit_lower）
                         有了它业务代码才真的"只 include cstackgui.h"
       cg_serial.c       串口：读线程 + 环形缓冲；业务在时钟里 cg_serial_read 取走（docs/COMM.md）
       cg_net.c          网口 TCP：连接 / 监听 / 接受 + 读线程 + 环形缓冲，形状同串口；
