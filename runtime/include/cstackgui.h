@@ -788,6 +788,9 @@ int   cg_ini_write(const char *path, const char *section, const char *key, const
 /** 拼字符串（printf 风格），返回堆内存 */
 char *cg_str_format(const char *fmt, ...);
 /** 去掉首尾空白（空格 / 制表 / 换行），返回堆内存 */
+/** 复制一个字符串（堆内存，用完 cg_free；s 为 NULL 时返回 NULL）
+ *  与 cg_str_format("%s", s) 等价，但不用过一遍 printf —— 想留下借用串的副本时用它。 */
+char *cg_str_dup(const char *s);
 char *cg_str_trim(const char *s);
 /** 比较字符串（忽略英文大小写）：相等返回 1 */
 int   cg_str_equal(const char *a, const char *b);

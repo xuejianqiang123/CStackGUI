@@ -645,6 +645,7 @@ cg_ini_write("config.ini", "窗口", "宽", cg_str_format("%d", cg_widget_w(w)))
 cg_message_box(self, msg, "统计", 0);
 cg_free(msg);`,
           }),
+          c("cg_str_dup", "复制字符串", "char *cg_str_dup(const char *s)", "留下一个副本（NULL 进 NULL 出），返回堆串，用完 cg_free"),
           c("cg_str_trim", "去首尾空白", "char *cg_str_trim(const char *s)", "去掉两端空格/制表/换行，返回堆串"),
           c("cg_str_equal", "比较字符串", "int cg_str_equal(const char *a, const char *b)", "忽略英文大小写；相等返回 1"),
           c("cg_str_replace", "替换子串", "char *cg_str_replace(const char *src, const char *from, const char *to)", "把 src 里所有 from 换成 to，返回堆串"),
