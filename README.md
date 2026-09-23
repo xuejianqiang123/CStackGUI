@@ -312,7 +312,14 @@ CStackGUI\
       cg_doc_kind.c            控件类型表 k_kinds（含每种控件支持的事件）
       cg_event.c               事件名表、回调绑定解析、事件派发
       cg_widget.c              运行时控件模型：构建、查找、属性 API
-      cg_widget_data.c         内容 API：列表/树/表格/状态栏/标签页/图片/提示/时钟
+      cg_widget_data.c         路标：七个文件各管什么（原 1149 行按控件族拆开）
+      cg_widget_list.c         列表 / 状态栏 / 菜单 / 提示 / 时钟 / 图片
+      cg_widget_tree.c         树（含跨文件共用的 want_type）
+      cg_widget_table.c        表格
+      cg_widget_tabs.c         标签页
+      cg_widget_split.c        分隔条
+      cg_widget_term.c         终端（日志视图）
+      cg_widget_gauge.c        图表 / 状态灯 / 仪表盘
       cg_bind.c                控件绑定：值/文字/勾选自动同步到另一个控件（.cgui 的 bind）
       cg_app.c                 应用生命周期（定位 .cgui / 打开 / 消息循环）与 --selftest
       cg_log.c                 日志：stderr 镜像 + 日志文件（GUI 版没有控制台时唯一的线索）

@@ -253,7 +253,14 @@ runtime/
       cg_internal.h     运行时内部结构 + 后端接口 + 跨模块内部声明
       cg_event.c        事件名表、回调绑定解析、事件派发中枢
       cg_widget.c       运行时控件模型：构建、查找、公共属性 API
-      cg_widget_data.c  内容 API：列表/树/表格/状态栏/标签页/图片/提示/时钟
+      cg_widget_data.c  路标：七个文件各管什么（原 1149 行按控件族拆开，别往里加实现）
+      cg_widget_list.c  列表 / 状态栏 / 菜单 / 提示·周期 / 图片，外加 cg_widget_add（零散属主）
+      cg_widget_tree.c  树，外加跨文件共用的 want_type
+      cg_widget_table.c 表格
+      cg_widget_tabs.c  标签页
+      cg_widget_split.c 分隔条
+      cg_widget_term.c  终端（日志视图）
+      cg_widget_gauge.c 图表 + 状态灯 + 仪表盘
       cg_bind.c         控件绑定：值/文字/勾选自动同步到另一个控件
       cg_app.c          应用生命周期（定位 .cgui / 打开 / 消息循环 / 收尾）与自检
       cg_timer.c        一次性定时器（后端 50ms 心跳驱动）

@@ -1,6 +1,6 @@
 /**
  * @file    test_terminal.c
- * @brief   cg_widget_data.c 里终端（terminal）行处理的单元测试
+ * @brief   终端（terminal）行处理的单元测试（cg_widget_term.c）
  * @details 为什么盯它：终端是"业务把字节丢进来、它负责变成给人看的行"的控件，
  *          中间的格式转换全是隐式约定 —— HEX 怎么分组、控制字符怎么处理、中文会不会被搅坏、
  *          带 \r\n 的一坨数据要不要切成多行、超上限丢哪一头。这些错了都不崩，只是日志悄悄变得
