@@ -73,6 +73,12 @@ echo   bat encoding (UTF-8 no BOM + CRLF + ASCII prelude)
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-utf8.ps1 -Mode check
 if errorlevel 1 exit /b 1
 
+rem 文档口径契约：文档里手写的"课数 / 示例范围 / 文章篇数"必须与 examples\ 和 docs\articles\ 的现状一致，
+rem 并且教学说明里那张"六课事实表"必须是生成结果（2026-09-23 体检发现这类手写事实一次漏改 31 处）。
+echo   docs vs examples (lesson count / range / article count)
+node tools\check-examples.mjs --docs
+if errorlevel 1 exit /b 1
+
 echo.
 echo [ok] format contract check passed
 exit /b 0
