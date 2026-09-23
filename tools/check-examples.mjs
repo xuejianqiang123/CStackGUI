@@ -265,6 +265,25 @@ if (wantDocs) {
     }
   }
 
+  // ⑤ 每篇自述的"本篇是第 N 篇"必须等于它在系列里的序号（文件名前缀 + 1：00 导读 = 第 1 篇）
+  if (fs.existsSync(ARTICLES_DIR)) {
+    for (const f of articles) {
+      const idx = Number(f.slice(0, 2)) + 1;
+      if (!Number.isFinite(idx)) continue;
+      fs.readFileSync(path.join(ARTICLES_DIR, f), "utf8").split(/\r?\n/).forEach((line, i) => {
+        // 只认"自述"两种写法：本篇是第 N 篇 / 这是系列的第 N 篇。
+        // "见第 1 篇""后面第 4 篇"是交叉引用，不是自述 —— 按任意"第 N 篇"匹配会误报。
+        for (const m of line.matchAll(/本篇是第\s*(?<n1>[0-9]+)\s*篇|这是系列的第\s*(?<n2>[0-9]+)\s*篇/g)) {
+          claims += 1;
+          const got = Number(m.groups.n1 ?? m.groups.n2);
+          if (got !== idx) {
+            problems.push(`docs/articles/${f}:${i + 1} — 自述"第 ${got} 篇"，按文件名应是第 ${idx} 篇`);
+          }
+        }
+      });
+    }
+  }
+
   if (problems.length > 0) {
     console.error(`[fail] 文档口径与现状不一致（${problems.length} 处 / 共检查 ${claims} 条声明）：`);
     for (const p of problems) console.error("        - " + p);
