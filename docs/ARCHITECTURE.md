@@ -137,7 +137,7 @@ void cb(cg_widget_t *self, cg_event_t ev, void *user);
 
 | type | 中文 | 容器 | Win32 实现 |
 | --- | --- | --- | --- |
-| `button` | 按钮 | 否 | `BUTTON` + `BS_PUSHBUTTON` |
+| `button` | 按钮 | 否 | `BUTTON` + `BS_OWNERDRAW`（M3 自绘，见 M3-SKIN）|
 | `label` | 标签 | 否 | `STATIC`（`SS_LEFT/CENTER/RIGHT`）|
 | `edit` | 输入框 | 否 | `EDIT`；多行加 `ES_MULTILINE`，带调节器（`spin`）时加 `msctls_updown32`（**此时一个控件两个 HWND**，见 4.1）。原来的 `multiedit`/`spinner` 已合并进它 |
 | `checkbox` / `radio` | 复选/单选 | 否 | `BUTTON` + `BS_OWNERDRAW`，父窗口处理 `WM_DRAWITEM` 自绘 |
@@ -159,7 +159,7 @@ void cb(cg_widget_t *self, cg_event_t ev, void *user);
 | `separator` | 分割线 | 否 | `STATIC` + `SS_ETCHEDHORZ` |
 | `image` | 图片 | 否 | 自注册窗口类 `CStackGUIImage`，GDI+ 读图 + 自绘缩放 |
 
-> 这里只是常用控件的速览。**完整 44 行类型表**（含 `progressring` / `timer` / `canvas` / `colorpicker` /
+> 这里只是常用控件的速览。**完整 42 行类型表**（含 `progressring` / `timer` / `canvas` / `colorpicker` /
 > `browser` / `shape` / `badge` / `tag` / `rate` / `pagination`）见
 > [docs/CGUI-FORMAT.md](CGUI-FORMAT.md) 第 4 节。
 
@@ -519,12 +519,12 @@ release/
   整层放在 `runtime/src/skin/`（`cg_skin.{h,c}` + `cg_skin_edit.c`）。按钮/开关/勾选/滑块/进度条/圆环
   都有 M3 观感，圆角与配色生效；将来换 D2D 内核时整目录替换，上层接入点不动（见 `docs/M3-SKIN.md`）。
 - **画布内一键运行 / 发布**：工具条「运行」（F5）编译并启动工程；「发布」组装 `publish\<名字>\` 并打 zip。
-- **控件补齐到 39 种**：含 `iconbutton`、`monthcal`、`progressring`、`canvas`、`colorpicker`、`browser`、
+- **控件补齐到 42 种**：含 `iconbutton`、`monthcal`、`progressring`、`canvas`、`colorpicker`、`browser`、
   `rate`、`pagination`、`badge`、`tag`、`card`、`shape`、`timer`。
-- **分隔条（splitter）**：第 40 种控件，"能拖动的分区边界"。拖它 = 撑开前一块、后面的兄弟整体
+- **分隔条（splitter）**："能拖动的分区边界"。拖它 = 撑开前一块、后面的兄弟整体
   让位、同一容器里最后一块吃掉余量 —— 所以 [日志区/分隔条/发送区] 这种布局不需要布局引擎（见 §3.3）。
   自绘窗口类 `CStackGUISplitter`；`format` 缺省 `col`（竖条），`row` 是横条。
-- **终端（terminal）**：第 41 种控件，通信/调试工具最需要的那块"日志视图"。业务用
+- **终端（terminal）**：通信/调试工具最需要的那块"日志视图"。业务用
   `cg_term_write(w, CG_TERM_RX/TX/SYS, buf, len)` 灌内容，格式（时间戳、HEX）、行数上限、
   按方向着色都由控件管；后端是**只读 RichEdit + 逐行 CHARFORMAT**，所以"选择复制"与
   自动滚动是白捡的（日志最常被做的事就是复制出去）。行在 core 里存为 `items[]`，
@@ -535,13 +535,13 @@ release/
   **点数超过绘图区像素宽度时按像素列取 min/max 画竖线**（LVGL 的做法，不抽点所以尖峰不丢）。
   自绘窗口类 `CStackGUIChart`（GDI：折线用一次 `Polyline` 批量提交，数据线不做抗锯齿）。
   `cg_widget_sync()` 会顺手把点缓冲对齐 `items`/`value`，所以查询与绘制看到的永远是与配置一致的状态。
-- **状态灯（led）**：第 43 种控件，"看一眼就知道通没通"的那种小灯。业务只给一个状态
+- **状态灯（led）**："看一眼就知道通没通"的那种小灯。业务只给一个状态
   （`cg_led_set(w, 0/1/2)` = 灭 / 亮 / 闪，`cg_led_state` 读回、`cg_led_set_color` 换颜色），
   **闪烁由控件自己定时重绘**（按 `period` 的前后半个周期各亮/灭一次）——业务不用为"闪"另开时钟，
   `cg_led_set(w, 2)` 之后就不管了。两条边界：`period` 小于 100 会被**兜回缺省 500**
   （太快人眼不觉得在闪，只会像"暗的"）、`value` 超范围夹到 0..2。纯显示控件：没有任何事件。
   自绘窗口类 `CStackGUILed`（窗口过程自己按 `period` 定时重绘，所以"闪"不占用业务的消息与时钟）。
-- **仪表盘（meter）**：第 44 种控件，一个刻度量表。业务用 `cg_meter_set(w, v)` 给值
+- **仪表盘（meter）**：一个刻度量表。业务用 `cg_meter_set(w, v)` 给值
   （被 `min`/`max` 夹，和滑块同一套语义）、`cg_meter_set_range(w, min, max)` 改量程；
   `format` 是形状，`arc`（缺省）从 135° 顺时针扫 270° 到 45°、`half` 从 180° 扫 180°（左端到右端）。
   表由底弧（灰）+ 值弧（彩色，随值增长）+ 刻度线 + 指针 + 中心大数值 + 单位文字一起画。

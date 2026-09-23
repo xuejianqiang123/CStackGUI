@@ -265,6 +265,41 @@ if (wantDocs) {
     }
   }
 
+  // ④.5 控件类型总数：文档里"N 种控件 / N 类控件 / 控件 N 种 / N 行类型表"必须等于 k_kinds 里的实名类型数
+  //      （2026-09-23 排查发现 ARCHITECTURE 里同时写着 44 行类型表 / 补齐到 39 种 / 第 40·41·43·44 种，
+  //       而代码是 42 —— 这类"总数"是同一类会漂移的手写事实，所以纳入口径门禁）
+  const KIND_DOCS = [
+    "README.md",
+    "examples/教学使用说明.md",
+    "packaging/README.release.md",
+    "docs/ARCHITECTURE.md",
+    "docs/CGUI-FORMAT.md",
+    "docs/M3-SKIN.md",
+  ];
+  const kindCount = types.length;
+  const KIND_CLAIM_RES = [
+    new RegExp(`(?<n>[0-9]+)\\s*种控件`, "g"),
+    // 刻意不收 "N 类控件"：那个措辞常被用来讲"某个示例覆盖了多少种"（如 gallery 覆盖 33 类），
+    // 不是总数声明 —— 收进来会误报（2026-09-23 首版实测）。
+    new RegExp(`控件\\s*(?<n>[0-9]+)\\s*种`, "g"),
+    new RegExp(`(?<n>[0-9]+)\\s*行类型表`, "g"),
+  ];
+  for (const rel of KIND_DOCS) {
+    const p = path.join(root, rel);
+    if (!fs.existsSync(p)) continue;
+    fs.readFileSync(p, "utf8").split(/\r?\n/).forEach((line, i) => {
+      for (const re of KIND_CLAIM_RES) {
+        for (const m of line.matchAll(re)) {
+          claims += 1;
+          const got = Number(m.groups.n);
+          if (got !== kindCount) {
+            problems.push(`${rel}:${i + 1} — 写的是"${m[0].trim()}"，实际是 ${kindCount} 种（k_kinds 实名类型）`);
+          }
+        }
+      }
+    });
+  }
+
   // ⑤ 每篇自述的"本篇是第 N 篇"必须等于它在系列里的序号（文件名前缀 + 1：00 导读 = 第 1 篇）
   if (fs.existsSync(ARTICLES_DIR)) {
     for (const f of articles) {

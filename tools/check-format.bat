@@ -73,10 +73,17 @@ echo   bat encoding (UTF-8 no BOM + CRLF + ASCII prelude)
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-utf8.ps1 -Mode check
 if errorlevel 1 exit /b 1
 
-rem 文档口径契约：文档里手写的"课数 / 示例范围 / 文章篇数"必须与 examples\ 和 docs\articles\ 的现状一致，
-rem 并且教学说明里那张"六课事实表"必须是生成结果（2026-09-23 体检发现这类手写事实一次漏改 31 处）。
-echo   docs vs examples (lesson count / range / article count)
+rem 文档口径契约：文档里手写的"课数 / 示例范围 / 文章篇数 / 控件类型总数"必须与 examples\、
+rem docs\articles\ 与 k_kinds 的现状一致，并且教学说明里那张"六课事实表"必须是生成结果
+rem （2026-09-23 体检发现这类手写事实一次漏改 31 处）。
+echo   docs vs examples (lesson count / range / article count / kind count)
 node tools\check-examples.mjs --docs
+if errorlevel 1 exit /b 1
+
+rem 控件落点契约：42 种类型每种都得在 examples\ 里至少有一个 .cgui 用到
+rem （否则读者找不到用法 —— box/meter 就这么被漏过）。这条以前只在手工命令里，2026-09-23 接进来。
+echo   every kind has an example
+node tools\check-examples.mjs
 if errorlevel 1 exit /b 1
 
 echo.
