@@ -54,9 +54,9 @@ runtime\
   lib\cstackgui_res.o  资源对象（v6 通用控件清单 + 版本信息 + 图标）
   res\                 manifest / 默认图标（工程的 <名字>.rc 会引用这里的清单）
 examples\
-  lesson01_basics\ ~ lesson05_commands\
-                       教学示例：五课（基础与容器 → 输入与选择 → 数值与指示 → 数据与日志 → 命令与图形）
-  教学使用说明.md       上面那五课怎么学（先读它）
+  lesson01_basics\ ~ lesson06_window\
+                       教学示例：六课（基础与容器 → 输入与选择 → 数值与指示 → 数据与日志 → 命令与图形）
+  教学使用说明.md       上面那六课怎么学（先读它）
   gallery\             示例：控件陈列室·三合一（67 个控件，全部控件+事件都用上了）
   notepad\             示例：真实小工具·记事本（菜单 / 文件 / 编码 / cg_kit 全套）
 apps\                  你自己导出的工程会放在这里（现在还没有）
@@ -286,7 +286,7 @@ tools\check-kit.bat                                              :: 用到 cg_ki
 
 发布包里带两个示例：
 
-- `examples\lesson01_basics` ~ `lesson05_commands` —— **五课教学示例**：基础与容器 → 输入与选择 →
+- `examples\lesson01_basics` ~ `lesson06_window` —— **六课教学示例**：基础与容器 → 输入与选择 →
   数值与指示 → 数据与日志 → 命令与图形，每课只讲一个主题、只出现本课主题的控件。
   **第一次用就从这里开始**，
   路线图与逐课详解见 `examples\教学使用说明.md`。

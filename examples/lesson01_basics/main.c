@@ -16,7 +16,7 @@
  *            - `separator`   一条横线，纯分隔，没有事件
  *            - `group` / `box` / `card`  三种容器：子控件的 `rect` 相对容器左上角
  *
- *          本工程贯穿五课的写法（后面每一课都是这一套）：
+ *          本工程贯穿这套示例的写法（后面每一课都是这一套）：
  *            - `.cgui` 里存 **id 与事件函数名**，C 侧用 `CG_BIND` 把函数名和函数对上；
  *              名字写错不报错，但 `--selftest` 会揪出来；
  *            - 回调签名固定 `void f(cg_widget_t *self, cg_event_t ev, void *user)`；

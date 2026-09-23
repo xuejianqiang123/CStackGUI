@@ -482,7 +482,7 @@ CStackGUI/
   make-release.bat            一键打发布包 -> release\（可随时删掉重打）
   runtime/                    C 运行时库（画布不依赖它，业务 exe 依赖它）
   examples/                   仓库自带的示例
-    gallery/                  控件陈列室·三合一（覆盖 33 类控件；42 类齐全的是"五课 + 陈列室"整体）
+    gallery/                  控件陈列室·三合一（覆盖 33 类控件；42 类齐全的是"六课 + 陈列室"整体）
   apps/                       用户自己的工程（画布「导出 C 骨架」默认导到这里）
     README.md                 说明这个目录是干嘛的
   designer/                   画布（Electron + React + TS）

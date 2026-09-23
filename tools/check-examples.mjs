@@ -7,7 +7,7 @@
  * 用法（在项目根）：
  *   node tools\check-examples.mjs            扫类型表 + 扫 examples/**\*.cgui，缺落点就报错（退出码 1）
  *   node tools\check-examples.mjs --table    打印 Markdown 映射表（生成文档索引表用，别手抄）
- *   node tools\check-examples.mjs --lessons  只认五课（lesson01~05）：这是"控件分类课"的验收标准
+ *   node tools\check-examples.mjs --lessons  只认教学示例目录（lesson01~06）：这是"控件分类课"的验收标准
  *   node tools\check-examples.mjs --gallery  只认 gallery（"一页看全"那句话得是真的）
  *
  * 说明：
