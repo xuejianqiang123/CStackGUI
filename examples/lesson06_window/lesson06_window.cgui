@@ -1,0 +1,103 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "入门 06 · 主窗口与窗口事件",
+    "width": 760,
+    "height": 436,
+    "bg": "#F3EDF7",
+    "center": true,
+    "escClose": false,
+    "events": {
+      "ready": "on_app_ready",
+      "close": "on_app_close",
+      "size": "on_win_size",
+      "keydown": "on_win_keydown",
+      "char": "on_win_char",
+      "mousedown": "on_win_mousedown",
+      "idle": "on_app_idle",
+      "tray": "on_app_tray"
+    },
+    "info": {
+      "product": "CStackGUI 主窗口示例",
+      "desc": "入门 06：窗口配置、窗口事件、程序信息",
+      "version": "1.0.0.0",
+      "build": "2026-09-23",
+      "author": "CStackGUI",
+      "company": "CStackGUI",
+      "copyright": "© 2026 CStackGUI（示例）",
+      "email": "demo@example.com"
+    }
+  },
+  "widgets": [
+    {
+      "id": "grp_info",
+      "type": "group",
+      "rect": { "x": 16, "y": 16, "w": 728, "h": 76 },
+      "text": "程序信息（.cgui 的 app.info → 编译进 exe 版本信息 → 运行时 cg_app_info 读回）",
+      "children": [
+        { "id": "lab_info_product", "type": "label", "rect": { "x": 12, "y": 28, "w": 340, "h": 22 }, "text": "" },
+        { "id": "lab_info_version", "type": "label", "rect": { "x": 360, "y": 28, "w": 340, "h": 22 }, "text": "" },
+        { "id": "lab_info_author", "type": "label", "rect": { "x": 12, "y": 52, "w": 340, "h": 22 }, "text": "" },
+        { "id": "lab_info_company", "type": "label", "rect": { "x": 360, "y": 52, "w": 340, "h": 22 }, "text": "" }
+      ]
+    },
+    {
+      "id": "btn_about",
+      "type": "button",
+      "rect": { "x": 16, "y": 108, "w": 170, "h": 32 },
+      "text": "关于（读程序信息）",
+      "hint": "用 cg_app_info(app, \"product\") 从 exe 版本信息里读回，再拼一个消息框",
+      "events": { "click": "on_btn_about_click" }
+    },
+    {
+      "id": "btn_center",
+      "type": "button",
+      "rect": { "x": 196, "y": 108, "w": 170, "h": 32 },
+      "text": "窗口居中",
+      "hint": "cg_win_center(app)：按当前显示器工作区居中（.cgui 里的 center: true 走的就是它）",
+      "events": { "click": "on_btn_center_click" }
+    },
+    {
+      "id": "btn_topmost",
+      "type": "button",
+      "rect": { "x": 376, "y": 108, "w": 170, "h": 32 },
+      "text": "总在最前：开",
+      "hint": "cg_win_set_topmost(app, on)：和 .cgui 的 app.topmost 字段等效",
+      "events": { "click": "on_btn_topmost_click" }
+    },
+    {
+      "id": "btn_hide",
+      "type": "button",
+      "rect": { "x": 556, "y": 108, "w": 188, "h": 32 },
+      "text": "隐藏 1 秒再显示",
+      "hint": "cg_win_show(app, 0) + cg_set_timer 一秒后 cg_win_show(app, 1)；show / hide 事件都会到",
+      "events": { "click": "on_btn_hide_click" }
+    },
+    {
+      "id": "lab_k_evt",
+      "type": "label",
+      "rect": { "x": 16, "y": 160, "w": 104, "h": 24 },
+      "text": "listbox 事件流水"
+    },
+    {
+      "id": "lst_evt",
+      "type": "listbox",
+      "rect": { "x": 128, "y": 156, "w": 616, "h": 200 },
+      "value": -1,
+      "hint": "窗口事件都写在 app.events 里：ready / close / size / keydown / char / mousedown / idle / tray / show / hide …"
+    },
+    {
+      "id": "chk_ask",
+      "type": "checkbox",
+      "rect": { "x": 128, "y": 364, "w": 320, "h": 32 },
+      "text": "演示：拦下这次关闭（cg_cancel_close）",
+      "hint": "勾上它再关窗口：close 回调会拦下这次关闭并说明原因；取消勾选就能正常退出"
+    },
+    {
+      "id": "sb_main",
+      "type": "statusbar",
+      "rect": { "x": 0, "y": 412, "w": 760, "h": 24 },
+      "items": ["窗口 760×436", "最近事件：-", "空闲 0 次"]
+    }
+  ]
+}

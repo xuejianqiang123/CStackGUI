@@ -53,6 +53,12 @@ echo   roundtrip lesson01
 node tools\format-roundtrip.mjs examples\lesson01_basics\lesson01_basics.exe examples\lesson01_basics\lesson01_basics.cgui build\roundtrip_lesson01.cgui
 if errorlevel 1 exit /b 1
 
+rem 第六课的 .cgui 带一整套 app.* 窗口配置（center/border/topmost/escClose/tray/events/info），
+rem 拿它当"窗口级字段"的回归样本：字段语义一变，这条往返就会红。
+echo   roundtrip lesson06
+node tools\format-roundtrip.mjs examples\lesson06_window\lesson06_window.exe examples\lesson06_window\lesson06_window.cgui build\roundtrip_lesson06.cgui
+if errorlevel 1 exit /b 1
+
 echo   roundtrip netterm
 node tools\format-roundtrip.mjs examples\netterm\netterm.exe examples\netterm\netterm.cgui build\roundtrip_netterm.cgui
 if errorlevel 1 exit /b 1
