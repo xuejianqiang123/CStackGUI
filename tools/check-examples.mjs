@@ -360,6 +360,50 @@ if (wantDocs) {
         }
       }
     });
+
+    // ④.7 画布的事件表（designer/src/model/events.ts 的 KIND_EVENTS）必须与运行时掩码逐条一致。
+    //      画布是用户**唯一**能绑事件的地方，所以这条是"声明了却不生效"缺陷的高发边界：
+    //      · 画布列了、运行时不派发 → 用户在画布上绑好、运行时永远不触发（静默失效）；
+    //        月历的 dblclick 就是这么来的（类型表声明过、而 MCN_SELECT 从不发 NM_DBLCLK）。
+    //      · 运行时支持、画布不列 → 用户以为框架没这个能力，只能手写 .cgui（edit 的 click 一度如此）。
+    //      与 ④.6 互补：④.6 管"文档 vs 代码"，这里管"画布 vs 代码"。
+    {
+      const evTs = fs.readFileSync(path.join(root, "designer/src/model/events.ts"), "utf8");
+      const knDecl = /export const KIND_EVENTS[\s\S]*?\n\};/.exec(evTs);
+      if (!knDecl) {
+        problems.push("designer/src/model/events.ts — 找不到 KIND_EVENTS 声明（改名了？这条门禁要跟着改）");
+      } else {
+        const knSrc = knDecl[0]
+          .replace(/\/\*[\s\S]*?\*\//g, "")
+          .replace(/\/\/[^\n]*/g, "");
+        const unknownInCanvas = [];
+        let compared = 0;
+        for (const m of knSrc.matchAll(/([a-z_]+)\s*:\s*\[([\s\S]*?)\]/g)) {
+          const type = m[1];
+          const mask = masks.get(type);
+          if (!mask) { unknownInCanvas.push(type); continue; }
+          const listed = new Set([...m[2].matchAll(/"([a-z]+)"/g)].map((x) => x[1]));
+          compared += 1;
+          for (const ev of listed) {
+            if (!mask.has(ev)) {
+              problems.push(
+                `designer/src/model/events.ts — 画布给 \`${type}\` 列了 \`${ev}\`，但运行时掩码里没有：` +
+                `用户绑了它、运行时永远不派发（静默失效）`,
+              );
+            }
+          }
+          for (const ev of mask) {
+            if (!listed.has(ev)) {
+              console.log(`        提示：designer/src/model/events.ts — \`${type}\` 运行时掩码有 \`${ev}\`，画布没列（用户会以为没这个事件）`);
+            }
+          }
+        }
+        claims += compared;
+        if (unknownInCanvas.length) {
+          console.log(`        提示：画布 KIND_EVENTS 里有运行时未知的类型（旧写法别名？这些不参与比对）：${unknownInCanvas.join(", ")}`);
+        }
+      }
+    }
   }
 
   // ⑤ 每篇自述的"本篇是第 N 篇"必须等于它在系列里的序号（文件名前缀 + 1：00 导读 = 第 1 篇）

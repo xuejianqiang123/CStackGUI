@@ -176,3 +176,14 @@
 4. **队友自报不算数**：主负责人必须自己跑一遍 `build-all` / `run-tests` / `check-format`
    再提交（第一刀：队友报全绿 → 我复跑三道 → 才提交）。
 5. 每刀都要顺带清掉指向旧文件/旧行号的引用（grep 旧文件名 + `旧文件名:[0-9]` 应 0 命中）。
+
+6. **每次拆分前先想"哪道门禁看得见这次改动"，看不看得见必须写清**（第二刀踩过的坑）：
+   `designer/src/model.ts` 拆成 `model/` 之后，桶编出来的 `export * from "./model/events"`
+   **没有 `.js` 后缀** —— `tsc --noEmit` 与 `vite build` 都看不见（Vite 自己会解析无后缀
+   import），只有 `tools/check-format.bat` 里"tsc 编成 ESM → 用 Node 跑"的往返检查会红
+   （`ERR_MODULE_NOT_FOUND`）。**所以：模型层的任何拆分/搬家，验收必须包含那五条
+   `node tools/format-roundtrip.mjs …`**（命令在 `check-format.bat:40-63`，只读 exe，可与 C 侧重编并行）。
+   推论：`designer/src/model/**` 里所有相对 import/export 说明符**一律带 `.js` 后缀**。
+7. 「编译过 = 通过」不成立的地方要专门指出来：画布的**属性面板（Inspector）没有自动化行为测试**，
+   所以拆它时唯一可信的验收是"写点（写入节点字段的位置）集合与写点数前后一致"这类**静态对账**，
+   外加运行时的往返检查（它管序列化、不管面板）。别把"tsc 过了"当成"面板没坏"。
