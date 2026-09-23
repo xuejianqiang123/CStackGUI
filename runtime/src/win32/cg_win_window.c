@@ -144,9 +144,26 @@ int cgw_win_init(cg_app_t *app)
         return -1;
     }
 
+    /* 客户区尺寸要跟控件一样过 DPI 缩放：.cgui 里写的是**逻辑像素**，控件全都过
+     * cgw_scale_px，窗口本身原来漏了 —— 表现为 125%/150% 下窗口仍是 1× 大小、
+     * 控件却按 1.x 摆放，**右侧与下侧整片被裁掉**（2026-09-23 高 DPI 审计发现）。
+     * 建窗时还没有 HWND，先用 GetDpiForSystem()（DPI 不感知的老系统上它给 96，
+     * 于是不缩放、由 Windows 自己位图放大，正好也不会双重缩放）。 */
+    app->scale = 100;
+    {
+        HMODULE u32 = LoadLibraryW(L"user32.dll");
+        typedef UINT (WINAPI *get_sysdpi_t)(void);
+        get_sysdpi_t get_sysdpi = u32 ? (get_sysdpi_t)(void *)GetProcAddress(u32, "GetDpiForSystem") : NULL;
+        if (get_sysdpi) {
+            UINT d = get_sysdpi();
+            if (d > 0) app->scale = (int)((long long)d * 100 / 96);
+        }
+        if (u32) FreeLibrary(u32);
+    }
+
     rc.left = 0; rc.top = 0;
-    rc.right = app->doc.width;
-    rc.bottom = app->doc.height;
+    rc.right = cgw_scale_px(app, app->doc.width);
+    rc.bottom = cgw_scale_px(app, app->doc.height);
     AdjustWindowRectEx(&rc, wstyle, FALSE, wexstyle);
     ww = rc.right - rc.left;
     wh = rc.bottom - rc.top;
@@ -203,7 +220,22 @@ int cgw_win_init(cg_app_t *app)
         get_dpi_t get_dpi = user32 ? (get_dpi_t)(void *)GetProcAddress(user32, "GetDpiForWindow") : NULL;
         if (get_dpi) {
             UINT d = get_dpi(hwnd);
-            if (d > 0) { st->dpi = (int)d; app->scale = (int)((long long)d * 100 / 96); }
+            if (d > 0) {
+                int old = app->scale;
+
+                st->dpi = (int)d;
+                app->scale = (int)((long long)d * 100 / 96);
+                /* 窗口建起来后才知道自己落在哪块显示器上：如果那边 DPI 与建窗时用的
+                 * 不同（多显示器混 DPI），客户区尺寸要按新比例重算一次 ——
+                 * 否则窗口尺寸和控件坐标又变成两套基准。 */
+                if (app->scale != old) {
+                    RECT r2 = { 0, 0, cgw_scale_px(app, app->doc.width), cgw_scale_px(app, app->doc.height) };
+
+                    AdjustWindowRectEx(&r2, wstyle, FALSE, wexstyle);
+                    SetWindowPos(hwnd, NULL, 0, 0, r2.right - r2.left, r2.bottom - r2.top,
+                                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+                }
+            }
         }
     }
 
@@ -250,7 +282,9 @@ int cgw_win_init(cg_app_t *app)
                     GetWindowRect(hwnd, &wr);
                     fw = (wr.right - wr.left) - (cr.right - cr.left);
                     fh = (wr.bottom - wr.top) - (cr.bottom - cr.top);
-                    SetWindowPos(hwnd, NULL, 0, 0, app->doc.width + fw, app->doc.height + fh,
+                    SetWindowPos(hwnd, NULL, 0, 0,
+                                 cgw_scale_px(app, app->doc.width) + fw,
+                                 cgw_scale_px(app, app->doc.height) + fh,
                                  SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
                 }
             } else if (hm) {
