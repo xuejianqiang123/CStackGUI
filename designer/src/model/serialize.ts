@@ -1,0 +1,185 @@
+/* model/serialize.ts -- 写出 .cgui（去空字段、可读、diff 友好）
+ *
+ * serializeDoc 把 CgDoc 变成 JSON 文本；clean* 系列负责把 undefined 和「等于 C 侧默认值」
+ * 的字段剔掉，让存出来的文件干净、老运行时读新文件也不被多余字段干扰。
+ *
+ * 依赖：model/types.ts + model/kinds.ts（KIND_MAP / isNumEdit）+ model/events.ts（WINDOW_EVENTS）。
+ */
+
+import { WINDOW_EVENTS, type CgEvent } from "./events.js";
+import { KIND_MAP, isNumEdit } from "./kinds.js";
+import { INFO_KEYS, type CgApp, type CgDoc, type CgInfo, type CgNode, type CgStyle, type CgTreeItem } from "./types.js";
+
+export function serializeDoc(doc: CgDoc): string {
+  return `${JSON.stringify(cleanDoc(doc), null, 2)}\n`;
+}
+
+function cleanTree(item: CgTreeItem): CgTreeItem {
+  const out: CgTreeItem = { text: item.text };
+  if (item.id) out.id = item.id;
+  if (item.expanded) out.expanded = true;
+  if (item.checked) out.checked = true;
+  if (item.children?.length) out.children = item.children.map(cleanTree);
+  return out;
+}
+
+/** 去掉 undefined 和空字段，让存出来的文件干净、可读、diff 友好 */
+function cleanNode(node: CgNode): CgNode {
+  const out: CgNode = {
+    id: node.id,
+    type: node.type,
+    rect: {
+      x: Math.round(node.rect.x),
+      y: Math.round(node.rect.y),
+      w: Math.round(node.rect.w),
+      h: Math.round(node.rect.h),
+    },
+  };
+  if (node.text) out.text = node.text;
+  if (node.page !== undefined && node.page > 0) out.page = Math.round(node.page);
+  if (node.src) out.src = node.src;
+  if (
+    node.format &&
+    ((node.type === "datepicker" && node.format !== "date") ||
+      node.type === "shape" ||
+      /* 分隔条缺省就是左右分栏（竖条），只有 "row" 需要写出去 */
+      (node.type === "splitter" && node.format !== "col") ||
+      /* 终端缺省是文本模式，只有 "hex" 需要写出去 */
+      (node.type === "terminal" && !!node.format) ||
+      /* 状态灯缺省是圆的，只有 "square" 需要写出去 */
+      (node.type === "led" && node.format !== "round") ||
+      /* 仪表盘缺省是 270° 圆弧，只有 "half" 需要写出去 */
+      (node.type === "meter" && node.format !== "arc"))
+  ) {
+    out.format = node.format;
+  }
+  if (node.hint) out.hint = node.hint;
+  if (node.period) out.period = Math.max(0, Math.round(node.period));
+  if (node.multi === true) out.multi = true;
+  if (node.check === true) out.check = true;
+  /* 数值框（edit + 调节器）：value 是真相、文本由它派生，所以值/范围/文本一起写出去。
+   * edit 本身不是 ranged 控件（上面那段会跳过 min/max），漏了这三行运行时夹取范围
+   * 就永远是缺省的 0~100，而且显示的还是空的。 */
+  if (isNumEdit(node)) {
+    out.value = Math.round(node.value ?? 0);
+    out.min = Math.round(node.min ?? 0);
+    out.max = Math.round(node.max ?? 100);
+  }
+  /* edit 的输入框行为：等于默认（单行 / 无滚动条 / 不限长 / 不转换 / 通常方式）就不写 */
+  if (node.multiline === true) out.multiline = true;
+  if (node.scroll) out.scroll = node.scroll;
+  if (node.maxlen) out.maxlen = node.maxlen;
+  if (node.conv) out.conv = node.conv;
+  if (node.input) out.input = node.input;
+  if (node.border) out.border = node.border;
+  if (node.spin) out.spin = node.spin;
+  if (node.bind?.src) {
+    out.bind = node.bind.two ? { src: node.bind.src, two: true } : { src: node.bind.src };
+  }
+  if (node.items && node.items.length) out.items = [...node.items];
+  if (node.nodes && node.nodes.length) out.nodes = node.nodes.map(cleanTree);
+  if (node.columns && node.columns.length) {
+    out.columns = node.columns.map((c) => (c.w && c.w > 0 ? { title: c.title, w: Math.round(c.w) } : { title: c.title }));
+  }
+  if (node.rows && node.rows.length) out.rows = node.rows.map((r) => [...r]);
+  const style = node.style ?? {};
+  const kept: CgStyle = {};
+  if (style.font) kept.font = style.font;
+  if (style.size) kept.size = style.size;
+  if (style.bold) kept.bold = true;
+  if (style.fg) kept.fg = style.fg;
+  if (style.bg) kept.bg = style.bg;
+  if (style.align && style.align !== "left") kept.align = style.align;
+  if (style.radius) kept.radius = style.radius;
+  if (Object.keys(kept).length) out.style = kept;
+
+  const flagged = (v: boolean | undefined, d: boolean) => v !== undefined && v !== d;
+  if (flagged(node.visible, true)) out.visible = node.visible;
+  if (flagged(node.enabled, true)) out.enabled = node.enabled;
+  if (flagged(node.checked, false)) out.checked = node.checked;
+  if (KIND_MAP[node.type]?.ranged) {
+    out.value = node.value ?? 0;
+    out.min = node.min ?? 0;
+    out.max = node.max ?? 100;
+  } else if (node.type === "colorpicker") {
+    out.value = node.value ?? 0;   /* value 存颜色 0xRRGGBB */
+  } else if (node.type === "chart") {
+    /* 图表的 value 是窗口点数、min/max 是 Y 轴范围，三者都要存；而且 value 不能被 min/max
+       夹 —— "窗口 120 个点 + Y 范围 0~100" 是正常配置，标成 ranged 就会被画布夹成 100 */
+    out.value = Math.max(2, Math.round(node.value ?? 120));
+    out.min = node.min ?? 0;
+    out.max = node.max ?? 100;
+  } else if (node.type === "led") {
+    /* 状态灯的 value 是 0 灭 / 1 亮 / 2 闪 —— 0 也是合法状态，必须一直写出去，
+       不能像 checked 那样"等于默认值就不写"（那会把"灭"变成"没配过"） */
+    const st = typeof node.value === "number" && Number.isFinite(node.value) ? Math.round(node.value) : 0;
+    out.value = Math.max(0, Math.min(2, st));
+  } else if (KIND_MAP[node.type]?.listLike && node.value) {
+    /* tabs/listbox/combo 的当前选中项：不存的话重开文件永远回第 0 页/第 0 项 */
+    out.value = Math.max(0, Math.round(node.value));
+  }
+  if (node.events && Object.keys(node.events).length) {
+    out.events = { ...node.events };
+  }
+  /* 只给容器写 children。正常情况下画布内存里不会有"非容器带 children"
+   * （拖放走 isContainer 判断、读入侧也会丢掉，见 model/parse.ts），
+   * 但这一条是**文件能不能被运行时读进去**的底线：运行时对"非容器带 children"
+   * 是硬错误，会把**整个控件**丢掉（cg_doc.c 的节点解析）。
+   * 万一哪天上游的不变量破了，这里退化成"少几个子节点"而不是"整份文件读不进"。 */
+  if (node.children?.length && KIND_MAP[node.type]?.container) {
+    out.children = node.children.map(cleanNode);
+  } else if (KIND_MAP[node.type]?.container) {
+    out.children = [];
+  }
+  return out;
+}
+
+function cleanDoc(doc: CgDoc): CgDoc {
+  const a = doc.app;
+  const app: CgApp = {
+    title: a.title,
+    width: Math.round(a.width),
+    height: Math.round(a.height),
+    bg: a.bg,
+  };
+
+  /* 只写和 C 侧默认值不同的字段：文件干净、老运行时读新文件也不会被多余字段干扰 */
+  if (a.x !== undefined) app.x = Math.round(a.x);
+  if (a.y !== undefined) app.y = Math.round(a.y);
+  if (a.center === true) app.center = true;
+  if (a.border && a.border !== "sizable") app.border = a.border;
+  if (a.controlBox === false) app.controlBox = false;
+  if (a.minimizeBox === false) app.minimizeBox = false;
+  if (a.maximizeBox === false) app.maximizeBox = false;
+  if (a.topmost === true) app.topmost = true;
+  if (a.taskbar === false) app.taskbar = false;
+  if (a.visible === false) app.visible = false;
+  if (a.enabled === false) app.enabled = false;
+  if (a.enterTab === true) app.enterTab = true;
+  if (a.escClose === false) app.escClose = false;
+  if (a.tray === true) app.tray = true;
+  if (a.icon) app.icon = a.icon;
+  if (a.cursor) app.cursor = a.cursor;
+  if (a.class) app.class = a.class;
+  if (a.note) app.note = a.note;
+
+  if (a.info) {
+    const info: CgInfo = {};
+    for (const key of INFO_KEYS) {
+      const v = a.info[key];
+      if (v) info[key] = v;
+    }
+    if (Object.keys(info).length) app.info = info;
+  }
+
+  if (a.events) {
+    const ev: Partial<Record<CgEvent, string>> = {};
+    for (const key of WINDOW_EVENTS) {
+      const v = a.events[key];
+      if (v) ev[key] = v;
+    }
+    if (Object.keys(ev).length) app.events = ev;
+  }
+
+  return { cgui: 1, app, widgets: doc.widgets.map(cleanNode) };
+}
