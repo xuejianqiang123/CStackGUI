@@ -56,6 +56,12 @@ if not exist "designer\release\CStackGUI.exe" (
     echo [fail] 没找到 designer\release\CStackGUI.exe
     exit /b 1
 )
+rem 打包好的画布要有前端资源：只跑 electron-builder 不跑 vite build 时，
+rem designer\dist\ 可能不存在（它被 .gitignore 忽略），产出的 exe 会白屏。
+if not exist "designer\dist\index.html" (
+    echo [fail] designer\dist\index.html 不存在 —— 画布前端没构建，打出来会是白屏
+    exit /b 1
+)
 
 echo.
 echo == 3/4 组装 release\ ==
@@ -106,6 +112,13 @@ copy /y tools\kit-test.c release\tools\ >nul
 
 rem AI 编程助手（CodeBuddy 等）的项目级技能：用户用 AI 写 C 回调 / 手改 .cgui 时自动加载
 xcopy /e /i /q /y packaging\codebuddy release\.codebuddy >nul
+
+rem 运行时库必须真的进了包：发布包自带的 build-app.bat 第一件事就是找它，
+rem 缺了的话用户在包里编不了任何东西（2026-09-23 审计发现 release\runtime\lib 曾经是空的）。
+if not exist "release\runtime\lib\libcstackgui.a" (
+    echo [fail] release\runtime\lib\libcstackgui.a 不在包里 —— 发布包不完整
+    exit /b 1
+)
 
 rem 预编译画布模型（发布版 check-format 用；发布机上没有 designer 源码）
 echo -- 预编译画布模型到 release\build\modeljs --

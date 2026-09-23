@@ -66,7 +66,9 @@ if not exist "runtime\lib\libcstackgui.a" (
 )
 
 rem comdlg32 供通用对话框（打开/保存文件、选颜色）使用
-set LDFLAGS=-lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32 -lws2_32
+rem uuid/ole32/oleaut32 供 browser（WebBrowser 控件 = OLE/COM）使用 —— 与源码版的
+rem build-app.bat 保持一致：少了它们，发布包里凡是用了 browser 的工程会 undefined reference
+set LDFLAGS=-lcomctl32 -luser32 -lgdi32 -lshell32 -lgdiplus -lcomdlg32 -luuid -lole32 -loleaut32 -lws2_32
 set CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include
 
 rem 资源对象（清单 + 版本信息）里没有代码符号，链接器不会主动从静态库里取它 ——
