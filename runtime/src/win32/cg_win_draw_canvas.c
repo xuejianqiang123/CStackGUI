@@ -1,0 +1,347 @@
+/**
+ * @file    cg_win_draw_canvas.c
+ * @brief   自绘窗口类：image / 圆环进度 / 进度条 / 画板
+ */
+#include "cg_win_internal.h"
+
+/** 图片控件：按控件大小 StretchBlt，缺图时画占位框 */
+static LRESULT CALLBACK ImageProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    cg_app_t *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+
+    switch (msg) {
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC dc = BeginPaint(hwnd, &ps);
+        RECT rc;
+        cg_widget_t *w = cgw_widget_by_hwnd(app, hwnd);
+        GetClientRect(hwnd, &rc);
+
+        if (w && w->bitmap) {
+            BITMAP bm;
+            HDC mem = CreateCompatibleDC(dc);
+            HGDIOBJ old = SelectObject(mem, (HGDIOBJ)w->bitmap);
+            if (GetObjectW((HGDIOBJ)w->bitmap, sizeof(bm), &bm)) {
+                int prev = SetStretchBltMode(dc, HALFTONE);
+                SetBrushOrgEx(dc, 0, 0, NULL);
+                StretchBlt(dc, 0, 0, rc.right - rc.left, rc.bottom - rc.top,
+                           mem, 0, 0, bm.bmWidth, bm.bmHeight, SRCCOPY);
+                SetStretchBltMode(dc, prev);
+            }
+            SelectObject(mem, old);
+            DeleteDC(mem);
+        } else {
+            COLORREF face = cgw_to_colorref(cg_win_behind_rgb(w->app, w->native));
+            HBRUSH br = CreateSolidBrush(face);
+            HGDIOBJ oldbr = SelectObject(dc, br);
+            HPEN pen = CreatePen(PS_DASH, 1, RGB(120, 120, 128));
+            HGDIOBJ oldpen = SelectObject(dc, pen);
+            Rectangle(dc, rc.left + 1, rc.top + 1, rc.right - 1, rc.bottom - 1);
+            SelectObject(dc, oldpen);
+            DeleteObject(pen);
+            SelectObject(dc, oldbr);
+            DeleteObject(br);
+
+            SetBkMode(dc, TRANSPARENT);
+            SetTextColor(dc, RGB(90, 90, 96));
+            if (w && w->src && *w->src) {
+                wchar_t *wt = cgw_wc_from_utf8(w->src);
+                if (wt) {
+                    DrawTextW(dc, wt, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_PATH_ELLIPSIS);
+                    free(wt);
+                }
+            } else {
+                const wchar_t *ph = L"图片";
+                DrawTextW(dc, ph, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            }
+        }
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_LBUTTONUP: {
+        /* `image` 在类型表里声明了 click/dblclick（cg_doc_kind.c），但 IMAGE_CLASS 自己
+         * 不发任何通知 —— 所以照画板的做法在这里补一次 click；双击由 cg_dispatch 按
+         * 系统双击间隔合成（core/cg_event.c）。历史上这里漏了：
+         * 给图片绑 click 永远不触发，而 --selftest 是直接调函数指针，所以门禁发现不了。 */
+        cg_widget_t *w = cgw_widget_by_hwnd(app, hwnd);
+        if (w && !g_win_in_notify) {
+            g_win_in_notify = 1;
+            cg_dispatch(w, CG_EVENT_CLICK);
+            g_win_in_notify = 0;
+        }
+        break;
+    }
+    default:
+        break;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+/** @brief 注册图片控件的自绘窗口类（整进程一次） */
+void cgw_register_image_class(void)
+{
+    static int done = 0;
+    WNDCLASSEXW wc;
+    if (done) return;
+    memset(&wc, 0, sizeof(wc));
+    wc.cbSize = sizeof(wc);
+    wc.lpfnWndProc = ImageProc;
+    wc.hInstance = GetModuleHandleW(NULL);
+    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
+    wc.lpszClassName = CG_IMAGE_CLASS;
+    RegisterClassExW(&wc);
+    done = 1;
+}
+
+/* ------------------------------------------------------ 环状进度（自绘）
+ * 原生控件里没有圆环进度，这个和 switch 一样是 owner-draw 思路的样板：
+ * 自己画在窗口上，所以能吃 style 的颜色，也才能有圆角/圆弧这种原生控件画不出的东西。
+ */
+/**
+ * @brief 画圆环中间那一行百分比文字
+ * @param dc 目标 DC；w 控件；rc 客户区
+ * @details 圆环本身（底色 / 轨道 / 进度弧）在 cg_skin.c 的 `cg_skin_draw_ring()` 里
+ *          用 GDI+ 抗锯齿画（GDI 的粗弧锯齿非常明显）；文字要用本文件的 `cgw_font_for()`，
+ *          所以留在调用方画完圆环之后补。
+ * @return void 无返回值
+ */
+static void draw_ring_text(HDC dc, const cg_widget_t *w, const RECT *rc)
+{
+    int span = (w->vmax > w->vmin) ? (w->vmax - w->vmin) : 1;
+    int val = w->value;
+    wchar_t text[32];
+    HFONT f, oldf;
+    RECT tr = *rc;
+
+    if (val < w->vmin) val = w->vmin;
+    if (val > w->vmax) val = w->vmax;
+
+    f = w->app ? cgw_font_for(w->app, w->style.font, w->style.size, w->style.bold, 0) : NULL;
+    oldf = (HFONT)SelectObject(dc, f ? f : (HFONT)GetStockObject(DEFAULT_GUI_FONT));
+    swprintf(text, 32, L"%d%%", (val - w->vmin) * 100 / span);
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, GetSysColor(COLOR_WINDOWTEXT));
+    DrawTextW(dc, text, -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    SelectObject(dc, oldf);
+}
+
+/** @brief 圆环进度控件窗口过程（自绘，无交互） */
+static LRESULT CALLBACK RingProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    cg_app_t *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+
+    switch (msg) {
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC dc = BeginPaint(hwnd, &ps);
+        RECT rc;
+        cg_widget_t *w = cgw_widget_by_hwnd(app, hwnd);
+        GetClientRect(hwnd, &rc);
+        if (w) {
+            cg_skin_draw_ring(w, dc, &rc);   /* GDI+ 抗锯齿：底色 + 轨道 + 进度弧 */
+            draw_ring_text(dc, w, &rc);      /* 中心百分比 */
+        } else {
+            FillRect(dc, &rc, cgw_brush_for(cg_win_behind_rgb(app, hwnd)));
+        }
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    default:
+        break;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+/** @brief 注册圆环进度的自绘窗口类（整进程一次） */
+void cgw_register_ring_class(void)
+{
+    static int done = 0;
+    WNDCLASSEXW wc;
+    if (done) return;
+    memset(&wc, 0, sizeof(wc));
+    wc.cbSize = sizeof(wc);
+    wc.lpfnWndProc = RingProc;
+    wc.hInstance = GetModuleHandleW(NULL);
+    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
+    wc.lpszClassName = CG_RING_CLASS;
+    RegisterClassExW(&wc);
+    done = 1;
+}
+
+/** @brief 进度条窗口过程（自绘，无交互）。原生的 PROGRESS_CLASS
+ *  不管主题开没开都不发 NM_CUSTOMDRAW，只能整个换成自己的类。 */
+static LRESULT CALLBACK ProgressProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    cg_app_t *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+
+    switch (msg) {
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC dc = BeginPaint(hwnd, &ps);
+        RECT rc;
+        cg_widget_t *w = cgw_widget_by_hwnd(app, hwnd);
+        GetClientRect(hwnd, &rc);
+        if (w) {
+            cg_skin_draw_progress(w, dc, &rc);
+        } else {
+            FillRect(dc, &rc, cgw_brush_for(cg_win_behind_rgb(app, hwnd)));
+        }
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    default:
+        break;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+/** @brief 注册进度条的自绘窗口类（整进程一次） */
+void cgw_register_progress_class(void)
+{
+    static int done = 0;
+    WNDCLASSEXW wc;
+    if (done) return;
+    memset(&wc, 0, sizeof(wc));
+    wc.cbSize = sizeof(wc);
+    wc.lpfnWndProc = ProgressProc;
+    wc.hInstance = GetModuleHandleW(NULL);
+    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
+    wc.lpszClassName = CG_PROGRESS_CLASS;
+    RegisterClassExW(&wc);
+    done = 1;
+}
+
+/* ------------------------------------------------------ 画板（自绘）
+ * cg_canvas_* 命令把每笔记录在 w->ops 里，WM_PAINT 按序回放。
+ * 坐标是逻辑像素（跟 .cgui 同一套），绘制时按 DPI 缩放。
+ */
+/** @brief 画板坐标：逻辑像素 -> 物理像素（与控件布局同一套缩放） */
+static int canvas_scale(const cg_widget_t *w, int logical)
+{
+    return cgw_scale_px(w->app, logical);
+}
+
+/**
+ * @brief 画板绘制：填底色后按记录顺序回放 cg_canvas_* 的绘制命令
+ * @param dc 目标 DC；w canvas 控件；rc 客户区
+ * @return void 无返回值
+ */
+static void draw_canvas(HDC dc, cg_widget_t *w, const RECT *rc)
+{
+    COLORREF bgc = (w->style.bg != CG_COLOR_NONE)
+                       ? cgw_to_colorref(w->style.bg)
+                       : cgw_to_colorref(cg_win_behind_rgb(w->app, w->native));
+    HBRUSH bg = CreateSolidBrush(bgc);
+    FillRect(dc, rc, bg);
+    DeleteObject(bg);
+
+    for (int i = 0; i < w->nops; i++) {
+        const cg_canvas_op_t *op = &w->ops[i];
+        HPEN pen = CreatePen(PS_SOLID, op->penw > 0 ? op->penw : 1, cgw_to_colorref(op->color));
+        HGDIOBJ oldpen = SelectObject(dc, pen);
+        HBRUSH br = NULL;
+        HGDIOBJ oldbr = NULL;
+
+        if (op->fill) {
+            br = CreateSolidBrush(cgw_to_colorref(op->color));
+            oldbr = SelectObject(dc, br);
+        } else {
+            oldbr = SelectObject(dc, GetStockObject(NULL_BRUSH));
+        }
+
+        switch (op->type) {
+        case CG_CANVAS_OP_LINE:
+            MoveToEx(dc, canvas_scale(w, op->x1), canvas_scale(w, op->y1), NULL);
+            LineTo(dc, canvas_scale(w, op->x2), canvas_scale(w, op->y2));
+            break;
+        case CG_CANVAS_OP_RECT:
+            Rectangle(dc, canvas_scale(w, op->x1), canvas_scale(w, op->y1),
+                      canvas_scale(w, op->x2), canvas_scale(w, op->y2));
+            break;
+        case CG_CANVAS_OP_ELLIPSE:
+            Ellipse(dc, canvas_scale(w, op->x1), canvas_scale(w, op->y1),
+                    canvas_scale(w, op->x2), canvas_scale(w, op->y2));
+            break;
+        case CG_CANVAS_OP_TEXT: {
+            wchar_t *wt = cgw_wc_from_utf8(op->text ? op->text : "");
+            HFONT f = cgw_font_for(w->app, w->style.font,
+                               w->style.size > 0 ? w->style.size : 10, w->style.bold, 0);
+            HFONT oldf = (HFONT)SelectObject(dc, f ? f : GetStockObject(DEFAULT_GUI_FONT));
+            SetBkMode(dc, TRANSPARENT);
+            SetTextColor(dc, cgw_to_colorref(op->color));
+            if (wt) {
+                TextOutW(dc, canvas_scale(w, op->x1), canvas_scale(w, op->y1),
+                         wt, (int)wcslen(wt));
+                free(wt);
+            }
+            SelectObject(dc, oldf);
+            break;
+        }
+        default:
+            break;
+        }
+        SelectObject(dc, oldpen);
+        DeleteObject(pen);
+        if (br) { SelectObject(dc, oldbr); DeleteObject(br); }
+        else SelectObject(dc, oldbr);
+    }
+}
+
+/** @brief 画板控件窗口过程：自绘 + 左键抬起派发 click（双击由运行时合成） */
+static LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    cg_app_t *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+
+    switch (msg) {
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC dc = BeginPaint(hwnd, &ps);
+        RECT rc;
+        cg_widget_t *w = cgw_widget_by_hwnd(app, hwnd);
+        GetClientRect(hwnd, &rc);
+        if (w) {
+            draw_canvas(dc, w, &rc);
+        } else {
+            FillRect(dc, &rc, cgw_brush_for(cg_win_behind_rgb(app, hwnd)));
+        }
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_LBUTTONUP: {
+        cg_widget_t *w = cgw_widget_by_hwnd(app, hwnd);
+        if (w && !g_win_in_notify) {
+            g_win_in_notify = 1;
+            cg_dispatch(w, CG_EVENT_CLICK);   /* 双击由运行时按系统间隔合成 */
+            g_win_in_notify = 0;
+        }
+        break;
+    }
+    default:
+        break;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+/** @brief 注册画板的自绘窗口类（整进程一次） */
+void cgw_register_canvas_class(void)
+{
+    static int done = 0;
+    WNDCLASSEXW wc;
+    if (done) return;
+    memset(&wc, 0, sizeof(wc));
+    wc.cbSize = sizeof(wc);
+    wc.lpfnWndProc = CanvasProc;
+    wc.hInstance = GetModuleHandleW(NULL);
+    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
+    wc.lpszClassName = CG_CANVAS_CLASS;
+    RegisterClassExW(&wc);
+    done = 1;
+}

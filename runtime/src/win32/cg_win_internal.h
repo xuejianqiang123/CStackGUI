@@ -158,7 +158,9 @@ void cgw_datetime_from_text(const cg_widget_t *w, SYSTEMTIME *date, SYSTEMTIME *
 /** @brief 把控件里的日期时间写回 text */
 void cgw_datetime_pull_text(cg_widget_t *w, HWND date_hwnd, HWND time_hwnd);
 
-/* ---------------- cg_win_draw.c：自绘窗口类 ---------------- */
+/* ---------------- 自绘窗口类：9 个类按控件分居四个文件
+ *   cg_win_draw_canvas.c（image/圆环/进度条/画板）、cg_win_draw_panel.c（面板/分隔条）、
+ *   cg_win_draw_chart.c（图表）、cg_win_draw_gauge.c（状态灯/仪表盘） ---------------- */
 
 void cgw_register_image_class(void);
 void cgw_register_ring_class(void);
