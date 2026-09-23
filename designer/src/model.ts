@@ -129,12 +129,16 @@ export const KIND_EVENTS: Record<string, CgEvent[]> = {
   label: [],
   switch: ["change", "gotfocus", "lostfocus"],
   /* 单行输入框：自己的 change/submit + 鼠标/键盘全套（输入时拦按键、点一下做点事都要用）
+   * click/dblclick 是 2026-09-23 补齐的：EDIT 类不发 BN_CLICKED 也不产生 WM_LBUTTONDBLCLK，
+   * 由子类在左键抬起时补派发 click、双击再由 cg_dispatch 合成（见 cg_win_event.c）。
    * 必须和 runtime/src/core/cg_doc_kind.c 的 edit 行一致 */
-  edit: ["change", "submit", "mousedown", "mouseup", "dblclick", "rdown", "rup", "mousemove",
+  edit: ["click", "change", "submit", "mousedown", "mouseup", "dblclick", "rdown", "rup", "mousemove",
          "gotfocus", "lostfocus", "keydown", "keyup", "char", "wheel", "spin"],
   richtext: ["change", "gotfocus", "lostfocus"],
   datepicker: ["change", "gotfocus", "lostfocus"],
-  monthcal: ["select", "dblclick"],
+  /* 月历只给 select：MCN_SELECT 已含"点了哪一天"，而它从不发 NM_DBLCLK
+   * （2026-09-23 真机连点实测只进 select），原 dblclick 是空头承诺，已随运行时撤掉 */
+  monthcal: ["select"],
   checkbox: ["change", "gotfocus", "lostfocus"],
   radio: ["change", "gotfocus", "lostfocus"],
   listbox: ["select", "dblclick", "gotfocus", "lostfocus"],

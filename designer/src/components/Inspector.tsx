@@ -492,7 +492,7 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
         </>
       ) : null}
 
-      {node.type === "button" ? (
+      {node.type === "button" || node.type === "iconbutton" ? (
         <>
           <Row label="图片">
             <input
@@ -518,7 +518,9 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
             </button>
           </Row>
           <p className="muted small">
-            图片拉伸铺满按钮作背景，文字画在图上；路径相对 .cgui 所在目录，支持 png / jpg / bmp / gif。
+            {node.type === "iconbutton"
+              ? "图标等比缩放居中显示（只缩不放，四周各留 4px）；路径相对 .cgui 所在目录，支持 png / jpg / bmp / gif。"
+              : "图片拉伸铺满按钮作背景，文字画在图上；路径相对 .cgui 所在目录，支持 png / jpg / bmp / gif。"}
           </p>
         </>
       ) : null}
@@ -746,6 +748,21 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
           <option value="center">居中</option>
           <option value="right">右对齐</option>
         </select>
+      </Row>
+      <Row label="圆角" hint="自绘控件的圆角半径（像素）：按钮 / 复选框 / 开关 / 输入框 / 卡片 / 外形框等用得上；填 0 或清空 = 不写该字段、用控件缺省">
+        <input
+          className="input narrow"
+          type="number"
+          min={0}
+          value={style.radius ?? 0}
+          onChange={(e) =>
+            patch((n) => {
+              const v = Math.round(Number(e.target.value) || 0);
+              n.style = { ...(n.style ?? {}), radius: v > 0 ? v : undefined };
+            })
+          }
+        />
+        <span className="muted small">px，0 = 缺省</span>
       </Row>
 
       <div className="insp-section">状态</div>
@@ -1193,8 +1210,11 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
         </Row>
       ) : null}
 
-      {node.type === "tabs" ? (
-        <Row label="当前页">
+      {node.type === "tabs" || node.type === "listbox" || node.type === "combo" ? (
+        <Row
+          label={node.type === "tabs" ? "当前页" : "初始选中"}
+          hint={node.type === "tabs" ? undefined : "运行时启动后默认选中第几项（0 起）；选项来自下面的「条目」"}
+        >
           <select
             className="input"
             value={node.value ?? 0}
@@ -1206,7 +1226,7 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
           >
             {(node.items ?? []).map((t, i) => (
               <option key={i} value={i}>
-                {i + 1}. {t || `页面 ${i + 1}`}
+                {i + 1}. {t || (node.type === "tabs" ? `页面 ${i + 1}` : `第 ${i + 1} 项`)}
               </option>
             ))}
           </select>
