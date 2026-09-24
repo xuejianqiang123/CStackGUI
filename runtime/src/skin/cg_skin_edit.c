@@ -161,15 +161,24 @@ static void sk_edit_box(HWND hwnd, const sk_edit_sub_t *s, int focus)
     ReleaseDC(hwnd, dc);
 }
 
-/** 取当前字体的文字行高（拿不到就是 0） */
+/** 取当前字体的文字行高（拿不到就是 0）。
+ *  **必须先把控件自己的字体（WM_GETFONT）选进 DC 再量**：GetDC 拿来的 DC 里选中的是
+ *  系统默认字体（16px 的 System 位图字体），拿它量雅黑 10pt（行高约 19px）会量小，
+ *  上边距 pad 就算大了 —— 文字整条往下坠（用户报的"输入框里的字往下沉"）。
+ *  这同时也救活了 WM_SETFONT 里"字高变了才重排"的比较：量错的话恒等于同一个值，
+ *  换字号永远比不出变化。 */
 static int sk_edit_text_height(HWND hwnd)
 {
-    HDC dc = GetDC(hwnd);
+    HDC        dc = GetDC(hwnd);
+    HFONT      f, of;
     TEXTMETRICW tm;
     int th = 0;
     if (!dc) return 0;
     memset(&tm, 0, sizeof(tm));
+    f = (HFONT)SendMessageW(hwnd, WM_GETFONT, 0, 0);
+    of = (HFONT)SelectObject(dc, f ? f : GetStockObject(DEFAULT_GUI_FONT));
     if (GetTextMetricsW(dc, &tm)) th = tm.tmHeight;
+    SelectObject(dc, of);
     ReleaseDC(hwnd, dc);
     return th;
 }

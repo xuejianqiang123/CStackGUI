@@ -52,14 +52,14 @@ for %%a in (%*) do (
 )
 
 rem 包含路径：公开头文件、与后端无关那层（白盒测试直接读 cg_json.h / cg_doc.h），
-rem 以及 tests\ 自己（为了 cg_test.h）。
-set "CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include -Iruntime\src\core -Itests"
+rem 皮肤层（test_skin_edit.c 要读 CG_EDIT_BORDER）、以及 tests\ 自己（为了 cg_test.h）。
+set "CFLAGS=-std=c11 -O2 -Wall -Wextra -Wno-unused-parameter -Iruntime\include -Iruntime\src\core -Iruntime\src\skin -Itests"
 set "DEFS="
 set "LINKFLAGS="
 if defined MEMCHECK (
     rem -g + -O1：让插桩在调试时既不失真又好读。
     rem --memcheck 依赖 tests\cg_test_memcheck.c 提供的 ld --wrap 挂钩。
-    set "CFLAGS=-std=c11 -O1 -g -Wall -Wextra -Wno-unused-parameter -Iruntime\include -Iruntime\src\core -Itests"
+    set "CFLAGS=-std=c11 -O1 -g -Wall -Wextra -Wno-unused-parameter -Iruntime\include -Iruntime\src\core -Iruntime\src\skin -Itests"
     set "DEFS=-DCG_TEST_MEMCHECK"
     set "LINKFLAGS=-Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=free -Wl,--wrap=_strdup"
 )
