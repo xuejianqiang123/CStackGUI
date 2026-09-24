@@ -116,7 +116,10 @@ void cgw_notify_body(cg_app_t *app, cg_widget_t *w, HWND hwnd, int code, int cmd
         /* 下拉框（CBS_DROPDOWNLIST）的选择变化走 WM_COMMAND 的 CBN_SELCHANGE。
          * value 直接写、不走 cg_widget_set_value：那个会按 min/max 夹到区间里，
          * 而这里存的是条目下标，条目数可以超过 100（夹了就永远选不中后面那些）。 */
-        if (code == CBN_SELCHANGE) {
+        /* 除 CBN_SELCHANGE 外也接住 SELENDOK / CLOSEUP：不同交互方式（键盘、触摸、
+         * 直接点列表项）下控件发的通知码并不一致，只认 SELENDOK 会表现为"选了没反应"。
+         * 三者的处理完全一样（取当前下标），所以一并接住 —— 纯加法，不改变已有行为。 */
+        if (code == CBN_SELCHANGE || code == CBN_SELENDOK || code == CBN_CLOSEUP) {
             LRESULT sel = SendMessageW(hwnd, CB_GETCURSEL, 0, 0);
             if (sel != CB_ERR) {
                 w->value = (int)sel;
@@ -272,6 +275,13 @@ LRESULT cgw_notify_common(cg_app_t *app, const NMHDR *hdr)
         cg_dispatch(w, CG_EVENT_SELECT);
         break;
     }
+    case DTN_CLOSEUP:
+        /* 月历弹层关掉时再拉一次值：有些选择路径只在 CLOSEUP 时才把日期落进控件，
+         * 只认 DTN_DATETIMECHANGE 会表现为"在日历里点了某天、框里还是旧日期"。
+         * CLOSEUP 的通知体只是 NMHDR（没有 dwFlags），所以无条件拉一次。 */
+        cgw_datetime_pull_text(w, (HWND)w->native, (HWND)w->native2);
+        cg_dispatch(w, CG_EVENT_CHANGE);
+        break;
     case DTN_DATETIMECHANGE: {
         const NMDATETIMECHANGE *dt = (const NMDATETIMECHANGE *)hdr;
         if (dt->dwFlags == GDT_VALID) {

@@ -91,6 +91,18 @@ LRESULT CALLBACK cgw_FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     switch (msg) {
     case WM_COMMAND:
     case WM_NOTIFY:
+        /* 只转发"来自我们某个控件"的通知 —— 与下面 WM_HSCROLL/WM_VSCROLL 的白名单同一个道理。
+         * 有些控件自己内部还有子窗口（下拉框的 ComboLBox、日期控件的内嵌 MonthCal 与内嵌
+         * Up-Down），那些子窗口的通知是发给**控件自己**的；无条件转发会把它们劫走：
+         * 主窗口认不出这个陌生 HWND、没人处理，而我们从不用 DefSubclassProc 补回去
+         * ⇒ 控件自己永远收不到。表现为下拉选了不生效 / 日历点了不落值 / 时间的加减钮没反应。 */
+        if (g_win_app && g_win_app->hwnd && (HWND)g_win_app->hwnd != hwnd) {
+            HWND from = (msg == WM_NOTIFY && lp) ? ((const NMHDR *)lp)->hwndFrom : (HWND)lp;
+            if (cgw_widget_by_hwnd(g_win_app, from)) {
+                return SendMessageW((HWND)g_win_app->hwnd, msg, wp, lp);
+            }
+        }
+        break;
     case WM_DRAWITEM:
     case WM_CTLCOLORSTATIC:
     case WM_CTLCOLOREDIT:

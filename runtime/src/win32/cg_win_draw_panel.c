@@ -85,9 +85,19 @@ LRESULT CALLBACK cgw_PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
     switch (msg) {
     case WM_COMMAND:
+    case WM_NOTIFY:
+        /* 同 cg_win_event.c 的 cgw_FocusProc：只转发"来自我们某个控件"的通知。
+         * 无条件转发会劫走控件内部子窗口（ComboLBox / 内嵌 MonthCal / 内嵌 Up-Down）
+         * 发给控件自己的通知，表现为下拉选了不生效、日历点了不落值、加减钮没反应。 */
+        if (app && app->hwnd && (HWND)app->hwnd != hwnd) {
+            HWND from = (msg == WM_NOTIFY && lp) ? ((const NMHDR *)lp)->hwndFrom : (HWND)lp;
+            if (cgw_widget_by_hwnd(app, from)) {
+                return SendMessageW((HWND)app->hwnd, msg, wp, lp);
+            }
+        }
+        break;
     case WM_HSCROLL:
     case WM_VSCROLL:
-    case WM_NOTIFY:
     case WM_DRAWITEM:
     case WM_SETCURSOR:
     case WM_CTLCOLORSTATIC:
