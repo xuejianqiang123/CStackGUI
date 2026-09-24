@@ -107,16 +107,20 @@ static char *term_make_line(cg_widget_t *w, int dir, const unsigned char *data, 
     return line;
 }
 
-/** @brief 追加一行到 items 并按上限丢弃最老的（不 sync，给 cg_term_write 批量用） */
-static void term_append_line(cg_widget_t *w, int dir, const unsigned char *data, int len)
+/** @brief 追加一行到 items 并按上限丢弃最老的（不 sync，给 cg_term_write 批量用）
+ *  @return 本次从头部裁剪掉的行数（0 = 没裁）。裁剪必须同步回退 term_pushed，
+ *          否则后端 sync_terminal 看到 `term_pushed >= nitems` 直接 return、新行永不推送
+ *          —— 终端到上限后"彻底停刷新"就是这样来的（2026-09-25）。 */
+static int term_append_line(cg_widget_t *w, int dir, const unsigned char *data, int len)
 {
     char **ni;
     char  *line = term_make_line(w, dir, data, len);
     int    max;
+    int    trimmed = 0;
 
-    if (!line) return;
+    if (!line) return 0;
     ni = (char **)realloc(w->items, ((size_t)w->nitems + 1) * sizeof(char *));
-    if (!ni) { free(line); return; }
+    if (!ni) { free(line); return 0; }
     w->items = ni;
     w->items[w->nitems++] = line;
 
@@ -125,7 +129,10 @@ static void term_append_line(cg_widget_t *w, int dir, const unsigned char *data,
         free(w->items[0]);
         memmove(w->items, w->items + 1, ((size_t)w->nitems - 1) * sizeof(char *));
         w->nitems--;
+        if (w->term_pushed > 0) w->term_pushed--;   /* 模型丢了最老一行，已推送指针同步回退 */
+        trimmed++;
     }
+    return trimmed;
 }
 
 /**
@@ -142,10 +149,15 @@ void cg_term_write(cg_widget_t *w, int dir, const void *data, int len)
     const unsigned char *p = (const unsigned char *)data;
     int start = 0;
     int i;
+    int trimmed = 0;
 
     if (!w || !want_type(w, "terminal", "cg_term_write")) return;
     if (len < 0) len = data ? (int)strlen((const char *)data) : 0;
-    if (len <= 0) { term_append_line(w, dir, p, 0); cg_widget_sync(w); return; }
+    if (len <= 0) {
+        if (term_append_line(w, dir, p, 0)) w->items_dirty = 1;   /* 裁过 → 后端整体重灌 */
+        cg_widget_sync(w);
+        return;
+    }
 
     for (i = 0; i <= len; i++) {
         if (i < len && p[i] != '\n') continue;
@@ -153,11 +165,13 @@ void cg_term_write(cg_widget_t *w, int dir, const void *data, int len)
             int end = i;
             while (end > start && p[end - 1] == '\r') end--;
             /* 结尾多出来的空段（数据以 \n 收尾）不再补一行空行 */
-            if (end > start || i < len) term_append_line(w, dir, p + start, end - start);
+            if (end > start || i < len) trimmed |= term_append_line(w, dir, p + start, end - start);
         }
         start = i + 1;
     }
-    w->items_dirty = 0;      /* 不是"重建"，后端只需追加（见 sync_terminal） */
+    /* 没裁剪 → 后端走增量追加（见 sync_terminal）；裁过 → 标脏让后端整体重灌，
+     * 否则 RichEdit 里最老那行不会被删掉、界面会比上限多显示一行（且持续堆积）。 */
+    if (!trimmed) w->items_dirty = 0;
     cg_widget_sync(w);
 }
 

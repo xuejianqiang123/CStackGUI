@@ -310,4 +310,47 @@ CG_TEST_SUITE("终端：HEX 模式", test_term_hex_mode);
 CG_TEST_SUITE("终端：时间戳", test_term_timestamp);
 CG_TEST_SUITE("终端：按换行切行", test_term_split_lines);
 CG_TEST_SUITE("终端：行数上限与清空", test_term_max_lines);
+/** @brief 到上限后继续写：模型丢最老的行，但"已推送指针"必须跟着回退
+ *  @details 后端 sync 是**增量追加**（只推 [term_pushed, nitems) 这段），并且
+ *           `term_pushed >= nitems` 时直接 return。所以从头部删行而不回退这个指针，
+ *           界面就会"永远不再更新"—— 不崩、不报错，只是日志悄悄停在某个时刻，
+ *           比崩了还糟（人会照着它排查问题）。 */
+static void test_term_max_lines_pushed(void)
+{
+    cg_app_t app;
+
+    if (!build_app(&app, k_doc)) return;
+    {
+        cg_widget_t *t = cg_find(&app, "term");
+        int cap = 20;
+        int i;
+
+        cg_term_set_max_lines(t, cap);
+        /* 先填到上限（无窗模式 cg_term_write 不更新 term_pushed，故下一步手动模拟一次后端 sync） */
+        for (i = 0; i < cap; i++) {
+            char b[16];
+            snprintf(b, sizeof(b), "L%d", i);
+            cg_term_write(t, CG_TERM_RX, b, -1);
+        }
+        cg_test_int("行数停在上限", cg_term_count(t), cap);
+        /* 模拟一次后端 sync：把已推送指针推到和模型一致（sync_terminal 在真机就是这么做的） */
+        t->term_pushed = cg_term_count(t);
+        /* 再写 8 行：每次都触发"从头部丢一行"的裁剪。若 term_pushed 不跟着回退，
+         * 后端 sync_terminal 会认为"都推过了"而永远不再刷新（2026-09-25 终端到上限后停刷新）。 */
+        for (i = 0; i < 8; i++) {
+            char b[16];
+            snprintf(b, sizeof(b), "L%d", cap + i);
+            cg_term_write(t, CG_TERM_RX, b, -1);
+        }
+        cg_test_int("裁剪后仍是上限", cg_term_count(t), cap);
+        /* 关键不变量：还有没推给后端的行 —— 否则后端直接 return，界面不再刷新 */
+        cg_test_ok("已推送指针跟着头部删除回退（界面还能继续刷新）",
+                   t->term_pushed < cg_term_count(t));
+        /* 模型内容正确：最老的是 L8（丢掉 L0..L7），最新的是 L27；line_text 带方向前缀 "RX " */
+        cg_test_str("丢的是最老的、留的是最新的", line_text(t, 0), "RX L8");
+    }
+    free_app(&app);
+}
+
 CG_TEST_SUITE("终端：存文件与兜底", test_term_save);
+CG_TEST_SUITE("终端：到上限后仍要继续刷新", test_term_max_lines_pushed);
