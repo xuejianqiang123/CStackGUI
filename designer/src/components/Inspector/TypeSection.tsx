@@ -32,6 +32,86 @@ export default function TypeSection({ node, patch }: TypeSectionProps) {
           <span className="muted small">毫秒，0 = 停</span>
         </Row>
       ) : null}
+      {node.type === "serial" ? (
+        <>
+          <Row label="端口名">
+            <input
+              className="input mono"
+              value={node.port ?? "COM1"}
+              placeholder="COM1"
+              spellCheck={false}
+              onChange={(e) =>
+                patch((n) => {
+                  n.port = e.target.value || undefined;
+                })
+              }
+            />
+          </Row>
+          <Row label="波特率">
+            <select
+              className="input"
+              value={node.baud ?? 9600}
+              onChange={(e) => patch((n) => { n.baud = Number(e.target.value); })}
+            >
+              <option value={9600}>9600</option>
+              <option value={19200}>19200</option>
+              <option value={38400}>38400</option>
+              <option value={57600}>57600</option>
+              <option value={115200}>115200</option>
+              <option value={230400}>230400</option>
+              <option value={460800}>460800</option>
+              <option value={921600}>921600</option>
+            </select>
+          </Row>
+          <Row label="数据位">
+            <select
+              className="input"
+              value={node.bits ?? 8}
+              onChange={(e) => patch((n) => { n.bits = Number(e.target.value); })}
+            >
+              <option value={5}>5</option>
+              <option value={6}>6</option>
+              <option value={7}>7</option>
+              <option value={8}>8</option>
+            </select>
+          </Row>
+          <Row label="停止位">
+            <select
+              className="input"
+              value={node.stop ?? 1}
+              onChange={(e) => patch((n) => { n.stop = Number(e.target.value); })}
+            >
+              <option value={1}>1</option>
+              <option value={2}>2</option>
+            </select>
+          </Row>
+          <Row label="校验">
+            <select
+              className="input"
+              value={node.parity ?? 0}
+              onChange={(e) => patch((n) => { n.parity = Number(e.target.value); })}
+            >
+              <option value={0}>无</option>
+              <option value={1}>奇</option>
+              <option value={2}>偶</option>
+            </select>
+          </Row>
+          <Row label="自动启动">
+            <label className="check-inline">
+              <input
+                type="checkbox"
+                checked={node.auto === true}
+                onChange={(e) => patch((n) => { n.auto = e.target.checked || undefined; })}
+              />
+              启动时自动打开串口
+            </label>
+          </Row>
+          <p className="muted small">
+            无界面控件：运行时不建窗口，收到数据就派发 <code>arrive</code> 事件，
+            数据落到哪个控件由你的代码决定（用 <code>cg_serial_read</code> 等 API 取走）。
+          </p>
+        </>
+      ) : null}
       {node.type === "colorpicker" ? (
         <Row label="颜色">
           <input

@@ -88,6 +88,13 @@ export function makeNode(type: string, x: number, y: number): CgNode {
     node.items = ["系列一", "系列二"];   /* 两个系列，颜色按调色板自动分配 */
   } else if (type === "timer") {
     node.period = 1000;
+  } else if (type === "serial") {
+    node.port = "COM1";
+    node.baud = 9600;
+    node.bits = 8;
+    node.stop = 1;
+    node.parity = 0;
+    /* auto 缺省 false，不显式写（cleanNode 只在 === true 时写出） */
   } else if (type === "colorpicker") {
     node.value = 0x6750a4;
   } else if (type === "rate") {

@@ -13,9 +13,10 @@ export type HintSectionProps = {
 export default function HintSection({ node, patch }: HintSectionProps) {
   return (
     <>
-      {/* timer / menu 没有原生窗口（timer 见 cg_win_ctl.c:63 直接跳过；menu 无矩形，
-          tooltip 靠窗口句柄挂，见 cg_win_create.c:107），悬停提示永远挂不上，故不显示。 */}
-      {node.type === "timer" || node.type === "menu" ? null : (
+      {/* timer / menu / serial 没有原生窗口（timer 见 cg_win_ctl.c:63 直接跳过；
+          menu 无矩形、tooltip 靠窗口句柄挂，见 cg_win_create.c:107；
+          serial 是无界面控件，运行时不建窗口），悬停提示永远挂不上，故不显示。 */}
+      {node.type === "timer" || node.type === "menu" || node.type === "serial" ? null : (
         <Row label="悬停提示">
           <input
             className="input"

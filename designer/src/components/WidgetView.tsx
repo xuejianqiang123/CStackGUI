@@ -347,6 +347,14 @@ function inner(node: CgNode) {
         </div>
       );
 
+    case "serial":
+      return (
+        <div className="ctl-serial" title={node.port ?? "COM1"}>
+          <span className="glyph-serial" />
+          <span className="ctl-serial-port">{node.port ?? "COM1"}</span>
+        </div>
+      );
+
     case "canvas":
       return <div className="ctl-canvas">画板</div>;
 

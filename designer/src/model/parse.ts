@@ -142,6 +142,18 @@ function coerceNode(raw: unknown, index: number): CgNode | null {
   if (typeof o.format === "string") node.format = o.format;
   if (typeof o.hint === "string" && o.hint.trim()) node.hint = o.hint;
   if (Number.isFinite(Number(o.period))) node.period = Math.max(0, Math.round(Number(o.period)));
+  /* serial：只收合法档位，其余一律当没填（旧文件 / 手写脏值都读得进来）；
+     缺字段就回退缺省值，绝不往 node 上塞 undefined（写出时非缺省才写）。 */
+  if (typeof o.port === "string" && o.port.trim()) node.port = o.port;
+  const baud = Number(o.baud);
+  if (o.baud !== undefined && Number.isFinite(baud) && baud > 0) node.baud = Math.round(baud);
+  const bits = Number(o.bits);
+  if (o.bits !== undefined && Number.isFinite(bits) && bits >= 5 && bits <= 8) node.bits = Math.round(bits);
+  const stop = Number(o.stop);
+  if (o.stop !== undefined && Number.isFinite(stop) && (stop === 1 || stop === 2)) node.stop = Math.round(stop);
+  const parity = Number(o.parity);
+  if (o.parity !== undefined && Number.isFinite(parity) && parity >= 0 && parity <= 2) node.parity = Math.round(parity);
+  if (o.auto === true) node.auto = true;
   if (o.multi === true) node.multi = true;
   if (o.check === true) node.check = true;
   /* edit 的输入框行为：只收合法档位，其余一律当没填（旧文件 / 手写脏值都读得进来） */

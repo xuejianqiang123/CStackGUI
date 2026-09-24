@@ -81,6 +81,18 @@ export type CgNode = {
   hint?: string;
   /** timer 的触发周期（毫秒），0 = 停 */
   period?: number;
+  /** serial 的串口名（如 "COM1"），缺省 "COM1" */
+  port?: string;
+  /** serial 的波特率，缺省 9600 */
+  baud?: number;
+  /** serial 数据位（5..8），缺省 8 */
+  bits?: number;
+  /** serial 停止位（1..2），缺省 1 */
+  stop?: number;
+  /** serial 校验 0=无 / 1=奇 / 2=偶，缺省 0 */
+  parity?: number;
+  /** serial 自动启动（缺省 false；JSON 里写 auto: true 才算开） */
+  auto?: boolean;
   /** table：允许多选行 */
   multi?: boolean;
   /** table：显示行首复选框列 */

@@ -76,6 +76,9 @@ export const KINDS: KindInfo[] = [
   { type: "tag", label: "标签片", group: "装饰", container: false, w: 72, h: 28, text: "标签" },
   { type: "rate", label: "评分", group: "装饰", container: false, w: 140, h: 32, text: "", ranged: true },
   { type: "pagination", label: "分页", group: "装饰", container: false, w: 180, h: 32, text: "", ranged: true },
+  /* 串口：无界面控件（运行时不建窗口），靠 arrive 事件把收到的数据交给业务。
+     顺序与 runtime/src/core/cg_doc_kind.c 的 k_kinds 表一致。 */
+  { type: "serial", label: "串口", group: "其它", container: false, w: 48, h: 48, text: "" },
 ];
 
 export const KIND_MAP: Record<string, KindInfo> = Object.fromEntries(KINDS.map((k) => [k.type, k]));

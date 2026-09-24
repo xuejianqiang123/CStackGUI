@@ -11,7 +11,7 @@
 export const CG_EVENTS = [
   /* --- 控件事件 --- */
   "click", "dblclick", "change", "submit", "select", "release",
-  "expand", "collapse", "tick", "check", "gotfocus", "lostfocus",
+  "expand", "collapse", "tick", "arrive", "check", "gotfocus", "lostfocus",
   /* --- 窗口事件（绑在窗口上，对应「启动窗口」那张事件表） --- */
   "ready", "close", "closequery", "destroy", "move", "size",
   "activate", "deactivate", "firstactivate", "idle", "tray", "show", "hide",
@@ -41,6 +41,7 @@ export const EVENT_LABEL: Record<CgEvent, string> = {
   expand: "展开节点",
   collapse: "折叠节点",
   tick: "时钟周期到",
+  arrive: "数据到达",
   check: "行勾选变化",
   gotfocus: "获得焦点",
   lostfocus: "失去焦点",
@@ -90,6 +91,7 @@ export const EVENT_HINT: Record<CgEvent, string> = {
   expand: "树节点展开",
   collapse: "树节点折叠",
   tick: "时钟控件的周期到了（period 毫秒一次）",
+  arrive: "串口收到数据时触发（无界面控件，数据落到哪个控件由你的代码决定）",
   check: "表格里某一行的复选框被点了",
   gotfocus: "控件拿到键盘焦点（输入校验常用）",
   lostfocus: "控件失去键盘焦点（输入校验常用）",
@@ -160,6 +162,7 @@ export const KIND_EVENTS: Record<string, CgEvent[]> = {
   separator: [],
   image: ["click", "dblclick"],
   timer: ["tick"],
+  serial: ["arrive"],
   canvas: ["click", "dblclick"],
   colorpicker: ["change"],
   browser: [],

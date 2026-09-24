@@ -55,6 +55,13 @@ function cleanNode(node: CgNode): CgNode {
   }
   if (node.hint) out.hint = node.hint;
   if (node.period) out.period = Math.max(0, Math.round(node.period));
+  /* serial：非缺省才写（与 C 侧写回口径一致；auto 只有显式 === true 才写） */
+  if (node.port && node.port !== "COM1") out.port = node.port;
+  if (node.baud && node.baud !== 9600) out.baud = node.baud;
+  if (node.bits && node.bits !== 8) out.bits = node.bits;
+  if (node.stop && node.stop !== 1) out.stop = node.stop;
+  if (node.parity && node.parity !== 0) out.parity = node.parity;
+  if (node.auto === true) out.auto = true;
   if (node.multi === true) out.multi = true;
   if (node.check === true) out.check = true;
   /* 数值框（edit + 调节器）：value 是真相、文本由它派生，所以值/范围/文本一起写出去。
