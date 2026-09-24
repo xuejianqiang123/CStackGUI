@@ -164,7 +164,7 @@ void cb(cg_widget_t *self, cg_event_t ev, void *user);
 | `separator` | 分割线 | 否 | `STATIC` + `SS_ETCHEDHORZ` |
 | `image` | 图片 | 否 | 自注册窗口类 `CStackGUIImage`，GDI+ 读图 + 自绘缩放 |
 
-> 这里只是常用控件的速览。**完整 42 行类型表**（含 `progressring` / `timer` / `canvas` / `colorpicker` /
+> 这里只是常用控件的速览。**完整 43 行类型表**（含 `progressring` / `timer` / `canvas` / `colorpicker` /
 > `browser` / `shape` / `badge` / `tag` / `rate` / `pagination`）见
 > [docs/CGUI-FORMAT.md](CGUI-FORMAT.md) 第 4 节。
 

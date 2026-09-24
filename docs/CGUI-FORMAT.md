@@ -117,6 +117,7 @@
 | `hint` | 字符串 | 否 | 鼠标悬停提示（tooltip），**所有控件通用**；不写 / 空 = 无提示 |
 | `bind` | 对象 | 否 | 控件绑定：值/文字/勾选跟着另一个控件走，见 2.8 |
 | `period` | 整数 | 否 | `timer` 的触发周期（毫秒）。**不写 = 0 = 不触发**（画布新建时钟时给 1000）；`led` 的闪烁周期（毫秒，仅在状态=闪时有意义；缺省 500，小于 100 兜回缺省）|
+| `port` / `baud` / `bits` / `stop` / `parity` / `auto` | 字符串 / 整数 / 整数 / 整数 / 整数 / 布尔 | 否 | **只有 `serial`（串口组件）用**：端口名（`COM4`，不写 = 没配，运行时 `cg_widget_serial_open(w, port)` 指定）/ 波特率（缺省 9600）/ 数据位 5..8（缺省 8）/ 停止位 1..2（缺省 1）/ 校验 0=无 1=奇 2=偶（缺省 0）/ 自动启动（不写 = 等 `cg_widget_serial_open()` 开）。越界值一律回退缺省 |
 | `multi` / `check` | 布尔 | 否 | `table`：`multi` = 允许整行多选，`check` = 显示行首复选框列（配合 `check` 事件）|
 | `multiline` | 布尔 | 否 | `edit`：允许多行（`ES_MULTILINE` + Enter 变换行）。**不写 = 单行**；多行一般还要配竖向 `scroll` |
 | `scroll` | 整数 | 否 | `edit`：滚动条 `1` 横向 / `2` 纵向 / `3` 双向（位 1 = 横、位 2 = 纵）。**不写 = 0 = 无** |
@@ -449,6 +450,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `release` | 滑块/分隔条松手（拖完才发一次） | `slider`、`splitter` |
 | `expand` / `collapse` | 树节点展开/折叠 | 只有树 |
 | `tick` | 时钟控件的周期到了（`period` 毫秒一次） | 只有时钟 |
+| `arrive` | 串口组件收到数据（缓冲有数据就在主线程派发；回调里 `cg_widget_serial()` 取句柄再 `cg_serial_read()`，数据落到哪个控件由这行代码决定） | 只有串口组件 |
 | `check` | 表格勾选列的行勾选状态变了 | 只有表格（`.cgui` 里开 `check`） |
 | `gotfocus` / `lostfocus` | 控件获得 / 失去键盘焦点 | 有焦点概念的原生控件（输入类、按钮、开关勾选、滑块、列表/下拉/树/表格/标签页）|
 | `mousedown` / `mouseup` | 按下 / 松开左键 | 窗口（客户区）+ `button` / `edit`（控件内）|
@@ -504,6 +506,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `image` | 图片 | 否 | 200×120 | — | `click`、`dblclick` | 自绘窗口（GDI+ 读图）|
 | `shape` | 外形框 | 否 | 120×120 | — | **无** | 自注册面板窗口（自绘外形）|
 | `timer` | 时钟 | 否 | 无矩形 | — | `tick` | **无窗口**，后端 50ms 心跳驱动（`period` 毫秒）|
+| `serial` | 串口 | 否 | 无矩形 | — | `arrive` | **无窗口**（像易语言的串口组件）：只带参数（`port`/`baud`/`bits`/`stop`/`parity`/`auto`），收到数据在主线程派发 `arrive`，**数据落到哪个控件由用户代码决定**（terminal / chart / listbox 都行） |
 | `canvas` | 画板 | 否 | 240×160 | — | `click`、`dblclick` | 自绘窗口（`cg_canvas_*` 画线/矩形/椭圆/文字）|
 | `colorpicker` | 颜色选择 | 否 | 64×28 | — | `change` | `BUTTON` 自绘色块（点击弹系统取色器，值存 `value`）|
 | `browser` | 网页浏览 | 否 | 320×240 | — | **无** | `AtlAxWin` 宿主系统 WebBrowser（起不来降级 `STATIC` 占位；实验性）|
@@ -574,6 +577,11 @@ C 侧 `runtime/src/core/cg_doc_kind.c` 的 `k_kinds`，画布侧 `designer/src/m
 - `button` 的 `src` 是**背景图**：拉伸铺满整个按钮（圆角裁切），文字画在图上；
   悬停/按下/禁用在图上叠一层半透明蒙版做反馈。没图就照常画纯色按钮。
 - `timer` 不写 `period` 就等于关着（C 侧缺省 0）；画布新建时钟会给 1000，运行时用 `cg_widget_set_period()` 改。
+- `serial`（串口组件）是**无界面控件**：运行时不建窗口、不占矩形；`auto: true` 时窗口建好就自动开链路
+  （失败只记日志不拦启动）。链路开着时运行时每 50ms 看一眼缓冲，有数据就在主线程派发 `arrive`；
+  回调里 `cg_widget_serial(w)` 取句柄（**未打开/自检合成触发时是 NULL，必须先判**），`cg_serial_read()` 非阻塞取数据，
+  想喂几个控件喂几个控件。运行时动态换端口/波特率：`cg_widget_serial_open(w, "COM4")`（会先关旧的）
+  和 `cg_widget_serial_set_baud(w, 115200)`（开着就按新参数重开）。app 退出时链路自动关。
 - `colorpicker` 的当前颜色存在 `value`（`0xRRGGBB`），点色块弹系统取色器。**要程序改颜色别用
   `cg_widget_set_value()`** —— 那条路会按 `min`/`max` 截断，颜色不是区间值。
 - `rate` 星数 = `max-min`（上限 10）；`pagination` 页数 = `max-min+1`；当前值都用 `cg_widget_value()` 读。
