@@ -113,6 +113,19 @@ static void sync_terminal(HWND h, cg_widget_t *w)
     SendMessageW(h, EM_SCROLLCARET, 0, 0);      /* 自动滚到底 */
 }
 
+/** @brief 多行编辑框滚到最底部：把插入点移到末尾再 EM_SCROLLCARET */
+void cg_edit_scroll_end(cg_widget_t *w)
+{
+    HWND h;
+    int  len;
+
+    if (!w || !cgw_is_t(w, "edit") || !w->native) return;
+    h = (HWND)w->native;
+    len = (int)SendMessageW(h, WM_GETTEXTLENGTH, 0, 0);
+    SendMessageW(h, EM_SETSEL, (WPARAM)len, (LPARAM)len);   /* 插入点到末尾 */
+    SendMessageW(h, EM_SCROLLCARET, 0, 0);                  /* 滚到插入点 */
+}
+
 /** 标签页当前显示第几页时，某个子控件该不该出现 */
 static int page_visible(const cg_widget_t *w)
 {

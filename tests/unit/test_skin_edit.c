@@ -114,3 +114,42 @@ static void test_edit_vcenter(void)
 }
 
 CG_TEST_SUITE("输入框皮肤：单行垂直居中", test_edit_vcenter);
+
+/** @brief 多行编辑框滚到底：cg_edit_scroll_end 把插入点移到末尾（串口监视器要这个） */
+static void test_edit_scroll_end(void)
+{
+    HWND        h;
+    cg_widget_t w;
+    int         len;
+    DWORD       sel;
+
+    memset(&w, 0, sizeof(w));
+    w.type = "edit";
+
+    cg_test_note("---- cg_edit_scroll_end：多行编辑框滚到末尾 ----");
+    cg_edit_scroll_end(NULL);              /* 不崩 */
+    cg_test_ok("NULL 不崩", 1);
+
+    h = CreateWindowExW(0, L"EDIT", L"", WS_OVERLAPPEDWINDOW | ES_MULTILINE,
+                       0, 0, 240, 120, NULL, NULL, GetModuleHandleW(NULL), NULL);
+    if (!h) { cg_test_ok("建多行 EDIT 窗口成功", 0); return; }
+    cg_test_ok("建多行 EDIT 窗口成功", 1);
+
+    w.native = h;
+    SetWindowTextW(h, L"line1\r\nline2\r\nline3");
+    len = (int)SendMessageW(h, WM_GETTEXTLENGTH, 0, 0);
+
+    cg_edit_scroll_end(&w);                /* 插入点应到末尾 */
+    sel = (DWORD)SendMessageW(h, EM_GETSEL, 0, 0);
+    cg_test_ok("插入点移到末尾（start==end==长度）",
+               LOWORD(sel) == (WORD)len && HIWORD(sel) == (WORD)len);
+
+    /* 非编辑框：空转、不崩 */
+    w.type = "label";
+    cg_edit_scroll_end(&w);
+    cg_test_ok("非编辑框空转不崩", 1);
+
+    DestroyWindow(h);
+}
+
+CG_TEST_SUITE("编辑框：滚到底", test_edit_scroll_end);

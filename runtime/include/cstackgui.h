@@ -267,6 +267,8 @@ int         cg_widget_count(const cg_app_t *app);
  */
 
 void cg_widget_set_text(cg_widget_t *w, const char *text);
+/** 多行编辑框滚到最底部（串口监视器那种"新数据始终可见"）；非编辑框 / NULL 空转 */
+void cg_edit_scroll_end(cg_widget_t *w);
 void cg_widget_set_rect(cg_widget_t *w, int x, int y, int width, int height);
 void cg_widget_set_pos(cg_widget_t *w, int x, int y);
 void cg_widget_set_size(cg_widget_t *w, int width, int height);
