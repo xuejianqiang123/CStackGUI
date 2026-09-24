@@ -189,8 +189,15 @@ cg_serial_t *cg_serial_from_handle(void *handle, const char *name, int rx_cap)
     return s;
 }
 
-/** @brief 打开串口（"COM3" / "\\\\.\\COM3" 都收），固定 8N1 */
+/** @brief 打开串口（固定 8N1，等价 open_ex(port, baud, 8, 1, 0)） */
 cg_serial_t *cg_serial_open(const char *port, int baud)
+{
+    return cg_serial_open_ex(port, baud, 8, 1, 0);
+}
+
+/** @brief 打开串口（全参数版）：bits 数据位 5..8、stop 停止位 1..2、parity 0=无/1=奇/2=偶。
+ *  参数不合法时**干净失败** —— 不合法的值不往驱动送（半开着的端口比打不开更坑人）。 */
+cg_serial_t *cg_serial_open_ex(const char *port, int baud, int bits, int stop, int parity)
 {
     HANDLE      h;
     wchar_t    *wp;
@@ -198,6 +205,7 @@ cg_serial_t *cg_serial_open(const char *port, int baud)
     COMMTIMEOUTS tmo;
     cg_serial_t *s;
     char        path[80];
+    const char *parity_txt[3] = { "N", "O", "E" };
 
     if (!port || !*port) {
         snprintf(g_open_err, sizeof(g_open_err), "端口名是空的");
@@ -207,6 +215,21 @@ cg_serial_t *cg_serial_open(const char *port, int baud)
     if (baud <= 0) {
         snprintf(g_open_err, sizeof(g_open_err), "波特率不合法（%d）", baud);
         cg_log(CG_LOG_ERROR, "串口 %s 打开失败：波特率不合法（%d）", port, baud);
+        return NULL;
+    }
+    if (bits < 5 || bits > 8) {
+        snprintf(g_open_err, sizeof(g_open_err), "数据位不合法（%d，只能是 5..8）", bits);
+        cg_log(CG_LOG_ERROR, "串口 %s 打开失败：%s", port, g_open_err);
+        return NULL;
+    }
+    if (stop < 1 || stop > 2) {
+        snprintf(g_open_err, sizeof(g_open_err), "停止位不合法（%d，只能是 1..2）", stop);
+        cg_log(CG_LOG_ERROR, "串口 %s 打开失败：%s", port, g_open_err);
+        return NULL;
+    }
+    if (parity < 0 || parity > 2) {
+        snprintf(g_open_err, sizeof(g_open_err), "校验位不合法（%d，0=无 1=奇 2=偶）", parity);
+        cg_log(CG_LOG_ERROR, "串口 %s 打开失败：%s", port, g_open_err);
         return NULL;
     }
 
@@ -238,10 +261,10 @@ cg_serial_t *cg_serial_open(const char *port, int baud)
     }
     dcb.BaudRate = (DWORD)baud;
     dcb.fBinary = TRUE;
-    dcb.fParity = FALSE;
-    dcb.ByteSize = 8;
-    dcb.Parity = NOPARITY;
-    dcb.StopBits = ONESTOPBIT;
+    dcb.fParity = (parity != 0) ? TRUE : FALSE;   /* 开校验才让驱动去验 */
+    dcb.ByteSize = (BYTE)bits;
+    dcb.Parity = (BYTE)(parity == 1 ? ODDPARITY : parity == 2 ? EVENPARITY : NOPARITY);
+    dcb.StopBits = (BYTE)(stop == 2 ? TWOSTOPBITS : ONESTOPBIT);
     dcb.fOutxCtsFlow = FALSE;
     dcb.fOutxDsrFlow = FALSE;
     dcb.fDtrControl = DTR_CONTROL_ENABLE;
@@ -273,8 +296,84 @@ cg_serial_t *cg_serial_open(const char *port, int baud)
         CloseHandle(h);
         return NULL;
     }
-    cg_log(CG_LOG_INFO, "串口 %s 已打开（%d 8N1）", port, baud);
+    cg_log(CG_LOG_INFO, "串口 %s 已打开（%d %d%s%d）", port, baud, bits,
+           parity_txt[parity], stop);
     return s;
+}
+
+/* ------------------------------------------------------------ 串口组件（serial 控件）
+ * 无界面控件的控件侧 API：参数在控件上（cg_internal.h 的 sport/s_baud...），
+ * 打开后的 cg_serial_t* 放 native2。放在 kit 是因为 cg_serial_* 在这层；
+ * 到达轮询的起停走 cg_win_restart_serial（与 cg_widget_set_period 调
+ * cg_win_restart_timer 同一条先例路线）。 */
+
+/** @brief 取串口组件的链路句柄（未打开/类型不对返回 NULL） */
+cg_serial_t *cg_widget_serial(cg_widget_t *w)
+{
+    if (!w || !w->type || strcmp(w->type, "serial") != 0) return NULL;
+    return (cg_serial_t *)w->native2;
+}
+
+/** @brief 按控件属性打开链路（端口名可省略 = 用控件里配的）；已打开则先关旧的再开 */
+int cg_widget_serial_open(cg_widget_t *w, const char *port)
+{
+    cg_serial_t *s;
+
+    if (!w || !w->type || strcmp(w->type, "serial") != 0) return -1;
+
+    /* 重连 = 先关旧的（换端口 / 换波特率都靠"再开一次"表达） */
+    if (w->native2) {
+        cg_serial_close((cg_serial_t *)w->native2);
+        w->native2 = NULL;
+    }
+
+    if (port && *port) {
+        snprintf(w->sport, sizeof(w->sport), "%s", port);
+        if (w->node) {                      /* 回写节点：dump/自检看到的是最新值 */
+            free(w->node->sport);
+            w->node->sport = cg_str_dup(port);
+        }
+    }
+    if (!w->sport[0]) {
+        cg_log(CG_LOG_WARN, "串口组件 #%s 没配端口，打开不了", w->id ? w->id : "-");
+        return -1;
+    }
+
+    s = cg_serial_open_ex(w->sport, w->s_baud, w->s_bits, w->s_stop, w->s_parity);
+    if (!s) return -1;                      /* 原因 cg_serial_open_ex 已记日志 */
+
+    w->native2 = s;
+    cg_win_restart_serial(w);               /* 起到达轮询 */
+    return 0;
+}
+
+/** @brief 关掉串口组件的链路（幂等、NULL 安全） */
+void cg_widget_serial_close(cg_widget_t *w)
+{
+    if (!w) return;
+    if (w->native2) {
+        cg_serial_close((cg_serial_t *)w->native2);
+        w->native2 = NULL;
+    }
+    cg_win_restart_serial(w);               /* 停轮询（native2 空时它只 KillTimer） */
+}
+
+/** @brief 改波特率：链路开着就按新参数原样重开，没开就只记住 */
+void cg_widget_serial_set_baud(cg_widget_t *w, int baud)
+{
+    int was_open;
+
+    if (!w || baud <= 0 || baud == w->s_baud) return;
+
+    was_open = (w->native2 != NULL);
+    if (w->native2) {                       /* 先停轮询再关链路，重开时一起补回来 */
+        cg_serial_close((cg_serial_t *)w->native2);
+        w->native2 = NULL;
+    }
+    w->s_baud = baud;
+    if (w->node) w->node->s_baud = baud;    /* 节点跟着改，dump/自检看到的是新值 */
+
+    if (was_open) cg_widget_serial_open(w, NULL);
 }
 
 /** @brief 关掉串口并回收读线程（幂等、NULL 安全） */

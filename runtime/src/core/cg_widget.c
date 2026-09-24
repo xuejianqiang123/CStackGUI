@@ -237,6 +237,13 @@ static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node
     if (n->format) w->format = cg_str_dup(n->format);
     if (n->hint) w->hint = cg_str_dup(n->hint);
     w->period = n->period;
+    /* 串口组件：参数从节点拷进控件（动态改/动态建的控件不依赖文档节点存活） */
+    if (n->sport) snprintf(w->sport, sizeof(w->sport), "%s", n->sport);
+    w->s_baud = n->s_baud;
+    w->s_bits = n->s_bits;
+    w->s_stop = n->s_stop;
+    w->s_parity = n->s_parity;
+    w->s_auto = n->s_auto;
     if (n->bind_src) {                      /* 控件绑定：真值留着，运行期按 id 找源 */
         w->bind_src = cg_str_dup(n->bind_src);
         w->bind_two = n->bind_two;

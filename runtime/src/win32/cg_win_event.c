@@ -319,3 +319,15 @@ void cg_win_restart_timer(cg_widget_t *w)
         SetTimer(hwnd, (UINT_PTR)w->ctrl_id, (UINT)w->period, NULL);
     }
 }
+
+/** @brief 重设串口组件的到达轮询定时器（链路开着才转；id 复用 ctrl_id，同 timer 的招）。
+ *  50ms 与 CG_TICK_MS 同拍：到达事件的延迟上限就是这一拍，再快只是空转。 */
+void cg_win_restart_serial(cg_widget_t *w)
+{
+    if (!w || !w->app || !w->app->hwnd) return;
+    HWND hwnd = (HWND)w->app->hwnd;
+    KillTimer(hwnd, (UINT_PTR)w->ctrl_id);
+    if (cgw_is_t(w, "serial") && w->native2) {
+        SetTimer(hwnd, (UINT_PTR)w->ctrl_id, 50, NULL);
+    }
+}

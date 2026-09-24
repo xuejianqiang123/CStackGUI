@@ -82,6 +82,9 @@ static const cg_kind_info_t k_kinds[] = {
     { "chart",      CG_K_CHART,      0, 320, 160, "",     0 },
     { "led",        CG_K_LED,        0, 20,  20,  "",     0 },
     { "meter",      CG_K_METER,      0, 140, 140, "",     0 },
+    /* 串口组件：无窗口（0×0，同 timer），数据到达发 arrive；
+     * 数据落到哪个控件由用户代码决定 —— 这是它存在意义（见 cstackgui.h 串口组件一段）。 */
+    { "serial",     CG_K_SERIAL,     0,   0,   0, "",     CG_EV_ARRIVE },
     /* 伪控件：窗口自身。事件表与「启动窗口」的事件表对齐（见 cg_event_t 注释）。 */
     { "window",     CG_K_WINDOW,     1,   0,   0, "",
       CG_EV_CLOSE | CG_EV_READY | CG_EV_DESTROY | CG_EV_MOVE | CG_EV_SIZE |

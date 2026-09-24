@@ -109,6 +109,11 @@ struct cg_widget {
     /* 时钟（timer）：周期毫秒，0 = 停。Win32 定时器 id 复用 ctrl_id */
     int          period;
 
+    /* 串口组件（serial，无窗口）：参数从 .cgui 节点拷来；打开后的 cg_serial_t* 放
+     * native2（数据到达的轮询定时器 id 也复用 ctrl_id，见 cg_win_restart_serial） */
+    char         sport[64];
+    int          s_baud, s_bits, s_stop, s_parity, s_auto;
+
     /* 控件绑定（cg_bind.c）：以谁为源；bind_two 时自己的变化也推回源 */
     char        *bind_src;
     int          bind_two;
@@ -297,6 +302,8 @@ int cg_exe_path(char *buf, size_t size);
  * hint / period 改完要动 tooltip 和 SetTimer，那些句柄只有后端知道。 */
 void cg_win_set_hint(cg_widget_t *w);
 void cg_win_restart_timer(cg_widget_t *w);
+/** 串口组件的到达轮询定时器（打开才转；同 timer 复用 ctrl_id 做 Win32 定时器 id） */
+void cg_win_restart_serial(cg_widget_t *w);
 
 /** 新建一个运行时控件（内部用） */
 cg_widget_t *cg_widget_new(cg_app_t *app, const char *type, const char *id,

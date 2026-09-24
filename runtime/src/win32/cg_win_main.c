@@ -267,6 +267,17 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                 }
                 return 0;
             }
+            /* 串口组件：到达轮询（id 同样复用 ctrl_id）。缓冲里有数据才派发 ——
+             * 没绑 arrive 或没读完，下一拍接着来；回调里自己 cg_serial_read 取。 */
+            if (tw && cgw_is_t(tw, "serial") && tw->native2) {
+                if (!g_win_in_notify &&
+                    cg_serial_available((const cg_serial_t *)tw->native2) > 0) {
+                    g_win_in_notify = 1;
+                    cg_dispatch(tw, CG_EVENT_ARRIVE);
+                    g_win_in_notify = 0;
+                }
+                return 0;
+            }
         }
         break;
     case WM_DPICHANGED: {

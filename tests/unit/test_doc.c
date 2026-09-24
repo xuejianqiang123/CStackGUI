@@ -449,6 +449,75 @@ static void test_doc_legacy_alias(void)
     cg_doc_free(doc);
 }
 
+/** @brief 串口组件（serial）：字段解析、缺省回退、越界修正 */
+static void test_doc_serial(void)
+{
+    static const char *doc_text =
+        "{\n"
+        "  \"cgui\": 1,\n"
+        "  \"widgets\": [\n"
+        "    { \"id\": \"ser_a\", \"type\": \"serial\" },\n"
+        "    { \"id\": \"ser_b\", \"type\": \"serial\", \"port\": \"COM4\",\n"
+        "      \"baud\": 115200, \"bits\": 7, \"stop\": 2, \"parity\": 2, \"auto\": true }\n"
+        "  ]\n"
+        "}\n";
+    char      err[256];
+    cg_doc_t *doc;
+
+    cg_test_note("---- 串口组件：什么都不写 = 全缺省 ----");
+    err[0] = '\0';
+    doc = cg_doc_parse(doc_text, err, sizeof(err));
+    cg_test_ok("解析成功", doc != NULL);
+    if (!doc) {
+        printf("        解析失败：%s\n", err);
+        return;
+    }
+    {
+        const cg_node_t *a = child_by_id(doc->root, "ser_a");
+        const cg_node_t *b = child_by_id(doc->root, "ser_b");
+
+        cg_test_ok("缺省节点在", a != NULL);
+        if (a) {
+            cg_test_ok("端口没配（NULL）", a->sport == NULL);
+            cg_test_int("波特率缺省 9600", a->s_baud, 9600);
+            cg_test_int("数据位缺省 8", a->s_bits, 8);
+            cg_test_int("停止位缺省 1", a->s_stop, 1);
+            cg_test_int("校验缺省无", a->s_parity, 0);
+            cg_test_int("不自动启动", a->s_auto, 0);
+        }
+
+        cg_test_note("---- 写全了：原样保留 ----");
+        cg_test_ok("全参数节点在", b != NULL);
+        if (b) {
+            cg_test_str("端口名", b->sport, "COM4");
+            cg_test_int("波特率 115200", b->s_baud, 115200);
+            cg_test_int("数据位 7", b->s_bits, 7);
+            cg_test_int("停止位 2", b->s_stop, 2);
+            cg_test_int("校验偶", b->s_parity, 2);
+            cg_test_int("自动启动", b->s_auto, 1);
+        }
+    }
+    cg_doc_free(doc);
+
+    cg_test_note("---- 越界值回退缺省，不造出怪参数 ----");
+    doc = cg_doc_parse("{\"widgets\":[{\"id\":\"s\",\"type\":\"serial\","
+                       "\"port\":\"\",\"baud\":-1,\"bits\":44,\"stop\":9,\"parity\":7}]}",
+                       err, sizeof(err));
+    cg_test_ok("解析成功", doc != NULL);
+    if (doc) {
+        const cg_node_t *s = child_by_id(doc->root, "s");
+
+        if (s) {
+            cg_test_ok("空端口名当没配", s->sport == NULL || s->sport[0] == '\0');
+            cg_test_int("非法波特率回 9600", s->s_baud, 9600);
+            cg_test_int("非法数据位回 8", s->s_bits, 8);
+            cg_test_int("非法停止位回 1", s->s_stop, 1);
+            cg_test_int("非法校验回无", s->s_parity, 0);
+        }
+    }
+    cg_doc_free(doc);
+}
+
 CG_TEST_SUITE("文档：窗口属性与控件树", test_doc_skeleton);
 CG_TEST_SUITE("文档：老类型名自动升级", test_doc_legacy_alias);
 CG_TEST_SUITE("文档：事件名解析", test_doc_events);
@@ -456,4 +525,5 @@ CG_TEST_SUITE("文档：结构化内容", test_doc_structured);
 CG_TEST_SUITE("文档：状态与越界修正", test_doc_state_clamp);
 CG_TEST_SUITE("文档：缺省值兜底", test_doc_defaults);
 CG_TEST_SUITE("文档：坏文档的错误信息", test_doc_errors);
+CG_TEST_SUITE("文档：串口组件字段", test_doc_serial);
 CG_TEST_SUITE("文档：树打印", test_doc_dump);

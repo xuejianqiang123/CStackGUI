@@ -25,6 +25,7 @@ static const char *const k_ev_names[CG_EVENT_COUNT] = {
     [CG_EVENT_CHECK]    = "check",
     [CG_EVENT_GOTFOCUS] = "gotfocus",
     [CG_EVENT_LOSTFOCUS] = "lostfocus",
+    [CG_EVENT_ARRIVE]   = "arrive",
     /* 窗口级事件（绑在 __window 上，写在 .cgui 的 app.events 里） */
     [CG_EVENT_READY]         = "ready",
     [CG_EVENT_DESTROY]       = "destroy",

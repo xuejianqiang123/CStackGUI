@@ -46,6 +46,13 @@ void cgw_create_native(cg_widget_t *w)
         cg_win_restart_timer(w);
         return;
     }
+    /* 串口组件同样没有窗口：只负责按 auto 决定要不要把链路打开（失败只记日志，
+     * 不拦启动 —— 端口被占不该让整个程序起不来）。到达轮询在打开成功时起。 */
+    if (!strcmp(type, "serial")) {
+        free(wt);
+        if (w->s_auto) cg_widget_serial_open(w, NULL);
+        return;
+    }
 
     if (!strcmp(type, "group") || !strcmp(type, "box")) cgw_register_panel_class();
     if (!strcmp(type, "image")) cgw_register_image_class();
@@ -165,6 +172,12 @@ void cgw_create_native_tree(cg_widget_t *parent)
 /** @brief 销毁控件的原生窗口并释放后端资源（位图 / imagelist / 映射表） */
 void cgw_destroy_native(cg_widget_t *w)
 {
+    /* 串口组件的 native2 是 cg_serial_t* 不是 HWND —— 必须在下面的
+     * DestroyWindow 之前拦下来关链路，把它当窗口销毁是访问冲突。 */
+    if (w->native2 && cgw_is_t(w, "serial")) {
+        cg_serial_close((cg_serial_t *)w->native2);
+        w->native2 = NULL;
+    }
     if (w->native2) {
         DestroyWindow((HWND)w->native2);       /* 数值框的上下箭头 */
         w->native2 = NULL;

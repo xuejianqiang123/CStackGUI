@@ -63,6 +63,7 @@ typedef enum {
     CG_EVENT_CHECK,       /* 表格行勾选状态变化（table 勾选列） */
     CG_EVENT_GOTFOCUS,    /* 获得键盘焦点 */
     CG_EVENT_LOSTFOCUS,   /* 失去键盘焦点 */
+    CG_EVENT_ARRIVE,      /* 串口组件收到数据（serial；数据用 cg_widget_serial 取句柄读） */
 
     /* ---------------- 窗口级事件 ----------------
      * 全部绑在窗口伪控件（id = CG_WINDOW_ID）上，写在 .cgui 的 app.events 里。
@@ -394,6 +395,22 @@ const char *cg_widget_hint(const cg_widget_t *w);
 void cg_widget_set_period(cg_widget_t *w, int period_ms);
 int  cg_widget_period(const cg_widget_t *w);
 
+/* ------------------------------------------------------------ 串口组件（serial 控件）
+ * 无界面控件：.cgui 里只是个组件（画布上是图标，运行时不建窗口），
+ * 参数（端口/波特率/数据位/停止位/校验）写在控件属性里，"数据到达"（arrive 事件）
+ * 由运行时在主线程派发 —— 数据落到哪个控件由用户代码决定：
+ *
+ *   void on_arrive(cg_widget_t *self, cg_event_t ev, void *user) {
+ *       char buf[4096];
+ *       int  n = cg_serial_read(cg_widget_serial(self), buf, sizeof buf);   // 非阻塞
+ *       if (n > 0) cg_term_write(cg_find(app, "term_log"), CG_TERM_RX, buf, n);
+ *       // 想同时喂图表 / 列表，就在这里继续写 —— 一份数据去哪全由这行代码说了算
+ *   }
+ *
+ * 端口/波特率既可以在画布属性里填死，也可以运行时用 cg_widget_serial_open(w, "COM4")
+ * 动态指定（界面上的端口下拉就是给这用的）。未打开时 cg_widget_serial 返回 NULL，
+ * 回调务必 NULL 安全（自检模式会合成触发 arrive，而那时链路不存在）。 */
+
 /* ------------------------------------------------------------ 分隔条（splitter）
  * 能拖动的分区边界：拖它 = 撑开它**前面那一块**，它之后的兄弟整体让位，同一容器里
  * **最后一块**吃掉余量（反过来缩水）。所以 2 段布局就是"上/左变大、下/右变小"：
@@ -571,6 +588,11 @@ int  cg_serial_list(char *buf, int cap);
  *  失败原因用 cg_serial_last_error(NULL) 取（打开失败时没有句柄可问）。 */
 cg_serial_t *cg_serial_open(const char *port, int baud);
 
+/** 打开串口（全参数版）：bits 数据位 5..8、stop 停止位 1..2、parity 0=无/1=奇/2=偶。
+ *  参数不合法时**干净失败**（不合法的参数不往驱动送，原因见 cg_serial_last_error(NULL)）；
+ *  cg_serial_open() 等价于 open_ex(port, baud, 8, 1, 0)。 */
+cg_serial_t *cg_serial_open_ex(const char *port, int baud, int bits, int stop, int parity);
+
 /** 关掉串口并回收读线程。**幂等、NULL 安全**（没连上时直接调它也没事）。
  *  它会等读线程真的退出再释放缓冲，所以最坏会卡一个读超时周期（约 50ms）。 */
 void cg_serial_close(cg_serial_t *s);
@@ -597,6 +619,22 @@ long long cg_serial_tx_bytes(const cg_serial_t *s);
  *  s 传 NULL 时返回**最近一次 cg_serial_open 失败**的原因 —— 打开失败时用得上。
  *  返回的指针指向内部缓冲，下次报错会被覆盖；要留就自己拷走。 */
 const char *cg_serial_last_error(const cg_serial_t *s);
+
+/* ---- 串口组件（serial 控件）的控件侧 API：参数见上面"串口组件"一段 ---- */
+
+/** 取串口组件的链路句柄（未打开/类型不对返回 NULL；回调里先判 NULL） */
+cg_serial_t *cg_widget_serial(cg_widget_t *w);
+
+/** 按控件属性打开链路（端口名可省略 = 用控件里配的）；已打开则先关旧的再开。
+ *  返回 0 成功；失败返回 -1（原因见 cg_serial_last_error(NULL)，不影响界面运行）。 */
+int  cg_widget_serial_open(cg_widget_t *w, const char *port);
+
+/** 关掉串口组件的链路（幂等、NULL 安全；未打开时调它也没事） */
+void cg_widget_serial_close(cg_widget_t *w);
+
+/** 改串口组件的波特率（界面上的波特率下拉就是给这用的）；
+ *  链路开着时按新参数原样重开（关旧的再开新的），没开就只记住等下次打开用。 */
+void cg_widget_serial_set_baud(cg_widget_t *w, int baud);
 
 /* ------------------------------------------------------------ 网口（cg_net）
  * 与串口（cg_serial）**同一套形状**，因为面对的是同一类问题：网络 I/O 不能做在 UI 线程上

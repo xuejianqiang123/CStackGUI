@@ -63,6 +63,7 @@ typedef enum {
     CG_K_CHART,      /* 折线 / 柱状图（实时曲线：滑动窗口 + 超像素密度时按列画 min/max） */
     CG_K_LED,        /* 状态灯（纯显示：灭 / 亮 / 闪；闪烁由控件自己定时重绘） */
     CG_K_METER,      /* 仪表盘（纯显示：圆弧量程 + 值弧 + 指针 + 中心数值） */
+    CG_K_SERIAL,     /* 串口组件（无窗口：像易语言的串口组件，数据到达发 arrive） */
     CG_K_WINDOW,     /* 伪控件：窗口自身，只有 close 事件 */
     CG_K_COUNT
 } cg_kind_t;
@@ -108,6 +109,7 @@ typedef unsigned long long cg_evmask_t;
 #define CG_EV_KEYUP         CG_EV_BIT(CG_EVENT_KEYUP)
 #define CG_EV_CHAR          CG_EV_BIT(CG_EVENT_CHAR)
 #define CG_EV_WHEEL         CG_EV_BIT(CG_EVENT_WHEEL)
+#define CG_EV_ARRIVE        CG_EV_BIT(CG_EVENT_ARRIVE)
 
 typedef struct {
     const char *name;      /* .cgui 里 type 字段的写法 */
@@ -190,6 +192,19 @@ typedef struct cg_node {
     char    *hint;
     /** timer 的触发周期（毫秒），0 = 不运行 */
     int      period;
+    /* ---- 串口组件（serial）：参数写在控件属性里，"数据到达"（arrive）由运行时派发 ---- */
+    /** 端口名（"COM4"；NULL/空 = 没配，运行时用 cg_widget_serial_open(w, port) 指定） */
+    char    *sport;
+    /** 波特率（缺省 9600） */
+    int      s_baud;
+    /** 数据位 5..8（缺省 8） */
+    int      s_bits;
+    /** 停止位 1..2（缺省 1） */
+    int      s_stop;
+    /** 校验 0=无 / 1=奇 / 2=偶（缺省 0） */
+    int      s_parity;
+    /** 自动启动：窗口建好就按上面参数打开链路（缺省 0 = 等用户代码开） */
+    int      s_auto;
     /** 控件绑定：源控件 id（.cgui 的 bind.src）；NULL = 没绑 */
     char    *bind_src;
     /** 绑定是双向的（源变跟源走，自己也变时也推回源） */

@@ -313,6 +313,7 @@ static void node_free(cg_node_t *n)
     free(n->src);
     free(n->format);
     free(n->hint);
+    free(n->sport);
     free(n->bind_src);
     free(n);
 }
@@ -426,6 +427,18 @@ static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
     n->hint = dup_or_null(cj_str(cj_get(o, "hint"), NULL));
     n->period = cj_int(cj_get(o, "period"), 0);
     if (n->period < 0) n->period = 0;
+
+    /* 串口组件（serial）：越界值一律回退缺省，别让手写的 .cgui 造出怪参数 */
+    n->sport = dup_or_null(cj_str(cj_get(o, "port"), NULL));
+    n->s_baud = cj_int(cj_get(o, "baud"), 9600);
+    if (n->s_baud <= 0) n->s_baud = 9600;
+    n->s_bits = cj_int(cj_get(o, "bits"), 8);
+    if (n->s_bits < 5 || n->s_bits > 8) n->s_bits = 8;
+    n->s_stop = cj_int(cj_get(o, "stop"), 1);
+    if (n->s_stop < 1 || n->s_stop > 2) n->s_stop = 1;
+    n->s_parity = cj_int(cj_get(o, "parity"), 0);
+    if (n->s_parity < 0 || n->s_parity > 2) n->s_parity = 0;
+    n->s_auto = cj_bool(cj_get(o, "auto"), 0);
     n->multi = cj_bool(cj_get(o, "multi"), 0);
     n->check = cj_bool(cj_get(o, "check"), 0);
 
@@ -686,6 +699,10 @@ static void dump_node(const cg_node_t *n, FILE *out, int depth)
     if (n->format) fprintf(out, " format=%s", n->format);
     if (n->hint) fprintf(out, " hint=\"%s\"", n->hint);
     if (n->period) fprintf(out, " period=%d", n->period);
+    if (n->sport)
+        fprintf(out, " port=%s baud=%d bits=%d stop=%d parity=%d%s",
+                n->sport, n->s_baud, n->s_bits, n->s_stop, n->s_parity,
+                n->s_auto ? " auto" : "");
     if (n->bind_src) fprintf(out, " bind=%s%s", n->bind_src, n->bind_two ? "+two" : "");
     if (n->multi) fputs(" multi", out);
     if (n->check) fputs(" check", out);

@@ -351,6 +351,14 @@ static void win_shutdown(cg_app_t *app)
     for (cg_widget_t *w = app->widgets; w; w = w->next) {
         if (cgw_is_t(w, "timer")) KillTimer((HWND)app->hwnd, (UINT_PTR)w->ctrl_id);
     }
+    /* 串口组件：链路必须在这里收掉 —— 它没有原生窗口可销毁（cgw_destroy_native
+     * 走不到 DestroyWindow 的路），app_close 随后 free 控件，链路再不关就泄漏了。 */
+    for (cg_widget_t *w = app->widgets; w; w = w->next) {
+        if (cgw_is_t(w, "serial") && w->native2) {
+            cg_serial_close((cg_serial_t *)w->native2);
+            w->native2 = NULL;
+        }
+    }
     if (app->hwnd) DestroyWindow((HWND)app->hwnd);
     if (st->icon) {
         DestroyIcon(st->icon);

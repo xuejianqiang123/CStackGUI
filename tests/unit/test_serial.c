@@ -140,6 +140,20 @@ static void test_serial_params(void)
     cg_test_ok("波特率是 0 时打不开", cg_serial_open("COM1", 0) == NULL);
     cg_test_ok("波特率是负数时打不开", cg_serial_open("COM1", -9600) == NULL);
 
+    cg_test_note("---- 全参数版（open_ex）：不合法的参数不许往驱动送 ----");
+    cg_test_ok("数据位 4 不行",   cg_serial_open_ex("COM1", 9600, 4, 1, 0) == NULL);
+    cg_test_ok("数据位 9 不行",   cg_serial_open_ex("COM1", 9600, 9, 1, 0) == NULL);
+    cg_test_ok("停止位 0 不行",   cg_serial_open_ex("COM1", 9600, 8, 0, 0) == NULL);
+    cg_test_ok("停止位 3 不行",   cg_serial_open_ex("COM1", 9600, 8, 3, 0) == NULL);
+    cg_test_ok("校验 3 不行",     cg_serial_open_ex("COM1", 9600, 8, 1, 3) == NULL);
+    cg_test_ok("校验 -1 不行",    cg_serial_open_ex("COM1", 9600, 8, 1, -1) == NULL);
+    cg_test_str("每个失败都说得出人话原因（最后一个：校验位）",
+                cg_serial_last_error(NULL), "校验位不合法（-1，0=无 1=奇 2=偶）");
+    /* 合法参数组合 + 不存在的设备：走真正的打开路径，验的是"到驱动为止都干净" */
+    cg_test_ok("参数全对但设备不存在：也干净失败",
+               cg_serial_open_ex("\\\\.\\CStackGUI_NoSuchDevice", 115200, 7, 2, 2) == NULL);
+    cg_test_ok("这回的原因是找不到设备", strstr(cg_serial_last_error(NULL), "找不到") != NULL);
+
     cg_test_note("---- 打开一个不存在的设备：必须干净失败，不许崩、不许卡 ----");
     cg_test_ok("不存在的设备名打不开",
                cg_serial_open("\\\\.\\CStackGUI_NoSuchDevice", 9600) == NULL);
