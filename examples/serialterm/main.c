@@ -1,26 +1,28 @@
 /**
  * @file    main.c
- * @brief   串口助手示例：cg_serial_* 的正确用法（读线程 + 时钟回调取数据）
+ * @brief   串口助手示例：串口组件（无界面控件 serial）+ "数据到达"事件的样板
  * @details 这是"跟板子说话"那类工具的样板：界面全在 serialterm.cgui 里，这里只有行为。
  *
- *          **线程模型是这个示例唯一想讲清楚的事，也是唯一容易出事的地方**：
- *            - cg_serial_open() 内部起一个读线程，它只干一件事 —— 把驱动里的字节搬进
- *              64KB 环形缓冲（满了丢最老的），**它绝不碰控件**；
- *            - 控件（HWND）只能在建它的那个线程里碰，这是 Win32 的硬约束，不是本项目的风格偏好；
- *            - 所以数据要"按时来取"：cg_set_timer(50) 定周期 → 时钟回调里 cg_serial_read()
- *              → cg_term_write() 灌进 terminal 控件 → 顺带刷状态栏与曲线。
- *
- *          界面上用到的控件（都在 .cgui 里声明）：
- *            combo ×2（端口 / 波特率）、button ×4、led（链路灯）、terminal（收发日志）、
- *            splitter（日志区 / 发送区之间，能上下拖）、group（发送区）、
- *            chart（每秒收到多少字节）、statusbar（状态 / RX / TX）。
+ *          **这个示例想讲清楚的是"数据从哪来、落到哪去由谁决定"**：
+ *            - 串口是 .cgui 里的一个**无界面控件**（type: "serial"，id: "ser_main"）：
+ *              像易语言的串口组件 —— 画布上是个图标，运行时不建窗口，只带着
+ *              端口 / 波特率 / 数据位 / 停止位 / 校验这组参数；
+ *            - 链路内部照旧是"读线程 + 64KB 环形缓冲"：读线程只搬字节、**绝不碰控件**，
+ *              这是 Win32 的硬约束，不是风格偏好；
+ *            - 运行时在主线程里发现缓冲有数据就派发 **arrive（数据到达）** 事件，
+ *              回调拿到的 self 就是串口组件本身 —— 数据落到哪个控件，由这行代码决定：
+ *              本示例把同一份数据**同时**灌进 terminal（收发日志）和 chart（速率曲线），
+ *              换个项目灌进 listbox / label / 自己的解析器，都是这个回调里的事；
+ *            - 1 秒一颗的业务定时器只管"聚合"：把这一秒收到的字节数推上曲线、刷状态栏，
+ *              它不碰数据（数据已经在 arrive 里取走了）。
  *
  *          几个新手会踩的点，这里都写对了：
- *            1. cg_app_selftest 会**合成触发每个回调**，所以凡是要开串口或弹对话框的地方，
- *               先问一句 cg_app_has_window()，自检模式下直接返回（否则 CI 会卡在弹窗或无端口报错上）；
+ *            1. cg_app_selftest 会**合成触发每个回调**（包括 arrive），所以回调第一件事
+ *               就是判 cg_widget_serial() 是不是 NULL —— 自检模式下链路不存在，直接返回；
+ *               凡是开串口、弹对话框的地方也先问 cg_app_has_window()；
  *            2. 发送按「HEX 发送」勾选决定走原文还是十六进制；转换是手写的 —— 不用 strtok
  *               （它会就地改原串、还要维护状态），而且"1A2B"这种没分隔符的也得算对；
- *            3. 断开与退出都要 cg_serial_close()，它**幂等且 NULL 安全**，多叫几次没关系；
+ *            3. 链路的开关、销毁全归运行时管（app 退出时自动收），业务代码不用自己兜底；
  *            4. 打开失败别只报"失败了"：cg_serial_last_error(NULL) 给的是中文原因
  *               （端口被占用 / 找不到 / 波特率不支持），直接写进日志视图，这是可用性的关键。
  *
@@ -31,24 +33,19 @@
 #include <stdio.h>
 #include <string.h>
 
-/** 轮询周期（毫秒）：50ms 足够跟手，也不会给界面添负担 */
-#define POLL_MS        50
-/** 多少拍算一秒（把"每秒收到多少字节"聚合成曲线上的一个点） */
-#define TICKS_PER_SEC  (1000 / POLL_MS)
+/** 聚合周期（毫秒）：每秒往曲线上推一个点、刷一次状态栏。取数据不靠它 */
+#define AGG_MS         1000
 /** 一拍最多取多少字节 */
 #define RX_CHUNK       4096
-/** 一拍最多取几轮（防"数据一直比界面快"把这一拍拖久；剩下的下一拍再取） */
+/** 一次到达事件最多取几轮（防"数据一直比界面快"把事件拖久；剩下的下一拍再来） */
 #define RX_MAX_CHUNKS  32
 /** 曲线 Y 轴的最小上限，也是初始上限（和 .cgui 里 chart 的 max 对齐） */
 #define CHART_TOP_MIN  256
 
-/** 业务状态：串口链路、轮询定时器、累计量、曲线聚合量 */
+/** 业务状态：曲线聚合量与累计计数（链路句柄在串口组件上，这里不存） */
 typedef struct {
-    cg_serial_t *ser;         /**< 打开中的串口；NULL = 没连 */
-    cg_timer_t  *poll;        /**< 轮询定时器（一次性的，"再挂一次"就是周期） */
     char         ini[1200];   /**< 配置文件路径（记住上次的端口 / 波特率 / 分隔条） */
     int          n_ports;     /**< 上次枚举到几个串口（0 = 没有，别拿占位文字去开） */
-    int          ticks;       /**< 距曲线上一个点过了几拍 */
     int          rx_window;   /**< 这一秒内收到的字节数 */
     int          chart_top;   /**< 曲线 Y 轴当前上限（只往上扩） */
     long long    rx_total;    /**< 累计收到字节（断连后还要显示，所以自己留一份） */
@@ -70,6 +67,26 @@ static void term_sys(cg_app_t *app, const char *text)
     cg_widget_t *term = cg_find(app, "term_log");
 
     if (term) cg_term_write(term, CG_TERM_SYS, text, -1);
+}
+
+/**
+ * @brief 取本应用的串口组件（.cgui 里的 ser_main）
+ * @param app 所属应用
+ * @return cg_widget_t* 串口组件；.cgui 里没写返回 NULL
+ */
+static cg_widget_t *ser_of(cg_app_t *app)
+{
+    return cg_find(app, "ser_main");
+}
+
+/**
+ * @brief 当前是否连着（链路句柄在组件上，开着就算连着）
+ * @param app 所属应用
+ * @return int 1 = 已连接
+ */
+static int is_connected(cg_app_t *app)
+{
+    return cg_widget_serial(ser_of(app)) != NULL;
 }
 
 /**
@@ -132,17 +149,13 @@ static int hex_parse(const char *text, unsigned char *out, int cap)
  * @brief 把累计收发的字节数刷到状态栏第 2、3 段
  * @param app 所属应用
  * @return void
- * @note 连着的时候以句柄里的计数为准（只增不减）；断开后句柄已经释放，
- *       就继续显示断开前的数字，免得状态栏突然归零让人以为数据丢了。
+ * @note 累计量是业务自己记的（arrive / 发送时往里加）：链路断了句柄就没了，
+ *       状态栏不能因此突然归零，让人以为数据丢了。
  */
 static void refresh_stats(cg_app_t *app)
 {
     cg_widget_t *sb = cg_find(app, "sb_main");
 
-    if (s_biz.ser) {
-        s_biz.rx_total = cg_serial_rx_bytes(s_biz.ser);
-        s_biz.tx_total = cg_serial_tx_bytes(s_biz.ser);
-    }
     cg_status_setf(sb, 1, "RX %lld B", s_biz.rx_total);
     cg_status_setf(sb, 2, "TX %lld B", s_biz.tx_total);
 }
@@ -211,10 +224,7 @@ static int fill_ports(cg_app_t *app)
     return count;
 }
 
-/* ------------------------------------------------------------ 轮询（取数据）
-
- * 为什么要有这一段、为什么是这个形状，见文件头"线程模型"。
- */
+/* ------------------------------------------------------------ 数据到达（落点在这里定） */
 
 /**
  * @brief 曲线推一个点：这一秒收到的字节数，并按需自动扩 Y 轴上限
@@ -241,67 +251,69 @@ static void push_rate_point(cg_app_t *app)
 }
 
 /**
- * @brief 轮询回调：把串口接收缓冲里的数据搬进终端，并刷新状态栏与曲线
- * @param user 挂进去的 cg_app_t（cg_set_timer 的第 4 个参数）
+ * @brief **数据到达**：串口组件收到数据了，把缓冲取空、决定数据去哪
+ * @param self 串口组件本身（.cgui 里的 ser_main）
+ * @param ev arrive
+ * @param user 未使用
  * @return void
- * @note 它**不在读线程里**跑：读线程只往环形缓冲搬字节，控件只能在主线程碰。
- *       cg_set_timer 是一次性的，所以每次结束都要再挂一次，这才是"周期"。
- *       刚触发的那颗定时器已经被 cg_timer.c 回收了，所以这里先把自己的句柄清成 NULL。
+ * @note 这就是"用户自己决定数据传输到哪个控件"的地方：同一份数据，想灌几个控件
+ *       就灌几个 —— 本示例同时喂 terminal（收发日志）和 rx_window（速率曲线）。
+ *       **第一件事是判句柄 NULL**：自检模式会合成触发本回调，那时链路不存在。
  */
-static void poll_tick(void *user)
+static void on_arrive(cg_widget_t *self, cg_event_t ev, void *user)
 {
-    cg_app_t     *app  = (cg_app_t *)user;
-    cg_widget_t  *term = cg_find(app, "term_log");
+    cg_app_t     *app  = cg_app_of(self);
+    cg_widget_t  *term;
+    cg_serial_t  *ser;
     unsigned char buf[RX_CHUNK];
     int           loops, n;
 
-    s_biz.poll = NULL;                  /* 上一颗已经回收，别让 stop_poll 去碰悬空指针 */
-    if (!s_biz.ser) return;             /* 中途断开了：就此停表，重连时再挂 */
+    (void)ev;
+    (void)user;
 
-    /* 把缓冲取空：cg_serial_available() 先问一句，省一次注定返回 0 的 read；
-     * RX_MAX_CHUNKS 是"数据一直比界面快"时的保险，剩下的留给下一拍。 */
+    ser = cg_widget_serial(self);
+    if (!ser) return;                       /* 自检合成触发：链路不存在，直接走 */
+
+    term = cg_find(app, "term_log");
     for (loops = 0; loops < RX_MAX_CHUNKS; loops++) {
-        if (cg_serial_available(s_biz.ser) <= 0) break;
-        n = cg_serial_read(s_biz.ser, buf, (int)sizeof(buf));
+        if (cg_serial_available(ser) <= 0) break;
+        n = cg_serial_read(ser, buf, (int)sizeof(buf));
         if (n <= 0) break;
-        cg_term_write(term, CG_TERM_RX, buf, n);     /* 收到多少灌多少，它会按 \n 切行 */
-        s_biz.rx_window += n;
+        /* ---- 数据的落点：一份数据，两个去处 ---- */
+        cg_term_write(term, CG_TERM_RX, buf, n);   /* 去处 1：收发日志（按 \n 切行） */
+        s_biz.rx_window += n;                      /* 去处 2：速率曲线（1 秒聚一次） */
+        s_biz.rx_total  += n;
     }
-
     refresh_stats(app);
-
-    if (++s_biz.ticks >= TICKS_PER_SEC) {
-        s_biz.ticks = 0;
-        push_rate_point(app);
-    }
-
-    s_biz.poll = cg_set_timer(app, POLL_MS, poll_tick, app);
 }
 
-/** @brief 挂上轮询定时器（已经在跑就不重复挂） */
-static void start_poll(cg_app_t *app)
+/**
+ * @brief 每秒的聚合拍：推曲线点、刷状态栏（它不取数据，数据 arrive 已经取走了）
+ * @param user 挂进去的 cg_app_t
+ * @return void
+ * @note cg_set_timer 是一次性的，所以每次结束都要再挂一次，这才是"周期"
+ *       （回调里重挂的定时器同一拍绝不会再触发 —— 那个死循环是 cg_timer.c 的
+ *       2026-09 修复，别改回去）。
+ */
+static void agg_tick(void *user)
 {
-    if (!s_biz.poll) s_biz.poll = cg_set_timer(app, POLL_MS, poll_tick, app);
-}
+    cg_app_t *app = (cg_app_t *)user;
 
-/** @brief 撤掉轮询定时器（NULL 安全，重复调用没关系） */
-static void stop_poll(void)
-{
-    if (s_biz.poll) {
-        cg_kill_timer(s_biz.poll);
-        s_biz.poll = NULL;
-    }
+    push_rate_point(app);
+    refresh_stats(app);
+    cg_set_timer(app, AGG_MS, agg_tick, app);
 }
 
 /* ------------------------------------------------------------ 连接 / 发送 */
 
 /**
- * @brief 打开串口，成功则开始轮询；失败把中文原因写进日志视图
+ * @brief 打开串口（走串口组件），失败把中文原因写进日志视图
  * @param app 所属应用
  * @return void
  */
 static void do_connect(cg_app_t *app)
 {
+    cg_widget_t *ser      = ser_of(app);
     cg_widget_t *cmb_port = cg_find(app, "cmb_port");
     cg_widget_t *cmb_baud = cg_find(app, "cmb_baud");
     const char  *port = cg_widget_list_item(cmb_port, cg_widget_value(cmb_port));
@@ -314,28 +326,31 @@ static void do_connect(cg_app_t *app)
         term_sys(app, "没有可用串口。插上设备后点「刷新」。");
         return;
     }
+    if (!ser) {
+        term_sys(app, ".cgui 里没有串口组件（ser_main），这是界面文件的问题。");
+        return;
+    }
     if (baud <= 0) {
         term_sys(app, "波特率没选对，先在右边的下拉框里挑一个。");
         return;
     }
 
-    s_biz.ser = cg_serial_open(port, baud);
-    if (!s_biz.ser) {
-        /* 打开失败时最要紧的是"为什么"。cg_serial_last_error(NULL) 给的就是最近一次
+    /* 波特率是界面上选的，先写进组件再开链路；端口也交给组件记着 */
+    cg_widget_serial_set_baud(ser, baud);
+    if (cg_widget_serial_open(ser, port) != 0) {
+        /* 打开失败时最要紧的是"为什么"。cg_serial_last_error(NULL) 给的是最近一次
          * 打开失败的中文原因（端口被占用 / 找不到 / 波特率不支持…），别只报一句"失败了"。 */
         term_sys(app, cg_serial_last_error(NULL));
         cg_status_set(cg_find(app, "sb_main"), 0, "打开失败");
         return;
     }
 
-    s_biz.rx_total  = 0;
-    s_biz.tx_total  = 0;
     s_biz.rx_window = 0;
-    s_biz.ticks     = 0;
     set_connected(app, 1);
     refresh_stats(app);
     {
-        char *line = cg_str_format("已连接 %s @ %d（8N1）。每 %dms 取一次数据。", port, baud, POLL_MS);
+        char *line = cg_str_format("已连接 %s @ %d（8N1）。数据到达即取，逐行灌进日志。",
+                                   port, baud);
         if (line) {
             term_sys(app, line);
             cg_free(line);
@@ -345,20 +360,16 @@ static void do_connect(cg_app_t *app)
         cg_ini_write(s_biz.ini, "串口", "端口", port);
         cg_ini_write(s_biz.ini, "串口", "波特率", btext);
     }
-    start_poll(app);
 }
 
 /**
- * @brief 断开串口：撤掉轮询、关掉链路、刷界面
+ * @brief 断开串口：关掉组件上的链路、刷界面
  * @param app 所属应用
  * @return void
- * @note cg_serial_close() 会等读线程真的退出再释放缓冲，所以这里不需要自己判"还在不在"。
  */
 static void do_disconnect(cg_app_t *app)
 {
-    stop_poll();
-    cg_serial_close(s_biz.ser);
-    s_biz.ser = NULL;
+    cg_widget_serial_close(ser_of(app));
     set_connected(app, 0);
     refresh_stats(app);
     term_sys(app, "已断开串口。");
@@ -372,14 +383,15 @@ static void do_disconnect(cg_app_t *app)
  */
 static void send_current(cg_app_t *app)
 {
-    cg_widget_t *edt = cg_find(app, "edt_send");
-    const char  *text = cg_widget_text(edt);
+    cg_serial_t  *ser = cg_widget_serial(ser_of(app));
+    cg_widget_t  *edt = cg_find(app, "edt_send");
+    const char   *text = cg_widget_text(edt);
 
     if (!text || !*text) {
         term_sys(app, "输入框是空的，没东西可发。");
         return;
     }
-    if (!s_biz.ser) {
+    if (!ser) {
         term_sys(app, "还没连上串口：先点「打开串口」。");
         return;
     }
@@ -400,19 +412,21 @@ static void send_current(cg_app_t *app)
             term_sys(app, "HEX 模式没解析出任何字节。");
             return;
         }
-        if (cg_serial_write(s_biz.ser, bytes, n) < 0) {
-            term_sys(app, cg_serial_last_error(s_biz.ser));
+        if (cg_serial_write(ser, bytes, n) < 0) {
+            term_sys(app, cg_serial_last_error(ser));
             return;
         }
+        s_biz.tx_total += n;
         /* 日志里记一笔实际发出去的字节（原样按字节灌，终端会按 \n 切行） */
         cg_term_write(cg_find(app, "term_log"), CG_TERM_TX, bytes, n);
     } else {
         int len = (int)strlen(text);
 
-        if (cg_serial_write(s_biz.ser, text, len) < 0) {
-            term_sys(app, cg_serial_last_error(s_biz.ser));
+        if (cg_serial_write(ser, text, len) < 0) {
+            term_sys(app, cg_serial_last_error(ser));
             return;
         }
+        s_biz.tx_total += len;
         cg_term_write(cg_find(app, "term_log"), CG_TERM_TX, text, len);
     }
     refresh_stats(app);
@@ -437,8 +451,8 @@ static void on_connect_click(cg_widget_t *self, cg_event_t ev, void *user)
     (void)user;
     if (!cg_app_has_window(app)) return;
 
-    if (s_biz.ser) do_disconnect(app);
-    else          do_connect(app);
+    if (is_connected(app)) do_disconnect(app);
+    else                   do_connect(app);
 }
 
 /**
@@ -481,10 +495,9 @@ static void on_clear_click(cg_widget_t *self, cg_event_t ev, void *user)
     (void)ev;
     (void)user;
 
-    cg_serial_flush_rx(s_biz.ser);           /* NULL 安全：没连上时是个空操作 */
+    cg_serial_flush_rx(cg_widget_serial(ser_of(app)));   /* NULL 安全：没连上时空操作 */
     cg_term_clear(cg_find(app, "term_log"));
     s_biz.rx_window = 0;
-    s_biz.ticks     = 0;
     term_sys(app, "已清空接收缓冲与日志视图。");
 }
 
@@ -612,7 +625,7 @@ static void on_split_release(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief 窗口即将关闭：这里只记一笔（没有需要拦下的内容）
+ * @brief 窗口即将关闭：这里只记一笔（链路由运行时收，业务不用兜底）
  * @param self 窗口伪控件
  * @param ev close
  * @param user 未使用
@@ -627,7 +640,7 @@ static void on_close(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief 窗口已销毁：进程收尾 —— 撤轮询、关串口
+ * @brief 窗口已销毁：只记账本（串口链路运行时在 app 收尾时自动关，这里不碰）
  * @param self 窗口伪控件
  * @param ev destroy
  * @param user 未使用
@@ -638,17 +651,13 @@ static void on_destroy(cg_widget_t *self, cg_event_t ev, void *user)
     (void)self;
     (void)ev;
     (void)user;
-
-    stop_poll();                     /* 定时器可能还在飞，先撤掉再收串口 */
-    cg_serial_close(s_biz.ser);      /* 幂等 + NULL 安全，没连上时直接调也没事 */
-    s_biz.ser = NULL;
     cg_log(CG_LOG_INFO, "串口助手退出：RX %lld / TX %lld 字节", s_biz.rx_total, s_biz.tx_total);
 }
 
 /* ------------------------------------------------------------ 启动 */
 
 /**
- * @brief 界面就绪：枚举端口、恢复上次的配置、点亮初始状态
+ * @brief 界面就绪：枚举端口、恢复上次的配置、点亮初始状态、挂上聚合拍
  * @param app 所属应用
  * @param user desc.ready_user，本示例没挂数据
  * @return void
@@ -702,6 +711,7 @@ static void on_ready(cg_app_t *app, void *user)
 
     set_connected(app, 0);
     refresh_stats(app);
+    cg_set_timer(app, AGG_MS, agg_tick, app);     /* 聚合拍（取数据不靠它，见 on_arrive） */
     cg_log(CG_LOG_INFO, "串口助手启动：枚举到 %d 个串口，配置 %s",
            s_biz.n_ports, s_biz.ini[0] ? s_biz.ini : "(无)");
 }
@@ -716,6 +726,7 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND("on_send_click",     on_send_click),
     CG_BIND("on_send_submit",    on_send_submit),
     CG_BIND("on_split_release",  on_split_release),
+    CG_BIND("on_arrive",         on_arrive),
     CG_BIND("on_close",          on_close),
     CG_BIND("on_destroy",        on_destroy),
     CG_BIND_END
