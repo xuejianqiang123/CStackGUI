@@ -11,7 +11,7 @@
     },
     "info": {
       "product": "CStackGUI 串口助手示例",
-      "desc": "通信类工具样板：串口组件（无界面控件）发 arrive，数据落到哪个控件由用户代码决定",
+      "desc": "通信类工具样板：串口组件（无界面控件）发 arrive，数据落到编辑框（接收视图）和曲线（速率）",
       "version": "1.0.0.0",
       "author": "CStackGUI"
     }
@@ -93,16 +93,15 @@
       "style": { "fg": "#1B6E33" }
     },
     {
-      "id": "term_log",
-      "type": "terminal",
+      "id": "edt_recv",
+      "type": "edit",
       "rect": { "x": 8, "y": 48, "w": 904, "h": 470 },
-      "checked": true,
-      "value": 500,
-      "items": [
-        "串口助手就绪。",
-        "先在上面选端口和波特率，再点「打开串口」。",
-        "收发的数据会按行落到这里：RX 绿色（收到）/ TX 蓝色（发出）/ 灰色（程序自己的记录）。"
-      ]
+      "multiline": true,
+      "scroll": 2,
+      "maxlen": 65535,
+      "text": "串口助手就绪。\n先在上面选端口和波特率，再点「打开串口」。\n收到的数据会按字节落到这个编辑框里（和 terminal 控件无关，去哪个控件由你自己决定）。",
+      "style": { "font": "Consolas", "size": 10, "fg": "#1D1B20", "bg": "#FFFFFF" },
+      "hint": "接收日志：串口组件 arrive 事件里把收到的字节写进这里（多行编辑框，自动滚到底）"
     },
     {
       "id": "ser_main",

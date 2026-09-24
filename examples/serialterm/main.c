@@ -11,7 +11,7 @@
  *              这是 Win32 的硬约束，不是风格偏好；
  *            - 运行时在主线程里发现缓冲有数据就派发 **arrive（数据到达）** 事件，
  *              回调拿到的 self 就是串口组件本身 —— 数据落到哪个控件，由这行代码决定：
- *              本示例把同一份数据**同时**灌进 terminal（收发日志）和 chart（速率曲线），
+ *              本示例把同一份数据**同时**灌进 edt_recv（接收编辑框）和 chart（速率曲线），
  *              换个项目灌进 listbox / label / 自己的解析器，都是这个回调里的事；
  *            - 1 秒一颗的业务定时器只管"聚合"：把这一秒收到的字节数推上曲线、刷状态栏，
  *              它不碰数据（数据已经在 arrive 里取走了）。
@@ -39,6 +39,8 @@
 #define RX_CHUNK       4096
 /** 一次到达事件最多取几轮（防"数据一直比界面快"把事件拖久；剩下的下一拍再来） */
 #define RX_MAX_CHUNKS  32
+/** 接收编辑框里最多留多少字符（环形：超了从最老的地方丢） */
+#define RECV_CAP       65000
 /** 曲线 Y 轴的最小上限，也是初始上限（和 .cgui 里 chart 的 max 对齐） */
 #define CHART_TOP_MIN  256
 
@@ -50,6 +52,8 @@ typedef struct {
     int          chart_top;   /**< 曲线 Y 轴当前上限（只往上扩） */
     long long    rx_total;    /**< 累计收到字节（断连后还要显示，所以自己留一份） */
     long long    tx_total;    /**< 累计发出字节 */
+    char         recv_buf[RECV_CAP + 1];  /**< 接收编辑框的内容（环形，超了丢最老） */
+    int          recv_len;    /**< recv_buf 里当前有效长度 */
 } biz_t;
 
 static biz_t s_biz;
@@ -57,16 +61,53 @@ static biz_t s_biz;
 /* ------------------------------------------------------------ 小工具 */
 
 /**
- * @brief 往日志终端补一条"程序自己记的"消息（灰色，行首 --）
+ * @brief 把一段文本追加进接收编辑框（edt_recv），超容量从最老处丢，并滚到底
+ * @param app 所属应用
+ * @param data 要追加的字节（当成文本，UTF-8）
+ * @param n 字节数
+ * @return void
+ * @note 这就是"数据落到编辑框"的具体写法：自己维护一个环形缓冲，每次 set_text 整段重设。
+ *       set_text 会把编辑框滚回顶部，所以后面跟一个 cg_edit_scroll_end 把新数据露出来。
+ */
+static void recv_append(cg_app_t *app, const char *data, int n)
+{
+    cg_widget_t *edt = cg_find(app, "edt_recv");
+
+    if (n <= 0) return;
+    /* 环形：装不下就丢最老的那截 */
+    if (s_biz.recv_len + n > RECV_CAP) {
+        int drop = s_biz.recv_len + n - RECV_CAP;
+        if (drop >= s_biz.recv_len) {
+            s_biz.recv_len = 0;
+        } else {
+            memmove(s_biz.recv_buf, s_biz.recv_buf + drop, (size_t)(s_biz.recv_len - drop));
+            s_biz.recv_len -= drop;
+        }
+    }
+    memcpy(s_biz.recv_buf + s_biz.recv_len, data, (size_t)n);
+    s_biz.recv_len += n;
+    s_biz.recv_buf[s_biz.recv_len] = '\0';
+
+    if (edt) {
+        cg_widget_set_text(edt, s_biz.recv_buf);
+        cg_edit_scroll_end(edt);             /* set_text 会滚回顶部，这里救回来 */
+    }
+}
+
+/**
+ * @brief 往接收编辑框补一条"程序自己记的"系统消息（行首 --）
  * @param app 所属应用
  * @param text 要写的中文（UTF-8）
  * @return void
  */
-static void term_sys(cg_app_t *app, const char *text)
+static void log_line(cg_app_t *app, const char *text)
 {
-    cg_widget_t *term = cg_find(app, "term_log");
+    char tmp[2048];
+    int  n = snprintf(tmp, sizeof(tmp), "\n-- %s", text);
 
-    if (term) cg_term_write(term, CG_TERM_SYS, text, -1);
+    if (n < 0) return;
+    if (n > (int)sizeof(tmp) - 1) n = (int)sizeof(tmp) - 1;
+    recv_append(app, tmp, n);
 }
 
 /**
@@ -200,7 +241,7 @@ static int fill_ports(cg_app_t *app)
         cg_widget_list_add(cmb, "（没有可用串口）");
         cg_widget_set_value(cmb, 0);
         s_biz.n_ports = 0;
-        term_sys(app, "没枚举到任何串口。插上设备后点「刷新」再试。");
+        log_line(app, "没枚举到任何串口。插上设备后点「刷新」再试。");
         return 0;
     }
 
@@ -257,13 +298,12 @@ static void push_rate_point(cg_app_t *app)
  * @param user 未使用
  * @return void
  * @note 这就是"用户自己决定数据传输到哪个控件"的地方：同一份数据，想灌几个控件
- *       就灌几个 —— 本示例同时喂 terminal（收发日志）和 rx_window（速率曲线）。
+ *       就灌几个 —— 本示例同时喂 edt_recv（接收编辑框）和 rx_window（速率曲线）。
  *       **第一件事是判句柄 NULL**：自检模式会合成触发本回调，那时链路不存在。
  */
 static void on_arrive(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t     *app  = cg_app_of(self);
-    cg_widget_t  *term;
     cg_serial_t  *ser;
     unsigned char buf[RX_CHUNK];
     int           loops, n;
@@ -274,13 +314,12 @@ static void on_arrive(cg_widget_t *self, cg_event_t ev, void *user)
     ser = cg_widget_serial(self);
     if (!ser) return;                       /* 自检合成触发：链路不存在，直接走 */
 
-    term = cg_find(app, "term_log");
     for (loops = 0; loops < RX_MAX_CHUNKS; loops++) {
         if (cg_serial_available(ser) <= 0) break;
         n = cg_serial_read(ser, buf, (int)sizeof(buf));
         if (n <= 0) break;
         /* ---- 数据的落点：一份数据，两个去处 ---- */
-        cg_term_write(term, CG_TERM_RX, buf, n);   /* 去处 1：收发日志（按 \n 切行） */
+        recv_append(app, (const char *)buf, n);     /* 去处 1：接收编辑框（当作文本灌进去） */
         s_biz.rx_window += n;                      /* 去处 2：速率曲线（1 秒聚一次） */
         s_biz.rx_total  += n;
     }
@@ -323,15 +362,15 @@ static void do_connect(cg_app_t *app)
     if (btext) sscanf(btext, "%d", &baud);      /* 下拉框里存的是文字，转成数字 */
 
     if (s_biz.n_ports <= 0 || !port || !*port) {
-        term_sys(app, "没有可用串口。插上设备后点「刷新」。");
+        log_line(app, "没有可用串口。插上设备后点「刷新」。");
         return;
     }
     if (!ser) {
-        term_sys(app, ".cgui 里没有串口组件（ser_main），这是界面文件的问题。");
+        log_line(app, ".cgui 里没有串口组件（ser_main），这是界面文件的问题。");
         return;
     }
     if (baud <= 0) {
-        term_sys(app, "波特率没选对，先在右边的下拉框里挑一个。");
+        log_line(app, "波特率没选对，先在右边的下拉框里挑一个。");
         return;
     }
 
@@ -340,7 +379,7 @@ static void do_connect(cg_app_t *app)
     if (cg_widget_serial_open(ser, port) != 0) {
         /* 打开失败时最要紧的是"为什么"。cg_serial_last_error(NULL) 给的是最近一次
          * 打开失败的中文原因（端口被占用 / 找不到 / 波特率不支持…），别只报一句"失败了"。 */
-        term_sys(app, cg_serial_last_error(NULL));
+        log_line(app, cg_serial_last_error(NULL));
         cg_status_set(cg_find(app, "sb_main"), 0, "打开失败");
         return;
     }
@@ -349,10 +388,10 @@ static void do_connect(cg_app_t *app)
     set_connected(app, 1);
     refresh_stats(app);
     {
-        char *line = cg_str_format("已连接 %s @ %d（8N1）。数据到达即取，逐行灌进日志。",
+        char *line = cg_str_format("已连接 %s @ %d（8N1）。数据到达即取，灌进接收编辑框。",
                                    port, baud);
         if (line) {
-            term_sys(app, line);
+            log_line(app, line);
             cg_free(line);
         }
     }
@@ -372,7 +411,24 @@ static void do_disconnect(cg_app_t *app)
     cg_widget_serial_close(ser_of(app));
     set_connected(app, 0);
     refresh_stats(app);
-    term_sys(app, "已断开串口。");
+    log_line(app, "已断开串口。");
+}
+
+/**
+ * @brief 把"已发出"的内容记进接收编辑框（行首 >>）
+ * @param app 所属应用
+ * @param show 要显示的文字（文本模式就是原文；HEX 模式是已经拼好的 01 02 这样的串）
+ * @param n show 的长度
+ * @return void
+ */
+static void log_sent(cg_app_t *app, const char *show, int n)
+{
+    char tmp[1200];
+    int  k = snprintf(tmp, sizeof(tmp), "\n>> %.*s", n, show);
+
+    if (k < 0) return;
+    if (k > (int)sizeof(tmp) - 1) k = (int)sizeof(tmp) - 1;
+    recv_append(app, tmp, k);
 }
 
 /**
@@ -388,11 +444,11 @@ static void send_current(cg_app_t *app)
     const char   *text = cg_widget_text(edt);
 
     if (!text || !*text) {
-        term_sys(app, "输入框是空的，没东西可发。");
+        log_line(app, "输入框是空的，没东西可发。");
         return;
     }
     if (!ser) {
-        term_sys(app, "还没连上串口：先点「打开串口」。");
+        log_line(app, "还没连上串口：先点「打开串口」。");
         return;
     }
 
@@ -401,33 +457,38 @@ static void send_current(cg_app_t *app)
         int           n = hex_parse(text, bytes, (int)sizeof(bytes));
 
         if (n == -2) {
-            term_sys(app, "HEX 数据太长了（一次最多 512 字节）。");
+            log_line(app, "HEX 数据太长了（一次最多 512 字节）。");
             return;
         }
         if (n < 0) {
-            term_sys(app, "HEX 写错了：只允许 0-9 A-F 和分隔符，而且数字个数必须是偶数（像 1A 2B）。");
+            log_line(app, "HEX 写错了：只允许 0-9 A-F 和分隔符，而且数字个数必须是偶数（像 1A 2B）。");
             return;
         }
         if (n == 0) {
-            term_sys(app, "HEX 模式没解析出任何字节。");
+            log_line(app, "HEX 模式没解析出任何字节。");
             return;
         }
         if (cg_serial_write(ser, bytes, n) < 0) {
-            term_sys(app, cg_serial_last_error(ser));
+            log_line(app, cg_serial_last_error(ser));
             return;
         }
         s_biz.tx_total += n;
-        /* 日志里记一笔实际发出去的字节（原样按字节灌，终端会按 \n 切行） */
-        cg_term_write(cg_find(app, "term_log"), CG_TERM_TX, bytes, n);
+        {                                   /* 记一笔实际发出的字节（按 HEX 显示） */
+            char hex[1200];
+            int  hi = 0, cap = (int)sizeof(hex) - 1, i;
+            for (i = 0; i < n && hi < cap - 3; i++)
+                hi += snprintf(hex + hi, (size_t)(cap - hi), "%02X ", bytes[i]);
+            log_sent(app, hex, hi);
+        }
     } else {
         int len = (int)strlen(text);
 
         if (cg_serial_write(ser, text, len) < 0) {
-            term_sys(app, cg_serial_last_error(ser));
+            log_line(app, cg_serial_last_error(ser));
             return;
         }
         s_biz.tx_total += len;
-        cg_term_write(cg_find(app, "term_log"), CG_TERM_TX, text, len);
+        log_sent(app, text, len);
     }
     refresh_stats(app);
 }
@@ -475,7 +536,7 @@ static void on_refresh_click(cg_widget_t *self, cg_event_t ev, void *user)
     if (n > 0) {
         char *line = cg_str_format("枚举到 %d 个串口。", n);
         if (line) {
-            term_sys(app, line);
+            log_line(app, line);
             cg_free(line);
         }
     }
@@ -496,9 +557,11 @@ static void on_clear_click(cg_widget_t *self, cg_event_t ev, void *user)
     (void)user;
 
     cg_serial_flush_rx(cg_widget_serial(ser_of(app)));   /* NULL 安全：没连上时空操作 */
-    cg_term_clear(cg_find(app, "term_log"));
+    s_biz.recv_len = 0;
+    s_biz.recv_buf[0] = '\0';
+    cg_widget_set_text(cg_find(app, "edt_recv"), "");    /* 清空接收编辑框 */
     s_biz.rx_window = 0;
-    term_sys(app, "已清空接收缓冲与日志视图。");
+    log_line(app, "已清空接收缓冲与编辑框。");
 }
 
 /**
@@ -522,14 +585,18 @@ static void on_save_log_click(cg_widget_t *self, cg_event_t ev, void *user)
                              "txt", path, sizeof(path))) {
         return;
     }
-    if (cg_term_save(cg_find(app, "term_log"), path) != 0) {
-        term_sys(app, "日志没写出去（路径不可写或被占用）。");
-        return;
+    {
+        const char *txt = cg_widget_text(cg_find(app, "edt_recv"));
+
+        if (cg_file_write(path, txt ? txt : "") != 0) {
+            log_line(app, "日志没写出去（路径不可写或被占用）。");
+            return;
+        }
     }
     {
         char *line = cg_str_format("日志已存到 %s", path);
         if (line) {
-            term_sys(app, line);
+            log_line(app, line);
             cg_free(line);
         }
     }
@@ -550,11 +617,11 @@ static void on_hex_change(cg_widget_t *self, cg_event_t ev, void *user)
     (void)user;
 
     if (!cg_widget_checked(self)) {
-        term_sys(app, "HEX 发送：关。输入按原文（UTF-8）发出去。");
+        log_line(app, "HEX 发送：关。输入按原文（UTF-8）发出去。");
         return;
     }
 
-    term_sys(app, "HEX 发送：开。输入像 1A 2B 2C 这样写，空格可有可无。");
+    log_line(app, "HEX 发送：开。输入像 1A 2B 2C 这样写，空格可有可无。");
     {
         const char *text = cg_widget_text(cg_find(app, "edt_send"));
         if (text && *text) {
@@ -562,12 +629,12 @@ static void on_hex_change(cg_widget_t *self, cg_event_t ev, void *user)
             int           n = hex_parse(text, bytes, (int)sizeof(bytes));
             char         *line;
             if (n < 0) {
-                term_sys(app, "（当前输入解析不了：数字个数要是偶数，而且只允许 0-9 A-F）");
+                log_line(app, "（当前输入解析不了：数字个数要是偶数，而且只允许 0-9 A-F）");
                 return;
             }
             line = cg_str_format("（当前输入会发成 %d 个字节）", n);
             if (line) {
-                term_sys(app, line);
+                log_line(app, line);
                 cg_free(line);
             }
         }
