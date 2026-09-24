@@ -653,7 +653,11 @@ static void sync_widget_body(cg_widget_t *w)
             SendMessageW((HWND)w->native2, DTM_SETSYSTEMTIME, GDT_VALID, (LPARAM)&t);
         }
     } else if (!strcmp(w->type, "tabs")) {
+        /* bind / cg_widget_set_value 改 value 也要把页体切过去：光 TCM_SETCURSEL
+         * 只换页签高亮，页体显隐是每个子控件自己的事 —— 收尾和 TCN_SELCHANGE
+         * （cg_win_notify.c）走同一套 cgw_sync_tabs_pages，别整表重建（items_dirty）。 */
         SendMessageW(h, TCM_SETCURSEL, (WPARAM)w->value, 0);
+        cgw_sync_tabs_pages(w);
     } else if (!strcmp(w->type, "listbox") && !w->items_dirty) {
         SendMessageW(h, LB_SETCURSEL, (WPARAM)w->value, 0);
     } else if (!strcmp(w->type, "combo") && !w->items_dirty) {

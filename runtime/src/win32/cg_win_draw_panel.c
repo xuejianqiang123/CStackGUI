@@ -210,6 +210,7 @@ void cgw_register_panel_class(void)
  * 这里只做两件事：鼠标（捕获 + 光标 + 把位移喂进去）、外观（一条线 + 三个握点）。
  */
 static int s_split_origin;   /* 按下时鼠标的屏幕坐标（竖条看 x，横条看 y） */
+static int s_split_dragged;  /* 这次拖动真的动过分隔条吗（松手要不要报 release） */
 
 /** @brief 分隔条窗口过程：拖动改两侧面板尺寸，松手派发一次 release */
 static LRESULT CALLBACK SplitterProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
@@ -270,6 +271,7 @@ static LRESULT CALLBACK SplitterProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_LBUTTONDOWN:
         if (!w) break;
         SetCapture(hwnd);
+        s_split_dragged = 0;
         {
             POINT pt;
             GetCursorPos(&pt);
@@ -280,18 +282,29 @@ static LRESULT CALLBACK SplitterProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (!w || GetCapture() != hwnd) break;
         {
             POINT pt;
-            int   now, moved;
+            int   now, moved, sc;
             GetCursorPos(&pt);
             now   = cgw_splitter_is_vert(w) ? (int)pt.x : (int)pt.y;
-            moved = cg_splitter_apply(w, now - s_split_origin);
+            /* GetCursorPos 给的是物理像素，cg_splitter_apply 吃的是逻辑像素
+             * （和 .cgui / rect 同一口径）：高 DPI 下不折算会拖快 scale 倍 */
+            sc    = (w->app && w->app->scale > 0) ? w->app->scale : 100;
+            moved = cg_splitter_apply(w, (now - s_split_origin) * 100 / sc);
             /* 被最小尺寸夹住时原点不跟走，鼠标退回来还能继续拖 */
-            if (moved) s_split_origin += moved;
+            if (moved) {
+                s_split_origin += moved;
+                s_split_dragged = 1;
+            }
         }
         return 0;
     case WM_LBUTTONUP:
         if (GetCapture() == hwnd) ReleaseCapture();
-        /* 拖完通知一次：业务在这里把布局存进 INI 最合适 */
-        if (w) cg_dispatch(w, CG_EVENT_RELEASE);
+        /* 拖完通知一次：业务在这里把布局存进 INI 最合适。
+         * 单击不动（没真的拖过）不算"拖完"，不发 —— 否则业务会把没变过的布局当
+         * "用户拖过了"存下来。 */
+        if (w && s_split_dragged) {
+            s_split_dragged = 0;
+            cg_dispatch(w, CG_EVENT_RELEASE);
+        }
         return 0;
     case WM_CAPTURECHANGED:
         return 0;

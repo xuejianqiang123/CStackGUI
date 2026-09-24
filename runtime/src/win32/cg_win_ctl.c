@@ -283,6 +283,12 @@ DWORD cgw_exstyle_of(const cg_widget_t *w)
     if (!strcmp(w->type, "edit"))    return 0;
     if (!strcmp(w->type, "richtext")) return WS_EX_CLIENTEDGE;
     if (!strcmp(w->type, "listbox")) return WS_EX_CLIENTEDGE;
+    /* 容器类要给 WS_EX_CONTROLPARENT：键盘导航（Tab / 方向键）由 IsDialogMessage
+     * 驱动，它只在"父是控制父"时才递归枚举容器里的子窗口 —— 少了这一位，
+     * Tab 焦点永远进不了 group / box / card / shape / tabs 里的按钮和输入框 */
+    if (!strcmp(w->type, "group") || !strcmp(w->type, "box") ||
+        !strcmp(w->type, "card") || !strcmp(w->type, "shape") ||
+        !strcmp(w->type, "tabs")) return WS_EX_CONTROLPARENT;
     return 0;
 }
 
@@ -382,7 +388,7 @@ static unsigned parent_body_rgb(HWND parent, HWND child)
  *  @param app 所属应用；hwnd 目标控件（按它的**直接父窗口**判断"背后"是谁）
  *  @return unsigned 0xRRGGBB
  *  @details 主窗口上的控件 -> 窗口底色；分组框 / 容器块 / 卡片 / 图形里的 -> 该面板的
- *           style.bg（没设就用它类背景的系统色）；标签页里的 -> 采样页体真实像素。
+ *           style.bg（没设就顺着父链继续往上看，直到主窗底色）；标签页里的 -> 采样页体真实像素。
  *           无底色标签、以及"清掉自身底色"的自绘按钮/开关/勾选框都用它，
  *           否则它们会把窗口底色画到带底色的面板上，露出一块方块。
  */
@@ -392,7 +398,6 @@ unsigned cg_win_behind_rgb(cg_app_t *app, void *hwnd)
     HWND child = (HWND)hwnd;
     HWND parent = child ? GetParent(child) : NULL;
     cg_widget_t *pw;
-    ULONG_PTR v;
 
     /* app 为空 = 自绘控件在**建窗口的过程中**就收到了一次 WM_PAINT（运行时还没把
      * GWLP_USERDATA 挂上）。这不是错误状态，只是还问不出"背后是谁"，给个默认面色就行 ——
@@ -405,9 +410,11 @@ unsigned cg_win_behind_rgb(cg_app_t *app, void *hwnd)
     pw = cg_widget_by_hwnd(app, parent);
     if (pw && (cgw_is_t(pw, "group") || cgw_is_t(pw, "box") || cgw_is_t(pw, "card") || cgw_is_t(pw, "shape"))) {
         if (pw->style.bg != CG_COLOR_NONE) return pw->style.bg;
-        v = (ULONG_PTR)GetClassLongPtrW(parent, GCLP_HBRBACKGROUND);
-        if (v == 0 || v > (ULONG_PTR)(COLOR_ENDCOLORS + 1)) return rgb_of(st->bg_color);
-        return rgb_of(GetSysColor((int)v - 1));
+        /* 父容器没设底色：递归问"它背后是什么"（容器自己画底色用的就是这条递归，
+         * cg_win_draw_panel.c 的 behind_rgb_of）。不能去拿窗口类背景刷 —— 那是面板类
+         * 注册的 COLOR_BTNFACE+1(#F0F0F0)，口径和容器自绘对不上，容器里每个无底色
+         * label / separator / badge 底下就会露一块系统灰。 */
+        return cg_win_behind_rgb(app, parent);
     }
     /* 标签页等系统容器：设了背景色就用它（cgw_FocusProc 会把页体填成这个色），
      * 没设才让页体自己把"背后那块"画出来取色（什么主题都对得上） */
