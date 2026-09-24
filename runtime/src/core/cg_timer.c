@@ -61,29 +61,51 @@ void cg_kill_timer(cg_timer_t *t)
  * @brief 后端心跳调用：推进同 app 的所有定时器，到点的摘链并执行
  * @param app 当前应用
  * @return void 无返回值
- */
+ * @note **回调里 cg_set_timer 新挂的定时器，本轮绝不能再触发**。串口助手那种
+ *       "回调里把自己再挂一次当周期"是标准用法：旧实现边遍历边执行，新挂的
+ *       落在遍历指针前面，同一轮就被又触发一遍 —— 无限循环，窗口直接未响应。
+ *       所以这里先把整条链摘下来再遍历；遍历期间新挂的都落在 s_timers 上，
+ *       自然留给下一拍。 */
 void cg_timers_tick(cg_app_t *app)
 {
-    cg_timer_t **pp = &s_timers;
+    cg_timer_t  *pending = s_timers;
+    cg_timer_t  *keep    = NULL;
+    cg_timer_t **kt      = &keep;
 
-    while (*pp) {
-        cg_timer_t *t = *pp;
-        if (t->app != app) { pp = &t->next; continue; }
+    s_timers = NULL;
+
+    while (pending) {
+        cg_timer_t *t = pending;
+        pending = t->next;
+
+        if (t->app != app) {                /* 别家的：原样保留 */
+            *kt = t; kt = &t->next;
+            continue;
+        }
         if (!t->fn) {                       /* 已被 kill */
-            *pp = t->next;
             free(t);
             continue;
         }
         t->elapsed_ms += CG_TICK_MS;
-        if (t->elapsed_ms >= t->delay_ms) {
-            void (*fn)(void *) = t->fn;
-            void *user = t->user;
-            *pp = t->next;
-            free(t);
-            fn(user);
+        if (t->elapsed_ms < t->delay_ms) {  /* 还没到点 */
+            *kt = t; kt = &t->next;
             continue;
         }
-        pp = &t->next;
+        {
+            void (*fn)(void *) = t->fn;
+            void *user = t->user;
+
+            free(t);
+            fn(user);
+        }
+    }
+    *kt = NULL;
+
+    /* 存活的接回去（挂在回调期间新设置的后面，反正下一拍才看它们） */
+    if (keep) {
+        cg_timer_t **tail = &s_timers;
+        while (*tail) tail = &(*tail)->next;
+        *tail = keep;
     }
 }
 
