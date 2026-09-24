@@ -495,7 +495,13 @@ void cg_widget_set_value(cg_widget_t *w, int value)
     /* 列表框 / 下拉框 / 标签页的 value 是"第几项"：范围是 0..项数-1，不是默认的 [0,100]。
      * 不区分的话，超过 100 项的列表通过公共 API 永远选不中后段 —— 而内部那条路径
      * （原生通知进来时）本来就绕过了夹取，两边语义应当一致（与 bind 传播的"下标不夹"也一致）。 */
-    if (!strcmp(w->type, "listbox") || !strcmp(w->type, "combo") || !strcmp(w->type, "tabs")) {
+    /* colorpicker 的 value 是 0xRRGGBB 颜色值、**不是**数值量 —— 按 [vmin,vmax]（默认 0..100）
+     * 夹取会把所有真实颜色压成同一个数（设 0x6750A4 得到 100、界面变近黑）。
+     * 内部那条选色路径本来就绕开了本函数（cg_win_notify.c 的选色分支直接写 w->value，
+     * 注释里记着这个坑），这里补上公共 API 这一侧。 */
+    if (!strcmp(w->type, "colorpicker")) {
+        /* 颜色值不夹取 */
+    } else if (!strcmp(w->type, "listbox") || !strcmp(w->type, "combo") || !strcmp(w->type, "tabs")) {
         if (value < 0) value = 0;
         if (w->nitems > 0 && value > w->nitems - 1) value = w->nitems - 1;
     } else {
