@@ -99,7 +99,7 @@ char *cg_read_file(const char *path);
 3. **量文字行高必须先 `WM_GETFONT` 把控件自己的字体选进 `GetDC` 的 DC 再 `GetTextMetrics`** —— DC 默认选的是 16px System 位图字体，量小了 pad 算大、文字整条下沉（雅黑 10pt 实际行高约 19px），且 `WM_SETFONT` 里"字高变了才重排"的比较会恒为不变、换字号不重排。
 4. **调节器（spin）不能用 `UDS_ALIGNRIGHT`**：它按 buddy 的窗口矩形贴右，会压在自绘边框和圆角上；改为创建时不带该样式，由 `cg_skin_edit_fit_spin()` 按客户区内侧摆位（右让 bw、上下各让 bw），并在 `WM_SIZE`/`WM_SETFONT` 里重摆 + 设右内边距。聚焦环优先级高于边框样式（无边框也要有焦点反馈）。
 5. **边框/焦点环用 `GetWindowDC` 画在客户区之外**（客户区四边由 `WM_NCCALCSIZE` 四边内缩 `bw`），控件自身重绘（选中/滚动/光标闪烁）盖不掉 —— 这是设计意图，**别把边框画进内容区**。
-6. **已知缺陷（2026-09-25 排查中，未修）**：多行编辑框（`multiline`）+ 流式灌入（反复 `SetWindowText` + `cg_edit_scroll_end` 滚到底）时，内容区会出现横贯整行的实心线。已用 `tests/unit/test_skin_edit.c` 的「编辑框：多行渲染实心线」套件复现（子窗口 + 挂皮肤 + 流式，约第 25 轮扫到一条 100% 覆盖率的实心线）。修之前先核实两件事：`sk_edit_box` 的边框带是否画进了内容区（扫描判定用的 `s->w`/`s->h` 在滚动时是否取到旧值）；以及子类 `WM_SIZE` 分支是否漏了 `DefSubclassProc`（会让 EDIT 收不到 `WM_SIZE`、内部布局错位）。
+6. **边框只在非客户区消息里重画，别挂进 `WM_PAINT`**：`sk_edit_box`（画边框）曾挂在 `WM_PAINT` 分支里，客户区重画时用 `GetWindowDC` 画非客户区边框——流式灌入滚动时 DC 带滚动偏移，边框被画进内容区，留下一条皮肤灰（`B8B2BD`）横贯实心线（2026-09-25 修，回归在 test_skin_edit.c）。正确做法：边框只响应 `WM_NCPAINT`/`WM_SETFOCUS`/`WM_KILLFOCUS`；`WM_PAINT` 只走 `DefSubclassProc` 让 EDIT 画客户区。
 
 ## §7 GDI 渲染 bug 的像素级复现方法（auto_invoke：改 cg_skin_edit.c 或怀疑"渲染 bug"时）
 
@@ -107,8 +107,10 @@ char *cg_read_file(const char *path);
 
 - **量化思路**：建一个真 EDIT 挂上 `cg_skin_apply_edit`，`ShowWindow` + `UpdateWindow` 后用 `GetDC`/`GetPixel` 逐行扫客户区，统计"非白像素横贯整行"的行。正常文本行字间有空隙，覆盖率到不了 ~80%；实心规则线能到 ~100%，一眼可分。
 - **复现三要素（缺一个可能不重现）**：① 挂皮肤 vs 不挂（对照组）② 单层弹窗 vs 子窗口（贴近主窗口上下文）③ **单次灌入 vs 反复灌入 + 滚动**（`cg_edit_scroll_end`），真实串口助手是第三种。本次的线条 bug 只在 ③ + 挂皮肤时出现。
-- **扫描很贵**：一轮扫满屏约 30 万次 `GetPixel`，别在每一轮都扫，每 N 轮扫一次（N=25 就够抓到）。
-- **排查坑**：`cgu-tests.exe` 把 stdout 重定向到管道时是 4KB 块缓冲，崩溃点的真实位置会比最后刷出的 `[ok]` 行落后很多——看 stderr（无缓冲，先到）或用 PowerShell `Get-Content ... -Tail` 看末尾；进程被命令超时杀掉会给出伪退出码 `0xCFFFFFFF`（看着像崩溃，其实不是 AV，是被杀了）。
+- **扫描很贵，且对皮肤控件逐像素 `GetPixel` 是灾难**：一轮扫满屏约 30 万次 `GetPixel`；更要命的是对挂了皮肤的窗口逐像素读会**触发皮肤反复重画**（30 万次 × 重画），CPU 跑满、窗口"无响应"，看起来像死循环，其实只是巨慢。**正确做法：先 `CreateCompatibleDC`+`CreateCompatibleBitmap`，`BitBlt` 把客户区抓到离屏位图一次，再对位图逐像素扫**——飞快且不惊动控件。别在每一轮都扫，每 N 轮扫一次（N=5 就够抓到）。
+- **定性来源看颜色**：扫到实心线后把该行平均颜色打出来（如 `RGB=B8B2BD`），和皮肤调色板比对——`SK_EDGE_GREY=B8B2BD` 一对上就知道是皮肤画的，能省掉大量瞎猜。
+- **测试框架 stdout 设无缓冲**（`cg_test_main.c` 里 `setvbuf(stdout, NULL, _IONBF, 0)`）：否则重定向到文件是 4KB 块缓冲，卡死/被杀时缓冲丢失，永远看不到真实进度。
+- **排查坑**：进程被命令超时杀掉会给出伪退出码 `0xCFFFFFFF`（看着像崩溃，其实不是 AV，是被杀了）；`run-tests.bat` 会 `cd` 到 `build/tests` 再跑 exe，测试里写相对路径会偏移，要落盘诊断文件就用绝对路径。
 - **跑全量单测**用 `tools/run-tests.bat --no-kit`；中文 `--grep` 参数会因控制台编码被搅，改在测试里打 ASCII tag（如 `"round 25"`）再筛。
 
 ## 输出格式
