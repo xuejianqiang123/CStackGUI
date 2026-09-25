@@ -153,3 +153,176 @@ static void test_edit_scroll_end(void)
 }
 
 CG_TEST_SUITE("编辑框：滚到底", test_edit_scroll_end);
+
+/* ================= 多行编辑框渲染：横贯实心线复现 =================
+ * 用户报：串口日志灌进多行编辑框后，内容区里出现一条条横贯整行的实心线
+ * （每两行文本下面一条，颜色和边框同色系）。这里的复现思路：
+ * 建真多行 EDIT -> 灌日志 -> 滚到底 -> 强制画完 -> 逐行扫客户区像素，
+ * 统计"非白像素横贯整行"的行（正常文本行字间有空隙，覆盖率到不了 80%）。 */
+
+/** 像素算不算背景（白/近白） */
+static int px_is_bg(COLORREF c)
+{
+    return GetRValue(c) > 235 && GetGValue(c) > 235 && GetBValue(c) > 235;
+}
+
+/** 扫客户区：返回横贯实心线的条数，并把最高覆盖率打出来（诊断用） */
+static int scan_solid_lines(HWND h, const char *tag)
+{
+    RECT rc;
+    HDC  dc = GetDC(h);
+    int  x0, x1, span, y, hit_max = 0, y_max = -1, lines = 0;
+
+    if (!dc) return -1;
+    GetClientRect(h, &rc);
+    x0 = 12;
+    x1 = rc.right - 40;                     /* 避开左内边距与右侧滚动条 */
+    span = x1 - x0;
+    for (y = 4; y < rc.bottom - 4; y++) {
+        int hit = 0, x;
+        for (x = x0; x < x1; x++) {
+            COLORREF c = GetPixel(dc, x, y);
+            if (!px_is_bg(c)) hit++;
+        }
+        if (hit > hit_max) { hit_max = hit; y_max = y; }
+        if (span > 0 && hit * 100 >= span * 80) lines++;
+    }
+    ReleaseDC(h, dc);
+    printf("        [%s] 最高整行覆盖率 %d%%（y=%d）；实心线条数 %d\n",
+           tag, span > 0 ? hit_max * 100 / span : 0, y_max, lines);
+    return lines;
+}
+
+/** 建一个 800x400 的多行 EDIT（带滚动条）；skin=1 时挂皮肤子类 */
+static HWND mk_edit_multi(cg_app_t *app, cg_widget_t *w, int skin)
+{
+    HWND h = CreateWindowW(L"EDIT", L"",
+                           WS_POPUP | ES_MULTILINE | ES_LEFT | ES_AUTOVSCROLL | WS_VSCROLL,
+                           40, 40, 800, 400, NULL, NULL, GetModuleHandleW(NULL), NULL);
+    if (!h) return NULL;
+    memset(w, 0, sizeof(*w));
+    w->native  = h;
+    w->app     = app;
+    w->style.bg = CG_COLOR_NONE;
+    if (skin) cg_skin_apply_edit(w);
+    return h;
+}
+
+/** 灌 n 行 ESP 风格日志（\r\n 结尾，和真机一致），滚到底并强制画完 */
+static void fill_log_and_paint(HWND h, int lines)
+{
+    static wchar_t buf[16384];
+    HFONT f = CreateFontW(-13, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET,
+                          OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                          FIXED_PITCH | FF_MODERN, L"Consolas");
+    int    i, n = 0, len;
+    MSG    msg;
+
+    SendMessageW(h, WM_SETFONT, (WPARAM)f, TRUE);
+    for (i = 0; i < lines && n < 15000; i++) {
+        wchar_t *p = buf + n;
+        int left = 16384 - n;
+        int k = swprintf(p, (size_t)left,
+                         L"I (%d) esp_psram: Speed: 80MHz heap ok line %d\r\n", i * 7, i);
+        if (k <= 0) break;
+        n += k;
+    }
+    SetWindowTextW(h, buf);
+    len = (int)SendMessageW(h, WM_GETTEXTLENGTH, 0, 0);
+    SendMessageW(h, EM_SETSEL, (WPARAM)len, (LPARAM)len);
+    SendMessageW(h, EM_SCROLLCARET, 0, 0);
+    ShowWindow(h, SW_SHOWNOACTIVATE);
+    UpdateWindow(h);
+    while (PeekMessageW(&msg, h, 0, 0, PM_REMOVE)) {   /* 排队的 WM_PAINT 跑干净 */
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+    DeleteObject(f);
+}
+
+/** 流式灌日志：一轮 = 追加一行 -> 全量 SetWindowText -> 滚到底 -> 画完
+ *  （和 serialterm 的 recv_append 同一条路径：WM_SETTEXT 会把滚动清回顶部，
+ *    再 EM_SCROLLCARET 滚回底部 —— 每轮都是"整屏重画 + 滚动"的组合拳） */
+static void stream_lines(HWND h, int rounds, int scan_every)
+{
+    static wchar_t buf[32768];
+    int n = 0, i, bad = 0;
+    MSG msg;
+
+    for (i = 0; i < 6; i++)
+        n += swprintf(buf + n, (size_t)(32768 - n), L"-- 欢迎第 %d 行\r\n", i);
+    for (i = 0; i < rounds && n < 30000; i++) {
+        int len;
+        n += swprintf(buf + n, (size_t)(32768 - n),
+                      L"I (%d) esp_psram: Speed: 80MHz heap ok line %d\r\n", i * 7, i);
+        SetWindowTextW(h, buf);
+        len = (int)SendMessageW(h, WM_GETTEXTLENGTH, 0, 0);
+        SendMessageW(h, EM_SETSEL, (WPARAM)len, (LPARAM)len);
+        SendMessageW(h, EM_SCROLLCARET, 0, 0);
+        UpdateWindow(h);
+        while (PeekMessageW(&msg, h, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+        if ((i + 1) % scan_every == 0) {
+            char tag[64];
+            sprintf(tag, "round %d", i + 1);
+            bad = scan_solid_lines(h, tag);
+            if (bad > 0) break;            /* 复现了：别刷了，赶紧看 */
+        }
+    }
+    cg_test_int("流式灌入后无实心线", bad, 0);
+}
+
+/** 复现/回归：多行编辑框灌日志滚动后，内容区不得出现横贯实心线 */
+static void test_edit_multiline_paint(void)
+{
+    cg_app_t app;
+    cg_widget_t w;
+    HWND parent, h;
+    int  bad;
+
+    memset(&app, 0, sizeof(app));
+
+    cg_test_note("---- 多行编辑框：灌日志 + 滚动后不应出现横贯实心线 ----");
+
+    h = mk_edit_multi(&app, &w, 0);        /* 对照组：原生 EDIT（顶层弹窗） */
+    if (!h) { cg_test_ok("建原生多行 EDIT 成功", 0); return; }
+    fill_log_and_paint(h, 40);
+    bad = scan_solid_lines(h, "native");
+    cg_test_int("原生多行 EDIT 无实心线", bad, 0);
+    DestroyWindow(h);
+
+    h = mk_edit_multi(&app, &w, 1);        /* 实验组：挂皮肤子类 */
+    if (!h) { cg_test_ok("建挂皮肤多行 EDIT 成功", 0); return; }
+    fill_log_and_paint(h, 40);
+    bad = scan_solid_lines(h, "skinned");
+    cg_test_int("挂皮肤后仍无实心线", bad, 0);
+    DestroyWindow(h);
+
+    /* 流式：子窗口 + 反复灌入滚动（真实串口助手的用法） */
+    parent = CreateWindowW(L"STATIC", L"parent", WS_POPUP, 30, 30, 900, 500,
+                           NULL, NULL, GetModuleHandleW(NULL), NULL);
+    ShowWindow(parent, SW_SHOWNOACTIVATE);
+    UpdateWindow(parent);
+    h = CreateWindowW(L"EDIT", L"",
+                      WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_WANTRETURN |
+                      ES_AUTOVSCROLL | WS_VSCROLL | ES_LEFT,
+                      8, 8, 800, 400, parent, NULL, GetModuleHandleW(NULL), NULL);
+    if (!h) { cg_test_ok("建子窗口多行 EDIT 成功", 0); DestroyWindow(parent); return; }
+    cg_test_ok("建子窗口多行 EDIT 成功", 1);
+
+    memset(&w, 0, sizeof(w));
+    w.native  = h;
+    w.app     = &app;
+    w.style.bg = CG_COLOR_NONE;
+    cg_skin_apply_edit(&w);                /* 挂上皮肤再流式（真机组合） */
+    stream_lines(h, 60, 5);                 /* 每 5 轮扫一次，第 25 轮稳抓到实心线 */
+    cg_test_ok("流式（挂皮肤）跑完没崩", 1);
+    DestroyWindow(h);
+
+    DestroyWindow(parent);
+    cg_test_ok("收尾没崩", 1);
+}
+
+CG_TEST_SUITE("编辑框：多行渲染实心线", test_edit_multiline_paint);
