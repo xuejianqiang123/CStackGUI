@@ -75,8 +75,12 @@ HFONT cgw_font_for(cg_app_t *app, const char *family, int size_pt, int bold, int
     if (!st) return NULL;
     if (!family || !*family) family = "Microsoft YaHei UI";
     if (size_pt <= 0) {
-        /* 不指定就跟随系统 UI 字体，交给 DEFAULT_GUI_FONT */
-        return NULL;
+        /* 没声明字号 = 应用默认 UI 字号。以前直接返 NULL 让调用方拿
+         * DEFAULT_GUI_FONT —— 那是不随 DPI 缩放的旧系统字体（宋体风、固定小字号），
+         * 和声明了 font/size 的控件（雅黑、随 DPI 缩放）同屏混排就"格格不入"
+         * （2026-09-25 用户报"分组框标题字体格格不入"，实为无字体声明的控件
+         * 掉进 DEFAULT_GUI_FONT）。这里改为走统一缓存：雅黑 9pt @ 当前 DPI。 */
+        size_pt = 9;
     }
     height = -MulDiv(size_pt, st->dpi, 72);
 

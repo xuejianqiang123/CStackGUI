@@ -56,7 +56,7 @@ static void panel_draw_group(cg_app_t *app, HDC dc, cg_widget_t *w, const RECT *
 
     /* 标题：先铺一小块自己的底色擦开顶边线，再写字 */
     if (has_title) {
-        HFONT f = cgw_font_for(app, w->style.font, w->style.size ? w->style.size : 10, w->style.bold, 0);
+        HFONT f = cgw_font_for(app, w->style.font, w->style.size, w->style.bold, 0);
         HFONT oldf = (HFONT)SelectObject(dc, f ? f : (HFONT)GetStockObject(DEFAULT_GUI_FONT));
         wchar_t *wt = cgw_wc_from_utf8(w->text);
         int pad = cgw_scale_px(app, 4);
@@ -146,7 +146,7 @@ static void panel_draw_card_shape(cg_app_t *app, HDC dc, cg_widget_t *w, const R
 
         /* 卡片顶部画标题 */
         if (cgw_is_t(w, "card") && w->text && *w->text) {
-            HFONT f = cgw_font_for(app, w->style.font, w->style.size ? w->style.size : 10, w->style.bold, 0);
+            HFONT f = cgw_font_for(app, w->style.font, w->style.size, w->style.bold, 0);
             HFONT oldf = (HFONT)SelectObject(dc, f ? f : GetStockObject(DEFAULT_GUI_FONT));
             RECT tr = *rc;
             tr.left += cgw_scale_px(app, 12);
