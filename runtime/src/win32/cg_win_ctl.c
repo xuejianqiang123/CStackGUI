@@ -410,6 +410,13 @@ unsigned cg_win_behind_rgb(cg_app_t *app, void *hwnd)
     pw = cg_widget_by_hwnd(app, parent);
     if (pw && (cgw_is_t(pw, "group") || cgw_is_t(pw, "box") || cgw_is_t(pw, "card") || cgw_is_t(pw, "shape"))) {
         if (pw->style.bg != CG_COLOR_NONE) return pw->style.bg;
+        if (cgw_is_t(pw, "card")) {
+            /* 卡片没设底色时自己填的就是系统面色（panel_draw_card_shape 的 facergb 分支），
+             * 子控件的"背后"必须跟它对齐 —— 否则卡片里的无底色 label 按递归拿到页面色，
+             * 灰卡上糊一块页面色方块（2026-09-25 用户截图：卡片里的标签是页面青色底）。 */
+            unsigned face = GetSysColor(COLOR_BTNFACE);
+            return ((face & 0xFFu) << 16) | (face & 0xFF00u) | ((face >> 16) & 0xFFu);
+        }
         /* 父容器没设底色：递归问"它背后是什么"（容器自己画底色用的就是这条递归，
          * cg_win_draw_panel.c 的 behind_rgb_of）。不能去拿窗口类背景刷 —— 那是面板类
          * 注册的 COLOR_BTNFACE+1(#F0F0F0)，口径和容器自绘对不上，容器里每个无底色
