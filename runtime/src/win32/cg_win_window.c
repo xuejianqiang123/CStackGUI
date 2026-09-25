@@ -379,6 +379,12 @@ static void win_shutdown(cg_app_t *app)
             DeleteObject((HGDIOBJ)w->bitmap);
             w->bitmap = NULL;
         }
+        if (w->imglist) {                 /* 表格/列表的图标列表：关窗路径不走 cgw_destroy_native
+             * （cgw_destroy_native 只在单个控件动态删除时调），必须在这里收，
+             * 否则每次关窗漏一个 HIMAGELIST */
+            ImageList_Destroy((HIMAGELIST)w->imglist);
+            w->imglist = NULL;
+        }
     }
     if (g_win_gdip_token) {
         GdiplusShutdown(g_win_gdip_token);
