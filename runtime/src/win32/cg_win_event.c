@@ -268,12 +268,23 @@ LRESULT CALLBACK cgw_FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
                 cg_dispatch(w, wev);
                 g_win_in_notify = 0;
             }
+            /* 四类自绘按钮不擦背景：WM_DRAWITEM 的皮肤画之前会整帧填"背后"色，
+             * 系统擦除却走 WM_CTLCOLORBTN 的默认灰刷，与卡面/页面对不上 ——
+             * 悬停进出、点击换态、sync 失效都会先闪一帧错色
+             * （2026-09-25 用户报"鼠标移到卡片内开关就闪烁"） */
+            if (msg == WM_ERASEBKGND &&
+                (cgw_is_t(w, "button") || cgw_is_t(w, "checkbox") || cgw_is_t(w, "radio") || cgw_is_t(w, "switch")))
+                return 1;
+
             /* 自绘按钮：悬停/按下只影响外观，不派发事件（点击仍走 BN_CLICKED） */
             if (cgw_is_t(w, "button") || cgw_is_t(w, "checkbox") || cgw_is_t(w, "radio") || cgw_is_t(w, "switch")) {
+                /* 失效一律不带擦除：这四种皮肤画之前都会整帧填"背后"色，擦除帧纯属多余
+                 * —— 而擦除走 WM_CTLCOLORBTN 的系统默认灰刷，和卡面/页面对不上，
+                 * 悬停进出就是一帧错色闪一下（2026-09-25 用户报"鼠标移到卡片内开关就闪烁"） */
                 if (msg == WM_LBUTTONDOWN) {
-                    w->pressed = 1; InvalidateRect(hwnd, NULL, TRUE);
+                    w->pressed = 1; InvalidateRect(hwnd, NULL, FALSE);
                 } else if (msg == WM_LBUTTONUP) {
-                    w->pressed = 0; InvalidateRect(hwnd, NULL, TRUE);
+                    w->pressed = 0; InvalidateRect(hwnd, NULL, FALSE);
                 } else if (msg == WM_MOUSEMOVE) {
                     if (!w->hot) {
                         w->hot = 1;
@@ -283,10 +294,10 @@ LRESULT CALLBACK cgw_FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
                         tme.dwFlags = TME_LEAVE;
                         tme.hwndTrack = hwnd;
                         TrackMouseEvent(&tme);
-                        InvalidateRect(hwnd, NULL, TRUE);
+                        InvalidateRect(hwnd, NULL, FALSE);
                     }
                 } else if (msg == WM_MOUSELEAVE) {
-                    w->hot = 0; w->pressed = 0; InvalidateRect(hwnd, NULL, TRUE);
+                    w->hot = 0; w->pressed = 0; InvalidateRect(hwnd, NULL, FALSE);
                 }
             }
         }
