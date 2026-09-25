@@ -100,12 +100,13 @@ HFONT cgw_font_for(cg_app_t *app, const char *family, int size_pt, int bold, int
                                   wf ? wf : L"Microsoft YaHei UI");
         free(wf);
     }
+    /* key 或字体任一分配失败：把这次造出来的字体也还掉，返回 NULL 让调用方走系统默认字体。
+     * 不缓存一个残缺节点（key 为 NULL 时下面 strcmp 会崩，hfont 也没人释放会泄漏）。 */
     if (!node->key || !node->hfont) {
-        /* 分配失败就丢给系统字体，别缓存一个戳不上的 key（strcmp 会崩） */
-        HFONT hf = node->hfont;
+        if (node->hfont) DeleteObject(node->hfont);
         free(node->key);
         free(node);
-        return hf ? hf : NULL;
+        return NULL;
     }
     node->next = st->fonts;
     st->fonts = node;

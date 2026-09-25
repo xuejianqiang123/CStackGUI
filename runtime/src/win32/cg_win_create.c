@@ -141,7 +141,9 @@ void cgw_create_native(cg_widget_t *w)
         HWND t = CreateWindowExW(0, DATETIMEPICK_CLASSW, L"",
                                  WS_CHILD | WS_VISIBLE | WS_TABSTOP | DTS_TIMEFORMAT,
                                  0, 0, 0, 0, parent, NULL, GetModuleHandleW(NULL), NULL);
-        w->native2 = t;
+        /* CreateWindowExW 失败返回 NULL：native2 保持 NULL（其余使用处都有 if 守卫），
+         * 别拿无效句柄去子类化 / 同步，否则刷新或交互会崩。 */
+        if (t) w->native2 = t;
     }
 
     /* 第二个原生窗口也要能报焦点事件 */

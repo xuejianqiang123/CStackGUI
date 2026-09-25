@@ -132,6 +132,18 @@ LRESULT CALLBACK cgw_PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             HDC dc = BeginPaint(hwnd, &ps);
             RECT rc;
             GetClientRect(hwnd, &rc);
+            /* 圆角矩形外的四个角：圆角路径只填内部，四角三角形不会被 cg_skin_fill_round_rect
+             * 覆盖（而且本类 WM_ERASEBKGND 返回 1、不擦背景）。极暗背景上会残留旧像素，
+             * 所以画之前先把整个客户区按"底色"铺一遍——底色和下面圆角填充是同一个值，四角自然干净。 */
+            {
+                unsigned face = GetSysColor(COLOR_BTNFACE);
+                unsigned facergb = ((face & 0xFFu) << 16) | (face & 0xFF00u) | ((face >> 16) & 0xFFu);
+                unsigned base;
+                if (w->style.bg != CG_COLOR_NONE) base = w->style.bg;
+                else if (cgw_is_t(w, "card")) base = facergb;
+                else base = cg_win_behind_rgb(app, hwnd);   /* shape 无底色 = 透出背后 */
+                FillRect(dc, &rc, cgw_brush_for(base));
+            }
             int inset = cgw_scale_px(app, 1);
             COLORREF fillc = (w->style.bg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.bg) : 0;
             COLORREF penc = (w->style.fg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.fg)

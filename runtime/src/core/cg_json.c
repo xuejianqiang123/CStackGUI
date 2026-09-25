@@ -200,21 +200,30 @@ static char *take_string(parser_t *ps)
     return s;
 }
 
-/** @brief 给数组/对象容器追加一个值（对象还要存 key；分配失败静默丢弃） */
-static void push_item(cj_val_t *container, char *key, cj_val_t *item)
+/** @brief 给数组/对象容器追加一个值（对象还要存 key）；OOM 返回 0 并释放入参，
+ *  让调用方把整次解析判失败，而不是"静默丢 item 却返回成功" */
+static int push_item(cj_val_t *container, char *key, cj_val_t *item)
 {
     size_t n = container->count;
     cj_val_t **ni = (cj_val_t **)realloc(container->items, (n + 1) * sizeof(cj_val_t *));
-    if (!ni) return;
+    if (!ni) { free(key); cj_free(item); return 0; }
     container->items = ni;
     container->items[n] = item;
     if (container->type == CJ_OBJ) {
         char **nk = (char **)realloc(container->keys, (n + 1) * sizeof(char *));
-        if (!nk) return;
+        if (!nk) {
+            /* items 已扩出第 n 槽但 count 还没加，items[n] 不会被 cj_free 释放，
+             * 这里自己收掉 item，key 也一并释放，避免泄漏。 */
+            container->items[n] = NULL;
+            cj_free(item);
+            free(key);
+            return 0;
+        }
         container->keys = nk;
         container->keys[n] = key;
     }
     container->count = n + 1;
+    return 1;
 }
 
 /** @brief 解析对象（"key": value, ...）；失败返回 NULL */
@@ -234,7 +243,11 @@ static cj_val_t *parse_object(parser_t *ps)
         ps->p++;
         cj_val_t *val = parse_value(ps);
         if (!val) { free(key); cj_free(obj); return NULL; }
-        push_item(obj, key, val);
+        if (!push_item(obj, key, val)) {
+            cj_free(obj);
+            fail(ps, "out of memory");
+            return NULL;
+        }
         skip_ws(ps);
         if (ps->p < ps->end && *ps->p == ',') { ps->p++; continue; }
         if (ps->p < ps->end && *ps->p == '}') { ps->p++; return obj; }
@@ -255,7 +268,11 @@ static cj_val_t *parse_array(parser_t *ps)
     for (;;) {
         cj_val_t *val = parse_value(ps);
         if (!val) { cj_free(arr); return NULL; }
-        push_item(arr, NULL, val);
+        if (!push_item(arr, NULL, val)) {
+            cj_free(arr);
+            fail(ps, "out of memory");
+            return NULL;
+        }
         skip_ws(ps);
         if (ps->p < ps->end && *ps->p == ',') { ps->p++; continue; }
         if (ps->p < ps->end && *ps->p == ']') { ps->p++; return arr; }

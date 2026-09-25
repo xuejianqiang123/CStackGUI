@@ -284,7 +284,7 @@ static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node
             w->items_dirty = 1;
         }
     }
-    if (n->nodes && n->nnodes) {
+    if (n->nodes && n->nnodes && strcmp(n->type, "tree") == 0) {
         tree_push_doc(w, n->nodes, n->nnodes, -1);
         w->items_dirty = 1;
     }
@@ -510,7 +510,13 @@ void cg_widget_set_value(cg_widget_t *w, int value)
         /* 颜色值不夹取 */
     } else if (!strcmp(w->type, "listbox") || !strcmp(w->type, "combo") || !strcmp(w->type, "tabs")) {
         if (value < 0) value = 0;
-        if (w->nitems > 0 && value > w->nitems - 1) value = w->nitems - 1;
+        if (w->nitems > 0) {
+            if (value > w->nitems - 1) value = w->nitems - 1;
+        } else {
+            /* 空列表没有合法的下标上限：把越界的正数封顶到 0（不当成 -1，也不会落到
+             * items[] 之外），等条目补齐后 0 自然就是一个合法选择。 */
+            if (value > 0) value = 0;
+        }
     } else {
         if (value < w->vmin) value = w->vmin;
         if (value > w->vmax) value = w->vmax;

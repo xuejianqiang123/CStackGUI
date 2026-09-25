@@ -457,8 +457,17 @@ static void browser_recreate(cg_widget_t *w)
     /* 重建出来的是**新 HWND**：建窗只能带 WS_VISIBLE，所以"该不该显示 / 该不该可点"
      * 必须在这里重新落一遍。否则 visible:false、在非当前标签页里、或 enabled:false 的
      * 浏览器，一旦导航触发重建就会自己冒出来、还变得可点 —— 因为这条路径是提前 return 的，
-     * 走不到 sync_widget_body 末尾那两句 apply_visible / EnableWindow（2026-09-23 排查发现）。 */
+     * 走不到 sync_widget_body 末尾那两句 apply_visible / EnableWindow（2026-09-23 排查发现）。
+     * 焦点子类与 tooltip 也得重新挂：原来的那一份挂在旧 HWND 上，旧窗 DestroyWindow 后
+     * 就没了，不补回来刷新后点击 / 悬停就失灵（和 cgw_create_native 的建窗流程对称）。 */
     if (h) {
+        cgw_subclass_for_events(h);
+        {
+            cg_win_state_t *st = (cg_win_state_t *)app->natives;
+            if (st && st->tooltip && w->hint && *w->hint) {
+                cgw_tooltip_add_for(st->tooltip, h);
+            }
+        }
         apply_visible(w);
         EnableWindow(h, w->enabled ? TRUE : FALSE);
     }

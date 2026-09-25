@@ -359,7 +359,10 @@ static void win_shutdown(cg_app_t *app)
             w->native2 = NULL;
         }
     }
-    if (app->hwnd) DestroyWindow((HWND)app->hwnd);
+    /* 窗口可能已在 WM_CLOSE 里 DestroyWindow 过（app->hwnd 仍是旧值、句柄已失效），
+     * 直接再 DestroyWindow 会踩无效句柄。先 IsWindow 判定，销毁后置空避免二次。 */
+    if (app->hwnd && IsWindow((HWND)app->hwnd)) DestroyWindow((HWND)app->hwnd);
+    app->hwnd = NULL;
     if (st->icon) {
         DestroyIcon(st->icon);
         st->icon = NULL;
