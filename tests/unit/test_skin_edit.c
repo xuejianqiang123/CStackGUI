@@ -166,30 +166,59 @@ static int px_is_bg(COLORREF c)
     return GetRValue(c) > 235 && GetGValue(c) > 235 && GetBValue(c) > 235;
 }
 
-/** 扫客户区：返回横贯实心线的条数，并把最高覆盖率打出来（诊断用） */
+/** 扫客户区：返回横贯实心线的条数，并把最高覆盖率/颜色打出来（诊断用）。
+ *  **关键**：先 BitBlt 把整窗抓到离屏位图一次，再扫位图——否则对皮肤编辑框逐像素
+ *  GetPixel 会触发皮肤反复重画（29 万次 × 重画），巨慢且让窗口"无响应"。 */
 static int scan_solid_lines(HWND h, const char *tag)
 {
     RECT rc;
-    HDC  dc = GetDC(h);
+    HDC  dc, mem;
+    HBITMAP bmp;
     int  x0, x1, span, y, hit_max = 0, y_max = -1, lines = 0;
 
-    if (!dc) return -1;
     GetClientRect(h, &rc);
-    x0 = 12;
-    x1 = rc.right - 40;                     /* 避开左内边距与右侧滚动条 */
-    span = x1 - x0;
-    for (y = 4; y < rc.bottom - 4; y++) {
-        int hit = 0, x;
-        for (x = x0; x < x1; x++) {
-            COLORREF c = GetPixel(dc, x, y);
-            if (!px_is_bg(c)) hit++;
+    if (rc.right <= 0 || rc.bottom <= 0) return -1;
+    dc = GetDC(h);
+    if (!dc) return -1;
+    mem = CreateCompatibleDC(dc);
+    bmp = CreateCompatibleBitmap(dc, rc.right, rc.bottom);
+    if (mem && bmp) {
+        HGDIOBJ old = SelectObject(mem, bmp);
+        UpdateWindow(h);                       /* 先保证画完，再抓一次 */
+        BitBlt(mem, 0, 0, rc.right, rc.bottom, dc, 0, 0, SRCCOPY);
+        x0 = 12;
+        x1 = rc.right - 40;                     /* 避开左内边距与右侧滚动条 */
+        span = x1 - x0;
+        for (y = 4; y < rc.bottom - 4; y++) {
+            int hit = 0, x;
+            for (x = x0; x < x1; x++) {
+                COLORREF c = GetPixel(mem, x, y);
+                if (!px_is_bg(c)) hit++;
+            }
+            if (hit > hit_max) { hit_max = hit; y_max = y; }
+            if (span > 0 && hit * 100 >= span * 80) lines++;
         }
-        if (hit > hit_max) { hit_max = hit; y_max = y; }
-        if (span > 0 && hit * 100 >= span * 80) lines++;
+        if (y_max >= 0) {                      /* 把那条线的颜色打出来，判断是皮肤还是 EDIT 自己 */
+            int R = 0, G = 0, B = 0, n = 0, xx;
+            RECT wr;
+            GetWindowRect(h, &wr);
+            for (xx = x0; xx < x1; xx += 37) {
+                COLORREF c = GetPixel(mem, xx, y_max);
+                if (!px_is_bg(c)) { R += GetRValue(c); G += GetGValue(c); B += GetBValue(c); n++; }
+            }
+            printf("        [%s] 最高整行覆盖率 %d%%（y=%d, RGB=%02X%02X%02X, winH=%d, rc=%dx%d）；实心线条数 %d\n",
+                   tag, span > 0 ? hit_max * 100 / span : 0, y_max,
+                   n ? R / n : 0, n ? G / n : 0, n ? B / n : 0,
+                   wr.bottom - wr.top, rc.right, rc.bottom, lines);
+        } else {
+            printf("        [%s] 最高整行覆盖率 %d%%（y=%d, rc=%dx%d）；实心线条数 %d\n",
+                   tag, span > 0 ? hit_max * 100 / span : 0, y_max, rc.right, rc.bottom, lines);
+        }
+        SelectObject(mem, old);
     }
+    if (bmp) DeleteObject(bmp);
+    if (mem) DeleteDC(mem);
     ReleaseDC(h, dc);
-    printf("        [%s] 最高整行覆盖率 %d%%（y=%d）；实心线条数 %d\n",
-           tag, span > 0 ? hit_max * 100 / span : 0, y_max, lines);
     return lines;
 }
 
@@ -317,7 +346,7 @@ static void test_edit_multiline_paint(void)
     w.app     = &app;
     w.style.bg = CG_COLOR_NONE;
     cg_skin_apply_edit(&w);                /* 挂上皮肤再流式（真机组合） */
-    stream_lines(h, 60, 5);                 /* 每 5 轮扫一次，第 25 轮稳抓到实心线 */
+    stream_lines(h, 60, 5);                 /* 每 5 轮扫一次，留足余量抓实心线 */
     cg_test_ok("流式（挂皮肤）跑完没崩", 1);
     DestroyWindow(h);
 

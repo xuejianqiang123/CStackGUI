@@ -299,7 +299,7 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
         if (s->single)
             SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
                          SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-    } else if (msg == WM_PAINT || msg == WM_SETFOCUS || msg == WM_KILLFOCUS || msg == WM_NCPAINT) {
+    } else if (msg == WM_SETFOCUS || msg == WM_KILLFOCUS || msg == WM_NCPAINT) {
         /* WM_NCPAINT 也要跟着画：边框和箭头占的那一列都在非客户区上，
          * 只等 WM_PAINT 的话，"只重画非客户区"的场合（改尺寸、系统重算边框）会留白 */
         LRESULT r;

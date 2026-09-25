@@ -185,6 +185,8 @@ int main(int argc, char **argv)
     const char *grep = NULL;
     int         list_only = 0;
 
+    setvbuf(stdout, NULL, _IONBF, 0);   /* 行级实时落盘：卡死/被杀也能看到最后进度 */
+
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--list") == 0) {
             list_only = 1;
