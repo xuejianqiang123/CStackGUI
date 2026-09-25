@@ -808,12 +808,16 @@ void cg_skin_draw_progress(cg_widget_t *w, HDC hdc, const RECT *rc)
         /* 回退：GDI 圆角矩形 */
         HBRUSH bg = CreateSolidBrush(sk_colorref(0xE6E1E9u));
         HBRUSH fb = CreateSolidBrush(sk_colorref((w->style.fg != CG_COLOR_NONE) ? w->style.fg : 0x6750A4u));
+        HPEN   dp = CreatePen(PS_SOLID, 1, RGB(0xCA, 0xC4, 0xD0));   /* 与 GDI+ 路径一致的浅灰描边，避免默认黑笔 */
         HBRUSH ob = (HBRUSH)SelectObject(hdc, bg);
+        HPEN   op = (HPEN)SelectObject(hdc, dp);
         RoundRect(hdc, x, y, x + wp, y + hp, rad * 2, rad * 2);
         SelectObject(hdc, fb);
         if (fw > 0) RoundRect(hdc, x + 1, y + 1, x + 1 + fw, y + hp - 1, rad * 2, rad * 2);
         SelectObject(hdc, ob);
+        SelectObject(hdc, op);
         DeleteObject(bg);
         DeleteObject(fb);
+        DeleteObject(dp);
     }
 }

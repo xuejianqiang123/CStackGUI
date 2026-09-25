@@ -192,7 +192,7 @@ static void sk_edit_resize(HWND hwnd, sk_edit_sub_t *s)
     s->h = wr.bottom - wr.top;
     if (s->w > 0 && s->h > 0) {
         HRGN rgn = CreateRoundRectRgn(0, 0, s->w, s->h, s->rad * 2, s->rad * 2);
-        if (rgn) { SetWindowRgn(hwnd, rgn, TRUE); DeleteObject(rgn); }
+        if (rgn) SetWindowRgn(hwnd, rgn, TRUE);   /* 系统接管区域所有权，调用方不得再删 */
     }
     if (!s->single) {
         RECT tr;
