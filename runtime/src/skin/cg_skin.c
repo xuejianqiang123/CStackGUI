@@ -715,6 +715,14 @@ LRESULT cg_skin_draw_slider_notify(cg_app_t *app, const NMHDR *hdr)
                 GdipDeletePath(p);
             }
             GdipDeleteGraphics(g);
+        } else {
+            /* 回退：GDI 圆角矩形。GDI+ 起不来时（理论情况）至少把轨道画出来，
+             * 否则返回 CDRF_SKIPDEFAULT 又不画 = 滑块轨道整条消失（2026-09-25 审查发现） */
+            HBRUSH br = CreateSolidBrush(sk_colorref(0xE7E0ECu));
+            HBRUSH ob = (HBRUSH)SelectObject(cd->hdc, br);
+            RoundRect(cd->hdc, cd->rc.left, cd->rc.top, cd->rc.right, cd->rc.bottom, rh, rh);
+            SelectObject(cd->hdc, ob);
+            DeleteObject(br);
         }
         return CDRF_SKIPDEFAULT;
     }
@@ -734,6 +742,13 @@ LRESULT cg_skin_draw_slider_notify(cg_app_t *app, const NMHDR *hdr)
                 GdipDeletePath(p);
             }
             GdipDeleteGraphics(g);
+        } else {
+            /* 回退：GDI 圆角矩形（同轨道，避免 GDI+ 挂掉时滑块钮消失） */
+            HBRUSH br = CreateSolidBrush(sk_colorref(0x6750A4u));
+            HBRUSH ob = (HBRUSH)SelectObject(cd->hdc, br);
+            RoundRect(cd->hdc, cd->rc.left, cd->rc.top, cd->rc.right, cd->rc.bottom, r, r);
+            SelectObject(cd->hdc, ob);
+            DeleteObject(br);
         }
         return CDRF_SKIPDEFAULT;
     }
