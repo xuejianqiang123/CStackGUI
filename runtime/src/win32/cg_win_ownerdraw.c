@@ -200,7 +200,47 @@ static void draw_pagination(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 }
 
 /** WM_DRAWITEM：自绘控件统一分发（绘制本体在 cg_skin.c / 各 draw_* 函数） */
+static void cgw_draw_own_item_impl(cg_app_t *app, const DRAWITEMSTRUCT *dis);  /* 在下面 */
+
+/** @brief owner-draw 统一分发（双缓冲）：整帧画进内存位图后一次贴屏
+ *  @details 各皮肤是"填底 → 画形状 → 画文字"的多步直绘，每步都直接落在屏幕
+ *           DC 上，中间态可见 —— 复选框/开关一重绘，文字先消失一帧再回来，
+ *           悬停/点击的高频重绘下就是肉眼闪烁（2026-09-25 用户报"复选框的
+ *           文字也会闪烁"）。与圆环/标签同一治法：内存位图画好一次 BitBlt。 */
 void cgw_draw_own_item(cg_app_t *app, const DRAWITEMSTRUCT *dis)
+{
+    int wpx, hpx;
+    HDC mem;
+    HBITMAP bmp;
+    HGDIOBJ ob;
+    DRAWITEMSTRUCT d2;
+
+    if (!dis || !dis->hDC) return;
+    wpx = dis->rcItem.right - dis->rcItem.left;
+    hpx = dis->rcItem.bottom - dis->rcItem.top;
+    if (wpx <= 0 || hpx <= 0) return;
+
+    mem = CreateCompatibleDC(dis->hDC);
+    bmp = CreateCompatibleBitmap(dis->hDC, wpx, hpx);
+    if (!mem || !bmp) {                    /* 资源紧张：退回直绘，丑但别不画 */
+        if (mem) DeleteDC(mem);
+        if (bmp) DeleteObject(bmp);
+        cgw_draw_own_item_impl(app, dis);
+        return;
+    }
+    ob = SelectObject(mem, bmp);
+    d2 = *dis;
+    d2.hDC = mem;
+    d2.rcItem.left = 0;    d2.rcItem.top = 0;
+    d2.rcItem.right = wpx; d2.rcItem.bottom = hpx;
+    cgw_draw_own_item_impl(app, &d2);
+    BitBlt(dis->hDC, dis->rcItem.left, dis->rcItem.top, wpx, hpx, mem, 0, 0, SRCCOPY);
+    SelectObject(mem, ob);
+    DeleteObject(bmp);
+    DeleteDC(mem);
+}
+
+static void cgw_draw_own_item_impl(cg_app_t *app, const DRAWITEMSTRUCT *dis)
 {
     cg_widget_t *w = cgw_widget_by_hwnd(app, dis->hwndItem);
 
