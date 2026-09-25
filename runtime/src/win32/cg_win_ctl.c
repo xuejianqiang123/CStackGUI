@@ -165,7 +165,7 @@ void cgw_edit_validate(cg_widget_t *w, HWND hwnd)
     mode = edit_input_mode(w);
     if (mode < 4) return;
     len = GetWindowTextW(hwnd, buf, 128);
-    if (len <= 0 || len >= 128) return;      /* 空 = 没填，合法 */
+    if (len <= 0 || len >= (int)(sizeof(buf) / sizeof(buf[0])) - 1) return;  /* 超长不入校验，防溢出 */
 
     if (mode == 11) {
         if (!cgw_edit_date_ok(buf)) SetWindowTextW(hwnd, L"");

@@ -195,6 +195,10 @@ void cgw_destroy_native(cg_widget_t *w)
         w->item_map = NULL;
         w->item_map_n = 0;
     }
+    if (w->bitmap_src) {                     /* 图片/网页控件的路径或 URL */
+        free(w->bitmap_src);
+        w->bitmap_src = NULL;
+    }
     if (w->native) {
         DestroyWindow((HWND)w->native);
         w->native = NULL;

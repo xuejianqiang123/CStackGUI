@@ -234,6 +234,8 @@ static int app_open(cg_app_t *app, const cg_app_desc_t *desc, int allow_ui)
         free(json);
         if (!doc) {
             fatal_report(allow_ui, "CStackGUI：界面文件（.cgui）格式有误", err);
+            free(app->cgui_path); app->cgui_path = NULL;   /* 解析失败路径别漏放 */
+            free(app->cgui_dir);  app->cgui_dir  = NULL;
             return 3;
         }
         app->doc = *doc;

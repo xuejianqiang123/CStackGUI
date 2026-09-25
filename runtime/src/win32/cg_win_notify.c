@@ -98,6 +98,7 @@ void cgw_notify_body(cg_app_t *app, cg_widget_t *w, HWND hwnd, int code, int cmd
          * 只会拿到恒定旧值，表现为"关掉后就再也打不开"。所以自己取反。 */
         cg_widget_set_checked(w, !w->checked);
         cg_dispatch(w, CG_EVENT_CHANGE);
+        InvalidateRect((HWND)w->native, NULL, TRUE);   /* 键盘切换后重绘，否则视觉停在旧态 */
         return;
     }
     if (!strcmp(w->type, "listbox")) {
