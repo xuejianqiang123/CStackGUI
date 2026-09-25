@@ -171,7 +171,8 @@ void cg_term_write(cg_widget_t *w, int dir, const void *data, int len)
     }
     /* 没裁剪 → 后端走增量追加（见 sync_terminal）；裁过 → 标脏让后端整体重灌，
      * 否则 RichEdit 里最老那行不会被删掉、界面会比上限多显示一行（且持续堆积）。 */
-    if (!trimmed) w->items_dirty = 0;
+    if (trimmed) w->items_dirty = 1;        /* 裁过 → 后端整体重灌，否则最老行删不掉 */
+    else        w->items_dirty = 0;
     cg_widget_sync(w);
 }
 

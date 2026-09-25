@@ -186,6 +186,7 @@ int cg_led_lit(const cg_widget_t *w, unsigned long now_ms)
     if (!w) return 0;
     s = led_state(w);
     if (s != 2) return s == 1;                      /* 灭 = 不亮；亮 = 一直亮 */
+    if (w->period <= 0) return 0;                    /* 已停止闪烁：不再用默认周期假闪 */
     p = (w->period >= 100) ? (unsigned long)w->period : (unsigned long)CG_LED_DEF_PERIOD;
     return ((now_ms % p) < (p / 2)) ? 1 : 0;        /* 前半周期亮、后半周期灭 */
 }

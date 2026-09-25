@@ -17,15 +17,11 @@ void cg_table_rows_grow(cg_widget_t *w, int want)
     if (want > w->row_cap) {
         unsigned char *nc = (unsigned char *)realloc(w->row_checked, (size_t)want);
         int *nv = (int *)realloc(w->row_val, (size_t)want * sizeof(int));
-        if (!nc && !nv) return;   /* 内存不足：两个都没长成，保持原状，别把 row_cap 抬上去 */
-        if (nc) {
-            memset(nc + w->row_cap, 0, (size_t)(want - w->row_cap));
-            w->row_checked = nc;
-        }
-        if (nv) {
-            memset(nv + w->row_cap, 0, (size_t)(want - w->row_cap) * sizeof(int));
-            w->row_val = nv;
-        }
+        if (!nc || !nv) return;   /* 任一个没长成：保持原状，不抬 row_cap，避免越界写 */
+        memset(nc + w->row_cap, 0, (size_t)(want - w->row_cap));
+        w->row_checked = nc;
+        memset(nv + w->row_cap, 0, (size_t)(want - w->row_cap) * sizeof(int));
+        w->row_val = nv;
         w->row_cap = want;
     }
     if (want > w->row_icon_n) {
@@ -47,17 +43,29 @@ void cg_table_rows_grow(cg_widget_t *w, int want)
 int cg_table_add_column(cg_widget_t *w, const char *title, int width)
 {
     cg_col_t *nc;
+    int      old_ncols, new_ncols, r;
 
     if (!w || !want_type(w, "table", "cg_table_add_column")) return -1;
-    nc = (cg_col_t *)realloc(w->cols, ((size_t)w->ncols + 1) * sizeof(cg_col_t));
+    old_ncols = w->ncols;
+    new_ncols = old_ncols + 1;
+    nc = (cg_col_t *)realloc(w->cols, (size_t)new_ncols * sizeof(cg_col_t));
     if (!nc) return -1;
     w->cols = nc;
-    w->cols[w->ncols].title = cg_str_dup(title ? title : "");
-    w->cols[w->ncols].width = width;
-    w->ncols++;
+    w->cols[old_ncols].title = cg_str_dup(title ? title : "");
+    w->cols[old_ncols].width = width;
+
+    /* 已有行的单元格数组都要扩到新列数：否则之后按新列数释放/访问老行会越界 */
+    for (r = 0; r < w->nrows; r++) {
+        char **nr = (char **)realloc(w->rows[r], (size_t)new_ncols * sizeof(char *));
+        if (!nr) return -1;            /* OOM：列已记录但行未全扩，row_cells 不变故仍安全 */
+        w->rows[r] = nr;
+        for (int c = old_ncols; c < new_ncols; c++) nr[c] = cg_str_dup("");
+    }
+    w->ncols = new_ncols;
+    w->row_cells = new_ncols;
     w->items_dirty = 1;
     cg_widget_sync(w);
-    return w->ncols - 1;
+    return old_ncols;
 }
 
 /** @brief 加一行 */

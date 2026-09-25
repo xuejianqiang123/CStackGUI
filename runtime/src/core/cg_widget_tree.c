@@ -32,7 +32,7 @@ int want_type(const cg_widget_t *w, const char *type, const char *who)
 int cg_tree_add(cg_widget_t *w, int parent, const char *text)
 {
     if (!w || !want_type(w, "tree", "cg_tree_add")) return -1;
-    if (parent >= w->ntree) {
+    if (parent < -1 || parent >= w->ntree) {
         fprintf(stderr, "[cstackgui] cg_tree_add: 父节点下标 %d 不存在\n", parent);
         return -1;
     }

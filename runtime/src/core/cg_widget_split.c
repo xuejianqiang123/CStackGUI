@@ -21,7 +21,8 @@
 /** @brief 这个兄弟参与分隔条布局吗（菜单栏 / 时钟没有矩形，跳过） */
 static int split_layout_sibling(const cg_widget_t *s)
 {
-    return s && strcmp(s->type, "menu") != 0 && strcmp(s->type, "timer") != 0;
+    return s && strcmp(s->type, "menu") != 0 && strcmp(s->type, "timer") != 0
+           && strcmp(s->type, "statusbar") != 0;
 }
 
 /** @brief 分隔条是不是竖的：左右分栏 = 竖条（format 缺省）；format == "row" 才是横条 */
