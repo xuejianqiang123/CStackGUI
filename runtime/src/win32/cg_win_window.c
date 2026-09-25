@@ -33,6 +33,12 @@ static DWORD style_of_doc(const cg_doc_t *d, DWORD *exstyle)
         if (!d->max_box) style &= ~WS_MAXIMIZEBOX;
     }
 
+    /* 主窗口必须带 WS_CLIPCHILDREN：否则父窗口 WM_ERASEBKGND 擦背景时会把子控件那块
+     * 也填成窗口底色（见 cgw_MainProc 的 FillRect），而子控件多为自绘/静态、每帧先被底色
+     * 盖一下再重画 —— 表现为"拖滑块时其它控件闪烁"。有这个位后，父窗口擦背景会跳过子
+     * 窗口矩形，子控件各自的 WM_ERASEBKGND 接管，不再闪。 */
+    style |= WS_CLIPCHILDREN;
+
     *exstyle = 0;
     if (d->topmost) *exstyle |= WS_EX_TOPMOST;      /* 总在最前 */
     if (!d->taskbar) *exstyle |= WS_EX_TOOLWINDOW;  /* 不在任务栏出现（Alt-Tab 也不出现） */

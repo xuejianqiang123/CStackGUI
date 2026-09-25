@@ -109,6 +109,16 @@ HFONT cgw_font_for(cg_app_t *app, const char *family, int size_pt, int bold, int
 COLORREF cgw_to_colorref(unsigned c);
 /** @brief 取一个按颜色缓存的实心画刷，供 WM_CTLCOLOR* 返回 */
 HBRUSH cgw_brush_for(unsigned rgb);
+
+/** @brief 双缓冲上屏：fn 把整个控件画进内存位图，再一次 BitBlt 贴到屏幕
+ *  @details 自绘控件分几笔直接画在屏幕 DC 上时，每一笔之间都是可见的中间状态
+ *           （底色先糊上去、内容再一笔一笔出现）——拖滑块 / 拽分隔条 / 实时图表 / 缩放
+ *           窗口这类高频重绘下就是肉眼可见的闪烁。先画进内存位图、最后一次贴上屏，
+ *           中间状态就不会被扫出来。fn 收到的 rc 是内存位图的坐标（左上 0,0）。
+ *           2026-09-25 起，ring/progress/chart/panel/image/splitter 统一走它。
+ */
+void cgw_paint_buffered(HDC dc, const RECT *rc,
+                        void (*fn)(HDC, const RECT *, void *), void *ctx);
 /** @brief 控件类型判断（NULL 安全） */
 int cgw_is_t(const cg_widget_t *w, const char *type);
 /** @brief 是否输入类控件（edit/richtext）；数值框判定见 cg_widget_is_numedit() */

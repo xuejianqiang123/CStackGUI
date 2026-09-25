@@ -4,6 +4,10 @@
  */
 #include "cg_win_internal.h"
 
+/* 图片双缓冲：image_body 定义在文件后面，这里先前置声明 */
+typedef struct { cg_app_t *app; cg_widget_t *w; } image_ctx_t;
+static void image_body(HDC mem, const RECT *rc, void *vctx);
+
 /** 图片控件：按控件大小 StretchBlt，缺图时画占位框 */
 static LRESULT CALLBACK ImageProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
@@ -16,47 +20,11 @@ static LRESULT CALLBACK ImageProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(hwnd, &ps);
         RECT rc;
-        cg_widget_t *w = cgw_widget_by_hwnd(app, hwnd);
+        image_ctx_t ctx;
         GetClientRect(hwnd, &rc);
-
-        if (w && w->bitmap) {
-            BITMAP bm;
-            HDC mem = CreateCompatibleDC(dc);
-            HGDIOBJ old = SelectObject(mem, (HGDIOBJ)w->bitmap);
-            if (GetObjectW((HGDIOBJ)w->bitmap, sizeof(bm), &bm)) {
-                int prev = SetStretchBltMode(dc, HALFTONE);
-                SetBrushOrgEx(dc, 0, 0, NULL);
-                StretchBlt(dc, 0, 0, rc.right - rc.left, rc.bottom - rc.top,
-                           mem, 0, 0, bm.bmWidth, bm.bmHeight, SRCCOPY);
-                SetStretchBltMode(dc, prev);
-            }
-            SelectObject(mem, old);
-            DeleteDC(mem);
-        } else {
-            COLORREF face = cgw_to_colorref(cg_win_behind_rgb(app, hwnd));
-            HBRUSH br = CreateSolidBrush(face);
-            HGDIOBJ oldbr = SelectObject(dc, br);
-            HPEN pen = CreatePen(PS_DASH, 1, RGB(120, 120, 128));
-            HGDIOBJ oldpen = SelectObject(dc, pen);
-            Rectangle(dc, rc.left + 1, rc.top + 1, rc.right - 1, rc.bottom - 1);
-            SelectObject(dc, oldpen);
-            DeleteObject(pen);
-            SelectObject(dc, oldbr);
-            DeleteObject(br);
-
-            SetBkMode(dc, TRANSPARENT);
-            SetTextColor(dc, RGB(90, 90, 96));
-            if (w && w->src && *w->src) {
-                wchar_t *wt = cgw_wc_from_utf8(w->src);
-                if (wt) {
-                    DrawTextW(dc, wt, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_PATH_ELLIPSIS);
-                    free(wt);
-                }
-            } else {
-                const wchar_t *ph = L"图片";
-                DrawTextW(dc, ph, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-            }
-        }
+        ctx.app = app;
+        ctx.w = cgw_widget_by_hwnd(app, hwnd);
+        cgw_paint_buffered(dc, &rc, image_body, &ctx);
         EndPaint(hwnd, &ps);
         return 0;
     }
@@ -99,6 +67,115 @@ void cgw_register_image_class(void)
  * 原生控件里没有圆环进度，这个和 switch 一样是 owner-draw 思路的样板：
  * 自己画在窗口上，所以能吃 style 的颜色，也才能有圆角/圆弧这种原生控件画不出的东西。
  */
+
+/** @brief 传给双缓冲绘制回调的参数 */
+typedef struct {
+    cg_app_t    *app;
+    HWND         hwnd;
+    cg_widget_t *w;
+} canvas_ctx_t;
+
+/** @brief 双缓冲上屏：fn 把整个控件画进内存位图，再一次 BitBlt 贴到屏幕
+ *  @details GDI/GDI+ 分几笔直接画在屏幕 DC 上时，每一笔之间都是可见的中间状态
+ *           （底色先糊上去、内容再一笔一笔出现）——拖滑块这类高频重绘下就是肉眼可见的
+ *           闪烁。先画进内存位图、最后一次贴上屏，中间状态不会被扫出来（2026-09-25
+ *           用户报"拖滑块时标签/进度条/圆环闪烁"后的统一治法，meter/led 同理）。
+ */
+void cgw_paint_buffered(HDC dc, const RECT *rc,
+                        void (*fn)(HDC, const RECT *, void *), void *ctx)
+{
+    int     w = rc->right - rc->left;
+    int     h = rc->bottom - rc->top;
+    HDC     mem = CreateCompatibleDC(dc);
+    HBITMAP bmp = CreateCompatibleBitmap(dc, w, h);
+    HGDIOBJ ob = SelectObject(mem, bmp);
+    RECT    mrc;
+
+    mrc.left = 0; mrc.top = 0; mrc.right = w; mrc.bottom = h;
+    fn(mem, &mrc, ctx);
+    BitBlt(dc, rc->left, rc->top, w, h, mem, 0, 0, SRCCOPY);
+    SelectObject(mem, ob);
+    DeleteObject(bmp);
+    DeleteDC(mem);
+}
+
+/** @brief 图片的一帧：位图按控件大小拉伸，缺图时画占位框 + 文件名/占位文字 */
+static void image_draw(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
+{
+    if (w && w->bitmap) {
+        BITMAP bm;
+        HDC mem = CreateCompatibleDC(dc);
+        HGDIOBJ old = SelectObject(mem, (HGDIOBJ)w->bitmap);
+        if (GetObjectW((HGDIOBJ)w->bitmap, sizeof(bm), &bm)) {
+            int prev = SetStretchBltMode(dc, HALFTONE);
+            SetBrushOrgEx(dc, 0, 0, NULL);
+            StretchBlt(dc, 0, 0, rc->right - rc->left, rc->bottom - rc->top,
+                       mem, 0, 0, bm.bmWidth, bm.bmHeight, SRCCOPY);
+            SetStretchBltMode(dc, prev);
+        }
+        SelectObject(mem, old);
+        DeleteDC(mem);
+    } else {
+        COLORREF face = cgw_to_colorref(cg_win_behind_rgb(app, (void *)w->native));
+        HBRUSH br = CreateSolidBrush(face);
+        HGDIOBJ oldbr = SelectObject(dc, br);
+        HPEN pen = CreatePen(PS_DASH, 1, RGB(120, 120, 128));
+        HGDIOBJ oldpen = SelectObject(dc, pen);
+        Rectangle(dc, rc->left + 1, rc->top + 1, rc->right - 1, rc->bottom - 1);
+        SelectObject(dc, oldpen);
+        DeleteObject(pen);
+        SelectObject(dc, oldbr);
+        DeleteObject(br);
+
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, RGB(90, 90, 96));
+        if (w && w->src && *w->src) {
+            wchar_t *wt = cgw_wc_from_utf8(w->src);
+            if (wt) {
+                DrawTextW(dc, wt, -1, (RECT *)rc,
+                          DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_PATH_ELLIPSIS);
+                free(wt);
+            }
+        } else {
+            const wchar_t *ph = L"图片";
+            DrawTextW(dc, ph, -1, (RECT *)rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        }
+    }
+}
+
+/** @brief 图片一帧适配器：画进内存位图 */
+static void image_body(HDC mem, const RECT *rc, void *vctx)
+{
+    image_ctx_t *c = (image_ctx_t *)vctx;
+    image_draw(c->app, c->w, mem, rc);
+}
+
+static void draw_ring_text(HDC dc, const cg_widget_t *w, const RECT *rc);  /* 定义在下面 */
+
+/** @brief 圆环的一帧：底色/轨道/进度弧（GDI+ 抗锯齿）+ 中心百分比 */
+static void ring_body(HDC mem, const RECT *rc, void *vctx)
+{
+    canvas_ctx_t *c = (canvas_ctx_t *)vctx;
+
+    if (c->w) {
+        cg_skin_draw_ring(c->w, mem, rc);
+        draw_ring_text(mem, c->w, rc);       /* 中心百分比 */
+    } else {
+        FillRect(mem, rc, cgw_brush_for(cg_win_behind_rgb(c->app, c->hwnd)));
+    }
+}
+
+/** @brief 进度条的一帧：浅灰圆角轨道 + 主题紫填充 */
+static void progress_body(HDC mem, const RECT *rc, void *vctx)
+{
+    canvas_ctx_t *c = (canvas_ctx_t *)vctx;
+
+    if (c->w) {
+        cg_skin_draw_progress(c->w, mem, rc);
+    } else {
+        FillRect(mem, rc, cgw_brush_for(cg_win_behind_rgb(c->app, c->hwnd)));
+    }
+}
 /**
  * @brief 画圆环中间那一行百分比文字
  * @param dc 目标 DC；w 控件；rc 客户区
@@ -139,14 +216,11 @@ static LRESULT CALLBACK RingProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(hwnd, &ps);
         RECT rc;
-        cg_widget_t *w = cgw_widget_by_hwnd(app, hwnd);
+        canvas_ctx_t ctx;
         GetClientRect(hwnd, &rc);
-        if (w) {
-            cg_skin_draw_ring(w, dc, &rc);   /* GDI+ 抗锯齿：底色 + 轨道 + 进度弧 */
-            draw_ring_text(dc, w, &rc);      /* 中心百分比 */
-        } else {
-            FillRect(dc, &rc, cgw_brush_for(cg_win_behind_rgb(app, hwnd)));
-        }
+        ctx.app = app; ctx.hwnd = hwnd;
+        ctx.w = cgw_widget_by_hwnd(app, hwnd);
+        cgw_paint_buffered(dc, &rc, ring_body, &ctx);
         EndPaint(hwnd, &ps);
         return 0;
     }
@@ -185,13 +259,11 @@ static LRESULT CALLBACK ProgressProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(hwnd, &ps);
         RECT rc;
-        cg_widget_t *w = cgw_widget_by_hwnd(app, hwnd);
+        canvas_ctx_t ctx;
         GetClientRect(hwnd, &rc);
-        if (w) {
-            cg_skin_draw_progress(w, dc, &rc);
-        } else {
-            FillRect(dc, &rc, cgw_brush_for(cg_win_behind_rgb(app, hwnd)));
-        }
+        ctx.app = app; ctx.hwnd = hwnd;
+        ctx.w = cgw_widget_by_hwnd(app, hwnd);
+        cgw_paint_buffered(dc, &rc, progress_body, &ctx);
         EndPaint(hwnd, &ps);
         return 0;
     }

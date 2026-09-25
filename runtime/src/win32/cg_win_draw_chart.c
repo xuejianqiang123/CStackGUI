@@ -216,11 +216,20 @@ static void chart_paint(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
     }
 }
 
+/** @brief 图表双缓冲回调参数 */
+typedef struct { cg_app_t *app; cg_widget_t *w; } chart_ctx_t;
+
+/** @brief 图表一帧适配器：整张画进内存位图 */
+static void chart_body(HDC mem, const RECT *rc, void *vctx)
+{
+    chart_ctx_t *c = (chart_ctx_t *)vctx;
+    chart_paint(c->app, c->w, mem, rc);
+}
+
 /** @brief 图表窗口过程（自绘，纯显示；没绑任何事件） */
 static LRESULT CALLBACK ChartProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     cg_app_t    *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
-    cg_widget_t *w = cgw_widget_by_hwnd(app, hwnd);
 
     (void)wp;
     (void)lp;
@@ -231,9 +240,13 @@ static LRESULT CALLBACK ChartProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         PAINTSTRUCT ps;
         HDC         dc = BeginPaint(hwnd, &ps);
         RECT        rc;
+        chart_ctx_t ctx;
         GetClientRect(hwnd, &rc);
-        if (w) {
-            chart_paint(app, w, dc, &rc);
+        ctx.app = app;
+        ctx.w = cgw_widget_by_hwnd(app, hwnd);
+        if (ctx.w) {
+            /* 双缓冲：实时图表被 cg_chart_push 高频刷新，多笔直绘会闪 */
+            cgw_paint_buffered(dc, &rc, chart_body, &ctx);
         } else {
             /* 控件还没挂上运行时的那一帧：填个系统面色就行，别去问"背后的颜色" */
             FillRect(dc, &rc, (HBRUSH)(COLOR_BTNFACE + 1));

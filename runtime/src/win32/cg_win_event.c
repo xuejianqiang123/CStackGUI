@@ -128,17 +128,50 @@ LRESULT CALLBACK cgw_FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     }
 
     if (msg == WM_ERASEBKGND && g_win_app) {
-        /* 静态类控件（标签 / 链接 / 分割线）自己不管底色：尤其分割线，系统的 SS_ETCHEDHORZ
+        /* 静态类控件自己不管底色：尤其分割线，系统的 SS_ETCHEDHORZ
          * 连 WM_CTLCOLORSTATIC 都不发，它那块像素还是创建时留下的（窗口底色），
-         * 放进带底色的分组框就是一块窗口色。这里统一按规则擦一遍。 */
+         * 放进带底色的分组框就是一块窗口色。这里统一按规则擦一遍。
+         * 标签例外：标签走下面 WM_PAINT 里的双缓冲整帧重画（底色 + 文字一次上屏），
+         * 这里若再擦一遍就会多出一帧"只有底色没有字"的中间态 —— 拖滑块这类高频
+         * 刷新下就是肉眼可见的文字闪烁（2026-09-25）。 */
         cg_widget_t *ew = cgw_widget_by_hwnd(g_win_app, hwnd);
-        if (ew && (cgw_is_t(ew, "label") || cgw_is_t(ew, "link") || cgw_is_t(ew, "separator"))) {
+        if (ew && cgw_is_t(ew, "label")) return 1;
+        if (ew && (cgw_is_t(ew, "link") || cgw_is_t(ew, "separator"))) {
             RECT rc;
             GetClientRect(hwnd, &rc);
             FillRect((HDC)wp, &rc, (ew->style.bg != CG_COLOR_NONE)
                                       ? cgw_brush_for(ew->style.bg)
                                       : cgw_brush_for(cg_win_behind_rgb(g_win_app, hwnd)));
             return 1;
+        }
+    }
+
+    if (msg == WM_PAINT && g_win_app) {
+        /* 标签：双缓冲整帧重画。先在内存位图里铺底色、再让原生 STATIC 用
+         * WM_PRINTCLIENT 把文字画进同一张位图，最后一次 BitBlt 上屏 —— 擦除与
+         * 绘制之间不再有"底色裸奔"的中间帧（颜色/对齐/省略号全跟系统渲染一致） */
+        cg_widget_t *lw = cgw_widget_by_hwnd(g_win_app, hwnd);
+        if (lw && cgw_is_t(lw, "label")) {
+            PAINTSTRUCT ps;
+            HDC wdc = BeginPaint(hwnd, &ps);
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+            {
+                int wpx = rc.right - rc.left, hpx = rc.bottom - rc.top;
+                HDC     mem = CreateCompatibleDC(wdc);
+                HBITMAP bmp = CreateCompatibleBitmap(wdc, wpx, hpx);
+                HGDIOBJ ob = SelectObject(mem, bmp);
+                FillRect(mem, &rc, (lw->style.bg != CG_COLOR_NONE)
+                                      ? cgw_brush_for(lw->style.bg)
+                                      : cgw_brush_for(cg_win_behind_rgb(g_win_app, hwnd)));
+                SendMessageW(hwnd, WM_PRINTCLIENT, (WPARAM)mem, PRF_CLIENT);
+                BitBlt(wdc, 0, 0, wpx, hpx, mem, 0, 0, SRCCOPY);
+                SelectObject(mem, ob);
+                DeleteObject(bmp);
+                DeleteDC(mem);
+            }
+            EndPaint(hwnd, &ps);
+            return 0;
         }
     }
 

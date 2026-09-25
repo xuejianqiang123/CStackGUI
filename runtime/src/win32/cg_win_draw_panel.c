@@ -78,6 +78,92 @@ static void panel_draw_group(cg_app_t *app, HDC dc, cg_widget_t *w, const RECT *
     }
 }
 
+/** @brief 双缓冲回调参数 */
+typedef struct { cg_app_t *app; cg_widget_t *w; } panel_ctx_t;
+
+/** @brief group/box 一帧适配器：画进内存位图 */
+static void panel_group_body(HDC mem, const RECT *rc, void *vctx)
+{
+    panel_ctx_t *c = (panel_ctx_t *)vctx;
+    panel_draw_group(c->app, mem, c->w, rc);
+}
+
+/** @brief 画卡片/形状：先铺底（清四角），再圆角/椭圆/矩形描边，卡片带标题 */
+static void panel_draw_card_shape(cg_app_t *app, HDC dc, cg_widget_t *w, const RECT *rc)
+{
+    unsigned face = GetSysColor(COLOR_BTNFACE);
+    unsigned facergb = ((face & 0xFFu) << 16) | (face & 0xFF00u) | ((face >> 16) & 0xFFu);
+    unsigned base;
+    if (w->style.bg != CG_COLOR_NONE) base = w->style.bg;
+    else if (cgw_is_t(w, "card")) base = facergb;
+    else base = cg_win_behind_rgb(app, w->native);   /* shape 无底色 = 透出背后 */
+    FillRect(dc, rc, cgw_brush_for(base));
+
+    {
+        int inset = cgw_scale_px(app, 1);
+        COLORREF fillc = (w->style.bg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.bg) : 0;
+        COLORREF penc = (w->style.fg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.fg)
+                                                       : RGB(0xB4, 0xB0, 0xBB);
+        HPEN pen = CreatePen(PS_SOLID, inset ? inset : 1, penc);
+        HGDIOBJ oldpen = SelectObject(dc, pen);
+        HBRUSH br = NULL;
+        HGDIOBJ oldbr;
+        if (cgw_is_t(w, "card") || w->style.bg != CG_COLOR_NONE) {
+            br = CreateSolidBrush((w->style.bg != CG_COLOR_NONE) ? fillc : GetSysColor(COLOR_BTNFACE));
+            oldbr = SelectObject(dc, br);
+        } else {
+            oldbr = SelectObject(dc, GetStockObject(NULL_BRUSH));
+        }
+        if (cgw_is_t(w, "shape") && w->format && strcmp(w->format, "ellipse") == 0) {
+            Ellipse(dc, rc->left + 1, rc->top + 1, rc->right - 1, rc->bottom - 1);
+        } else if (cgw_is_t(w, "shape") && (!w->format || strcmp(w->format, "rect") != 0)) {
+            /* 抗锯齿圆角：GDI 的 RoundRect 没有抗锯齿、圆角会"发毛"（用户报的是徽章/标签片，
+             * 面板圆角是同一个毛病）。形状框没设背景色时**只有描边**，所以填充传 CG_COLOR_NONE。 */
+            int r = cgw_scale_px(app, (w->style.radius > 0) ? w->style.radius : 8);
+            RECT rr = { rc->left + 1, rc->top + 1, rc->right - 1, rc->bottom - 1 };
+            cg_skin_fill_round_rect(dc, &rr, r,
+                                    (w->style.bg != CG_COLOR_NONE) ? w->style.bg : CG_COLOR_NONE,
+                                    (w->style.fg != CG_COLOR_NONE) ? w->style.fg : 0xB4B0BBu,
+                                    (float)(inset ? inset : 1));
+        } else if (cgw_is_t(w, "card")) {
+            int r = cgw_scale_px(app, (w->style.radius > 0) ? w->style.radius : 12);
+            RECT rr = { rc->left + 1, rc->top + 1, rc->right - 1, rc->bottom - 1 };
+            cg_skin_fill_round_rect(dc, &rr, r,
+                                    (w->style.bg != CG_COLOR_NONE) ? w->style.bg : facergb,
+                                    (w->style.fg != CG_COLOR_NONE) ? w->style.fg : 0xB4B0BBu,
+                                    (float)(inset ? inset : 1));
+        } else {
+            Rectangle(dc, rc->left + 1, rc->top + 1, rc->right - 1, rc->bottom - 1);
+        }
+        SelectObject(dc, oldbr);
+        if (br) DeleteObject(br);
+        SelectObject(dc, oldpen);
+        DeleteObject(pen);
+
+        /* 卡片顶部画标题 */
+        if (cgw_is_t(w, "card") && w->text && *w->text) {
+            HFONT f = cgw_font_for(app, w->style.font, w->style.size ? w->style.size : 10, w->style.bold, 0);
+            HFONT oldf = (HFONT)SelectObject(dc, f ? f : GetStockObject(DEFAULT_GUI_FONT));
+            RECT tr = *rc;
+            tr.left += cgw_scale_px(app, 12);
+            tr.top += cgw_scale_px(app, 6);
+            SetBkMode(dc, TRANSPARENT);
+            SetTextColor(dc, (w->style.fg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.fg)
+                                                            : GetSysColor(COLOR_WINDOWTEXT));
+            wchar_t *wt = cgw_wc_from_utf8(w->text);
+            if (wt) { DrawTextW(dc, wt, -1, &tr, DT_LEFT | DT_TOP); free(wt); }
+            SelectObject(dc, oldf);
+        }
+    }
+}
+
+/** @brief card/shape 一帧适配器：画进内存位图 */
+static void panel_card_body(HDC mem, const RECT *rc, void *vctx)
+{
+    panel_ctx_t *c = (panel_ctx_t *)vctx;
+    panel_draw_card_shape(c->app, mem, c->w, rc);
+}
+
 /** @brief 面板窗口过程（group/box/card/shape）：通知上浮主窗口 + card/shape 自绘 */
 LRESULT CALLBACK cgw_PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
@@ -115,94 +201,24 @@ LRESULT CALLBACK cgw_PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
          * 这里再填一遍会把"顶边线以上透出背后"的效果糊掉。 */
         return 1;
     case WM_PAINT: {
-        /* card / shape 画圆角/椭圆边框，group / box 连底色带标题一起画 */
+        /* card / shape 画圆角/椭圆边框，group / box 连底色带标题一起画。
+         * 这几种都分多笔直绘（铺底 / 边框 / 标题），窗口缩放这类高频重绘下会闪，
+         * 故统一走双缓冲（cgw_paint_buffered）一次贴上屏。 */
         cg_widget_t *w = app ? cgw_widget_by_hwnd(app, hwnd) : NULL;
-        if (w && (cgw_is_t(w, "group") || cgw_is_t(w, "box"))) {
+        if (w && (cgw_is_t(w, "group") || cgw_is_t(w, "box") || cgw_is_t(w, "card") || cgw_is_t(w, "shape"))) {
             PAINTSTRUCT ps;
             HDC dc = BeginPaint(hwnd, &ps);
             RECT rc;
+            panel_ctx_t ctx;
             GetClientRect(hwnd, &rc);
-            panel_draw_group(app, dc, w, &rc);
+            ctx.app = app; ctx.w = w;
+            cgw_paint_buffered(dc, &rc,
+                               (cgw_is_t(w, "group") || cgw_is_t(w, "box")) ? panel_group_body : panel_card_body,
+                               &ctx);
             EndPaint(hwnd, &ps);
             return 0;
         }
-        if (!w || (!cgw_is_t(w, "card") && !cgw_is_t(w, "shape"))) break;
-        {
-            PAINTSTRUCT ps;
-            HDC dc = BeginPaint(hwnd, &ps);
-            RECT rc;
-            GetClientRect(hwnd, &rc);
-            /* 圆角矩形外的四个角：圆角路径只填内部，四角三角形不会被 cg_skin_fill_round_rect
-             * 覆盖（而且本类 WM_ERASEBKGND 返回 1、不擦背景）。极暗背景上会残留旧像素，
-             * 所以画之前先把整个客户区按"底色"铺一遍——底色和下面圆角填充是同一个值，四角自然干净。 */
-            {
-                unsigned face = GetSysColor(COLOR_BTNFACE);
-                unsigned facergb = ((face & 0xFFu) << 16) | (face & 0xFF00u) | ((face >> 16) & 0xFFu);
-                unsigned base;
-                if (w->style.bg != CG_COLOR_NONE) base = w->style.bg;
-                else if (cgw_is_t(w, "card")) base = facergb;
-                else base = cg_win_behind_rgb(app, hwnd);   /* shape 无底色 = 透出背后 */
-                FillRect(dc, &rc, cgw_brush_for(base));
-            }
-            int inset = cgw_scale_px(app, 1);
-            COLORREF fillc = (w->style.bg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.bg) : 0;
-            COLORREF penc = (w->style.fg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.fg)
-                                                           : RGB(0xB4, 0xB0, 0xBB);
-            HPEN pen = CreatePen(PS_SOLID, inset ? inset : 1, penc);
-            HGDIOBJ oldpen = SelectObject(dc, pen);
-            HBRUSH br = NULL;
-            HGDIOBJ oldbr;
-            if (cgw_is_t(w, "card") || w->style.bg != CG_COLOR_NONE) {
-                br = CreateSolidBrush((w->style.bg != CG_COLOR_NONE) ? fillc : GetSysColor(COLOR_BTNFACE));
-                oldbr = SelectObject(dc, br);
-            } else {
-                oldbr = SelectObject(dc, GetStockObject(NULL_BRUSH));
-            }
-            if (cgw_is_t(w, "shape") && w->format && strcmp(w->format, "ellipse") == 0) {
-                Ellipse(dc, rc.left + 1, rc.top + 1, rc.right - 1, rc.bottom - 1);
-            } else if (cgw_is_t(w, "shape") && (!w->format || strcmp(w->format, "rect") != 0)) {
-                /* 抗锯齿圆角：GDI 的 RoundRect 没有抗锯齿、圆角会"发毛"（用户报的是徽章/标签片，
-                 * 面板圆角是同一个毛病）。形状框没设背景色时**只有描边**，所以填充传 CG_COLOR_NONE。 */
-                int r = cgw_scale_px(app, (w->style.radius > 0) ? w->style.radius : 8);
-                RECT rr = { rc.left + 1, rc.top + 1, rc.right - 1, rc.bottom - 1 };
-                cg_skin_fill_round_rect(dc, &rr, r,
-                                        (w->style.bg != CG_COLOR_NONE) ? w->style.bg : CG_COLOR_NONE,
-                                        (w->style.fg != CG_COLOR_NONE) ? w->style.fg : 0xB4B0BBu,
-                                        (float)(inset ? inset : 1));
-            } else if (cgw_is_t(w, "card")) {
-                int r = cgw_scale_px(app, (w->style.radius > 0) ? w->style.radius : 12);
-                RECT rr = { rc.left + 1, rc.top + 1, rc.right - 1, rc.bottom - 1 };
-                unsigned face = GetSysColor(COLOR_BTNFACE);   /* COLORREF 是 0x00BBGGRR，这里转 0xRRGGBB */
-                unsigned facergb = ((face & 0xFFu) << 16) | (face & 0xFF00u) | ((face >> 16) & 0xFFu);
-                cg_skin_fill_round_rect(dc, &rr, r,
-                                        (w->style.bg != CG_COLOR_NONE) ? w->style.bg : facergb,
-                                        (w->style.fg != CG_COLOR_NONE) ? w->style.fg : 0xB4B0BBu,
-                                        (float)(inset ? inset : 1));
-            } else {
-                Rectangle(dc, rc.left + 1, rc.top + 1, rc.right - 1, rc.bottom - 1);
-            }
-            SelectObject(dc, oldbr);
-            if (br) DeleteObject(br);
-            SelectObject(dc, oldpen);
-            DeleteObject(pen);
-
-            /* 卡片顶部画标题 */
-            if (cgw_is_t(w, "card") && w->text && *w->text) {
-                HFONT f = cgw_font_for(app, w->style.font, w->style.size ? w->style.size : 10, w->style.bold, 0);
-                HFONT oldf = (HFONT)SelectObject(dc, f ? f : GetStockObject(DEFAULT_GUI_FONT));
-                RECT tr = rc;
-                tr.left += cgw_scale_px(app, 12);
-                tr.top += cgw_scale_px(app, 6);
-                SetBkMode(dc, TRANSPARENT);
-                SetTextColor(dc, (w->style.fg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.fg)
-                                                                : GetSysColor(COLOR_WINDOWTEXT));
-                wchar_t *wt = cgw_wc_from_utf8(w->text);
-                if (wt) { DrawTextW(dc, wt, -1, &tr, DT_LEFT | DT_TOP); free(wt); }
-                SelectObject(dc, oldf);
-            }
-            EndPaint(hwnd, &ps);
-            return 0;
-        }
+        break;
     }
     default:
         break;
@@ -234,6 +250,39 @@ void cgw_register_panel_class(void)
 static int s_split_origin;   /* 按下时鼠标的屏幕坐标（竖条看 x，横条看 y） */
 static int s_split_dragged;  /* 这次拖动真的动过分隔条吗（松手要不要报 release） */
 
+/** @brief 分隔条一帧适配器：画进内存位图（清背后 + 线 + 握点） */
+static void splitter_body(HDC mem, const RECT *rc, void *vctx)
+{
+    panel_ctx_t *c = (panel_ctx_t *)vctx;
+    cg_widget_t *w = c->w;
+
+    /* 先把整块填成"背后"的颜色：分隔条是"没有自己底色"的自绘控件 */
+    cgw_clear_to_behind(w, mem, rc);
+
+    {
+        int vert = cgw_splitter_is_vert(w);
+        int cx = rc->left + (rc->right - rc->left) / 2;
+        int cy = rc->top + (rc->bottom - rc->top) / 2;
+        HBRUSH line = cgw_brush_for(0xCAC4D0);
+        HBRUSH dot  = cgw_brush_for(0x79747E);
+        RECT r = *rc;
+        int i;
+        if (vert) { r.left = cx; r.right = cx + 1; } else { r.top = cy; r.bottom = cy + 1; }
+        FillRect(mem, &r, line);
+        for (i = -1; i <= 1; i++) {
+            RECT d;
+            if (vert) {
+                d.left = cx - 1; d.right = cx + 2;
+                d.top = cy + i * 6 - 1; d.bottom = cy + i * 6 + 2;
+            } else {
+                d.top = cy - 1; d.bottom = cy + 2;
+                d.left = cx + i * 6 - 1; d.right = cx + i * 6 + 2;
+            }
+            FillRect(mem, &d, dot);
+        }
+    }
+}
+
 /** @brief 分隔条窗口过程：拖动改两侧面板尺寸，松手派发一次 release */
 static LRESULT CALLBACK SplitterProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
@@ -247,40 +296,15 @@ static LRESULT CALLBACK SplitterProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC         dc = BeginPaint(hwnd, &ps);
-        RECT        rc, r;
-        HBRUSH      line, dot;
-        int         cx, cy, i, vert;
-
+        RECT        rc;
         GetClientRect(hwnd, &rc);
         if (!w) {
             FillRect(dc, &rc, cgw_brush_for(cg_win_behind_rgb(app, hwnd)));
             EndPaint(hwnd, &ps);
             return 0;
         }
-        /* 先把整块填成"背后"的颜色：分隔条是"没有自己底色"的自绘控件 */
-        cgw_clear_to_behind(w, dc, &rc);
-
-        vert = cgw_splitter_is_vert(w);
-        cx = rc.left + (rc.right - rc.left) / 2;
-        cy = rc.top + (rc.bottom - rc.top) / 2;
-        line = cgw_brush_for(0xCAC4D0);
-        dot  = cgw_brush_for(0x79747E);
-
-        /* 中间一条 1px 的线 + 三个握点，一眼能看出"这里能拖" */
-        r = rc;
-        if (vert) { r.left = cx; r.right = cx + 1; } else { r.top = cy; r.bottom = cy + 1; }
-        FillRect(dc, &r, line);
-        for (i = -1; i <= 1; i++) {
-            RECT d;
-            if (vert) {
-                d.left = cx - 1; d.right = cx + 2;
-                d.top = cy + i * 6 - 1; d.bottom = cy + i * 6 + 2;
-            } else {
-                d.top = cy - 1; d.bottom = cy + 2;
-                d.left = cx + i * 6 - 1; d.right = cx + i * 6 + 2;
-            }
-            FillRect(dc, &d, dot);
-        }
+        /* 双缓冲：拖动分隔条时每帧重画（线 + 握点），多笔直绘会闪 */
+        { panel_ctx_t ctx = { app, w }; cgw_paint_buffered(dc, &rc, splitter_body, &ctx); }
         EndPaint(hwnd, &ps);
         return 0;
     }
