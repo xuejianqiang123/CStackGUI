@@ -31,7 +31,12 @@ static void panel_draw_group(cg_app_t *app, HDC dc, cg_widget_t *w, const RECT *
     if (inset < 1) inset = 1;
     top = has_title ? cgw_scale_px(app, 8) : inset;   /* 顶边线：有标题就让出一条给标题 */
 
-    /* 内区底色（顶边线以上不填，透出背后） */
+    /* 双缓冲下"不画 = 透出背后"不再成立：内存位图是未初始化像素，顶边线以上那条留白
+     * 不填就是一截随机垃圾 —— 表现为标题右侧一条黑横带（2026-09-25 用户截图）。
+     * 先整块清成背后色，内区底色再盖掉标题行以下的部分，留白条才真正透出页面底色。 */
+    cgw_clear_to_behind(w, dc, rc);
+
+    /* 内区底色 */
     {
         RECT b = *rc;
         b.top = top;
@@ -93,11 +98,10 @@ static void panel_draw_card_shape(cg_app_t *app, HDC dc, cg_widget_t *w, const R
 {
     unsigned face = GetSysColor(COLOR_BTNFACE);
     unsigned facergb = ((face & 0xFFu) << 16) | (face & 0xFF00u) | ((face >> 16) & 0xFFu);
-    unsigned base;
-    if (w->style.bg != CG_COLOR_NONE) base = w->style.bg;
-    else if (cgw_is_t(w, "card")) base = facergb;
-    else base = cg_win_behind_rgb(app, w->native);   /* shape 无底色 = 透出背后 */
-    FillRect(dc, rc, cgw_brush_for(base));
+
+    /* 先整块清成"背后色"再画圆角：圆角弧外露出的四角才是页面底色，圆角才真正成立。
+     * 原来直接把整个矩形填成卡片底色，四个圆角外糊着一圈直角色块（2026-09-25 用户报"卡片丑"）。 */
+    cgw_clear_to_behind(w, dc, rc);
 
     {
         int inset = cgw_scale_px(app, 1);
