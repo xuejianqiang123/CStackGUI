@@ -89,6 +89,37 @@ static void test_timer_rearm_same_tick(void)
     cg_timers_clear(APP_A);                 /* 收尾：把还挂着的那颗摘掉 */
 }
 
+/** @brief 同轮注销：一颗定时器的回调里 cg_kill_timer 另一颗，后者本轮绝不触发
+ *         （回归：原先 free 在 fn 之前，被注销/已触发的定时器同轮仍可能被回调，
+ *          回调访问已释放的窗口/控件 → UAF）。 */
+static int s_killer_fired;
+static int s_victim_fired;
+static cg_timer_t *g_victim;
+
+static void cb_victim(void *user) { (void)user; s_victim_fired++; }
+static void cb_killer(void *user)
+{
+    (void)user;
+    s_killer_fired++;
+    cg_kill_timer(g_victim);   /* 同轮注销另一颗，它绝不该再触发 */
+}
+
+static void test_timer_kill_in_tick(void)
+{
+    s_killer_fired = 0;
+    s_victim_fired = 0;
+
+    cg_test_note("---- 同轮被注销的定时器，本轮绝不触发（UAF 防护） ----");
+    /* victim 先挂（链尾），killer 后挂（链头，先被遍历到） */
+    g_victim = cg_set_timer(APP_A, 50, cb_victim, NULL);
+    cg_set_timer(APP_A, 50, cb_killer, NULL);
+    cg_timers_tick(APP_A);
+    cg_test_int("killer 正常触发一次", s_killer_fired, 1);
+    cg_test_int("同轮被注销的 victim 绝不触发", s_victim_fired, 0);
+
+    cg_timers_clear(APP_A);     /* 收尾 */
+}
+
 /** @brief 多应用隔离：tick 只推进自己的，clear 也只清自己的 */
 static void test_timer_two_apps(void)
 {
@@ -124,3 +155,4 @@ static void test_timer_two_apps(void)
 CG_TEST_SUITE("定时器：一次性与 kill", test_timer_basic);
 CG_TEST_SUITE("定时器：回调里重挂不同级触发", test_timer_rearm_same_tick);
 CG_TEST_SUITE("定时器：多应用隔离", test_timer_two_apps);
+CG_TEST_SUITE("定时器：同轮注销绝不触发", test_timer_kill_in_tick);
