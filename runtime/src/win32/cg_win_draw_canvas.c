@@ -33,7 +33,7 @@ static LRESULT CALLBACK ImageProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             SelectObject(mem, old);
             DeleteDC(mem);
         } else {
-            COLORREF face = cgw_to_colorref(cg_win_behind_rgb(w->app, w->native));
+            COLORREF face = cgw_to_colorref(cg_win_behind_rgb(app, hwnd));
             HBRUSH br = CreateSolidBrush(face);
             HGDIOBJ oldbr = SelectObject(dc, br);
             HPEN pen = CreatePen(PS_DASH, 1, RGB(120, 120, 128));

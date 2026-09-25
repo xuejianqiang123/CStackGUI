@@ -194,7 +194,7 @@ static void chart_paint(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
         t.top = plot.bottom - 14; t.bottom = plot.bottom + 4;
         DrawTextW(dc, buf, -1, &t, DT_RIGHT | DT_SINGLELINE);
 
-        for (i = 0; i < n && w->nitems > 0; i++) {
+        for (i = 0; i < n && i < w->nitems; i++) {
             RECT lr;
             int  ly = plot.top + 2 + i * 16;
             lr.left = plot.right + 6; lr.right = plot.right + 14;
