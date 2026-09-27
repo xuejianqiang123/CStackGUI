@@ -307,6 +307,27 @@ int cg_exe_path(char *buf, size_t size)
     return 0;
 }
 
+/** @brief 宽字符 -> UTF-8 堆串（调用方 free）；NULL 进 NULL 出，转换失败也返回 NULL
+ *  @note 后端里另有几处"写进调用方缓冲"的私有版本（cg_win_diag.c / cg_win_dialog.c /
+ *        cg_win_notify.c），签名与新代码要用的这种"返回堆串"不同，**暂未合并** ——
+ *        要合就得一次改三处调用点，留作单独一片更稳。 */
+char *cgw_utf8_from_wcs(const wchar_t *ws)
+{
+    int   need;
+    char *out;
+
+    if (!ws) return NULL;
+    need = WideCharToMultiByte(CP_UTF8, 0, ws, -1, NULL, 0, NULL, NULL);
+    if (need <= 0) return NULL;
+    out = (char *)malloc((size_t)need);
+    if (!out) return NULL;
+    if (WideCharToMultiByte(CP_UTF8, 0, ws, -1, out, need, NULL, NULL) <= 0) {
+        free(out);
+        return NULL;
+    }
+    return out;
+}
+
 /** @brief 毫秒级时基（后端提供），用于双击判定与定时器 */
 unsigned long cg_ticks(void)
 {

@@ -39,6 +39,7 @@ static const char *const k_ev_names[CG_EVENT_COUNT] = {
     [CG_EVENT_SHOW]          = "show",
     [CG_EVENT_HIDE]          = "hide",
     [CG_EVENT_CLOSEQUERY]    = "closequery",
+    [CG_EVENT_DROP]          = "drop",
     [CG_EVENT_MOUSEDOWN]     = "mousedown",
     [CG_EVENT_MOUSEUP]       = "mouseup",
     [CG_EVENT_RDOWN]         = "rdown",
@@ -73,6 +74,61 @@ int cg_event_from_name(const char *name)
  * 回调签名固定三个参数，鼠标/按键/滚轮/托盘的参数没法直接传，
  * 就由后端在派发前写进控件的 ev_* 字段，回调里用下面这些读取。
  */
+
+/* ---- 文件拖放：本次拖进来的路径 ----
+ * 与上面那些 ev_* 字段同一个道理（回调签名固定，参数只能后端先存起来），
+ * 差别只是内容是一串字符串，而且 drop 是**窗口级**事件，所以挂在 app 上而不是控件上。
+ *
+ * 生命周期是**故意的**：后端填 → 派发 drop → 回调返回后清空。
+ * 路径只在回调期间有效，文档里写明了"要留着就在回调里拷走"。
+ */
+
+/** @brief 内部：复制一个字符串（NULL 进 NULL 出） */
+static char *ev_dup(const char *s)
+{
+    size_t n;
+    char  *p;
+
+    if (!s) return NULL;
+    n = strlen(s) + 1;
+    p = (char *)malloc(n);
+    if (p) memcpy(p, s, n);
+    return p;
+}
+
+void cg_app_drop_put(cg_app_t *app, const char *const *paths, int n)
+{
+    int i;
+
+    if (!app) return;
+    for (i = 0; i < app->ndrop; i++) free(app->drop_files[i]);
+    free(app->drop_files);
+    app->drop_files = NULL;
+    app->ndrop = 0;
+    if (!paths || n <= 0) return;
+
+    app->drop_files = (char **)calloc((size_t)n, sizeof(char *));
+    if (!app->drop_files) return;              /* 装不下就当没拖，不让调用方崩 */
+    for (i = 0; i < n; i++) {
+        app->drop_files[i] = ev_dup(paths[i]);
+        if (paths[i] && !app->drop_files[i]) { /* 中途没内存：清干净再退，不留半份清单 */
+            cg_app_drop_put(app, NULL, 0);
+            return;
+        }
+        app->ndrop = i + 1;
+    }
+}
+
+int cg_drop_count(cg_app_t *app)
+{
+    return app ? app->ndrop : 0;
+}
+
+char *cg_drop_file(cg_app_t *app, int index)
+{
+    if (!app || index < 0 || index >= app->ndrop) return NULL;
+    return ev_dup(app->drop_files[index]);
+}
 /** @brief 最近一次鼠标事件的 x（相对窗口客户区）；没有则 0 */
 int cg_event_x(const cg_widget_t *self) { return self ? self->ev_x : 0; }
 /** @brief 最近一次鼠标事件的 y（相对窗口客户区）；没有则 0 */

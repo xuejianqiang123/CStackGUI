@@ -77,6 +77,17 @@ unsigned cgw_theme_text(const cg_app_t *app);
  *         cgw_theme_apply 换主题时对全部控件调） */
 void cgw_theme_widget(cg_widget_t *w);
 
+/* ---------------- cg_win_drop.c：文件拖放 ---------------- */
+
+/** @brief 处理一次 WM_DROPFILES：取路径 -> 填清单 -> 派发 drop 事件 -> 清清单
+ *  @param hdrop 消息带进来的 HDROP（**所有权归系统**，调用方自己 DragFinish） */
+void cgw_win_drop(cg_app_t *app, HDROP hdrop);
+
+/* ---------------- cg_win_util.c ---------------- */
+
+/** @brief 宽字符 -> UTF-8 堆串（调用方 free）；失败 NULL */
+char *cgw_utf8_from_wcs(const wchar_t *ws);
+
 /* ---------------- cg_win_layout.c：余量分配（.cgui 的 grow） ---------------- */
 
 /** @brief 按 .cgui 的 grow 重排窗口里的控件（WM_SIZE 里调，**在派发 size 事件之前**） */

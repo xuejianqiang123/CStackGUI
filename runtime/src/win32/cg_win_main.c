@@ -283,6 +283,14 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             }
         }
         break;
+    case WM_DROPFILES:
+        /* hdrop 的所有权在系统：处理完必须 DragFinish，所以"读路径"和"释放"都收在这一处，
+         * 不让 cgw_win_drop 去管句柄（它只管把路径变成字符串并派发事件）。 */
+        if (app) {
+            cgw_win_drop(app, (HDROP)wp);
+            DragFinish((HDROP)wp);
+        }
+        return 0;
     case WM_THEMECHANGED:
         /* 用户在系统设置里换了浅/深色。**只有 auto 才该跟着变** —— 显式写了
          * dark:true/false 的工程照旧，不然用户设的配色被系统主题悄悄改掉。 */

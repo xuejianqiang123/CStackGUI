@@ -404,6 +404,11 @@ int cgw_win_init(cg_app_t *app)
     if (!app->doc.enabled) EnableWindow(hwnd, FALSE);
     if (app->doc.tray) cg_tray_set(app, NULL, NULL);
 
+    /* 接受"把文件拖进来"：走老的 WM_DROPFILES（cg_win_drop.c 的文件头解释了为什么不上
+     * OLE 拖放）。放在这里而不是建窗口之前 —— 那时 app->hwnd 还没写进去。
+     * 没在 .cgui 里绑 drop 事件时也没什么副作用：拖进来只有一条 INFO 日志。 */
+    DragAcceptFiles((HWND)app->hwnd, TRUE);
+
     /* 创建完毕：控件都建好了、窗口还没显示出来之前派发，
      * 回调里可以调窗口/控件 API（也因此 首次激活 排在它后面）。 */
     cgw_win_emit(app, CG_EVENT_READY);

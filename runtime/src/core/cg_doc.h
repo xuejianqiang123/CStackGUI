@@ -110,6 +110,7 @@ typedef unsigned long long cg_evmask_t;
 #define CG_EV_CHAR          CG_EV_BIT(CG_EVENT_CHAR)
 #define CG_EV_WHEEL         CG_EV_BIT(CG_EVENT_WHEEL)
 #define CG_EV_ARRIVE        CG_EV_BIT(CG_EVENT_ARRIVE)
+#define CG_EV_DROP          CG_EV_BIT(CG_EVENT_DROP)
 
 typedef struct {
     const char *name;      /* .cgui 里 type 字段的写法 */

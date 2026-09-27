@@ -272,6 +272,7 @@ static void app_close(cg_app_t *app)
     free(app->cgui_dir);
     app->cgui_path = NULL;
     app->cgui_dir = NULL;
+    cg_app_drop_put(app, NULL, 0);   /* 拖放路径列表（正常在 drop 回调返回时就已清空） */
     if (cg_backend_active && cg_backend_active->shutdown) cg_backend_active->shutdown(app);
     if (app->doc.root) {      /* 运行时控件会回写节点，先断开再放文档 */
         for (cg_widget_t *w = app->widgets; w; w = w->next) w->node = NULL;

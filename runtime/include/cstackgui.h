@@ -91,6 +91,10 @@ typedef enum {
     CG_EVENT_CHAR,          /* 字符输入 */
     CG_EVENT_WHEEL,         /* 滚轮被滚动 */
     CG_EVENT_SPIN,          /* 调节钮被按下（输入框右侧的上下箭头，delta 是 ±1） */
+    CG_EVENT_DROP,          /* 文件被拖进窗口（窗口级事件，绑在 app.events.drop）。
+                             * 回调里用 cg_drop_count(app) / cg_drop_file(app, i) 取路径 ——
+                             * 路径只在**本次回调期间**有效（回调返回后即释放）。
+                             * 放在枚举末尾：事件值是位下标，插在中间会动到前面所有事件的值。 */
     CG_EVENT_COUNT
 } cg_event_t;
 
@@ -240,6 +244,19 @@ int cg_theme_is_dark(const cg_app_t *app);
  */
 /** 把整个窗口存成 PNG（含标题栏）。成功 1，失败 0（写日志说明原因） */
 int cg_win_screenshot(cg_app_t *app, const char *path);
+
+/* ---- 文件拖放 ----
+ * 把文件从资源管理器拖到窗口上，会派发窗口级事件 **`drop`**（写在 `app.events` 里）：
+ *
+ *     { "app": { "events": { "drop": "on_files_drop" } } }
+ *
+ * 回调里用下面两个函数取路径。**路径只在回调期间有效** —— 回调返回后列表就被清掉了
+ * （要留着就在回调里拷走），所以别把它们存起来延后使用。
+ */
+/** 本次拖进来几个文件（不在 drop 回调里调用 = 0） */
+int cg_drop_count(cg_app_t *app);
+/** 第 index 个文件的完整路径（UTF-8 堆串，用完 cg_free）；越界/不在回调里返回 NULL */
+char *cg_drop_file(cg_app_t *app, int index);
 /** 把**一个控件**的原生窗口存成 PNG（"这个框里到底显示成什么样"取证用）；
  *  日期时间这类两个原生窗口拼的控件，存的是主窗口那个 */
 int cg_widget_screenshot(cg_widget_t *w, const char *path);

@@ -286,6 +286,11 @@ struct cg_app {
      *  建窗口时读系统主题解析（core 不碰注册表）。运行时切换走 cg_theme_set_dark()。
      *  皮肤层画"默认色"时读它（w->app->dark）；控件自己写了 fg/bg 的一律以自己为准。 */
     int          dark;
+    /** 本次"文件被拖进窗口"的路径列表（UTF-8），**只在 CG_EVENT_DROP 的回调期间有效**：
+     *  后端取完路径填进来（cg_app_drop_put）→ 派发 drop 事件 → 回调返回后立刻清掉。
+     *  对外的取用方式是 cg_drop_count(app) / cg_drop_file(app, i)。 */
+    char       **drop_files;
+    int          ndrop;
     cg_widget_t *window;     /* 代表主窗口的伪控件，承接 CG_EVENT_CLOSE */
     int          next_ctrl_id;
     int          next_menu_cmd;
@@ -321,6 +326,12 @@ cg_event_fn cg_resolve_binding(cg_app_t *app, const char *name);
 
 /** 事件派发中枢：后端拿到原生事件后调它 */
 int cg_dispatch(cg_widget_t *w, cg_event_t ev);
+
+/** 装 / 换 / 清空本次"文件拖进窗口"的路径清单（各自复制一份；NULL 或 n<=0 即清空）。
+ *  后端取完路径调它填进来，再派发 CG_EVENT_DROP，回调返回后立刻
+ *  `cg_app_drop_put(app, NULL, 0)` 收掉。对外取用见 cg_drop_count() / cg_drop_file()；
+ *  实现在 cg_event.c（与那条 drop 事件放在一起）。 */
+void cg_app_drop_put(cg_app_t *app, const char *const *paths, int n);
 
 /** 菜单项被点中：记下是哪一项，再给对应控件派发 click。返回 1 表示处理了。
  *  menu 走 WM_COMMAND（lParam 为 0），menubutton 走 TrackPopupMenu 的返回值。 */

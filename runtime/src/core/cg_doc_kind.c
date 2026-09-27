@@ -92,7 +92,7 @@ static const cg_kind_info_t k_kinds[] = {
       CG_EV_TRAY | CG_EV_SHOW | CG_EV_HIDE | CG_EV_CLOSEQUERY |
       CG_EV_MOUSEDOWN | CG_EV_MOUSEUP | CG_EV_DBLCLICK | CG_EV_RDOWN | CG_EV_RUP |
       CG_EV_MOUSEMOVE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS |
-      CG_EV_KEYDOWN | CG_EV_KEYUP | CG_EV_CHAR | CG_EV_WHEEL },
+      CG_EV_KEYDOWN | CG_EV_KEYUP | CG_EV_CHAR | CG_EV_WHEEL | CG_EV_DROP },
 };
 
 #define K_KIND_COUNT (sizeof(k_kinds) / sizeof(k_kinds[0]))
