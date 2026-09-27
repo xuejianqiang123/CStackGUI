@@ -19,8 +19,9 @@
  *                                  这条是探针试出来的、不是猜的
  *          ⇒ 两个 DLL 都是系统自带（Win8 起），取不到就如实返回"没有"，不假装成功。
  *
- *          **不持状态**：每次调用自己开-关句柄（WLAN 那把句柄很便宜）。所以没有"初始化/清理"
- *          这对仪式，也没有全局状态 —— 与 cg_kit 其它部分同一个立场。
+ *          **不用初始化**：WLAN 客户端句柄由本文件**在进程内开一次并复用**（见 wlan_handle 的
+ *          注释 —— 原来"每次调用自己开-关"是错的：那样会让 `WlanCloseHandle` 间歇性崩在
+ *          rpcrt4，且崩点随机）。除这一个句柄外不持任何可变状态。
  *
  *          **不提供"主动扫描"**（试过，撤了）：`WlanScan` 在本机实测返回 **87
  *          （ERROR_INVALID_PARAMETER）** —— 不是权限问题（那会是 5），参数与文档一致却仍失败，
@@ -112,6 +113,33 @@ static int wlan_ready(void)
     return 1;
 }
 
+static HANDLE g_wlan;                 /* 进程内复用的 WLAN 客户端句柄 */
+static DWORD  g_wlan_ver;
+static int    g_wlan_open_failed;     /* 开过一次失败就别每次再试（也别刷日志） */
+
+/** @brief 取（必要时建）WLAN 客户端句柄；返回 NULL = 这块用不了
+ *  @note **为什么不每次调用开-关**（原来就是这么写的，是错的）：实测反复
+ *        `WlanOpenHandle`/`WlanCloseHandle` 会让 `WlanCloseHandle` **间歇性崩在 rpcrt4**
+ *        —— 2026-09-27 用 gdb 抓到确切调用栈：
+ *          `WlanCloseHandle` -> `RpcSsDestroyClientContext` -> `RPCRT4!NDRCContextBinding` -> SIGSEGV
+ *        表现是"随机、位置漂移"的崩溃（早崩在 cg_wifi_count 的 close、晚崩在
+ *        cg_wifi_networks 的 close）⇒ **看日志尾部永远找不到病根**（尾部只是最后被打印的，
+ *        不是崩点）。改成"进程内开一次、复用"后连跑不再出现。
+ *        代价：这一个句柄到进程结束才由系统回收 —— 比"偶尔崩一下"划算得多。 */
+static HANDLE wlan_handle(void)
+{
+    if (!wlan_ready()) return NULL;
+    if (g_wlan) return g_wlan;
+    if (g_wlan_open_failed) return NULL;
+    if (g_wlan_open(2, NULL, &g_wlan_ver, &g_wlan) != 0 || !g_wlan) {
+        g_wlan_open_failed = 1;
+        g_wlan             = NULL;
+        cg_log(CG_LOG_WARN, "无线：WlanOpenHandle 失败（WLAN 服务没起？），WiFi 状态查不了");
+        return NULL;
+    }
+    return g_wlan;
+}
+
 /** @brief 取蓝牙那批符号；取不到返回 0
  *  @note 实测这些符号在 **BluetoothApis.dll**（不在 bthprops.cpl —— 那个只有无线电与设备枚举） */
 static int bt_ready(void)
@@ -169,20 +197,15 @@ static void copy_w(const wchar_t *src, int src_cap, char *dst, int size)
 int cg_wifi_count(void)
 {
     PWLAN_INTERFACE_INFO_LIST list = NULL;
-    HANDLE  h   = NULL;
-    DWORD   ver = 0;
-    int     n   = 0;
+    HANDLE  h;
+    int     n = 0;
 
-    if (!wlan_ready()) return 0;
-    if (g_wlan_open(2, NULL, &ver, &h) != 0 || !h) {
-        cg_log(CG_LOG_WARN, "无线：WlanOpenHandle 失败（WLAN 服务没起？），WiFi 状态查不了");
-        return 0;
-    }
+    h = wlan_handle();
+    if (!h) return 0;
     if (g_wlan_enum(h, NULL, &list) == 0 && list) {
         n = (int)list->dwNumberOfItems;
         g_wlan_free(list);
     }
-    g_wlan_close(h, NULL);
     return n;
 }
 
@@ -197,7 +220,8 @@ int cg_wifi_info(int idx, cg_wifi_info_t *out)
     memset(out, 0, sizeof *out);
     out->signal = -1;
     if (!wlan_ready()) return -1;
-    if (g_wlan_open(2, NULL, &ver, &h) != 0 || !h) return -1;
+    h = wlan_handle();
+    if (!h) return -1;
 
     if (g_wlan_enum(h, NULL, &list) == 0 && list && idx < (int)list->dwNumberOfItems) {
         const WLAN_INTERFACE_INFO *it = &list->InterfaceInfo[idx];
@@ -229,7 +253,6 @@ int cg_wifi_info(int idx, cg_wifi_info_t *out)
         }
     }
     if (list) g_wlan_free(list);
-    g_wlan_close(h, NULL);
     return ret;
 }
 
@@ -244,10 +267,10 @@ int cg_wifi_networks(cg_wifi_net_t *out, int cap, int *count)
     if (count) *count = 0;
     if (!out || cap <= 0) return -1;
     if (!wlan_ready()) return -1;
-    if (g_wlan_open(2, NULL, &ver, &h) != 0 || !h) return -1;
+    h = wlan_handle();
+    if (!h) return -1;
     if (g_wlan_enum(h, NULL, &ilist) != 0 || !ilist || ilist->dwNumberOfItems == 0) {
         if (ilist) g_wlan_free(ilist);
-        g_wlan_close(h, NULL);
         return -1;                       /* 没有无线网卡（本机探针就是这条路径） */
     }
     /* 只看第一块网卡：多网卡同时看周边 AP 意义不大，而且列表会重复 */
@@ -287,7 +310,6 @@ int cg_wifi_networks(cg_wifi_net_t *out, int cap, int *count)
         g_wlan_free(alist);
     }
     g_wlan_free(ilist);
-    g_wlan_close(h, NULL);
     if (count) *count = n;
     return 0;
 }
