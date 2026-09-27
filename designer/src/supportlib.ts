@@ -848,7 +848,7 @@ cg_base_convert("FF", 16, 2, buf, (int)sizeof(buf));   /* -> "11111111" */`,
         ],
       },
       {
-        label: "校验（CRC）",
+        label: "校验（CRC / 哈希）",
         cmds: [
           c("cg_crc32", "CRC32 校验值", "unsigned cg_crc32(const void *data, int len)",
             "IEEE 802.3 / zlib 同一套（多项式 0xEDB88320，初值全 1，末尾取反）。文本 \"123456789\" 的校验值是 0xCBF43926；空输入返回 0", {
@@ -871,6 +871,33 @@ unsigned      crc = cg_crc16(frame, 6);
 frame[6] = (unsigned char)(crc & 0xFF);
 frame[7] = (unsigned char)(crc >> 8);
 cg_serial_write(ser, frame, 8);`,
+            }),
+          c("cg_crc32_file", "算文件的 CRC32", "int cg_crc32_file(const char *path, unsigned *out)",
+            "分块读，不把文件整读进内存（固件镜像几十上百 MB 也能算）；成功才写 out", {
+              params: ["path：文件路径", "out：校验值出口"],
+              ret: "1 = 成功；0 = 打不开或中途读出错（out 不动）",
+              sample: `unsigned crc;
+char *p = cg_path_join(cg_app_dir(), "fw.bin");
+if (cg_crc32_file(p, &crc)) cg_status_set(sb, 0, cg_str_format("CRC32 %08X", crc));
+cg_free(p);`,
+            }),
+          c("cg_hash", "算摘要（MD5 / SHA-1 / SHA-256 / SHA-512）", "char *cg_hash(const void *data, int len, const char *algo)",
+            "返回**小写十六进制**串（记得 cg_free）。算法名大小写不敏感；不认识的名字返回 NULL", {
+              params: ["data / len：数据与长度（len <= 0 按空数据算）", "algo：md5 / sha1 / sha256 / sha512"],
+              ret: "摘要串（32 / 40 / 64 / 128 个字符）；失败 NULL",
+              sample: `const char *txt = cg_widget_text(edt);
+char *h = cg_hash(txt, (int)strlen(txt), "sha256");
+if (h) { cg_log(CG_LOG_INFO, "SHA-256 = %s", h); cg_free(h); }`,
+            }),
+          c("cg_hash_file", "算文件的摘要（核对固件用）", "char *cg_hash_file(const char *path, const char *algo)",
+            "同样分块读，不整读进内存。打不开或中途读出错返回 NULL —— 宁可报失败，也不给一个「看着像」的值", {
+              ret: "小写十六进制摘要串（记得 cg_free）；失败 NULL",
+              sample: `char *fw = cg_path_join(cg_app_dir(), "fw.bin");
+char *h  = cg_hash_file(fw, "md5");
+if (!h) cg_message_box(win, "打不开固件文件", "核对", 0);
+else    cg_status_set(sb, 0, h);
+cg_free(h);
+cg_free(fw);`,
             }),
         ],
       },
