@@ -148,8 +148,11 @@ static void chart_paint(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
     if (w->nitems > 0) plot.right -= right_pad;
     if (plot.right - plot.left < 8 || plot.bottom - plot.top < 8) return;
 
-    /* 网格：4 横 3 竖（浅色，别抢数据的视线） */
-    grid = cgw_brush_for(0xE7E0EC);
+    /* 网格：4 横 3 竖（浅色，别抢数据的视线）。中性灰 ⇒ 跟着主题走：
+     * 深色下原来的浅网格会变成"深底上亮线"，反而抢视线。
+     * 注意它和滑块槽**曾经是同一个值 0xE7E0EC** —— 用途不同、值相同，
+     * 所以"按值 grep 找同类"必然会漏一边（2026-09-27 就是靠像素断言抓到这条的）。 */
+    grid = cgw_brush_for(cg_skin_neutral(w->app, 0xE7E0ECu, 0x2E2B33u));
     for (i = 1; i < 4; i++) {
         RECT r;
         r.left = plot.left; r.right = plot.right;
@@ -170,8 +173,8 @@ static void chart_paint(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
         chart_draw_series(dc, w, i, &plot, k_chart_colors[i % 8], bars);
     }
 
-    /* 边框 */
-    frame = CreatePen(PS_SOLID, 1, RGB(0xB4, 0xB0, 0xBB));
+    /* 边框（中性灰 ⇒ 跟着主题走，否则深色绘图区镶一圈发亮的浅边） */
+    frame = CreatePen(PS_SOLID, 1, cgw_to_colorref(cg_skin_neutral(w->app, 0xB4B0BBu, 0x3D3945u)));
     oldpen = SelectObject(dc, frame);
     SelectObject(dc, GetStockObject(NULL_BRUSH));
     Rectangle(dc, plot.left, plot.top, plot.right, plot.bottom);
@@ -186,7 +189,12 @@ static void chart_paint(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
         RECT    t;
         int     oldmode = SetBkMode(dc, TRANSPARENT);
 
-        SetTextColor(dc, RGB(0x49, 0x45, 0x4F));
+        {   /* 轴标签：没写颜色就按主题给（深色下变浅字）—— 文档里"轴标签跟着变浅"这句
+             * 原先其实不成立（这里写死的是深灰，深底上等于看不见），2026-09-27 补齐。 */
+            unsigned tfg = cgw_theme_text(w->app);
+
+            SetTextColor(dc, tfg != CG_COLOR_NONE ? cgw_to_colorref(tfg) : RGB(0x49, 0x45, 0x4F));
+        }
         _snwprintf(buf, 31, L"%d", w->vmax);
         t.left = rc->left + 2; t.right = plot.left - 4; t.top = plot.top - 4; t.bottom = plot.top + 14;
         DrawTextW(dc, buf, -1, &t, DT_RIGHT | DT_SINGLELINE);
@@ -200,7 +208,11 @@ static void chart_paint(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
             lr.left = plot.right + 6; lr.right = plot.right + 14;
             lr.top = ly + 5;          lr.bottom = ly + 11;
             FillRect(dc, &lr, cgw_brush_for((unsigned)k_chart_colors[i % 8]));
-            SetTextColor(dc, RGB(0x1D, 0x1B, 0x20));
+            {   /* 图例文字：同轴标签，没写颜色时按主题给 */
+                unsigned tfg = cgw_theme_text(w->app);
+
+                SetTextColor(dc, tfg != CG_COLOR_NONE ? cgw_to_colorref(tfg) : RGB(0x1D, 0x1B, 0x20));
+            }
             lr.left = plot.right + 18; lr.right = rc->right - 2;
             lr.top = ly; lr.bottom = ly + 16;
             {

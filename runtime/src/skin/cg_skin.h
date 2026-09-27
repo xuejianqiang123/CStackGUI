@@ -51,6 +51,19 @@ LRESULT cg_skin_draw_slider_notify(cg_app_t *app, const NMHDR *hdr);
 void cg_skin_draw_progress(cg_widget_t *w, HDC hdc, const RECT *rc);
 
 /**
+ * @brief **中性灰部件**（轨道 / 槽 / 描边 / 灭态灯点 / 图表边框）在浅底与深底下的取值
+ * @param app 取它的 dark；可传 NULL（那就当浅色）
+ * @param light 浅色下用的值；dark 深色下用的值（都是 0xRRGGBB，与 style.fg/bg 同一种写法）
+ * @return unsigned 该用的颜色
+ * @details 导出的理由：这类"浅灰细部件"原先写死在**六个地方**（皮肤的圆环轨道 / 滑块槽 /
+ *          进度槽 / 进度描边，win32 的灭态灯点 / 图表边框），值各不相同；深色下就是
+ *          "深底上一条条发亮的浅线"。收成一个函数后，要调只改调用点，不会再漏。
+ *          品牌色填充（按钮 / 勾选 / 开关 / 进度填充的 M3 浅紫）**不**归它管 —— 那些不跟随，
+ *          画在它们上面的文字也就保持深色（见 cg_skin.c 的 sk_default_text 注释）。
+ */
+unsigned cg_skin_neutral(const cg_app_t *app, unsigned light, unsigned dark);
+
+/**
  * @brief 圆环进度（progressring）的轨道 + 进度弧，走 GDI+ 抗锯齿
  * @param w 圆环控件（读 value/vmin/vmax/style）；hdc 目标 DC；rc 客户区矩形
  * @return void 无返回值；中心百分比文字由调用方补（那要用 cg_win_util.c 的 cgw_font_for）

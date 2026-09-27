@@ -143,6 +143,22 @@ static void sk_round_rect(GpPath *p, REAL x, REAL y, REAL w, REAL h, REAL r)
     GdipClosePathFigure(p);
 }
 
+/** @brief **中性灰部件**（轨道 / 槽 / 描边这类）在浅底与深底下的取值
+ *  @param app 取它的 dark；可传 NULL（那就当浅色）
+ *  @param light 浅色下用的值；dark 深色下用的值
+ *  @note 2026-09-27 收拢：这类"浅灰细部件"原先写死在**八处**、值还不尽相同
+ *        （圆环轨道 `0xE0DAE6`、滑块槽 `0xE7E0EC`、进度槽 `0xE6E1E9`、进度描边 `0xCAC4D0`、
+ *         灭态灯点 `0xC0BCC6`、图表边框 `0xB4B0BB`、图表网格 `0xE7E0EC`），
+ *        深色下就是"深底上一条条发亮的浅槽"——深色示例那一路截图里最扎眼的一处。
+ *        与 sk_default_text 同一类教训：同一件事散在多处、且**常量各不相同**，
+ *        按值 grep 根本找不全 ⇒ 收成一个函数，以后要调只改这里。
+ *        （**不**包括品牌色填充：按钮 / 勾选 / 开关 / 进度填充的 M3 浅紫不跟随，
+ *          画在它上面的字也就不跟着变浅 —— 见 sk_default_text 的注释。） */
+unsigned cg_skin_neutral(const cg_app_t *app, unsigned light, unsigned dark)
+{
+    return (app && app->dark) ? dark : light;
+}
+
 /** 控件"背后"是什么颜色（0xRRGGBB）：自绘控件要清掉自身底色时拿它填充。
  *  不能一律填窗口底色 —— 控件在带「背景色」的分组框/容器块里时，那块地方是面板的颜色，
  *  填窗口底色就会露出一块方块（表现为"分组框背景色没生效、反而控件变色"）。 */
@@ -228,7 +244,7 @@ void cg_skin_fill_round_rect(HDC hdc, const RECT *rc, int radius,
 void cg_skin_draw_ring(cg_widget_t *w, HDC hdc, const RECT *rc)
 {
     int width, height, scale, thick, cx, cy, radius, span, val, sweep;
-    unsigned fg, trackc = 0xE0DAE6u;
+    unsigned fg, trackc;
     GpGraphics *g = NULL;
 
     if (!w) return;
@@ -250,6 +266,9 @@ void cg_skin_draw_ring(cg_widget_t *w, HDC hdc, const RECT *rc)
     if (val > w->vmax) val = w->vmax;
     sweep = (int)((long long)(val - w->vmin) * 360 / span);
     fg = (w->style.fg != CG_COLOR_NONE) ? w->style.fg : 0x6750A4u;
+    /* 轨道是中性灰 ⇒ 跟着主题走（否则深色下是一圈发亮的浅环）。填充色（弧）仍是
+     * style.fg 或 M3 主色，**不**跟随 —— 与进度条/仪表盘同一口径。 */
+    trackc = cg_skin_neutral(w->app, 0xE0DAE6u, 0x2E2B33u);
 
     /* 底：设了背景色用它，否则用"背后"的颜色 */
     {
@@ -713,7 +732,11 @@ LRESULT cg_skin_draw_slider_notify(cg_app_t *app, const NMHDR *hdr)
 {
     const NMCUSTOMDRAW *cd = (const NMCUSTOMDRAW *)hdr;
     int rw, rh;
-    (void)app;
+    /* 只请求 item 通知：**不**在这里填背景。
+     * 2026-09-27 实测过两条路（PREPAINT 里填"背后色"；再补 CDRF_SKIPDEFAULT），
+     * 像素断言显示**一个像素都没变** —— 原生 trackbar 那层主题灰底不是从这里画上去的，
+     * 所以拦不住。彻底解决要像 `progress` 那样把控件换成自绘窗口类（连输入一起接管），
+     * 没做；文档里按"槽跟随、画布底不跟随"如实写着。 */
     if (cd->dwDrawStage == CDDS_PREPAINT) return CDRF_NOTIFYITEMDRAW;
     if (cd->dwDrawStage != CDDS_ITEMPREPAINT) return CDRF_DODEFAULT;
 
@@ -728,7 +751,7 @@ LRESULT cg_skin_draw_slider_notify(cg_app_t *app, const NMHDR *hdr)
             if (GdipCreatePath(SK_FILL_WINDING, &p) == SK_GDIP_OK && p) {
                 GpSolidFill *bf = NULL;
                 sk_round_rect(p, (REAL)cd->rc.left, (REAL)cd->rc.top, (REAL)rw, (REAL)rh, (REAL)(rh / 2));
-                if (GdipCreateSolidFill(sk_argb(255, 0xE7E0ECu), &bf) == SK_GDIP_OK && bf) {
+                if (GdipCreateSolidFill(sk_argb(255, cg_skin_neutral(app, 0xE7E0ECu, 0x2E2B33u)), &bf) == SK_GDIP_OK && bf) {
                     GdipFillPath(g, (GpBrush *)bf, p);
                     GdipDeleteBrush((GpBrush *)bf);
                 }
@@ -738,7 +761,7 @@ LRESULT cg_skin_draw_slider_notify(cg_app_t *app, const NMHDR *hdr)
         } else {
             /* 回退：GDI 圆角矩形。GDI+ 起不来时（理论情况）至少把轨道画出来，
              * 否则返回 CDRF_SKIPDEFAULT 又不画 = 滑块轨道整条消失（2026-09-25 审查发现） */
-            HBRUSH br = CreateSolidBrush(sk_colorref(0xE7E0ECu));
+            HBRUSH br = CreateSolidBrush(sk_colorref(cg_skin_neutral(app, 0xE7E0ECu, 0x2E2B33u)));
             HBRUSH ob = (HBRUSH)SelectObject(cd->hdc, br);
             RoundRect(cd->hdc, cd->rc.left, cd->rc.top, cd->rc.right, cd->rc.bottom, rh, rh);
             SelectObject(cd->hdc, ob);
@@ -813,11 +836,11 @@ void cg_skin_draw_progress(cg_widget_t *w, HDC hdc, const RECT *rc)
             GpSolidFill *bf = NULL;
             GpPen *bd = NULL;
             sk_round_rect(p, (REAL)x, (REAL)y, (REAL)wp, (REAL)hp, (REAL)rad);
-            if (GdipCreateSolidFill(sk_argb(255, 0xE6E1E9u), &bf) == SK_GDIP_OK && bf) {
+            if (GdipCreateSolidFill(sk_argb(255, cg_skin_neutral(w->app, 0xE6E1E9u, 0x2E2B33u)), &bf) == SK_GDIP_OK && bf) {
                 GdipFillPath(g, (GpBrush *)bf, p);
                 GdipDeleteBrush((GpBrush *)bf);
             }
-            if (GdipCreatePen1(sk_argb(255, 0xCAC4D0u), 1.0f, SK_UNIT_PIXEL, &bd) == SK_GDIP_OK && bd) {
+            if (GdipCreatePen1(sk_argb(255, cg_skin_neutral(w->app, 0xCAC4D0u, 0x3D3945u)), 1.0f, SK_UNIT_PIXEL, &bd) == SK_GDIP_OK && bd) {
                 GdipDrawPath(g, bd, p);
                 GdipDeletePen(bd);
             }

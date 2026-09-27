@@ -76,8 +76,10 @@ static void led_body(HDC dc, const RECT *rc, int s, void *vctx)
                        : cgw_brush_for(cg_win_behind_rgb(ctx->app, (void *)w->native)));
 
     /* 亮 = style.fg（缺省绿）；灭 = 灰。 */
+    /* 亮 = style.fg（缺省绿）；灭 = 中性灰 —— 那个灰要**跟着主题**：深底上还画一个亮灰点，
+     * 会被读成"亮着"（2026-09-27 把这类中性灰一并收口时发现）。 */
     col = lit ? ((w->style.fg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.fg) : RGB(0x1B, 0x6E, 0x33))
-              : RGB(0xC0, 0xBC, 0xC6);
+              : cgw_to_colorref(cg_skin_neutral(w->app, 0xC0BCC6u, 0x4A4750u));
 
     /* 缩 1px（s 倍）留点余量，免得贴到边界上被裁掉半像素 */
     box.left = rc->left + s;
