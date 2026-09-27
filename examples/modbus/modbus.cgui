@@ -1,0 +1,205 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "Modbus 上位机（cg_modbus 示例）",
+    "width": 900,
+    "height": 640,
+    "bg": "#F3EDF7",
+    "events": {
+      "close": "on_close",
+      "destroy": "on_destroy"
+    },
+    "info": {
+      "product": "CStackGUI Modbus 上位机示例",
+      "desc": "工控向样板：cg_net（Modbus/TCP）连从站，cg_modbus_* 拼帧与解帧，按 MBAP 长度字段切帧后填寄存器表，终端里留完整报文",
+      "version": "1.0.0.0",
+      "author": "CStackGUI"
+    }
+  },
+  "styles": {
+    "label": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20" },
+    "input": { "font": "Microsoft YaHei UI", "size": 10 }
+  },
+  "widgets": [
+    {
+      "id": "lab_host",
+      "type": "label",
+      "rect": { "x": 12, "y": 14, "w": 36, "h": 24 },
+      "text": "地址",
+      "style": "label"
+    },
+    {
+      "id": "edt_host",
+      "type": "edit",
+      "rect": { "x": 52, "y": 12, "w": 130, "h": 26 },
+      "text": "127.0.0.1",
+      "hint": "从站的 IP；本机自测就用 127.0.0.1（配 examples/modbus/mock-slave.mjs 那个模拟从站）",
+      "style": "input"
+    },
+    {
+      "id": "lab_port",
+      "type": "label",
+      "rect": { "x": 190, "y": 14, "w": 36, "h": 24 },
+      "text": "端口",
+      "style": "label"
+    },
+    {
+      "id": "spn_port",
+      "type": "edit",
+      "rect": { "x": 230, "y": 12, "w": 84, "h": 26 },
+      "spin": true,
+      "min": 1,
+      "max": 65535,
+      "value": 1502,
+      "hint": "Modbus/TCP 标准端口是 502，但它要管理员权限；模拟从站默认用 1502",
+      "style": "input"
+    },
+    {
+      "id": "lab_slave",
+      "type": "label",
+      "rect": { "x": 326, "y": 14, "w": 54, "h": 24 },
+      "text": "从站号",
+      "style": "label"
+    },
+    {
+      "id": "spn_slave",
+      "type": "edit",
+      "rect": { "x": 384, "y": 12, "w": 64, "h": 26 },
+      "spin": true,
+      "min": 1,
+      "max": 247,
+      "value": 1,
+      "hint": "Modbus/TCP 里叫「单元标识」，1..247",
+      "style": "input"
+    },
+    {
+      "id": "led_link",
+      "type": "led",
+      "rect": { "x": 466, "y": 14, "w": 20, "h": 20 },
+      "value": 0,
+      "text": "未连接",
+      "style": { "fg": "#1B6E33" }
+    },
+    {
+      "id": "btn_conn",
+      "type": "button",
+      "rect": { "x": 620, "y": 12, "w": 120, "h": 28 },
+      "text": "连接",
+      "events": { "click": "on_connect" }
+    },
+    {
+      "id": "btn_read",
+      "type": "button",
+      "rect": { "x": 750, "y": 12, "w": 136, "h": 28 },
+      "text": "读一次",
+      "events": { "click": "on_read" }
+    },
+
+    {
+      "id": "lab_func",
+      "type": "label",
+      "rect": { "x": 12, "y": 50, "w": 54, "h": 24 },
+      "text": "功能码",
+      "style": "label"
+    },
+    {
+      "id": "cmb_func",
+      "type": "combo",
+      "rect": { "x": 70, "y": 48, "w": 176, "h": 200 },
+      "items": ["03 读保持寄存器", "04 读输入寄存器", "01 读线圈"],
+      "value": 0,
+      "hint": "三种读：保持寄存器（可写，最常用）/ 输入寄存器（只读）/ 线圈（开关量，1 个寄存器位）",
+      "events": { "select": "on_read" }
+    },
+    {
+      "id": "lab_addr",
+      "type": "label",
+      "rect": { "x": 262, "y": 50, "w": 54, "h": 24 },
+      "text": "起始",
+      "style": "label"
+    },
+    {
+      "id": "spn_addr",
+      "type": "edit",
+      "rect": { "x": 320, "y": 48, "w": 74, "h": 26 },
+      "spin": true,
+      "min": 0,
+      "max": 65535,
+      "value": 0,
+      "hint": "起始地址按协议从 0 算（有些手册写 40001，那是「1 基」的叫法，要减 1）",
+      "style": "input"
+    },
+    {
+      "id": "lab_count",
+      "type": "label",
+      "rect": { "x": 406, "y": 50, "w": 36, "h": 24 },
+      "text": "数量",
+      "style": "label"
+    },
+    {
+      "id": "spn_count",
+      "type": "edit",
+      "rect": { "x": 446, "y": 48, "w": 64, "h": 26 },
+      "spin": true,
+      "min": 1,
+      "max": 125,
+      "value": 8,
+      "hint": "一次最多 125 个寄存器（规范上限，cg_modbus_build_read 会拦）",
+      "style": "input"
+    },
+    {
+      "id": "chk_auto",
+      "type": "checkbox",
+      "rect": { "x": 534, "y": 48, "w": 78, "h": 26 },
+      "text": "自动轮询",
+      "events": { "change": "on_auto" }
+    },
+    {
+      "id": "lab_iv",
+      "type": "label",
+      "rect": { "x": 620, "y": 50, "w": 54, "h": 24 },
+      "text": "间隔ms",
+      "style": "label"
+    },
+    {
+      "id": "spn_iv",
+      "type": "edit",
+      "rect": { "x": 678, "y": 48, "w": 84, "h": 26 },
+      "spin": true,
+      "min": 50,
+      "max": 60000,
+      "value": 1000,
+      "hint": "轮询间隔；上位机轮太快会把从站压垮，工控现场一般 200ms~2s",
+      "style": "input"
+    },
+
+    {
+      "id": "tbl_regs",
+      "type": "table",
+      "rect": { "x": 12, "y": 84, "w": 420, "h": 300 },
+      "hint": "最近一次读回来的寄存器；列由 main.c 里的 cg_table_add_column 建"
+    },
+    {
+      "id": "term_log",
+      "type": "terminal",
+      "rect": { "x": 444, "y": 84, "w": 444, "h": 300 },
+      "checked": true,
+      "value": 500,
+      "grow": 1,
+      "hint": "完整报文（带时间戳、按方向着色）；发送的是 HEX、收到的也是 HEX"
+    },
+    {
+      "id": "lab_tip",
+      "type": "label",
+      "rect": { "x": 12, "y": 392, "w": 876, "h": 22 },
+      "text": "自测：node examples/modbus/mock-slave.mjs 1502（另开一个控制台），再点「连接」→「读一次」",
+      "style": "label"
+    },
+    {
+      "id": "sb_main",
+      "type": "statusbar",
+      "rect": { "x": 0, "y": 614, "w": 900, "h": 26 },
+      "items": ["未连接", "成功 0", "失败 0", "等待 0ms"]
+    }
+  ]
+}

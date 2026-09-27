@@ -94,6 +94,10 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
 - `examples\serialterm\` / `examples\netterm\` / `examples\darkterm\` —— **接上真实链路与主题三个**：
   串口助手、网络调试助手，以及**深色主题示例**（`app.dark` + 命名样式 + 一个**运行时切换主题**的按钮）。
   前两个讲"链路上怎么收怎么发"，第三个讲"要为深色写哪套配色、哪些只能自己写死"。
+- `examples\modbus\` —— **工控向样板（Modbus/TCP 上位机）**：`cg_modbus_*` 拼请求帧 / 解响应帧，
+  `cg_net_*` 收发，**按 MBAP 的长度字段切帧**（TCP 是字节流，一次读到的不一定是一整帧），
+  异常响应翻成人话，等回应超时报一句 —— 顺带带了 `mock-slave.mjs`（Node 模拟从站），
+  **不需要任何硬件就能把整条链在本机跑通**：`node examples/modbus/mock-slave.mjs 1502`。
 
 ### 1.3 当前边界
 
@@ -387,6 +391,7 @@ CStackGUI\
     serialterm\                串口助手（串口组件 + 终端/编辑框日志 + 分隔条 + HEX 发送）
     netterm\                   网络调试助手（TCP/UDP + 终端日志 + 角色切换）
     darkterm\                  深色主题示例（app.dark + 命名样式 + 运行时切换主题）
+    modbus\                    Modbus/TCP 上位机（cg_modbus_* 拼帧解帧 + 按长度切帧 + mock-slave.mjs 模拟从站）
   apps\                        你自己的工程（画布导出的默认位置）
     README.md                  这个目录是干嘛的
   build-runtime.bat            编译运行时库
