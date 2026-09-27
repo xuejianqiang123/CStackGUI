@@ -98,9 +98,17 @@ typedef enum {
     CG_EVENT_COUNT
 } cg_event_t;
 
-/** 事件名的规范写法，也是 .cgui 中 events 对象的键名 */
+/**
+ * @brief 事件名的规范写法，也是 .cgui 中 events 对象的键名
+ * @param ev 事件类型
+ * @return const char* 静态字符串，不要 free；任何合法事件都有名字，不会返回 NULL
+ */
 const char *cg_event_name(cg_event_t ev);
-/** 名字反查事件；不认识返回 -1 */
+/**
+ * @brief 名字反查事件
+ * @param name 事件名，与 cg_event_name 的输出一致（小写，如 "click"）
+ * @return int 事件类型；不认识的名字返回 -1
+ */
 int cg_event_from_name(const char *name);
 
 /* ------------------------------------------------------------ 不透明类型 */
@@ -112,10 +120,12 @@ typedef struct cg_widget cg_widget_t;
  *  想给 close 回调传业务数据时用 cg_find(app, CG_WINDOW_ID) 拿到它。 */
 #define CG_WINDOW_ID "__window"
 
-/** 所有控件事件的统一回调签名。
- *  @param self 触发事件的控件（不会是 NULL）
- *  @param ev   事件类型
- *  @param user cg_widget_set_user() 挂上的业务数据，默认 NULL
+/**
+ * @brief 所有控件事件的统一回调签名
+ * @param self 触发事件的控件（不会是 NULL）
+ * @param ev 事件类型
+ * @param user cg_widget_set_user() 挂上的业务数据，默认 NULL
+ * @return void 无返回值
  */
 typedef void (*cg_event_fn)(cg_widget_t *self, cg_event_t ev, void *user);
 
@@ -130,15 +140,41 @@ typedef void (*cg_event_fn)(cg_widget_t *self, cg_event_t ev, void *user);
  *
  * 坐标是相对窗口客户区的逻辑像素；非鼠标事件返回 0。
  */
+/**
+ * @brief 取鼠标事件的 X 坐标
+ * @param self 触发事件的控件
+ * @return int 相对该窗口客户区的 X 坐标（逻辑像素）；非鼠标事件返回 0
+ */
 int cg_event_x(const cg_widget_t *self);
+/**
+ * @brief 取鼠标事件的 Y 坐标
+ * @param self 触发事件的控件
+ * @return int 相对该窗口客户区的 Y 坐标（逻辑像素）；非鼠标事件返回 0
+ */
 int cg_event_y(const cg_widget_t *self);
-/** 功能键状态：1=Ctrl 2=Shift 4=Alt，可位或 */
+/**
+ * @brief 取功能键状态
+ * @param self 触发事件的控件
+ * @return int 1=Ctrl 2=Shift 4=Alt，可位或；非按键事件返回 0
+ */
 int cg_event_keys(const cg_widget_t *self);
-/** 键代码（keydown / keyup 是虚拟键码，char 是字符码） */
+/**
+ * @brief 取键代码
+ * @param self 触发事件的控件
+ * @return int keydown / keyup 是虚拟键码（VK_*），char 是字符码；非按键事件返回 0
+ */
 int cg_event_key(const cg_widget_t *self);
-/** 滚轮滚动量（正数向上）；非滚轮事件返回 0 */
+/**
+ * @brief 取滚轮滚动量
+ * @param self 触发事件的控件
+ * @return int 正数向上、负数向下；非滚轮事件返回 0
+ */
 int cg_event_delta(const cg_widget_t *self);
-/** 托盘动作：1=左键单击 2=左键双击 3=右键单击 */
+/**
+ * @brief 取托盘事件的动作类型
+ * @param self 触发事件的控件
+ * @return int 1=左键单击 2=左键双击 3=右键单击；非托盘事件返回 0
+ */
 int cg_tray_action(const cg_widget_t *self);
 
 /** 名字 -> 函数。表尾必须用 CG_BIND_END 结束。 */
@@ -152,8 +188,13 @@ typedef struct {
 
 /* ---------------------------------------------------------------- 启动 */
 
-/** 界面建好、消息循环开始之前调用一次。
- *  用来挂业务数据（cg_widget_set_user）、做初始检查、按业务状态调初始界面。 */
+/**
+ * @brief 界面建好、消息循环开始之前调用一次的钩子
+ * @param app 当前应用
+ * @param user cg_app_desc_t 里 ready_user 传进来的自定义数据
+ * @return void 无返回值
+ * @note 用来挂业务数据（cg_widget_set_user）、做初始检查、按业务状态调初始界面
+ */
 typedef void (*cg_ready_fn)(cg_app_t *app, void *user);
 
 typedef struct {
@@ -178,48 +219,124 @@ typedef struct {
     void *ready_user;
 } cg_app_desc_t;
 
-/** 建窗口 + 消息循环，返回进程退出码。 */
+/**
+ * @brief 建窗口 + 消息循环
+ * @param desc 启动描述（.cgui 来源、绑定表、钩子等），函数返回前一直要有效
+ * @return int 进程退出码（业务回调里 cg_quit 退出时为 0）
+ */
 int cg_app_run(const cg_app_desc_t *desc);
 
-/** 不开窗的自检：解析 .cgui、打印控件树、对每个绑定了回调的控件合成一次事件。
- *  用于 CI / 命令行确认「文件能解析、回调能命中」。返回 0 表示全部通过。 */
+/**
+ * @brief 不开窗的自检：解析 .cgui、打印控件树、对每个绑定了回调的控件合成一次事件
+ * @param desc 启动描述，语义同 cg_app_run；不需要窗口相关字段
+ * @return int 0 全部通过，非 0 表示有解析失败或回调没命中
+ * @note 用于 CI / 命令行确认「文件能解析、回调能命中」
+ */
 int cg_app_selftest(const cg_app_desc_t *desc);
 
 /* ------------------------------------------------------------ 应用级操作 */
 
-/** 从控件拿到它所属的应用（回调里最常用的第一步） */
+/**
+ * @brief 从控件拿到它所属的应用（回调里最常用的第一步）
+ * @param w 控件
+ * @return cg_app_t* 所属应用；w 为 NULL 时返回 NULL
+ */
 cg_app_t   *cg_app_of(const cg_widget_t *w);
-/** 按 id 找控件（id 在画布「属性」里定，就是 .cgui 里的 id 字段） */
+/**
+ * @brief 按 id 找控件（id 在画布「属性」里定，就是 .cgui 里的 id 字段）
+ * @param app 应用
+ * @param id 控件 id，CG_WINDOW_ID 可拿到窗口伪控件
+ * @return cg_widget_t* 找到的控件，不存在返回 NULL（运行时归它所有，别 free）
+ */
 cg_widget_t *cg_find(cg_app_t *app, const char *id);
-/** 退出消息循环，进程随后结束（退出码 0） */
+/**
+ * @brief 退出消息循环，进程随后结束
+ * @param app 应用
+ * @return void 无返回值（退出码 0）
+ */
 void        cg_quit(cg_app_t *app);
-/** 在窗口的 close 回调里调用：这次不关了（比如"还有没保存的内容"）。
- *  只有 close 回调里调才有意义。 */
+/**
+ * @brief 在窗口的 close 回调里调用：这次不关了
+ * @param app 应用
+ * @return void 无返回值
+ * @note 比如"还有没保存的内容"时用；只有 close 回调里调才有意义
+ */
 void        cg_cancel_close(cg_app_t *app);
+/**
+ * @brief 改窗口标题
+ * @param app 应用
+ * @param title UTF-8 标题，函数内部会拷贝，调用方可以立刻释放
+ * @return void 无返回值
+ */
 void        cg_set_title(cg_app_t *app, const char *title);
-/** 当前有没有真正的窗口（--selftest 不开窗）：回调里想弹对话框之前先问一句，
- *  免得自检/CI 被弹窗卡住。 */
+/**
+ * @brief 当前有没有真正的窗口（--selftest 不开窗）
+ * @param app 应用
+ * @return int 1 有窗口、0 没有（自检/CI 下总是 0）
+ * @note 回调里想弹对话框之前先问一句，免得自检/CI 被弹窗卡住
+ */
 int         cg_app_has_window(const cg_app_t *app);
 
-/** 把 .cgui 文档树打印到 stdout（调试/自检用） */
+/**
+ * @brief 把 .cgui 文档树打印到 stdout
+ * @param app 应用
+ * @return void 无返回值
+ * @note 调试/自检用
+ */
 void cg_dump_doc(cg_app_t *app);
 
 /* ------------------------------------------------------------ 窗口操作
  * 都是运行时改窗口属性；.cgui 的 app 节点里也能写（窗口属性表见 docs/CGUI-FORMAT.md）。
  */
-/** 移动窗口（top-left，屏幕坐标） */
+/**
+ * @brief 移动窗口（top-left，屏幕坐标）
+ * @param app 应用
+ * @param x 目标左边界，屏幕物理外的坐标由系统自己收进可见区
+ * @param y 目标上边界
+ * @return void 无返回值
+ */
 void cg_win_set_pos(cg_app_t *app, int x, int y);
-/** 改窗口客户区尺寸（逻辑像素，和 .cgui 的 width/height 同一套单位） */
+/**
+ * @brief 改窗口客户区尺寸
+ * @param app 应用
+ * @param width 客户区宽（逻辑像素，和 .cgui 的 width 同一套单位）
+ * @param height 客户区高（逻辑像素，和 .cgui 的 height 同一套单位）
+ * @return void 无返回值
+ */
 void cg_win_set_size(cg_app_t *app, int width, int height);
-/** 窗口居中（当前显示器工作区） */
+/**
+ * @brief 窗口居中（当前显示器工作区）
+ * @param app 应用
+ * @return void 无返回值
+ */
 void cg_win_center(cg_app_t *app);
-/** 显示 / 隐藏窗口 */
+/**
+ * @brief 显示 / 隐藏窗口
+ * @param app 应用
+ * @param show 1 显示、0 隐藏
+ * @return void 无返回值
+ */
 void cg_win_show(cg_app_t *app, int show);
-/** 最小化 / 最大化 / 还原：cmd 传 "min" / "max" / "normal" */
+/**
+ * @brief 最小化 / 最大化 / 还原
+ * @param app 应用
+ * @param cmd "min" / "max" / "normal"，认不出来就什么都不做
+ * @return void 无返回值
+ */
 void cg_win_set_state(cg_app_t *app, const char *cmd);
-/** 总在最前（1）或取消（0） */
+/**
+ * @brief 切窗口的"总在最前"
+ * @param app 应用
+ * @param on 1 置顶、0 取消
+ * @return void 无返回值
+ */
 void cg_win_set_topmost(cg_app_t *app, int on);
-/** 改窗口图标（.ico 路径，同 .cgui 里 app.icon 的查找规则）；NULL 还原默认 */
+/**
+ * @brief 改窗口图标
+ * @param app 应用
+ * @param ico_path .ico 路径（同 .cgui 里 app.icon 的查找规则）；NULL 还原默认
+ * @return void 无返回值
+ */
 void cg_win_set_icon(cg_app_t *app, const char *ico_path);
 
 /* ---- 深色模式 ----
@@ -242,7 +359,12 @@ int cg_theme_is_dark(const cg_app_t *app);
  * 存成 **PNG**。走 `PrintWindow`，所以窗口**被挡住或不在前台**也能拿到正确内容；
  * 少数控件不响应时退回抓屏并在日志里说明"这张可能被遮挡"。GDI+ 没起来的机器上返回 0。
  */
-/** 把整个窗口存成 PNG（含标题栏）。成功 1，失败 0（写日志说明原因） */
+/**
+ * @brief 把整个窗口存成 PNG（含标题栏）
+ * @param app 应用
+ * @param path 输出文件路径（UTF-8，目录必须已存在）
+ * @return int 1 成功、0 失败（原因写日志）
+ */
 int cg_win_screenshot(cg_app_t *app, const char *path);
 
 /* ---- 文件拖放 ----
@@ -253,12 +375,27 @@ int cg_win_screenshot(cg_app_t *app, const char *path);
  * 回调里用下面两个函数取路径。**路径只在回调期间有效** —— 回调返回后列表就被清掉了
  * （要留着就在回调里拷走），所以别把它们存起来延后使用。
  */
-/** 本次拖进来几个文件（不在 drop 回调里调用 = 0） */
+/**
+ * @brief 本次拖进来几个文件
+ * @param app 应用
+ * @return int 文件数；不在 drop 回调里调用返回 0
+ */
 int cg_drop_count(cg_app_t *app);
-/** 第 index 个文件的完整路径（UTF-8 堆串，用完 cg_free）；越界/不在回调里返回 NULL */
+/**
+ * @brief 取第 index 个拖入文件的完整路径
+ * @param app 应用
+ * @param index 序号，0 起
+ * @return char * UTF-8 堆串，用完由调用方 cg_free；越界或不在回调里返回 NULL
+ * @note 只在 drop 回调期间有效，要留着就自己拷走
+ */
 char *cg_drop_file(cg_app_t *app, int index);
-/** 把**一个控件**的原生窗口存成 PNG（"这个框里到底显示成什么样"取证用）；
- *  日期时间这类两个原生窗口拼的控件，存的是主窗口那个 */
+/**
+ * @brief 把**一个控件**的原生窗口存成 PNG（"这个框里到底显示成什么样"取证用）
+ * @param w 目标控件
+ * @param path 输出文件路径（UTF-8，目录必须已存在）
+ * @return int 1 成功、0 失败
+ * @note 日期时间这类两个原生窗口拼的控件，存的是主窗口那个
+ */
 int cg_widget_screenshot(cg_widget_t *w, const char *path);
 
 /* ------------------------------------------------------------ 托盘
@@ -266,11 +403,27 @@ int cg_widget_screenshot(cg_widget_t *w, const char *path);
  * 托盘被点（左键单击 / 左键双击 / 右键单击）时派发 window 的 tray 事件，
  * 回调里用 cg_tray_action() 分辨动作。
  */
-/** 建/改托盘图标：ico_path 传 NULL 用窗口图标，tip 传 NULL 用窗口标题 */
+/**
+ * @brief 建 / 改托盘图标
+ * @param app 应用
+ * @param ico_path .ico 路径；NULL 表示用窗口图标
+ * @param tip 悬停提示文字；NULL 表示用窗口标题
+ * @return void 无返回值
+ */
 void cg_tray_set(cg_app_t *app, const char *ico_path, const char *tip);
-/** 移除托盘图标 */
+/**
+ * @brief 移除托盘图标
+ * @param app 应用
+ * @return void 无返回值
+ */
 void cg_tray_remove(cg_app_t *app);
-/** 气泡提示（tip_title / text 都可 NULL） */
+/**
+ * @brief 弹一个托盘气泡提示
+ * @param app 应用
+ * @param tip_title 标题，可为 NULL
+ * @param text 正文，可为 NULL
+ * @return void 无返回值
+ */
 void cg_tray_balloon(cg_app_t *app, const char *tip_title, const char *text);
 
 /* ------------------------------------------------------------ 程序配置（版本信息）
@@ -281,48 +434,187 @@ void cg_tray_balloon(cg_app_t *app, const char *tip_title, const char *text);
  *              "email"/"homepage"/"build"（创建号）
  * 没有的 key 返回 NULL。
  */
+/**
+ * @brief 读程序配置里的一个字段（.cgui 的 app.info，编译时进了 exe 版本信息）
+ * @param app 应用
+ * @param key 字段名，取值见上面一段：product/desc/comments/version/author/company/
+ *            copyright/address/postcode/phone/fax/email/homepage/build
+ * @return const char* 静态字符串，别 free；没有这个 key 返回 NULL
+ */
 const char *cg_app_info(const cg_app_t *app, const char *key);
 
 /* ------------------------------------------------------------ 控件读取 */
 
-/** 控件 id；w 为 NULL 返回 NULL */
+/**
+ * @brief 取控件 id
+ * @param w 控件
+ * @return const char* 控件自己的字符串，别 free；w 为 NULL 返回 NULL
+ */
 const char *cg_widget_id(const cg_widget_t *w);
-/** 控件类型名（"button"/"edit"...） */
+/**
+ * @brief 取控件类型名（"button" / "edit" ...）
+ * @param w 控件
+ * @return const char* 静态字符串，别 free；w 为 NULL 返回 NULL
+ */
 const char *cg_widget_type(const cg_widget_t *w);
-/** 控件当前文字；w 为 NULL 返回 NULL */
+/**
+ * @brief 取控件当前文字
+ * @param w 控件
+ * @return const char* 控件自己的字符串，别 free；文字为空返回空串，w 为 NULL 返回 NULL
+ */
 const char *cg_widget_text(const cg_widget_t *w);
-/** 控件位置与尺寸（逻辑像素，相对父容器） */
+/**
+ * @brief 取控件左边界
+ * @param w 控件
+ * @return int 逻辑像素，相对父容器；w 为 NULL 返回 0
+ */
 int         cg_widget_x(const cg_widget_t *w);
+/**
+ * @brief 取控件上边界
+ * @param w 控件
+ * @return int 逻辑像素，相对父容器；w 为 NULL 返回 0
+ */
 int         cg_widget_y(const cg_widget_t *w);
+/**
+ * @brief 取控件宽度
+ * @param w 控件
+ * @return int 逻辑像素；w 为 NULL 返回 0
+ */
 int         cg_widget_w(const cg_widget_t *w);
+/**
+ * @brief 取控件高度
+ * @param w 控件
+ * @return int 逻辑像素；w 为 NULL 返回 0
+ */
 int         cg_widget_h(const cg_widget_t *w);
-/** 当前状态；w 为 NULL 时 visible/enabled 返回 0，其余返回 0 */
+/**
+ * @brief 控件是否可见
+ * @param w 控件
+ * @return int 1 可见、0 隐藏或 w 为 NULL
+ */
 int         cg_widget_visible(const cg_widget_t *w);
+/**
+ * @brief 控件是否可用
+ * @param w 控件
+ * @return int 1 可用、0 被禁用或 w 为 NULL
+ */
 int         cg_widget_enabled(const cg_widget_t *w);
+/**
+ * @brief 控件是否勾选（checkbox / radio / switch / 勾选列的表格行）
+ * @param w 控件
+ * @return int 1 勾选、0 未勾选或 w 为 NULL
+ */
 int         cg_widget_checked(const cg_widget_t *w);
-/** 当前值（滑块位置 / 列表选中下标 / 标签页页码等） */
+/**
+ * @brief 取控件当前值（滑块位置 / 列表选中下标 / 标签页页码等）
+ * @param w 控件
+ * @return int 当前值；w 为 NULL 返回 0
+ */
 int         cg_widget_value(const cg_widget_t *w);
-/** 当前控件总数（不含窗口伪控件），调试用 */
+/**
+ * @brief 数当前有多少个控件
+ * @param app 应用
+ * @return int 控件总数，不含代表窗口自身的那个伪控件；调试用
+ */
 int         cg_widget_count(const cg_app_t *app);
 
 /* ------------------------------------------------------------ 控件修改
  * 所有 set 都立即反映到界面上（内部做了 Win32 同步），不需要手动刷新。
  */
 
+/**
+ * @brief 改控件文字（同步到界面与文档节点）
+ * @param w 控件
+ * @param text UTF-8 文字，函数内部拷贝，调用方可以立刻释放
+ * @return void 无返回值
+ */
 void cg_widget_set_text(cg_widget_t *w, const char *text);
-/** 多行编辑框滚到最底部（串口监视器那种"新数据始终可见"）；非编辑框 / NULL 空转 */
+/**
+ * @brief 把多行编辑框滚到最底部（串口监视器那种"新数据始终可见"）
+ * @param w 多行 edit 控件
+ * @return void 无返回值；非编辑框或 w 为 NULL 时空转
+ */
 void cg_edit_scroll_end(cg_widget_t *w);
+/**
+ * @brief 一次改控件的位置和尺寸（逻辑像素，相对父容器）
+ * @param w 控件
+ * @param x 目标左边界
+ * @param y 目标上边界
+ * @param width 目标宽度
+ * @param height 目标高度
+ * @return void 无返回值
+ */
 void cg_widget_set_rect(cg_widget_t *w, int x, int y, int width, int height);
+/**
+ * @brief 只改控件位置（尺寸不动）
+ * @param w 控件
+ * @param x 目标左边界，逻辑像素
+ * @param y 目标上边界，逻辑像素
+ * @return void 无返回值
+ */
 void cg_widget_set_pos(cg_widget_t *w, int x, int y);
+/**
+ * @brief 只改控件尺寸（位置不动）
+ * @param w 控件
+ * @param width 目标宽度，逻辑像素
+ * @param height 目标高度，逻辑像素
+ * @return void 无返回值
+ */
 void cg_widget_set_size(cg_widget_t *w, int width, int height);
+/**
+ * @brief 显示 / 隐藏控件
+ * @param w 控件
+ * @param visible 1 显示、0 隐藏（与启用状态无关）
+ * @return void 无返回值
+ */
 void cg_widget_set_visible(cg_widget_t *w, int visible);
+/**
+ * @brief 启用 / 禁用控件
+ * @param w 控件
+ * @param enabled 1 启用、0 禁用
+ * @return void 无返回值
+ * @note 禁用后事件不再派发（引用动作的控件会在下次动作同步时被动作状态覆盖回来）
+ */
 void cg_widget_set_enabled(cg_widget_t *w, int enabled);
+/**
+ * @brief 设置勾选状态（checkbox / radio / switch）
+ * @param w 控件
+ * @param on 1 勾选、0 取消
+ * @return void 无返回值
+ */
 void cg_widget_set_checked(cg_widget_t *w, int on);
-/** 滑块 / 进度条 / 列表选择位置 */
+/**
+ * @brief 设置控件当前值（滑块 / 进度条 / 列表选择位置等）
+ * @param w 控件
+ * @param value 目标值，自动夹到 [vmin, vmax]；"下标即 value"的类型夹到项数范围
+ * @return void 无返回值
+ * @note 数值输入框（edit + 调节器）写的是 value，文本由 value 派生
+ */
 void cg_widget_set_value(cg_widget_t *w, int value);
+/**
+ * @brief 设置取值范围
+ * @param w 控件
+ * @param min 下限
+ * @param max 上限，<= min 时自动抬到 min + 1
+ * @return void 无返回值
+ */
 void cg_widget_set_value_range(cg_widget_t *w, int min, int max);
-/** 前景 / 背景色，0xRRGGBB 或 CG_RGB(r,g,b) */
+/**
+ * @brief 设置前景 / 背景色
+ * @param w 控件
+ * @param fg 文字 / 线条色，0xRRGGBB 或 CG_RGB(r,g,b)；CG_COLOR_NONE 交给系统默认
+ * @param bg 底色，编码同上
+ * @return void 无返回值
+ */
 void cg_widget_set_colors(cg_widget_t *w, unsigned fg, unsigned bg);
+/**
+ * @brief 设置控件字体
+ * @param w 控件
+ * @param family 字体名，NULL 表示回系统 UI 字体
+ * @param size_pt 字号（磅）
+ * @param bold 0 常规、非 0 加粗
+ * @return void 无返回值
+ */
 void cg_widget_set_font(cg_widget_t *w, const char *family, int size_pt, int bold);
 
 /* ------------------------------------------------------------ 控件绑定
@@ -345,73 +637,282 @@ void cg_widget_set_font(cg_widget_t *w, const char *family, int size_pt, int bol
  * 注意：绑定的同步不会触发目标的 change 回调 —— 它是"跟着变"，不是用户操作；
  * 也因此不存在回调互推的死循环。想在被同步时做事，请绑 change 到源控件上。
  */
+/**
+ * @brief 运行时绑定两个控件（覆盖原来 .cgui 里写的绑定）
+ * @param src 源控件（变化的一方）
+ * @param dst 目标控件（跟着 src 走的一方）
+ * @param two_way 非 0 时双向同步；0 只从 src 推到 dst
+ * @return int 0 成功；-1 参数不对（同一个控件、跨应用、控件没有 id）
+ */
 int cg_bind(cg_widget_t *src, cg_widget_t *dst, int two_way);
 
+/**
+ * @brief 取挂在控件上的业务数据
+ * @param w 控件
+ * @return void* cg_widget_set_user 挂上去的指针，运行时只管存不管释放；w 为 NULL 返回 NULL
+ */
 void  *cg_widget_get_user(const cg_widget_t *w);
+/**
+ * @brief 挂业务数据到控件
+ * @param w 控件
+ * @param user 任意业务数据指针，回调里的 user 参数就是它；运行时不会释放它
+ * @return void 无返回值
+ */
 void   cg_widget_set_user(cg_widget_t *w, void *user);
 
 /* ------------------------------------------------------ 列表类控件
  * 作用于 listbox / combo / tabs（标签文字）/ statusbar（分段文字）：
  * 内部保存一份字符串表，改完界面自动刷新。
  */
+/**
+ * @brief 给列表类控件追加一个条目
+ * @param w 目标控件（listbox / combo / tabs / statusbar / toolbar）
+ * @param item 条目文字，函数内部拷贝
+ * @return int 新条目下标；控件类型不对或没内存返回 -1
+ */
 int  cg_widget_list_add(cg_widget_t *w, const char *item);
+/**
+ * @brief cg_widget_list_add 的 printf 版本
+ * @param w 目标控件
+ * @param fmt printf 风格格式串
+ * @return int 新条目下标；失败返回 -1
+ */
 int  cg_widget_list_addf(cg_widget_t *w, const char *fmt, ...);
+/**
+ * @brief 清空列表类控件的全部条目
+ * @param w 目标控件
+ * @return void 无返回值
+ */
 void cg_widget_list_clear(cg_widget_t *w);
+/**
+ * @brief 列表条目数
+ * @param w 目标控件
+ * @return int 条目数；w 为 NULL 返回 0
+ */
 int  cg_widget_list_count(const cg_widget_t *w);
+/**
+ * @brief 取第 index 个条目文字
+ * @param w 目标控件
+ * @param index 下标，0 起
+ * @return const char* 控件内部的字符串，别 free；越界返回 NULL
+ */
 const char *cg_widget_list_item(const cg_widget_t *w, int index);
-/** 让列表滚到最后一项（日志类控件常用） */
+/**
+ * @brief 让列表滚到最后一项
+ * @param w 目标控件
+ * @return void 无返回值
+ * @note 日志类控件常用
+ */
 void cg_widget_list_scroll_bottom(cg_widget_t *w);
 
 /* ---------------------------------------------------------------- 树 */
-/** 加一个树节点；parent 传 -1 表示加在根上。返回节点下标（大于等于 0），失败返回 -1。 */
+/**
+ * @brief 给树加一个节点
+ * @param w tree 控件
+ * @param parent 父节点下标；-1 表示加在根上
+ * @param text 节点文字，函数内部拷贝
+ * @return int 节点下标（大于等于 0）；失败返回 -1
+ */
 int  cg_tree_add(cg_widget_t *w, int parent, const char *text);
+/**
+ * @brief cg_tree_add 的 printf 版本
+ * @param w tree 控件
+ * @param parent 父节点下标；-1 表示加在根上
+ * @param fmt printf 风格格式串
+ * @return int 节点下标；失败返回 -1
+ */
 int  cg_tree_addf(cg_widget_t *w, int parent, const char *fmt, ...);
+/**
+ * @brief 清空树的全部节点
+ * @param w tree 控件
+ * @return void 无返回值（整树重建实现，选中态复位）
+ */
 void cg_tree_clear(cg_widget_t *w);
+/**
+ * @brief 树节点总数
+ * @param w tree 控件
+ * @return int 节点数；非 tree 控件返回 0
+ */
 int  cg_tree_count(const cg_widget_t *w);
+/**
+ * @brief 取第 item 个节点的文字
+ * @param w tree 控件
+ * @param item 节点下标，0 起
+ * @return const char* 控件内部的字符串，别 free；越界返回 NULL
+ */
 const char *cg_tree_item_text(const cg_widget_t *w, int item);
-/** 当前选中的节点下标，没选中返回 -1 */
+/**
+ * @brief 取当前选中的节点下标
+ * @param w tree 控件
+ * @return int 节点下标；没选中返回 -1
+ */
 int  cg_tree_selected(const cg_widget_t *w);
+/**
+ * @brief 取当前选中节点的文字
+ * @param w tree 控件
+ * @return const char* 控件内部的字符串，别 free；没选中返回 NULL
+ */
 const char *cg_tree_selected_text(const cg_widget_t *w);
+/**
+ * @brief 展开 / 折叠某个节点
+ * @param w tree 控件
+ * @param item 节点下标
+ * @param expand 1 展开、0 折叠；越界忽略
+ * @return void 无返回值
+ */
 void cg_tree_expand(cg_widget_t *w, int item, int expand);
 
 /* ---------------------------------------------------------------- 表格 */
-/** 加一列；width 传 0 表示按控件宽度均分。返回列号，失败返回 -1。 */
+/**
+ * @brief 给表格加一列
+ * @param w table 控件
+ * @param title 列标题，函数内部拷贝
+ * @param width 列宽（逻辑像素）；传 0 表示按控件宽度均分
+ * @return int 列号；失败返回 -1
+ */
 int  cg_table_add_column(cg_widget_t *w, const char *title, int width);
-/** 加一行；cells 是列数个字符串，不足的列按空串处理。返回行号，失败返回 -1。 */
+/**
+ * @brief 给表格加一行
+ * @param w table 控件
+ * @param cells 列数个字符串；不足的列按空串处理，不释放也不接管这些指针
+ * @param ncells cells 的个数
+ * @return int 行号；失败返回 -1
+ */
 int  cg_table_add_row(cg_widget_t *w, const char *const *cells, int ncells);
+/**
+ * @brief 清空表格全部行
+ * @param w table 控件
+ * @return void 无返回值（列保留）
+ */
 void cg_table_clear(cg_widget_t *w);
+/**
+ * @brief 表格行数
+ * @param w table 控件
+ * @return int 行数；非 table 控件返回 0
+ */
 int  cg_table_row_count(const cg_widget_t *w);
+/**
+ * @brief 取某行某列的文字
+ * @param w table 控件
+ * @param row 行号，0 起
+ * @param col 列号，0 起
+ * @return const char* 控件内部的字符串，别 free；越界返回 NULL
+ */
 const char *cg_table_cell(const cg_widget_t *w, int row, int col);
-/** 当前选中行，没选中返回 -1 */
+/**
+ * @brief 取当前选中行
+ * @param w table 控件
+ * @return int 最后一次点击的行号；没选中返回 -1
+ */
 int  cg_table_selected(const cg_widget_t *w);
 
 /* ------------------------------------------------------------ 表格（增强） */
 
-/** 表格行数值 / 勾选 / 行图标（row 从 0 起）。
- *  勾选需要 .cgui 里 table 开了 check（显示复选框列）；勾选变化触发 check 事件。 */
+/**
+ * @brief 给表格某行绑一个整数值（行数据，不显示）
+ * @param w table 控件
+ * @param row 行号，0 起
+ * @param value 要存的整数
+ * @return int 0 成功、-1 参数不对
+ */
 int  cg_table_set_row_value(cg_widget_t *w, int row, int value);
+/**
+ * @brief 取表格某行绑的整数值
+ * @param w table 控件
+ * @param row 行号，0 起
+ * @return int 之前存的整数；参数不对返回 0
+ */
 int  cg_table_row_value(const cg_widget_t *w, int row);
+/**
+ * @brief 设置表格某行的勾选状态
+ * @param w table 控件（.cgui 里 table 要开 check 才有复选框列）
+ * @param row 行号，0 起
+ * @param on 1 勾上、0 取消
+ * @return void 无返回值
+ * @note 程序设置的勾选**不触发** check 事件；勾选变化触发 check 事件
+ */
 void cg_table_set_checked(cg_widget_t *w, int row, int on);
+/**
+ * @brief 取表格某行的勾选状态
+ * @param w table 控件
+ * @param row 行号，0 起
+ * @return int 1 勾选、0 没勾或参数不对
+ */
 int  cg_table_checked(const cg_widget_t *w, int row);
-/** 行首图标（png/jpg/bmp/gif 路径，同 image 控件的查找规则）；path 传 NULL 清除 */
+/**
+ * @brief 设置表格某行行首的图标
+ * @param w table 控件
+ * @param row 行号，0 起
+ * @param path 图片路径（png/jpg/bmp/gif，查找规则同 image 控件）；NULL 清除
+ * @return void 无返回值
+ */
 void cg_table_set_row_icon(cg_widget_t *w, int row, const char *path);
-/** 多选（.cgui 里 table 开了 multi）时：选中行数量 / 第 i 个选中行号 */
+/**
+ * @brief 多选表格当前选中了几行
+ * @param w table 控件（.cgui 里 table 开了 multi）
+ * @return int 选中行数（单选表格最多 1）
+ */
 int  cg_table_selected_count(const cg_widget_t *w);
+/**
+ * @brief 取第 index 个选中的行号（配合 cg_table_selected_count 遍历）
+ * @param w table 控件
+ * @param index 第几个选中行，0 起
+ * @return int 行号；没有了返回 -1
+ */
 int  cg_table_selected_row(const cg_widget_t *w, int index);
 
 /* ------------------------------------------------------------ 状态栏 */
-/** 改第 part 段的文字（段不存在且 part 等于段数时相当于追加一段） */
+/**
+ * @brief 改状态栏第 part 段的文字
+ * @param w statusbar 控件
+ * @param part 段号，0 起
+ * @param text 文字，函数内部拷贝；段不够且正好差一段时相当于追加，差得多就补空段
+ * @return void 无返回值
+ */
 void cg_status_set(cg_widget_t *w, int part, const char *text);
+/**
+ * @brief cg_status_set 的 printf 版本
+ * @param w statusbar 控件
+ * @param part 段号，0 起
+ * @param fmt printf 风格格式串
+ * @return void 无返回值
+ */
 void cg_status_setf(cg_widget_t *w, int part, const char *fmt, ...);
 
 /* ------------------------------------------------------------ 标签页 */
+/**
+ * @brief 标签页页数
+ * @param w tabs 控件
+ * @return int 页数；非 tabs 控件返回 0
+ */
 int  cg_tabs_count(const cg_widget_t *w);
+/**
+ * @brief 切到第 index 页（子控件按各自 page 自动显隐）
+ * @param w tabs 控件
+ * @param index 页号，0 起；越界忽略
+ * @return void 无返回值
+ */
 void cg_tabs_select(cg_widget_t *w, int index);
+/**
+ * @brief 取当前页下标
+ * @param w tabs 控件
+ * @return int 当前页（0 起）；w 为 NULL 返回 0
+ */
 int  cg_tabs_selected(const cg_widget_t *w);
 
 /* ------------------------------------------------------------ 图片 */
-/** 换图片文件（png/jpg/bmp/gif）；路径不存在时控件会显示成占位框 */
+/**
+ * @brief 换图片控件的图片文件
+ * @param w image 控件
+ * @param path 图片路径（png/jpg/bmp/gif）；路径不存在时控件显示成占位框
+ * @return void 无返回值
+ */
 void cg_widget_set_image(cg_widget_t *w, const char *path);
+/**
+ * @brief 取图片控件当前的图片路径
+ * @param w image 控件
+ * @return const char* 控件内部的字符串，别 free；未设置返回 NULL
+ */
 const char *cg_widget_image(const cg_widget_t *w);
 
 /* ------------------------------------------------------------ 菜单
@@ -491,39 +992,102 @@ void cg_menu_set_item_checked(cg_widget_t *w, const char *id, int checked);
  * 是纯文字列表）；没有运行时增删菜单项的 API；动作的 `text` 不能在运行时改。
  */
 
-/** 触发一个动作：快捷键、菜单项点击、控件点击最终都走到这里。
- *  @return 1 = 真的调用了回调；0 = 没有这个动作 / 动作被禁用 / handler 没登记 */
+/**
+ * @brief 触发一个动作：快捷键、菜单项点击、控件点击最终都走到这里
+ * @param app 应用
+ * @param name 动作名，就是 .cgui 里 actions 对象的键
+ * @return int 1 真的调用了回调；0 没有这个动作 / 动作被禁用 / handler 没登记
+ */
 int cg_action_invoke(cg_app_t *app, const char *name);
 
-/** 启用 / 禁用一个动作，并把结果同步到所有引用它的 UI（菜单项灰掉、控件灰掉）。
- *  动作不存在时是空操作。 */
+/**
+ * @brief 启用 / 禁用一个动作，并把结果同步到所有引用它的 UI（菜单项灰掉、控件灰掉）
+ * @param app 应用
+ * @param name 动作名
+ * @param enabled 1 启用、0 禁用
+ * @return void 无返回值（动作不存在时空操作）
+ */
 void cg_action_set_enabled(cg_app_t *app, const char *name, int enabled);
-/** 动作当前是否启用；动作不存在返回 0。 */
+/**
+ * @brief 动作当前是否启用
+ * @param app 应用
+ * @param name 动作名
+ * @return int 1 启用、0 禁用；动作不存在返回 0
+ */
 int  cg_action_is_enabled(const cg_app_t *app, const char *name);
 
-/** 勾选 / 取消勾选一个动作，并同步到所有引用它的**菜单项**（打勾或去掉）。
- *  动作不存在时是空操作。 */
+/**
+ * @brief 勾选 / 取消勾选一个动作，并同步到所有引用它的**菜单项**（打勾或去掉）
+ * @param app 应用
+ * @param name 动作名
+ * @param checked 1 勾选、0 取消
+ * @return void 无返回值（动作不存在时空操作）
+ */
 void cg_action_set_checked(cg_app_t *app, const char *name, int checked);
-/** 动作当前是否勾选；动作不存在返回 0。 */
+/**
+ * @brief 动作当前是否勾选
+ * @param app 应用
+ * @param name 动作名
+ * @return int 1 勾选、0 未勾选；动作不存在返回 0
+ */
 int  cg_action_is_checked(const cg_app_t *app, const char *name);
 
-/** 最近一次被激活的动作名（在动作的回调里用 self 取）；没有则返回 NULL。 */
+/**
+ * @brief 取最近一次被激活的动作名
+ * @param self 动作回调里的 self（恒为主窗口伪控件）
+ * @return const char* 运行时内部的字符串，别 free；没有则返回 NULL
+ */
 const char *cg_action_name(const cg_widget_t *self);
 
-/** 动作个数 / 第 i 个动作名（遍历用，参数越界返回 NULL）；调试与自检用。 */
+/**
+ * @brief 数有几个动作
+ * @param app 应用
+ * @return int 动作个数；调试与自检用
+ */
 int         cg_action_count(const cg_app_t *app);
+/**
+ * @brief 取第 i 个动作名（遍历用）
+ * @param app 应用
+ * @param i 序号，0 起
+ * @return const char* 运行时内部的字符串，别 free；越界返回 NULL
+ */
 const char *cg_action_at(const cg_app_t *app, int i);
-/** 动作的快捷键（规范化后的显示形式，如 "Ctrl+S"）；没有或动作不存在返回 ""。 */
+/**
+ * @brief 取动作的快捷键（规范化后的显示形式）
+ * @param app 应用
+ * @param name 动作名
+ * @return const char* 如 "Ctrl+S"；动作不存在或没配 accel 返回 ""
+ */
 const char *cg_action_accel(const cg_app_t *app, const char *name);
 
 /* ------------------------------------------------------------ 提示与时钟 */
 
-/** 鼠标悬停提示（tooltip）；text 传空串清除。对所有控件生效。 */
+/**
+ * @brief 设鼠标悬停提示（tooltip）
+ * @param w 控件（对所有控件生效）
+ * @param text 提示文字，函数内部拷贝；传空串清除
+ * @return void 无返回值
+ */
 void cg_widget_set_hint(cg_widget_t *w, const char *text);
+/**
+ * @brief 取控件当前的悬停提示文字
+ * @param w 控件
+ * @return const char* 控件内部的字符串，别 free；没设过返回 NULL
+ */
 const char *cg_widget_hint(const cg_widget_t *w);
 
-/** 时钟（timer 控件）的触发周期，毫秒；0 = 停止，>0 = 立即按新周期重新计时 */
+/**
+ * @brief 改时钟控件的触发周期
+ * @param w timer 控件
+ * @param period_ms 毫秒；0 = 停止，> 0 = 立即按新周期重新计时
+ * @return void 无返回值
+ */
 void cg_widget_set_period(cg_widget_t *w, int period_ms);
+/**
+ * @brief 取时钟控件的触发周期
+ * @param w timer 控件
+ * @return int 毫秒；0 表示已停止
+ */
 int  cg_widget_period(const cg_widget_t *w);
 
 /* ------------------------------------------------------------ 串口组件（serial 控件）
@@ -558,7 +1122,18 @@ int  cg_widget_period(const cg_widget_t *w);
  * 记进 INI，下次启动用 cg_splitter_set 恢复。
  * 没有矩形的东西（菜单栏、时钟）不参与布局。
  */
+/**
+ * @brief 取分隔条当前位置
+ * @param w splitter 控件
+ * @return int 逻辑像素（水平分栏时相对容器左边、垂直分行时相对上边）；类型不对返回 0
+ */
 int  cg_splitter_pos(const cg_widget_t *w);
+/**
+ * @brief 设分隔条位置（撑开它前面那一块）
+ * @param w splitter 控件
+ * @param pos 目标位置，逻辑像素；两侧各自最小 16px，越界会被夹住
+ * @return void 无返回值
+ */
 void cg_splitter_set(cg_widget_t *w, int pos);
 
 /* ------------------------------------------------------------ 终端 / 日志视图（terminal）
@@ -581,14 +1156,60 @@ void cg_splitter_set(cg_widget_t *w, int pos);
 #define CG_TERM_TX  2   /* 发出 */
 #define CG_TERM_SYS 3   /* 自己记的（连接状态、错误提示之类） */
 
+/**
+ * @brief 往终端控件写一段数据（一次调用 = 一段，内部按 \r\n 自动切成多行）
+ * @param w terminal 控件
+ * @param dir 方向，取 CG_TERM_RX / CG_TERM_TX / CG_TERM_SYS（决定行首标记与颜色）
+ * @param data 字节流，不用以 0 结尾
+ * @param len 字节数；传 -1 表示按字符串取长度（遇到 0 结束）
+ * @return void 无返回值（一次调用只刷新一次界面）
+ */
 void cg_term_write(cg_widget_t *w, int dir, const void *data, int len);
+/**
+ * @brief 清空终端控件的全部行
+ * @param w terminal 控件
+ * @return void 无返回值
+ */
 void cg_term_clear(cg_widget_t *w);
+/**
+ * @brief 切换 HEX / 文本显示
+ * @param w terminal 控件
+ * @param on 1 = HEX、0 = 文本
+ * @return void 无返回值（只影响之后写入的行）
+ */
 void cg_term_set_hex(cg_widget_t *w, int on);
+/**
+ * @brief 当前是不是 HEX 显示
+ * @param w terminal 控件
+ * @return int 1 = HEX、0 = 文本
+ */
 int  cg_term_hex(const cg_widget_t *w);
+/**
+ * @brief 开关行首时间戳
+ * @param w terminal 控件
+ * @param on 1 = 每行前加 [HH:MM:SS]、0 = 不加
+ * @return void 无返回值
+ */
 void cg_term_set_timestamp(cg_widget_t *w, int on);
+/**
+ * @brief 改最大保留行数
+ * @param w terminal 控件
+ * @param lines 行数上限，超出后从最老的丢
+ * @return void 无返回值
+ */
 void cg_term_set_max_lines(cg_widget_t *w, int lines);
+/**
+ * @brief 当前保留了多少行
+ * @param w terminal 控件
+ * @return int 行数
+ */
 int  cg_term_count(const cg_widget_t *w);
-/** 存成文本文件（UTF-8 + CRLF，不含方向标记）；成功返回 0 */
+/**
+ * @brief 把终端内容存成文本文件（UTF-8 + CRLF，不含方向标记）
+ * @param w terminal 控件
+ * @param path 输出文件路径（UTF-8，目录必须已存在）
+ * @return int 0 成功、非 0 失败
+ */
 int  cg_term_save(cg_widget_t *w, const char *path);
 
 /* ------------------------------------------------------------ 折线 / 柱状图（chart）
@@ -616,16 +1237,63 @@ int  cg_term_save(cg_widget_t *w, const char *path);
  *
  * 实时性靠"业务用 cg_set_timer 定周期 push"，**不要另开线程碰控件**（控件不是线程安全的）。
  */
+/**
+ * @brief 给某个系列推一个采样点（窗口满了整体左移一格）
+ * @param w chart 控件
+ * @param series 系列下标，0 起；越界忽略
+ * @param value 采样值，超出 min/max 的按边界裁剪后画
+ * @return void 无返回值
+ */
 void cg_chart_push(cg_widget_t *w, int series, int value);
+/**
+ * @brief 一次给所有系列各推一个点（多通道采样最常用）
+ * @param w chart 控件
+ * @param values 各系列的值，按系列下标排列
+ * @param nvalues values 的个数；多余的系列本轮不动
+ * @return void 无返回值
+ */
 void cg_chart_push_all(cg_widget_t *w, const int *values, int nvalues);
+/**
+ * @brief 清掉所有系列已填的点（系列本身保留）
+ * @param w chart 控件
+ * @return void 无返回值
+ */
 void cg_chart_clear(cg_widget_t *w);
-/** 运行时加一个系列（返回下标；到上限或没内存了返回 -1） */
+/**
+ * @brief 运行时加一个系列
+ * @param w chart 控件
+ * @param name 系列名，函数内部拷贝
+ * @return int 新系列下标；到上限或没内存返回 -1
+ */
 int  cg_chart_add_series(cg_widget_t *w, const char *name);
+/**
+ * @brief 当前有几个系列
+ * @param w chart 控件
+ * @return int 系列数
+ */
 int  cg_chart_series_count(const cg_widget_t *w);
-/** 某系列已经填了多少点 */
+/**
+ * @brief 某系列已经填了多少点
+ * @param w chart 控件
+ * @param series 系列下标，0 起
+ * @return int 已填点数；越界返回 0
+ */
 int  cg_chart_filled(const cg_widget_t *w, int series);
-/** 读回某个点（下标 0 = 最老的点）；越界返回 0 */
+/**
+ * @brief 读回某个采样点
+ * @param w chart 控件
+ * @param series 系列下标，0 起
+ * @param index 点下标，0 = 最老的点
+ * @return int 该点原始值；越界返回 0
+ */
 int  cg_chart_point(const cg_widget_t *w, int series, int index);
+/**
+ * @brief 改 Y 轴范围
+ * @param w chart 控件
+ * @param min 下限
+ * @param max 上限，<= min 时按 range = 1 处理
+ * @return void 无返回值
+ */
 void cg_chart_set_range(cg_widget_t *w, int min, int max);
 
 /* ------------------------------------------------------------ 状态灯（led）
@@ -646,9 +1314,25 @@ void cg_chart_set_range(cg_widget_t *w, int min, int max);
  * 闪烁**由控件自己定时重绘**（半个周期亮、半个周期灭），业务只要 cg_led_set(w, 2)，
  * 不用自己开时钟。它是纯显示控件：没有事件，点它没有反应。
  */
+/**
+ * @brief 改状态灯的状态
+ * @param w led 控件
+ * @param state 0 灭 / 1 亮 / 2 闪，越界夹到 0~2；闪烁由控件自己定时重绘
+ * @return void 无返回值
+ */
 void cg_led_set(cg_widget_t *w, int state);
+/**
+ * @brief 取状态灯当前状态
+ * @param w led 控件
+ * @return int 0 灭 / 1 亮 / 2 闪
+ */
 int  cg_led_state(const cg_widget_t *w);
-/** 亮起的颜色（等价于 cg_widget_set_colors(w, rgb, CG_COLOR_NONE)） */
+/**
+ * @brief 改状态灯亮起的颜色
+ * @param w led 控件
+ * @param rgb 0xRRGGBB，或 CG_RGB(r,g,b)
+ * @return void 无返回值（等价于 cg_widget_set_colors(w, rgb, CG_COLOR_NONE)）
+ */
 void cg_led_set_color(cg_widget_t *w, unsigned rgb);
 
 /* ------------------------------------------------------------ 仪表盘（meter）
@@ -666,7 +1350,20 @@ void cg_led_set_color(cg_widget_t *w, unsigned rgb);
  *
  * 纯显示控件：没有事件。
  */
+/**
+ * @brief 改仪表盘的读数
+ * @param w meter 控件
+ * @param value 目标值，按 min/max 夹（和滑块同一套语义）
+ * @return void 无返回值
+ */
 void cg_meter_set(cg_widget_t *w, int value);
+/**
+ * @brief 改仪表盘量程
+ * @param w meter 控件
+ * @param min 下限
+ * @param max 上限，<= min 时按 range = 1 处理（不会除零）
+ * @return void 无返回值
+ */
 void cg_meter_set_range(cg_widget_t *w, int min, int max);
 
 /* ------------------------------------------------------------ 串口（cg_serial）
@@ -714,22 +1411,45 @@ void cg_meter_set_range(cg_widget_t *w, int min, int max);
  */
 typedef struct cg_serial_t cg_serial_t;
 
-/** 枚举本机串口：每行一个端口名写入 buf（"COM3\nCOM7\n"），返回写入字节数。
- *  没有端口时返回 0（不是错误）。走注册表，不引任何额外链接依赖。 */
+/**
+ * @brief 枚举本机串口：每行一个端口名写入 buf（"COM3\nCOM7\n"），返回写入字节数。
+ *  没有端口时返回 0（不是错误）。走注册表，不引任何额外链接依赖。 *
+ * @param buf 输出缓冲，函数写进以换行分隔的端口名
+ * @param cap buf 的字节数
+ * @return int 写入的字节数；没有端口时返回 0（不是错误）
+ * @note 走注册表，不引任何额外链接依赖
+ */
 int  cg_serial_list(char *buf, int cap);
 
-/** 打开串口（"COM3" 或 "\\\\.\\COM3" 都收），固定 8N1。失败返回 NULL；
- *  失败原因用 cg_serial_last_error(NULL) 取（打开失败时没有句柄可问）。 */
+/**
+ * @brief 打开串口（"COM3" 或 "\\\\.\\COM3" 都收），固定 8N1。失败返回 NULL；
+ *
+ * @param port 端口名，两种写法都收
+ * @param baud 波特率，如 115200；固定 8N1（别的帧格式用 cg_serial_open_ex）
+ * @return cg_serial_t* 句柄（关掉用 cg_serial_close）；失败返回 NULL，原因用
+ *         cg_serial_last_error(NULL) 取（打开失败时没有句柄可问）
+ */
 cg_serial_t *cg_serial_open(const char *port, int baud);
 
-/** 打开串口（全参数版）：bits 数据位 5..8、stop 停止位 1..2、parity 0=无/1=奇/2=偶。
- *  参数不合法时**干净失败**（不合法的参数不往驱动送，原因见 cg_serial_last_error(NULL)）；
- *  cg_serial_open() 等价于 open_ex(port, baud, 8, 1, 0)。 */
+/**
+ * @brief 打开串口（全参数版）
+ * @param port 端口名，语义同 cg_serial_open
+ * @param baud 波特率
+ * @param bits 数据位，5..8
+ * @param stop 停止位，1..2
+ * @param parity 校验，0=无 / 1=奇 / 2=偶
+ * @return cg_serial_t* 句柄；失败返回 NULL
+ * @note 参数不合法时**干净失败**：不合法的参数不往驱动送，原因见 cg_serial_last_error(NULL)；
+ *       cg_serial_open() 等价于 open_ex(port, baud, 8, 1, 0)
+ */
 cg_serial_t *cg_serial_open_ex(const char *port, int baud, int bits, int stop, int parity);
 
-/** 关掉串口并回收读线程。**NULL 安全**（没连上时传 NULL 也行）。
- *  它会等读线程真的退出再释放缓冲，所以最坏会卡一个读超时周期（约 50ms）。
- *  @note **不是"幂等"**（2026-09-27 真机实测更正，原先这行写着"幂等"，是错的）：
+/**
+ * @brief 关掉串口并回收读线程
+ * @param s cg_serial_open / cg_serial_open_ex 返回的句柄；NULL 安全（没连上时传 NULL 也行）
+ * @return void 无返回值
+ * @note 它会等读线程真的退出再释放缓冲，所以最坏会卡一个读超时周期（约 50ms）
+ * @note **不是"幂等"**（2026-09-27 真机实测更正，原先这行写着"幂等"，是错的）：
  *        这一调会把句柄结构**释放掉**，指针当场失效 —— **同一个句柄关两次就是 use-after-free**，
  *        实测表现是进程以 `0xC0000374`（堆损坏）退出，而且崩点离关的地方可能很远。
  *        正确写法是**关完立刻置空**，这一行别省：
@@ -739,49 +1459,103 @@ cg_serial_t *cg_serial_open_ex(const char *port, int baud, int bits, int stop, i
  *        重复调它真的安全（要防呆就用组件形态，或者自己照着上面置空）。 */
 void cg_serial_close(cg_serial_t *s);
 
-/** 发送数据。返回实际写出的字节数，< 0 表示失败（原因见 cg_serial_last_error）。 */
+/**
+ * @brief 往串口发数据（同步写、带超时，不是写队列）
+ * @param s 串口句柄
+ * @param data 要发的字节
+ * @param len 字节数
+ * @return int 实际写出的字节数；< 0 表示失败（原因见 cg_serial_last_error）
+ */
 int  cg_serial_write(cg_serial_t *s, const void *data, int len);
 
-/** 从接收缓冲取最多 cap 字节（**非阻塞**：没数据返回 0，不是错误）。
- *  返回的字节数可能是**半个 UTF-8 序列** —— 要按文本显示的话，把不满意的尾巴留到下次
- *  （终端控件是按字节灌的，所以直接 cg_term_write 也行，只是那一帧可能显示成截断的）。 */
+/**
+ * @brief 从接收缓冲取数据（**非阻塞**：没数据返回 0，不是错误）
+ * @param s 串口句柄
+ * @param buf 输出缓冲
+ * @param cap buf 的字节数
+ * @return int 实际取到的字节数，最多 cap
+ * @note 返回的可能以**半个 UTF-8 序列**结尾 —— 要按文本显示的话，把不满意的尾巴留到下次
+ *       （终端控件是按字节灌的，所以直接 cg_term_write 也行，只是那一帧可能显示成截断的）
+ */
 int  cg_serial_read(cg_serial_t *s, void *buf, int cap);
 
-/** 接收缓冲里还有多少字节没取走 */
+/**
+ * @brief 接收缓冲里还有多少字节没取走
+ * @param s 串口句柄
+ * @return int 未读字节数
+ */
 int  cg_serial_available(const cg_serial_t *s);
 
-/** 丢掉接收缓冲里还没取走的数据（"清空接收"按钮用） */
+/**
+ * @brief 丢掉接收缓冲里还没取走的数据
+ * @param s 串口句柄
+ * @return void 无返回值（"清空接收"按钮用）
+ */
 void cg_serial_flush_rx(cg_serial_t *s);
 
-/** 累计收 / 发了多少字节（状态栏显示用；只增不减，要归零就重连） */
+/**
+ * @brief 累计收了多少字节
+ * @param s 串口句柄
+ * @return long long 只增不减；要归零就重连
+ */
 long long cg_serial_rx_bytes(const cg_serial_t *s);
+/**
+ * @brief 累计发了多少字节
+ * @param s 串口句柄
+ * @return long long 只增不减；要归零就重连
+ */
 long long cg_serial_tx_bytes(const cg_serial_t *s);
 
-/** 最后一次错误的中文描述（"找不到这个端口"这种）；没出错返回 ""。
- *  s 传 NULL 时返回**最近一次 cg_serial_open 失败**的原因 —— 打开失败时用得上。
- *  返回的指针指向内部缓冲，下次报错会被覆盖；要留就自己拷走。 */
+/**
+ * @brief 取最后一次错误的中文描述
+ * @param s 串口句柄；传 NULL 时返回**最近一次 cg_serial_open 失败**的原因（打开失败时用得上）
+ * @return const char* 如"找不到这个端口"；没出错返回 ""
+ * @note 指向内部缓冲，下次报错会被覆盖；要留就自己拷走
+ */
 const char *cg_serial_last_error(const cg_serial_t *s);
 
 /* ---- 串口组件（serial 控件）的控件侧 API：参数见上面"串口组件"一段 ---- */
 
-/** 取串口组件的链路句柄（未打开/类型不对返回 NULL；回调里先判 NULL） */
+/**
+ * @brief 取串口组件的链路句柄
+ * @param w serial 组件控件
+ * @return cg_serial_t* 链路句柄；未打开或类型不对返回 NULL（回调里先判 NULL）
+ */
 cg_serial_t *cg_widget_serial(cg_widget_t *w);
 
-/** 按控件属性打开链路（端口名可省略 = 用控件里配的）；已打开则先关旧的再开。
- *  返回 0 成功；失败返回 -1（原因见 cg_serial_last_error(NULL)，不影响界面运行）。 */
+/**
+ * @brief 按控件属性打开链路（已打开则先关旧的再开）
+ * @param w serial 组件控件
+ * @param port 端口名；传 NULL / 空串表示用控件属性里配的
+ * @return int 0 成功、-1 失败（原因见 cg_serial_last_error(NULL)，不影响界面运行）
+ */
 int  cg_widget_serial_open(cg_widget_t *w, const char *port);
 
-/** 关掉串口组件的链路（幂等、NULL 安全；未打开时调它也没事） */
+/**
+ * @brief 关掉串口组件的链路（内部把句柄置空，重复调真的安全）
+ * @param w serial 组件控件
+ * @return void 无返回值（未打开时调它也没事）
+ */
 void cg_widget_serial_close(cg_widget_t *w);
 
-/** 改串口组件的波特率（界面上的波特率下拉就是给这用的）；
- *  链路开着时按新参数原样重开（关旧的再开新的），没开就只记住等下次打开用。 */
+/**
+ * @brief 改串口组件的波特率（界面上的波特率下拉就是给这用的）
+ * @param w serial 组件控件
+ * @param baud 目标波特率；链路开着时按新参数原样重开，没开就只记住等下次打开用
+ * @return void 无返回值
+ */
 void cg_widget_serial_set_baud(cg_widget_t *w, int baud);
 
-/** 改数据位 / 停止位 / 校验（bits 5..8、stop 1..2、parity 0=无 1=奇 2=偶）——
- *  界面上的"数据位/停止位/校验"三个下拉就是给这用的（7E1 这类老设备）。
- *  链路开着就按新参数**重开**（先摘干净再改，避免"旧链路按新参数"的错觉）；
- *  任一个越界就整个忽略并记一条警告 —— 只改一半会造出谁也没要的组合。 */
+/**
+ * @brief 改串口组件的数据位 / 停止位 / 校验（界面上的三个下拉就是给这用的）
+ * @param w serial 组件控件
+ * @param bits 数据位，5..8
+ * @param stop 停止位，1..2
+ * @param parity 校验，0=无 / 1=奇 / 2=偶
+ * @return void 无返回值
+ * @note 链路开着就按新参数**重开**（先摘干净再改，避免"旧链路按新参数"的错觉）；
+ *       任一个越界就整个忽略并记一条警告 —— 只改一半会造出谁也没要的组合
+ */
 void cg_widget_serial_set_format(cg_widget_t *w, int bits, int stop, int parity);
 
 /* ------------------------------------------------------------ 网口（cg_net）
@@ -809,33 +1583,91 @@ void cg_widget_serial_set_format(cg_widget_t *w, int bits, int stop, int parity)
  */
 typedef struct cg_net_t cg_net_t;
 
-/** 连到一台主机；host 传 NULL / 空串 = 127.0.0.1（本机自测最常用）。
- *  timeout_ms <= 0 按 3000 算。用非阻塞 connect + select 实现超时 —— 坏地址不会把界面冻住。 */
+/**
+ * @brief 以客户端身份连到一台主机（TCP）
+ * @param host 主机名或 IP；传 NULL / 空串 = 127.0.0.1（本机自测最常用）
+ * @param port 目标端口
+ * @param timeout_ms 连接超时毫秒，<= 0 按 3000 算
+ * @return cg_net_t* 连接句柄（用完 cg_net_close）；失败返回 NULL，原因见 cg_net_last_error(NULL)
+ * @note 用非阻塞 connect + select 实现超时 —— 坏地址不会把界面冻住
+ */
 cg_net_t *cg_net_connect(const char *host, int port, int timeout_ms);
 
-/** 监听端口（backlog <= 0 按 4）。绑不上（端口被占）返回 NULL，原因见 cg_net_last_error(NULL)。 */
+/**
+ * @brief 监听端口（TCP 服务端）
+ * @param port 本地端口
+ * @param backlog 等待队列长度，<= 0 按 4
+ * @return cg_net_t* 监听句柄；绑不上（端口被占）返回 NULL，原因见 cg_net_last_error(NULL)
+ */
 cg_net_t *cg_net_listen(int port, int backlog);
 
-/** 收一个连接。**timeout_ms <= 0 = 不等，立刻返回**（适合放在时钟里轮询）；
- *  没有连接时返回 NULL —— 那是正常情况，不是错误。每个连接是一个独立句柄，用完 cg_net_close。 */
+/**
+ * @brief 从监听句柄收一个连接
+ * @param srv cg_net_listen 返回的监听句柄
+ * @param timeout_ms 等待毫秒；**<= 0 = 不等，立刻返回**（适合放在时钟里轮询）
+ * @return cg_net_t* 新连接的独立句柄（用完 cg_net_close）；没有连接返回 NULL —— 那是正常情况，不是错误
+ */
 cg_net_t *cg_net_accept(cg_net_t *srv, int timeout_ms);
 
-/** 发送（同步，带 1 秒超时）；返回实际写出字节数，< 0 失败 */
+/**
+ * @brief 发数据（同步，带 1 秒超时，不是写队列）
+ * @param n 连接句柄
+ * @param data 要发的字节
+ * @param len 字节数
+ * @return int 实际写出的字节数；< 0 失败
+ */
 int  cg_net_write(cg_net_t *n, const void *data, int len);
-/** 从接收缓冲取最多 cap 字节（**非阻塞**：没数据返回 0）；对端已关闭时也能把剩下的取完 */
+/**
+ * @brief 从接收缓冲取数据（**非阻塞**）
+ * @param n 连接句柄
+ * @param buf 输出缓冲
+ * @param cap buf 的字节数
+ * @return int 实际取到的字节数，最多 cap；没数据返回 0，对端已关闭时也能把剩下的取完
+ */
 int  cg_net_read(cg_net_t *n, void *buf, int cap);
-/** 接收缓冲里还有多少字节没取走 */
+/**
+ * @brief 接收缓冲里还有多少字节没取走
+ * @param n 连接句柄
+ * @return int 未读字节数
+ */
 int  cg_net_available(const cg_net_t *n);
-/** 对端还在吗（对方关闭后变 0；监听句柄恒为 0）—— 这是判断"掉线"的唯一信号 */
+/**
+ * @brief 对端还在吗
+ * @param n 连接句柄
+ * @return int 1 还在、0 对端已关闭（监听句柄恒为 0）
+ * @note 这是判断"掉线"的唯一信号
+ */
 int  cg_net_connected(const cg_net_t *n);
-/** 累计收 / 发字节数（状态栏用） */
+/**
+ * @brief 累计收了多少字节
+ * @param n 连接句柄
+ * @return long long 只增不减；状态栏用
+ */
 long long cg_net_rx_bytes(const cg_net_t *n);
+/**
+ * @brief 累计发了多少字节
+ * @param n 连接句柄
+ * @return long long 只增不减；状态栏用
+ */
 long long cg_net_tx_bytes(const cg_net_t *n);
-/** 对端 "ip:port"（监听句柄返回"（监听中）"） */
+/**
+ * @brief 取对端地址
+ * @param n 连接句柄
+ * @return const char* "ip:port"（监听句柄返回"（监听中）"）；指向内部缓冲，别 free
+ */
 const char *cg_net_peer(const cg_net_t *n);
-/** 最后一次错误的中文描述；n 传 NULL 时给"最近一次连接/监听失败"的原因 */
+/**
+ * @brief 取最后一次错误的中文描述
+ * @param n 连接句柄；传 NULL 时给"最近一次连接 / 监听失败"的原因
+ * @return const char* 指向内部缓冲，下次报错会被覆盖；没出错返回 ""
+ */
 const char *cg_net_last_error(const cg_net_t *n);
-/** 关掉连接或监听（幂等、NULL 安全；会等读线程退出，所以最坏卡一个收超时周期约 50ms） */
+/**
+ * @brief 关掉连接或监听
+ * @param n 连接 / 监听句柄；NULL 安全（重复调也安全，内部会置空）
+ * @return void 无返回值
+ * @note 会等读线程退出，所以最坏卡一个收超时周期（约 50ms）
+ */
 void cg_net_close(cg_net_t *n);
 
 /* ------------------------------------------------------------ 网口：UDP（数据报）
@@ -866,26 +1698,78 @@ void cg_net_close(cg_net_t *n);
  * 流那套（read / available / connected / write）在 UDP 句柄上分别返回 0 / 0 / 0 / -1 ——
  * 与其"悄悄支持"一个语义不对的行为，不如明确拒绝。
  */
+/**
+ * @brief 开一个 UDP 句柄（拉取式，没有读线程）
+ * @param local_port 本地绑定端口
+ * @param broadcast 非 0 允许发广播（板子回包就知道它的 IP 那种发现用法）
+ * @return cg_net_t* UDP 句柄（用完 cg_net_close）；失败返回 NULL
+ */
 cg_net_t *cg_net_udp_open(int local_port, int broadcast);
-/** 发一个数据报（每次调用解析一次主机名：填 IP 无所谓，填域名会多花一点时间）。
- *  返回实际发出的字节数，< 0 失败。*/
+/**
+ * @brief 发一个 UDP 数据报
+ * @param n UDP 句柄
+ * @param host 目标主机（每次调用解析一次主机名：填 IP 无所谓，填域名会多花一点时间）
+ * @param port 目标端口
+ * @param data 数据报内容
+ * @param len 字节数
+ * @return int 实际发出的字节数；< 0 失败
+ */
 int  cg_net_sendto(cg_net_t *n, const char *host, int port, const void *data, int len);
-/** 收一个数据报（非阻塞，一次一个，带出来源）。
- *  ip_out 可传 NULL 表示不关心来源；port_out 同理。返回值语义见上面那段。 */
+/**
+ * @brief 收一个 UDP 数据报（非阻塞，一次一个，带出来源）
+ * @param n UDP 句柄
+ * @param ip_out 来源 IP 的输出缓冲；传 NULL 表示不关心来源
+ * @param ip_cap ip_out 的字节数
+ * @param port_out 来源端口的出参；传 NULL 表示不关心
+ * @param buf 数据报内容的输出缓冲
+ * @param cap buf 的字节数
+ * @return int 语义见上面那段：> 0 收到的字节数、= 0 收到空数据报、= -1 暂时没数据（不是错误）
+ */
 int  cg_net_recvfrom(cg_net_t *n, char *ip_out, int ip_cap, int *port_out, void *buf, int cap);
 
 /* ------------------------------------------------------------ 通用对话框
  * 都不是控件，是弹系统对话框的函数。parent 传控件（定位用）或 NULL。
  * 路径缓冲区至少 1024 字节。返回 1 = 用户确定，0 = 取消/失败。
  */
+/**
+ * @brief 弹"打开文件"对话框
+ * @param parent 定位用的控件，可为 NULL
+ * @param title 对话框标题，可为 NULL
+ * @param filter 过滤器串，如 "文本 (*.txt)\0*.txt\0所有文件 (*.*)\0*.*\0\0"；可为 NULL
+ * @param out_path 用户选中路径的输出缓冲，至少 1024 字节
+ * @param out_size out_path 的字节数
+ * @return int 1 用户确定、0 取消或失败
+ */
 int  cg_open_file_dialog(cg_widget_t *parent, const char *title,
                          const char *filter, char *out_path, int out_size);
+/**
+ * @brief 弹"保存文件"对话框
+ * @param parent 定位用的控件，可为 NULL
+ * @param title 对话框标题，可为 NULL
+ * @param filter 过滤器串，写法同 cg_open_file_dialog；可为 NULL
+ * @param default_ext 缺省扩展名（不带点），可为 NULL
+ * @param out_path 用户选中路径的输出缓冲，至少 1024 字节
+ * @param out_size out_path 的字节数
+ * @return int 1 用户确定、0 取消或失败
+ */
 int  cg_save_file_dialog(cg_widget_t *parent, const char *title,
                          const char *filter, const char *default_ext,
                          char *out_path, int out_size);
-/** rgb 进出都是 0xRRGGBB；确认时写回并返回 1 */
+/**
+ * @brief 弹取色对话框
+ * @param parent 定位用的控件，可为 NULL
+ * @param rgb 入出参：进来是初始色、确认时写回用户选的色，编码都是 0xRRGGBB
+ * @return int 1 用户确定、0 取消或失败
+ */
 int  cg_choose_color(cg_widget_t *parent, unsigned *rgb);
-/** 消息框（确定钮）。icon: 0=信息 1=警告 2=错误 3=问号 */
+/**
+ * @brief 弹消息框（只有一个确定钮）
+ * @param parent 定位用的控件，可为 NULL
+ * @param text 正文
+ * @param title 标题，可为 NULL
+ * @param icon 图标：0=信息 1=警告 2=错误 3=问号
+ * @return void 无返回值
+ */
 void cg_message_box(cg_widget_t *parent, const char *text, const char *title, int icon);
 
 /* ------------------------------------------------------------ 画板
@@ -965,40 +1849,112 @@ int   cg_dir_create(const char *path);
 int   cg_dir_list(const char *dir, const char *filter, int index, char *out, int out_size);
 
 /* ---- 路径 ---- */
-/** 拼路径（自动补一个分隔符） */
+/**
+ * @brief 拼路径（自动补一个分隔符）
+ * @param a 前半段
+ * @param b 后半段
+ * @return char * 堆串，用完 cg_free；失败返回 NULL
+ */
 char *cg_path_join(const char *a, const char *b);
-/** 取目录部分（不含末尾分隔符） */
+/**
+ * @brief 取路径的目录部分（不含末尾分隔符）
+ * @param path 路径
+ * @return char * 堆串，用完 cg_free；失败返回 NULL
+ */
 char *cg_path_dir(const char *path);
-/** 取文件名部分；返回 path 内部的指针，**不用释放** */
+/**
+ * @brief 取路径的文件名部分
+ * @param path 路径
+ * @return const char* **path 内部的指针，不用释放**；path 为 NULL 返回 NULL
+ */
 const char *cg_path_name(const char *path);
-/** 取扩展名（含点，如 ".txt"）；没有扩展名返回 ""。同样不用释放 */
+/**
+ * @brief 取路径的扩展名（含点，如 ".txt"）
+ * @param path 路径
+ * @return const char* **path 内部的指针，不用释放**；没有扩展名返回 ""
+ */
 const char *cg_path_ext(const char *path);
-/** exe 所在目录（写日志、读同目录配置文件用） */
+/**
+ * @brief 取 exe 所在目录
+ * @return char * 堆串，用完 cg_free
+ * @note 写日志、读同目录配置文件用
+ */
 char *cg_app_dir(void);
-/** 本程序的用户数据目录 %LOCALAPPDATA%\<exe名>（会自动建），存配置/缓存用 */
+/**
+ * @brief 取本程序的用户数据目录（会自动建）
+ * @return char * 堆串（形如 %LOCALAPPDATA%\<exe名>），用完 cg_free
+ * @note 存配置 / 缓存用
+ */
 char *cg_app_data_dir(void);
 
 /* ---- 配置（INI 文本格式） ---- */
-/** 读 [section] key；文件/节/键不存在时返回 def 的副本 */
+/**
+ * @brief 读 INI 里的一个键
+ * @param path ini 文件路径（UTF-8）
+ * @param section 节名（方括号里的那个）
+ * @param key 键名
+ * @param def 文件 / 节 / 键不存在时用它的副本顶上；可传 NULL 表示返回 NULL
+ * @return char * 堆串，用完 cg_free；键不存在时是 def 的副本
+ */
 char *cg_ini_read(const char *path, const char *section, const char *key, const char *def);
-/** 写 [section] key=value（文件里其它内容保持不动，没有就新建）；成功返回 0 */
+/**
+ * @brief 写一个键（文件里其它内容保持不动，文件没有就新建）
+ * @param path ini 文件路径（UTF-8）
+ * @param section 节名
+ * @param key 键名
+ * @param value 要写的值
+ * @return int 0 成功、非 0 失败
+ */
 int   cg_ini_write(const char *path, const char *section, const char *key, const char *value);
 
 /* ---- 文本与编码 ---- */
-/** 拼字符串（printf 风格），返回堆内存 */
+/**
+ * @brief 拼字符串（printf 风格）
+ * @param fmt printf 风格格式串
+ * @return char * 堆串，用完 cg_free；失败返回 NULL
+ */
 char *cg_str_format(const char *fmt, ...);
-/** 去掉首尾空白（空格 / 制表 / 换行），返回堆内存 */
-/** 复制一个字符串（堆内存，用完 cg_free；s 为 NULL 时返回 NULL）
- *  与 cg_str_format("%s", s) 等价，但不用过一遍 printf —— 想留下借用串的副本时用它。 */
+/**
+ * @brief 复制一个字符串
+ * @param s 源串；为 NULL 时返回 NULL
+ * @return char * 堆串，用完 cg_free
+ * @note 与 cg_str_format("%s", s) 等价，但不用过一遍 printf —— 想留下借用串的副本时用它
+ */
 char *cg_str_dup(const char *s);
+/**
+ * @brief 去掉首尾空白（空格 / 制表 / 换行）
+ * @param s 源串；为 NULL 时返回 NULL
+ * @return char * 堆串，用完 cg_free
+ */
 char *cg_str_trim(const char *s);
-/** 比较字符串（忽略英文大小写）：相等返回 1 */
+/**
+ * @brief 比较字符串（忽略英文大小写）
+ * @param a 串一；NULL 与 "" 同等看待
+ * @param b 串二；NULL 与 "" 同等看待
+ * @return int 1 相等、0 不等
+ */
 int   cg_str_equal(const char *a, const char *b);
-/** 把 src 里所有 from 换成 to，返回堆内存（from 为空则返回 src 的副本） */
+/**
+ * @brief 把 src 里出现的 from 全部换成 to
+ * @param src 源串
+ * @param from 被替换的子串；为空则返回 src 的副本
+ * @param to 替换成的子串
+ * @return char * 堆串，用完 cg_free
+ */
 char *cg_str_replace(const char *src, const char *from, const char *to);
-/** UTF-8 -> GBK（读老式 ANSI 文件后转成界面能显示的） */
+/**
+ * @brief UTF-8 -> GBK
+ * @param utf8 UTF-8 文本
+ * @return char * 堆串，用完 cg_free；失败返回 NULL
+ * @note 读老式 ANSI 文件后转成界面能显示的
+ */
 char *cg_utf8_to_gbk(const char *utf8);
-/** GBK -> UTF-8（要把界面里的中文写进老式 ANSI 文件时用） */
+/**
+ * @brief GBK -> UTF-8
+ * @param gbk GBK 文本
+ * @return char * 堆串，用完 cg_free；失败返回 NULL
+ * @note 要把界面里的中文写进老式 ANSI 文件时用
+ */
 char *cg_gbk_to_utf8(const char *gbk);
 
 /* ---- 编码：十六进制 / Base64 / URL ----
