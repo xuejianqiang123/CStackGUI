@@ -10,12 +10,20 @@
  *          随时可能被调），也不用操心"表初始化了没"。代价是比查表慢约 8 倍，
  *          对协议帧与几 MB 的文件无感（要算大文件走 cg_crc32_file，那里是分块读的）。
  *
- *          哈希**手写**，不调 CryptoAPI。理由不是"省依赖"，而是**链接命令是用户可见的
- *          公开契约**：用 advapi32 就得在 build-app.bat / packaging\build-app.bat /
- *          run-tests.bat / check-kit.bat 以及文档里教用户的那行链接命令都补 -ladvapi32，
- *          于是**所有既有用户项目的构建会当场 undefined reference to
- *          CryptAcquireContextW**。附带两个坑：FIPS 策略下 CALG_MD5 会被系统拒绝
- *          （而"核对固件 MD5"正是本功能的高频用法）、以及失去平台无关性。
+ *          哈希**手写**，不调 CryptoAPI。**最初写的理由是错的，已按实验更正**：
+ *          我原先说"用 advapi32 就得让所有既有用户项目的链接命令补 -ladvapi32"。2026-09-27
+ *          用工程自己的链接参数编了一个调用 CryptAcquireContextW 的探针
+ *          （build\probe_link\crypt_probe.c），**它链接通过了** —— advapi32 本来就在可解析
+ *          范围内（MinGW 的默认链接带着它，而且 cg_kit_sys.c 早就在用 RegOpenKeyExW）。
+ *          保留手写实现靠的是这三条**真实**理由：
+ *            1. **FIPS 策略下 CryptoAPI 会直接拒绝 CALG_MD5** —— 而"核对固件 MD5"正是本功能
+ *               的高频用法；客户机器的安全策略不该让这个功能失效；
+ *            2. 结果**不依赖客户机器上的 crypto 配置**（CSP 缺失 / 被策略裁剪 / 版本差异）：
+ *               同一个文件在哪台机器上算出来都一样，这对"核对"工具是硬要求；
+ *            3. 已经用两条互相独立的证据验过（公开向量 + Node/OpenSSL 派生），风险压住了。
+ *          （同一个判据在 cg_local_ip 上是**反过来**的：iphlpapi 确实没链接 —— 探针里
+ *          GetAdaptersInfo 报 undefined reference —— 所以"不枚举网卡拿 MAC 地址"仍然成立。
+ *          结论：**"我以为需要新链接库"是个可验证的假设，先编译一次再拿它当理由。**）
  *
  *          手写的风险控制（这一段最怕"算得像个样子但其实错"）：
  *          1. 常量表由 build\hash-tables.mjs 用 BigInt **精确推导**（整数牛顿法求

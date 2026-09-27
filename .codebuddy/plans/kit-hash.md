@@ -5,17 +5,23 @@
 
 ## 1. 决定：**手写**，不调 CryptoAPI
 
-先说清楚这不是"省依赖"的选择，而是**链接命令是用户可见的公开契约**：
-
-- 用 CryptoAPI 就得在 `build-app.bat`、`packaging\build-app.bat`、`tools\run-tests.bat`、
-  `tools\check-kit.bat` **以及 `docs/ARCHITECTURE.md` 里教用户的那行链接命令**
-  （`-lcomctl32 -luser32 -lgdi32 -lshell32 …`）都补 `-ladvapi32`。
-  于是**所有既有用户项目的构建会当场 `undefined reference to CryptAcquireContextW`**。
-  给一个校验功能配上"请改你的链接参数"，代价明显不对等。
-- 附带两个坑：**FIPS 策略下 `CALG_MD5` 会被系统拒绝**（而"核对固件 MD5"正是本功能的高频用法）；
-  以及失去平台无关性（手写这段是纯计算，将来别的后端也能用）。
-
-代价是自己维护 4 个算法。风险用两条独立证据压住（见 §4）。
+> **更正（2026-09-27，同一轮内）**：本节最初写的理由是"用 advapi32 就得让所有既有用户项目的
+> 链接命令补 `-ladvapi32`，否则当场 `undefined reference to CryptAcquireContextW`"。
+> **这个理由是错的。** 我用工程自己的链接参数编了一个调用 `CryptAcquireContextW` 的探针
+> （`build\probe_link\crypt_probe.c`），**它链接通过** —— advapi32 本来就在可解析范围内
+> （MinGW 的默认链接带着它；而且 `cg_kit_sys.c` 早就在用 `RegOpenKeyExW`，那是同一个库）。
+> 同一个探针里 `GetAdaptersInfo`（iphlpapi）报 `undefined reference`，所以那条判断另有其事。
+>
+> **保留手写实现，但理由换成真实的两条**：
+> 1. **FIPS 策略下 CryptoAPI 会直接拒绝 `CALG_MD5`** —— 而"核对固件 MD5"正是本功能的高频用法，
+>    客户机器的安全策略不该让这个功能失效；
+> 2. 结果**不依赖客户机器上的 crypto 配置**（CSP 缺失 / 被策略裁剪 / 版本差异）：同一个文件
+>    在哪台机器上算出来都一样 —— 对一个"核对"工具这是硬要求。
+>
+> 代码本身已经用两条独立证据验过（见 §4），保留它比推倒重来更划算。
+>
+> **教训（值得记住的流程）**：**"我以为需要新链接库"是个可验证的假设 —— 先编译一次，再拿它当
+> 理由。** 一条编译命令就能证伪，我却把它写进了提交信息。
 
 ## 2. 契约
 
