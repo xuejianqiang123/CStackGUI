@@ -27,18 +27,48 @@ extern int cg_test_fails;
 /** 1 = 安静模式：只记账不打印（--memcheck 的第一遍热身跑用） */
 extern int cg_test_quiet;
 
-/** 测试函数签名：一个套件就是这么一个无参无返回的函数 */
+/**
+ * @brief 测试函数签名：一个套件就是这么一个无参无返回的函数
+ * @return void 无返回值（断言失败只记账，不返回错误码）
+ */
 typedef void (*cg_test_fn)(void);
 
-/** 断言：cond 为真算过 */
+/**
+ * @brief 断言：条件为真算过
+ * @param what 打印出来的断言描述
+ * @param cond 条件，0 非 0 都收（非 0 算过）
+ * @return void 无返回值（失败只记账，不中断本套件）
+ */
 void cg_test_ok(const char *what, int cond);
-/** 断言：两个整数相等，不等时把实际/期望都打出来 */
+/**
+ * @brief 断言：两个整数相等
+ * @param what 打印出来的断言描述
+ * @param got 实际值
+ * @param want 期望值（不等时两者都会打出来）
+ * @return void 无返回值（失败只记账，不中断本套件）
+ */
 void cg_test_int(const char *what, long long got, long long want);
-/** 断言：两个字符串相等（NULL 一律当空串，方便直接喂 API 返回值） */
+/**
+ * @brief 断言：两个字符串相等
+ * @param what 打印出来的断言描述
+ * @param got 实际值；NULL 一律当空串
+ * @param want 期望值；NULL 一律当空串
+ * @return void 无返回值（失败只记账，不中断本套件）
+ */
 void cg_test_str(const char *what, const char *got, const char *want);
-/** 打一行说明，不计入断言数（分隔用例组用） */
+/**
+ * @brief 打一行说明，不计入断言数
+ * @param text 说明文字
+ * @return void 无返回值（分隔用例组用）
+ */
 void cg_test_note(const char *text);
-/** 注册一个套件；正常用法是下面的 CG_TEST_SUITE 宏，别直接调用 */
+/**
+ * @brief 注册一个套件
+ * @param name 打印出来的套件名
+ * @param fn 套件函数
+ * @return void 无返回值
+ * @note 正常用法是下面的 CG_TEST_SUITE 宏，别直接调用
+ */
 void cg_test_register(const char *name, cg_test_fn fn);
 
 /** 声明一个测试套件。放在套件函数定义之后、文件末尾。
@@ -55,7 +85,11 @@ void cg_test_register(const char *name, cg_test_fn fn);
     }
 
 #ifdef CG_TEST_MEMCHECK
-/** 当前存活的堆块数；只在 --memcheck 模式有意义（见 cg_test_memcheck.c） */
+/**
+ * @brief 取当前存活的堆块数
+ * @return int 存活块数
+ * @note 只在 --memcheck 模式有意义（见 cg_test_memcheck.c）
+ */
 int cg_test_mem_live(void);
 #endif
 

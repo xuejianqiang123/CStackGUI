@@ -144,6 +144,9 @@ function indexFunctions(src) {
     const line = lines[i];
     if (line === '' || /^\s/.test(line)) continue;      // 只看顶格行
     if (/^[#}\/*]/.test(line)) continue;
+    // 第三方 ABI 声明（如 __declspec(dllimport) 的 GDI+ 系列）不是本工程的函数，
+    // §1 的注释口径管不到它们
+    if (/^__declspec|^extern\s+"C"/.test(line)) continue;
     if (!/\(/.test(line)) continue;
     if (/\b(if|for|while|switch|return|else)\b/.test(line)) continue;
 
@@ -164,7 +167,10 @@ function indexFunctions(src) {
     const nameEnd = pg.nameEnd.trim();
     if (/^(struct|union|enum)\s+\w+$/.test(nameEnd)) continue;
     if (!/[A-Za-z_]\w*\s*$/.test(nameEnd)) continue;
-    const name = nameEnd.match(/([A-Za-z_]\w*)$/)[1];
+    // 函数指针 typedef（typedef void (*cg_event_fn)(...)）的名字在括号里，别用返回类型当名字
+    const fp = sig.match(/\(\s*\*\s*([A-Za-z_]\w*)\s*\)/);
+    const name = (fp && sig.indexOf('(') === sig.indexOf(fp[0])) ? fp[1]
+               : nameEnd.match(/([A-Za-z_]\w*)$/)[1];
     if (NOT_A_FUNCTION.includes(name)) continue;
 
     const named = [];

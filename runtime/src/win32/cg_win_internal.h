@@ -61,41 +61,94 @@ typedef struct {
 
 /* ---------------- cg_win_theme.c：深色模式 ---------------- */
 
-/** @brief 读系统的"应用深色"设置（HKCU …Themes\Personalize 的 AppsUseLightTheme）；读不到按浅色 */
+/**
+ * @brief 读系统的"应用深色"设置（HKCU …Themes\Personalize 的 AppsUseLightTheme）
+ * @return int 1 深色、0 浅色（读不到按浅色算）
+ */
 int cgw_theme_system_dark(void);
-/** @brief 定下"现在是深色吗"并建好背景刷 —— 建窗口时调一次；WM_THEMECHANGED 时再调（重判 auto） */
+/**
+ * @brief 定下"现在是深色吗"并建好背景刷
+ * @param app 应用
+ * @return void 无返回值
+ * @note 建窗口时调一次；收到 WM_THEMECHANGED 时再调（重新判定 auto）
+ */
 void cgw_theme_init(cg_app_t *app);
-/** @brief 把当前主题应用到窗口与全部控件（换背景刷、重设系统控件的深色主题、重画） */
+/**
+ * @brief 把当前主题应用到窗口与全部控件（换背景刷、重设系统控件的深色主题、重画）
+ * @param app 应用
+ * @return void 无返回值
+ */
 void cgw_theme_apply(cg_app_t *app);
-/** @brief 窗口底色（深色 = 深面；否则 doc.bg 或系统面色） */
+/**
+ * @brief 取窗口底色
+ * @param app 应用
+ * @return unsigned 0xRRGGBB：深色 = 深面；否则 doc.bg 或系统面色
+ */
 unsigned cgw_theme_window_bg(const cg_app_t *app);
-/** @brief 卡片"没设底色时"自己填的那个面色（深色下一并变深） */
+/**
+ * @brief 取卡片"没设底色时"自己填的那个面色
+ * @param app 应用
+ * @return unsigned 0xRRGGBB（深色下一并变深）
+ */
 unsigned cgw_theme_card_face(const cg_app_t *app);
-/** @brief 无显式前景色时该用的文字色；返回 CG_COLOR_NONE = 别动（浅色下就是这条） */
+/**
+ * @brief 取无显式前景色时该用的文字色
+ * @param app 应用
+ * @return unsigned 0xRRGGBB；返回 CG_COLOR_NONE = 别动（浅色下就是这条）
+ */
 unsigned cgw_theme_text(const cg_app_t *app);
-/** @brief 让**一个**控件的原生窗口跟随当前主题（cgw_create_native 建完就调；
- *         cgw_theme_apply 换主题时对全部控件调） */
+/**
+ * @brief 让**一个**控件的原生窗口跟随当前主题
+ * @param w 控件
+ * @return void 无返回值
+ * @note cgw_create_native 建完就调；cgw_theme_apply 换主题时对全部控件调
+ */
 void cgw_theme_widget(cg_widget_t *w);
 
 /* ---------------- cg_win_drop.c：文件拖放 ---------------- */
 
-/** @brief 处理一次 WM_DROPFILES：取路径 -> 填清单 -> 派发 drop 事件 -> 清清单
- *  @param hdrop 消息带进来的 HDROP（**所有权归系统**，调用方自己 DragFinish） */
+/**
+ * @brief 处理一次 WM_DROPFILES：取路径 -> 填清单 -> 派发 drop 事件 -> 清清单
+ * @param app 目标应用
+ * @param hdrop 消息带进来的 HDROP（**所有权归系统**，调用方自己 DragFinish）
+ * @return void 无返回值
+ */
 void cgw_win_drop(cg_app_t *app, HDROP hdrop);
 
 /* ---------------- cg_win_util.c ---------------- */
 
-/** @brief 宽字符 -> UTF-8 堆串（调用方 free）；失败 NULL */
+/**
+ * @brief 宽字符 -> UTF-8 堆串
+ * @param ws 宽串；可为 NULL
+ * @return char * 堆串，调用方 free；失败或 ws 为 NULL 返回 NULL
+ */
 char *cgw_utf8_from_wcs(const wchar_t *ws);
-/** @brief 宽字符 -> UTF-8 写进调用方缓冲（截断安全；失败/装不下留空串，总以 NUL 结尾）。
- *  与 cgw_utf8_from_wcs 同一份转换逻辑，给不要 malloc 的调用点用。 */
+/**
+ * @brief 宽字符 -> UTF-8 写进调用方缓冲（截断安全，总以 NUL 结尾）
+ * @param ws 宽串；可为 NULL
+ * @param out 输出缓冲
+ * @param out_size out 的字节数
+ * @return void 无返回值（失败 / 装不下就留空串）
+ * @note 与 cgw_utf8_from_wcs 同一份转换逻辑，给不要 malloc 的调用点用
+ */
 void cgw_utf8_into(const wchar_t *ws, char *out, int out_size);
 
 /* ---------------- cg_win_layout.c：余量分配（.cgui 的 grow） ---------------- */
 
-/** @brief 按 .cgui 的 grow 重排窗口里的控件（WM_SIZE 里调，**在派发 size 事件之前**） */
+/**
+ * @brief 按 .cgui 的 grow 重排窗口里的控件
+ * @param app 应用
+ * @param now_w 客户区当前宽（逻辑像素）
+ * @param now_h 客户区当前高（逻辑像素）
+ * @return void 无返回值
+ * @note WM_SIZE 里调，**在派发 size 事件之前**
+ */
 void cgw_layout_apply(cg_app_t *app, int now_w, int now_h);
-/** @brief 丢掉布局基准，让下一个 WM_SIZE 重新取（DPI 变化后调） */
+/**
+ * @brief 丢掉布局基准，让下一个 WM_SIZE 重新取
+ * @param app 应用
+ * @return void 无返回值（DPI 变化后调）
+ */
 void cgw_layout_reset(cg_app_t *app);
 
 /* ============================================================ 窗口类名 / 常量 */
@@ -148,41 +201,114 @@ __declspec(dllimport) GpStatus WINAPI GdipSaveImageToFile(void *image, const WCH
 
 /* ---------------- cg_win_util.c：通用工具 ---------------- */
 
-/** @brief UTF-8 转 UTF-16 堆串（调用方 free）；空/失败返回 NULL */
+/**
+ * @brief UTF-8 转 UTF-16 堆串
+ * @param s UTF-8 源串；空串或 NULL 返回 NULL
+ * @return wchar_t * 堆串，调用方 free；失败返回 NULL
+ */
 wchar_t *cgw_wc_from_utf8(const char *s);
-/** @brief 逻辑像素转物理像素（按 app 的 DPI 百分比四舍五入） */
+/**
+ * @brief 逻辑像素转物理像素（按 app 的 DPI 百分比四舍五入）
+ * @param app 应用（读缩放比）
+ * @param logical 逻辑像素值
+ * @return int 物理像素值
+ */
 int cgw_scale_px(const cg_app_t *app, int logical);
-/** @brief 取（或缓存创建）一个 HFONT；size_pt<=0 返回 NULL 走系统默认 */
+/**
+ * @brief 取（或缓存创建）一个 HFONT
+ * @param app 应用（字体按 app 缓存，退出时统一销毁）
+ * @param family 字体名
+ * @param size_pt 字号（磅）；<= 0 返回 NULL 走系统默认
+ * @param bold 0 常规、非 0 加粗
+ * @param underline 0 无下划线、非 0 加下划线
+ * @return HFONT 缓存里的字体句柄（别销毁）；size_pt <= 0 返回 NULL
+ */
 HFONT cgw_font_for(cg_app_t *app, const char *family, int size_pt, int bold, int underline);
-/** @brief 0xRRGGBB 转 COLORREF */
+/**
+ * @brief 0xRRGGBB 转 COLORREF
+ * @param c 0xRRGGBB
+ * @return COLORREF Win32 的 0x00BBGGRR
+ */
 COLORREF cgw_to_colorref(unsigned c);
-/** @brief 取一个按颜色缓存的实心画刷，供 WM_CTLCOLOR* 返回 */
+/**
+ * @brief 取一个按颜色缓存的实心画刷
+ * @param rgb 0xRRGGBB
+ * @return HBRUSH 缓存里的画刷（别销毁），供 WM_CTLCOLOR* 返回
+ */
 HBRUSH cgw_brush_for(unsigned rgb);
 
-/** @brief 双缓冲上屏：fn 把整个控件画进内存位图，再一次 BitBlt 贴到屏幕
- *  @details 自绘控件分几笔直接画在屏幕 DC 上时，每一笔之间都是可见的中间状态
- *           （底色先糊上去、内容再一笔一笔出现）——拖滑块 / 拽分隔条 / 实时图表 / 缩放
- *           窗口这类高频重绘下就是肉眼可见的闪烁。先画进内存位图、最后一次贴上屏，
- *           中间状态就不会被扫出来。fn 收到的 rc 是内存位图的坐标（左上 0,0）。
- *           2026-09-25 起，ring/progress/chart/panel/image/splitter 统一走它。
+/**
+ * @brief 双缓冲上屏：fn 把整个控件画进内存位图，再一次 BitBlt 贴到屏幕
+ * @param dc 目标 DC
+ * @param rc 要重画的矩形（物理像素）
+ * @param fn 真正画内容的回调，收到的 rc 是内存位图的坐标（左上 0,0）
+ * @param ctx 传给 fn 的自定义数据（可以是任何东西，fn 自己解释）
+ * @return void 无返回值
+ * @details 自绘控件分几笔直接画在屏幕 DC 上时，每一笔之间都是可见的中间状态
+ *          （底色先糊上去、内容再一笔一笔出现）——拖滑块 / 拽分隔条 / 实时图表 / 缩放
+ *          窗口这类高频重绘下就是肉眼可见的闪烁。先画进内存位图、最后一次贴上屏，
+ *          中间状态就不会被扫出来。2026-09-25 起，ring/progress/chart/panel/image/splitter 统一走它
  */
 void cgw_paint_buffered(HDC dc, const RECT *rc,
                         void (*fn)(HDC, const RECT *, void *), void *ctx);
-/** @brief 控件类型判断（NULL 安全） */
+/**
+ * @brief 控件类型判断
+ * @param w 控件
+ * @param type 期望的类型名
+ * @return int 1 相符、0 不符或 w 为 NULL
+ */
 int cgw_is_t(const cg_widget_t *w, const char *type);
-/** @brief 是否输入类控件（edit/richtext）；数值框判定见 cg_widget_is_numedit() */
+/**
+ * @brief 是不是输入类控件（edit / richtext）
+ * @param w 控件
+ * @return int 1 是、0 不是
+ * @note 数值框判定见 cg_widget_is_numedit()
+ */
 int cgw_is_editlike(const cg_widget_t *w);
-/** 输入框的「输入方式」限制：这个字符要不要吞掉（WM_CHAR 过滤，见 cg_win_ctl.c） */
+/**
+ * @brief 输入框的「输入方式」限制：这个字符要不要吞掉
+ * @param w edit 控件（读 input 字段）
+ * @param hwnd 该控件的原生窗口
+ * @param ch 待判定的字符
+ * @return int 1 吞掉、0 放行
+ * @note WM_CHAR 过滤，见 cg_win_ctl.c
+ */
 int cgw_edit_char_reject(const cg_widget_t *w, HWND hwnd, wchar_t ch);
-/** 输入框的「输入方式」限制：失焦时校验文本（越界夹回、非法清空） */
+/**
+ * @brief 输入框的「输入方式」限制：失焦时校验文本（越界夹回、非法清空）
+ * @param w edit 控件
+ * @param hwnd 该控件的原生窗口
+ * @return void 无返回值
+ */
 void cgw_edit_validate(cg_widget_t *w, HWND hwnd);
-/** @brief 解析资源路径（相对 .cgui 目录 / exe 目录 / 绝对），成功返回 0 */
+/**
+ * @brief 解析资源路径（相对 .cgui 目录 / exe 目录 / 绝对）
+ * @param app 应用（提供 .cgui 目录与 exe 目录）
+ * @param path 资源路径
+ * @param out 解析结果输出缓冲
+ * @param outsz out 的字节数
+ * @return int 0 成功、非 0 找不到或放不下
+ */
 int cgw_resolve_asset(const cg_app_t *app, const char *path, char *out, size_t outsz);
-/** @brief 把图片文件读成 HBITMAP（走 GDI+），失败返回 NULL */
+/**
+ * @brief 把图片文件读成 HBITMAP（走 GDI+）
+ * @param app 应用（用于解析相对路径）
+ * @param path 图片路径（png/jpg/bmp/gif）
+ * @return HBITMAP 调用方负责 DeleteObject；失败返回 NULL
+ */
 HBITMAP cgw_load_image_file(const cg_app_t *app, const char *path);
-/** @brief 把 .ico 读成 HICON，失败返回 NULL */
+/**
+ * @brief 把 .ico 读成 HICON
+ * @param app 应用（用于解析相对路径）
+ * @param path .ico 路径
+ * @return HICON 调用方负责 DestroyIcon；失败返回 NULL
+ */
 HICON cgw_load_icon_file(const cg_app_t *app, const char *path);
-/** @brief 鼠标指针名 -> 系统指针 id（.cgui 的 app.cursor） */
+/**
+ * @brief 鼠标指针名 -> 系统指针 id
+ * @param name .cgui 的 app.cursor 取值，如 "arrow" / "hand"
+ * @return LPCWSTR MAKEINTRESOURCE 风格的指针 id；不认识返回 NULL（用系统默认）
+ */
 LPCWSTR cgw_cursor_id_of(const char *name);
 
 /** GDI+ 启动令牌，0 表示没起来；cgw_win_init 起、win_shutdown 停 */
@@ -195,86 +321,260 @@ extern const wchar_t *g_win_richedit_class;
 /** atl.dll 是否可用（browser 控件用 AtlAxWin 宿主 WebBrowser） */
 extern int g_win_atl_ok;
 
-/** @brief 控件 -> Win32 窗口类名（group/box/card/shape 走自注册 Panel 类） */
+/**
+ * @brief 控件 -> Win32 窗口类名
+ * @param w 控件
+ * @return const wchar_t * 类名（group / box / card / shape 走自注册的 Panel 类）
+ */
 const wchar_t *cgw_class_of(const cg_widget_t *w);
-/** @brief datepicker 是否为"时间"格式 */
+/**
+ * @brief datepicker 是不是"只要时间"的格式
+ * @param w datepicker 控件（读 format）
+ * @return int 1 是、0 不是
+ */
 int cgw_is_time_only(const cg_widget_t *w);
-/** @brief datepicker 是否为"日期+时间"双控件模式 */
+/**
+ * @brief datepicker 是不是"日期 + 时间"双控件模式
+ * @param w datepicker 控件（读 format）
+ * @return int 1 是、0 不是
+ */
 int cgw_is_datetime(const cg_widget_t *w);
-/** @brief 分隔条是不是竖的（左右分栏 = 竖条，format != "row"） */
+/**
+ * @brief 分隔条是不是竖的
+ * @param w splitter 控件
+ * @return int 1 竖条（左右分栏）、0 横条（format == "row"）
+ */
 int cgw_splitter_is_vert(const cg_widget_t *w);
-/** @brief 控件 -> WS 样式位 */
+/**
+ * @brief 控件 -> WS 样式位
+ * @param w 控件（读类型与 input / multiline / scroll 等字段）
+ * @return DWORD CreateWindowEx 的 dwStyle
+ */
 DWORD cgw_style_of(const cg_widget_t *w);
 
-/** @brief 控件 -> WS_EX 扩展样式位 */
+/**
+ * @brief 控件 -> WS_EX 扩展样式位
+ * @param w 控件
+ * @return DWORD CreateWindowEx 的 dwExStyle
+ */
 DWORD cgw_exstyle_of(const cg_widget_t *w);
-/** @brief 自绘控件画内容前，先把整块填成"背后"的颜色 */
+/**
+ * @brief 自绘控件画内容前，先把整块填成"背后"的颜色
+ * @param w 控件（决定"背后"是什么色）
+ * @param dc 目标 DC
+ * @param rc 要填的矩形
+ * @return void 无返回值（不填的话双缓冲帧里会留下垃圾像素）
+ */
 void cgw_clear_to_behind(cg_widget_t *w, HDC dc, const RECT *rc);
-/** @brief WM_CTLCOLOR* 的共用处理；返回 NULL 表示交给系统默认 */
+/**
+ * @brief WM_CTLCOLOR* 的共用处理
+ * @param app 应用
+ * @param wp WM_CTLCOLOR* 的 wParam（HDC）
+ * @param lp WM_CTLCOLOR* 的 lParam（控件 HWND）
+ * @return HBRUSH 该用的背景刷；返回 NULL 表示交给系统默认
+ */
 HBRUSH cgw_ctlcolor_brush(cg_app_t *app, WPARAM wp, LPARAM lp);
-/** @brief 把 text 里的日期时间写法解析成 SYSTEMTIME */
+/**
+ * @brief 把 text 里的日期时间写法解析成 SYSTEMTIME
+ * @param w datepicker 控件（读 text 与 format）
+ * @param date 日期出口
+ * @param time 时间出口（只要时间时 date 也会被填一份）
+ * @return void 无返回值
+ */
 void cgw_datetime_from_text(const cg_widget_t *w, SYSTEMTIME *date, SYSTEMTIME *time);
-/** @brief 把控件里的日期时间写回 text */
+/**
+ * @brief 把控件里的日期时间写回 text
+ * @param w datepicker 控件
+ * @param date_hwnd 日期那个原生窗口
+ * @param time_hwnd 时间那个原生窗口（不是双控件模式时可为 NULL）
+ * @return void 无返回值
+ */
 void cgw_datetime_pull_text(cg_widget_t *w, HWND date_hwnd, HWND time_hwnd);
 
 /* ---------------- 自绘窗口类：9 个类按控件分居四个文件
  *   cg_win_draw_canvas.c（image/圆环/进度条/画板）、cg_win_draw_panel.c（面板/分隔条）、
  *   cg_win_draw_chart.c（图表）、cg_win_draw_gauge.c（状态灯/仪表盘） ---------------- */
 
+/**
+ * @brief 注册 image 自绘窗口类
+ * @return void 无返回值（重复注册由系统忽略）
+ */
 void cgw_register_image_class(void);
+/**
+ * @brief 注册圆环进度自绘窗口类
+ * @return void 无返回值（重复注册由系统忽略）
+ */
 void cgw_register_ring_class(void);
+/**
+ * @brief 注册进度条自绘窗口类
+ * @return void 无返回值（重复注册由系统忽略）
+ */
 void cgw_register_progress_class(void);
+/**
+ * @brief 注册画板自绘窗口类
+ * @return void 无返回值（重复注册由系统忽略）
+ */
 void cgw_register_canvas_class(void);
+/**
+ * @brief 注册分隔条自绘窗口类
+ * @return void 无返回值（重复注册由系统忽略）
+ */
 void cgw_register_splitter_class(void);
+/**
+ * @brief 注册图表自绘窗口类
+ * @return void 无返回值（重复注册由系统忽略）
+ */
 void cgw_register_chart_class(void);
+/**
+ * @brief 注册状态灯自绘窗口类
+ * @return void 无返回值（重复注册由系统忽略）
+ */
 void cgw_register_led_class(void);
+/**
+ * @brief 注册仪表盘自绘窗口类
+ * @return void 无返回值（重复注册由系统忽略）
+ */
 void cgw_register_meter_class(void);
+/**
+ * @brief 注册面板自绘窗口类（group / box / card / shape 共用）
+ * @return void 无返回值（重复注册由系统忽略）
+ */
 void cgw_register_panel_class(void);
-/** @brief 面板窗口过程（group/box/card/shape）：转发子控件通知 + 自绘底板 */
+/**
+ * @brief 面板窗口过程（group / box / card / shape）：转发子控件通知 + 自绘底板
+ * @param hwnd 面板窗口
+ * @param msg 消息
+ * @param wp wParam
+ * @param lp lParam
+ * @return LRESULT 交给 DefWindowProc 或自行处理的结果
+ */
 LRESULT CALLBACK cgw_PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
 /* ---------------- cg_win_ownerdraw.c：owner-draw 项绘制 ---------------- */
 
-/** @brief WM_DRAWITEM 统一分发：按钮/勾选/开关交给 cg_skin，其余交给各 draw_* */
+/**
+ * @brief WM_DRAWITEM 统一分发：按钮 / 勾选 / 开关交给 cg_skin，其余交给各 draw_*
+ * @param app 应用
+ * @param dis WM_DRAWITEM 的结构体
+ * @return void 无返回值
+ */
 void cgw_draw_own_item(cg_app_t *app, const DRAWITEMSTRUCT *dis);
-/** @brief 把一条原生通知（code/cmd_id）归一后交给 cg_dispatch */
+/**
+ * @brief 把一条原生通知（code / cmd_id）归一后交给 cg_dispatch
+ * @param app 应用
+ * @param hwnd 通知来自哪个原生窗口
+ * @param code 通知码（如 BN_CLICKED / LVN_ITEMCHANGED）
+ * @param cmd_id WM_COMMAND 的 LOWORD；非命令通知传 0
+ * @return void 无返回值
+ */
 void cgw_notify_from(cg_app_t *app, HWND hwnd, int code, int cmd_id);
 
 /* ---------------- cg_win_create.c：原生控件创建 ---------------- */
 
-/** @brief 按原生窗口反查控件（同时比对 native 与 native2），找不到返回 NULL */
+/**
+ * @brief 按原生窗口反查控件（同时比对 native 与 native2）
+ * @param app 应用
+ * @param h 原生窗口句柄
+ * @return cg_widget_t* 控件；找不到返回 NULL
+ */
 cg_widget_t *cgw_widget_by_hwnd(cg_app_t *app, HWND h);
-/** @brief 控件的原生父窗口（容器控件有原生窗口就是容器子控件） */
+/**
+ * @brief 取控件的原生父窗口
+ * @param app 应用
+ * @param w 控件
+ * @return HWND 容器控件有原生窗口就是容器子控件，否则是主窗口
+ */
 HWND cgw_parent_hwnd_of(const cg_app_t *app, const cg_widget_t *w);
-/** @brief 建立某控件的原生窗口（menu/timer 除外），并做首次同步 */
+/**
+ * @brief 建立某控件的原生窗口（menu / timer 除外），并做首次同步
+ * @param w 控件
+ * @return void 无返回值
+ */
 void cgw_create_native(cg_widget_t *w);
-/** @brief 递归建原生控件树（父先于子） */
+/**
+ * @brief 递归建原生控件树（父先于子）
+ * @param parent 从哪个控件往下建
+ * @return void 无返回值
+ * @note 按树序创建是硬约束：子控件要在父窗口已存在时才能挂上去
+ */
 void cgw_create_native_tree(cg_widget_t *parent);
-/** @brief 销毁控件的原生窗口并释放相关资源（位图 / imagelist / 映射表） */
+/**
+ * @brief 销毁控件的原生窗口并释放相关资源（位图 / imagelist / 映射表）
+ * @param w 控件
+ * @return void 无返回值
+ */
 void cgw_destroy_native(cg_widget_t *w);
 
 /* ---------------- cg_win_sync.c：状态同步 ---------------- */
 
-/** @brief 切页后把 tabs 的当前页子控件刷新到最新 */
+/**
+ * @brief 切页后把 tabs 当前页的子控件刷新到最新
+ * @param tabs tabs 控件
+ * @return void 无返回值
+ */
 void cgw_sync_tabs_pages(cg_widget_t *tabs);
-/** @brief 把一个图标文件加进 imagelist，返回下标，失败 -1 */
+/**
+ * @brief 把一个图标文件加进 imagelist
+ * @param w 拥有 imagelist 的控件（表格 / 树，用于解析相对路径）
+ * @param il 目标 imagelist
+ * @param path 图标文件路径
+ * @param cell 单元格尺寸（物理像素），图标会被缩到这个大小
+ * @return int 图标下标；失败返回 -1
+ */
 int cgw_imagelist_add_file(cg_widget_t *w, HIMAGELIST il, const char *path, int cell);
-/** @brief 惰性创建表格的 imagelist */
+/**
+ * @brief 惰性创建表格的 imagelist
+ * @param h 表格的原生窗口（LVSIL_SMALL 挂在它身上）
+ * @param w 表格控件（创建结果缓存在 w->imglist）
+ * @return HIMAGELIST 已存在的或新建的 imagelist；失败返回 NULL
+ */
 HIMAGELIST cgw_table_imagelist(HWND h, cg_widget_t *w);
-/** @brief 同 cgw_wc_from_utf8，但把 \n 展开成多行 EDIT 要的 \r\n */
+/**
+ * @brief 同 cgw_wc_from_utf8，但把 \n 展开成多行 EDIT 要的 \r\n
+ * @param s UTF-8 源串
+ * @return wchar_t * 堆串，调用方 free；失败返回 NULL
+ */
 wchar_t *cgw_wc_from_utf8_crlf(const char *s);
-/** @brief 原生控件当前文本是否已经是 wt */
+/**
+ * @brief 原生控件当前文本是否已经是 wt（省掉一次多余的 SetWindowText）
+ * @param h 原生窗口
+ * @param wt 期望的宽串
+ * @return int 1 已经一致、0 需要写
+ */
 int cgw_hwnd_text_is(HWND h, const wchar_t *wt);
-/** @brief 把控件逻辑状态同步到原生控件（入口带防重入保护） */
+/**
+ * @brief 把控件逻辑状态同步到原生控件（入口带防重入保护）
+ * @param w 控件
+ * @return void 无返回值
+ * @note 只按 *_dirty 标记重建该重建的部分，否则用户的选择会被反复重置
+ */
 void cgw_sync_widget(cg_widget_t *w);
 
 /* ---------------- cg_win_notify.c：通知映射 ---------------- */
 
-/** @brief 把编辑框当前文字拉回控件模型 */
+/**
+ * @brief 把编辑框当前文字拉回控件模型
+ * @param w edit 控件
+ * @param hwnd 该控件的原生窗口
+ * @return void 无返回值（文本没变时不做任何事）
+ */
 void cgw_pull_edit_text(cg_widget_t *w, HWND hwnd);
-/** @brief 通知映射：原生通知 -> CStackGUI 事件（cmd_id 是 WM_COMMAND 的 LOWORD） */
+/**
+ * @brief 通知映射：原生通知 -> CStackGUI 事件
+ * @param app 应用
+ * @param w 通知对应的控件（可为 NULL，靠 cmd_id 反查）
+ * @param hwnd 通知来自哪个原生窗口
+ * @param code 通知码
+ * @param cmd_id WM_COMMAND 的 LOWORD
+ * @return void 无返回值
+ */
 void cgw_notify_body(cg_app_t *app, cg_widget_t *w, HWND hwnd, int code, int cmd_id);
-/** @brief WM_NOTIFY：标签页 / 树 / 表格 / 微调 四类通知的公共路由 */
+/**
+ * @brief WM_NOTIFY：标签页 / 树 / 表格 / 微调 四类通知的公共路由
+ * @param app 应用
+ * @param hdr WM_NOTIFY 的通知头
+ * @return LRESULT 已处理返回 0，未处理交给系统默认
+ */
 LRESULT cgw_notify_common(cg_app_t *app, const NMHDR *hdr);
 
 /* ---------------- cg_win_event.c：焦点子类与窗口事件 ---------------- */
@@ -284,50 +584,110 @@ extern int g_win_in_notify;
 /** 全局焦点子类要用的当前应用 */
 extern cg_app_t *g_win_app;
 
-/** @brief 控件统一子类过程：焦点事件、通知转发、评分/分页点击判定 */
+/**
+ * @brief 控件统一子类过程：焦点事件、通知转发、评分 / 分页点击判定
+ * @param hwnd 被套子类的控件窗口
+ * @param msg 消息
+ * @param wp wParam
+ * @param lp lParam
+ * @param id 子类 id（cgw_subclass_for_events 传进来）
+ * @param ref 引用数据（当前是 cg_widget_t*）
+ * @return LRESULT DefSubclassProc 的结果或自行处理的结果
+ */
 LRESULT CALLBACK cgw_FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR id, DWORD_PTR ref);
-/** @brief 给控件套统一子类（每个控件一次） */
+/**
+ * @brief 给控件套统一子类（每个控件一次）
+ * @param h 控件窗口
+ * @return void 无返回值
+ */
 void cgw_subclass_for_events(HWND h);
-/** @brief 把一个控件注册进 tooltip（文本用 LPSTR_TEXTCALLBACK 现取） */
+/**
+ * @brief 把一个控件注册进 tooltip
+ * @param tooltip tooltip 控件的窗口
+ * @param forw 要挂提示的控件窗口（文本用 LPSTR_TEXTCALLBACK 现取，改了立即生效）
+ * @return void 无返回值
+ */
 void cgw_tooltip_add_for(HWND tooltip, HWND forw);
 
 /* ---------------- cg_win_main.c：主窗口过程 ---------------- */
 
-/** @brief 向"代表主窗口"的伪控件派发一个窗口级事件 */
+/**
+ * @brief 向"代表主窗口"的伪控件派发一个窗口级事件
+ * @param app 应用
+ * @param ev 窗口级事件类型（READY / SIZE / CLOSE ...）
+ * @return void 无返回值
+ */
 void cgw_win_emit(cg_app_t *app, cg_event_t ev);
-/** @brief 主窗口过程：创建/通知/绘制/配色/DPI/定时器/窗口事件/关闭处理 */
+/**
+ * @brief 主窗口过程：创建 / 通知 / 绘制 / 配色 / DPI / 定时器 / 窗口事件 / 关闭处理
+ * @param hwnd 主窗口
+ * @param msg 消息
+ * @param wp wParam
+ * @param lp lParam
+ * @return LRESULT 交给 DefWindowProc 或自行处理的结果
+ */
 LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
 /* ---------------- cg_win_menu.c：菜单与工具栏 ---------------- */
 
-/** @brief 菜单按钮：在按钮下方弹出菜单，选中项直接派发 */
+/**
+ * @brief 菜单按钮：在按钮下方弹出菜单，选中项直接派发
+ * @param app 应用
+ * @param w menubutton 控件（菜单项来自它的行表）
+ * @param hwnd 按钮的原生窗口（决定弹出位置）
+ * @return void 无返回值
+ */
 void cgw_popup_menu_for(cg_app_t *app, cg_widget_t *w, HWND hwnd);
 
-/** @brief 按客户区尺寸重算窗口大小（补上菜单栏占掉的高度）。
- *  挂上菜单栏之后、以及**运行时重建菜单栏之后**都要走它 —— 同一规则一份实现：
- *  重建时忘了它，客户区就会少掉一条菜单栏的高度（界面整体上移、底部被裁）。
- *  注：给 core 调的那个跨层入口叫 `cg_win_menu_rebuild`，声明在 core 的 cg_internal.h
- *  （本仓口径：跨层 `cg_win_*`、win32 内部 `cgw_*`）。 */
+/**
+ * @brief 按客户区尺寸重算窗口大小（补上菜单栏占掉的高度）
+ * @param app 应用
+ * @return void 无返回值
+ * @note 挂上菜单栏之后、以及**运行时重建菜单栏之后**都要走它 —— 同一规则一份实现：
+ *       重建时忘了它，客户区就会少掉一条菜单栏的高度（界面整体上移、底部被裁）。
+ *       给 core 调的那个跨层入口叫 `cg_win_menu_rebuild`，声明在 core 的 cg_internal.h
+ *       （本仓口径：跨层 `cg_win_*`、win32 内部 `cgw_*`）
+ */
 void cgw_menu_fit_client(cg_app_t *app);
-/** @brief 由控件的菜单项数组建一个 HMENU（调用方 DestroyMenu）。
- *  as_bar=1 建**菜单栏**（窗口挂载用，必须 CreateMenu）；as_bar=0 建弹出菜单
- *  （menubutton / TrackPopupMenu 用，必须 CreatePopupMenu）。
- *  两者不能混：给 SetMenu 传 CreatePopupMenu 的表会静默失败 —— 菜单栏就是不显示。 */
+/**
+ * @brief 由控件的菜单项数组建一个 HMENU
+ * @param w 菜单所属控件（menu / menubutton）
+ * @param as_bar 1 建**菜单栏**（窗口挂载用）、0 建弹出菜单（TrackPopupMenu 用）
+ * @return HMENU 新建的菜单，调用方负责 DestroyMenu
+ * @note 两者不能混：给 SetMenu 传 CreatePopupMenu 的表会静默失败 —— 菜单栏就是不显示
+ */
 HMENU cgw_menu_build(const cg_widget_t *w, int as_bar);
-/** @brief 填充工具栏按钮（文字按钮 + BTNS_SHOWTEXT） */
+/**
+ * @brief 填充工具栏按钮（文字按钮 + BTNS_SHOWTEXT）
+ * @param h 工具栏的原生窗口
+ * @param w toolbar 控件（条目来自它的 items 表）
+ * @return void 无返回值
+ */
 void cgw_build_toolbar(HWND h, cg_widget_t *w);
 
 /* ---------------- cg_win_window.c：窗口生命周期 ---------------- */
 
-/** @brief 按顺序初始化：DPI、注册自绘类、建窗口、tooltip、定时器、建控件树 */
+/**
+ * @brief 按顺序初始化：DPI、注册自绘类、建窗口、tooltip、定时器、建控件树
+ * @param app 应用
+ * @return int 0 成功、非 0 失败（已写日志）
+ */
 int cgw_win_init(cg_app_t *app);
 
-/** @brief 按动作表建加速键表（HACCEL）。没有带快捷键的动作时是空操作。
- *  @details 必须在消息循环之前建好（win_run 里用它做 TranslateAccelerator）。
- *           这是"Ctrl+S 在输入框里也能按"的唯一实现方式 —— 窗口级 keydown 事件
- *           收不到被 EDIT 吃掉的按键。 */
+/**
+ * @brief 按动作表建加速键表（HACCEL）
+ * @param app 应用（表存进后端状态，退出时由 cgw_accel_destroy 释放）
+ * @return void 无返回值（没有带快捷键的动作时是空操作）
+ * @note 必须在消息循环之前建好（win_run 里用它做 TranslateAccelerator）。
+ *       这是"Ctrl+S 在输入框里也能按"的唯一实现方式 —— 窗口级 keydown 事件
+ *       收不到被 EDIT 吃掉的按键
+ */
 void cgw_accel_build(cg_app_t *app);
-/** @brief 销毁加速键表（幂等、NULL 安全） */
+/**
+ * @brief 销毁加速键表
+ * @param app 应用
+ * @return void 无返回值（幂等、NULL 安全）
+ */
 void cgw_accel_destroy(cg_app_t *app);
 
 #endif /* CG_WIN_INTERNAL_H */

@@ -124,12 +124,36 @@ typedef struct {
     cg_evmask_t events;
 } cg_kind_info_t;
 
+/**
+ * @brief 按 .cgui 的 type 字段找控件类型信息
+ * @param type 类型名，如 "button"（大小写敏感，与画布 KINDS 一致）
+ * @return const cg_kind_info_t* 静态表项，别 free；不认识返回 NULL
+ */
 const cg_kind_info_t *cg_kind_lookup(const char *type);
+/**
+ * @brief 按枚举值找控件类型信息
+ * @param kind 类型枚举
+ * @return const cg_kind_info_t* 静态表项，别 free；越界返回 NULL
+ */
 const cg_kind_info_t *cg_kind_info(cg_kind_t kind);
+/**
+ * @brief 取控件类型名
+ * @param kind 类型枚举
+ * @return const char* 静态字符串（如 "button"），别 free；越界返回 "?"
+ */
 const char           *cg_kind_name(cg_kind_t kind);
-/** 某个控件类型支不支持这个事件 */
+/**
+ * @brief 某个控件类型支不支持这个事件
+ * @param type 类型名
+ * @param ev 事件类型
+ * @return int 1 支持、0 不支持或类型不认识
+ */
 int                   cg_kind_supports_event(const char *type, cg_event_t ev);
-/** 某个控件类型支持的事件名列表，写成 "click/dblclick" 便于报错时提示 */
+/**
+ * @brief 取某个控件类型支持的事件名列表
+ * @param kind 类型枚举
+ * @return const char* 静态串，形如 "click/dblclick"，便于报错时提示；没有事件返回 ""
+ */
 const char           *cg_kind_event_list(cg_kind_t kind);
 
 /* ------------------------------------------------------------ 样式 */
@@ -374,17 +398,41 @@ typedef struct {
     int               dark;
 } cg_doc_t;
 
-/** 解析 .cgui 文本。失败返回 NULL 并写错误信息。 */
+/**
+ * @brief 解析 .cgui 文本成文档树
+ * @param json .cgui 的 JSON 原文（UTF-8）
+ * @param err 失败时写错误信息的缓冲；可传 NULL
+ * @param errsz err 的字节数
+ * @return cg_doc_t* 文档结构（用 cg_doc_free 释放）；失败返回 NULL
+ */
 cg_doc_t *cg_doc_parse(const char *json, char *err, size_t errsz);
-/** 释放文档内容，但 doc 本身（可能嵌在别的结构里，或是栈变量）不动 */
+/**
+ * @brief 释放文档内容，但 doc 本身不动
+ * @param doc 文档；NULL 安全
+ * @return void 无返回值
+ * @note doc 可能嵌在别的结构里、或是栈变量，所以只清内容（与 cg_doc_free 的分工就在这）
+ */
 void      cg_doc_release(cg_doc_t *doc);
-/** 释放内容并释放 doc 本身；只给 cg_doc_parse 的返回值用 */
+/**
+ * @brief 释放内容并释放 doc 本身
+ * @param doc cg_doc_parse 返回的指针；NULL 安全
+ * @return void 无返回值
+ */
 void      cg_doc_free(cg_doc_t *doc);
 
-/** 以缩进树的形式打印到 out（自检 / 排查用） */
+/**
+ * @brief 以缩进树的形式打印文档结构
+ * @param doc 文档
+ * @param out 输出流（如 stdout / stderr）
+ * @return void 无返回值（自检 / 排查用）
+ */
 void cg_doc_dump(const cg_doc_t *doc, FILE *out);
 
-/** 读文件到堆内存（UTF-8 原文），失败返回 NULL */
+/**
+ * @brief 读文件到堆内存（UTF-8 原文）
+ * @param path 文件路径（UTF-8）
+ * @return char * 堆串，用完 free；失败返回 NULL
+ */
 char *cg_read_file(const char *path);
 
 #endif /* CG_DOC_H */

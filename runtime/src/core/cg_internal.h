@@ -10,8 +10,11 @@
 
 typedef struct cg_app cg_app_t;
 
-/** 后端提供的杂项：有控制台时把它切到 UTF-8（printf 中文不乱码）。
- *  没有控制台（-mwindows 的 release 版、重定向输出）时是空操作。 */
+/**
+ * @brief 有控制台时把它切到 UTF-8（printf 中文不乱码）
+ * @return void 无返回值
+ * @note 没有控制台（-mwindows 的 release 版、重定向输出）时是空操作
+ */
 void cg_win_console_utf8(void);
 
 /** 树的一个节点（扁平存放，parent 是数组下标，-1 表示根） */
@@ -93,15 +96,24 @@ typedef struct {
     unsigned mods;   /* CG_MOD_* 的按位或 */
 } cg_accel_t;
 
-/** 解析快捷键文本：[Ctrl+][Shift+][Alt+]键（修饰键大小写不敏感、可任意顺序、重复算一次）。
- *  接受的键：A-Z / 0-9 / F1-F24 / Esc / Enter / Tab / Space / Back / Delete / Insert /
- *  Home / End / PageUp / PageDown / Left / Right / Up / Down。
- *  **不接受无修饰键的单个字母或数字**（裸 S 会让用户没法往输入框里打 s）。
- *  @return 1 = 解析成功并写出 out；0 = 语法/键名/组合不合法 */
+/**
+ * @brief 解析快捷键文本：[Ctrl+][Shift+][Alt+]键
+ * @param accel 快捷键文本，如 "Ctrl+Shift+S"；修饰键大小写不敏感、可任意顺序、重复算一次
+ * @param out 解析结果的出参，只有成功时才写
+ * @return int 1 解析成功并写出 out；0 语法 / 键名 / 组合不合法
+ * @note 接受的键：A-Z / 0-9 / F1-F24 / Esc / Enter / Tab / Space / Back / Delete / Insert /
+ *       Home / End / PageUp / PageDown / Left / Right / Up / Down；
+ *       **不接受无修饰键的单个字母或数字**（裸 S 会让用户没法往输入框里打 s）
+ */
 int cg_accel_parse(const char *accel, cg_accel_t *out);
 
-/** 规范化显示形式（修饰键顺序固定 Ctrl+Shift+Alt，如 "Ctrl+Shift+S"）。
- *  @return 1 = 成功；0 = 解析不了（buf 写成空串） */
+/**
+ * @brief 规范化快捷键的显示形式（修饰键顺序固定 Ctrl+Shift+Alt）
+ * @param accel 快捷键文本，语义同 cg_accel_parse
+ * @param buf 输出缓冲
+ * @param cap buf 的字节数
+ * @return int 1 成功（如 "Ctrl+Shift+S"）；0 解析不了（buf 写成空串）
+ */
 int cg_accel_format(const char *accel, char *buf, size_t cap);
 
 /** 运行时的动作（.cgui 顶层 actions 的一项 + 运行期状态）。
@@ -126,7 +138,17 @@ typedef struct {
     int grow;           /* 权重 0..99；0 = 不吃余量 */
 } cg_layout_box_t;
 
-/** @brief 按 grow 把"容器尺寸变化"分配到各 box（纯整数算术、不碰 Win32，可纯单测） */
+/**
+ * @brief 按 grow 把"容器尺寸变化"分配到各 box
+ * @param boxes 布局单元数组；进来是基准坐标，出去是算好的坐标
+ * @param count boxes 的个数
+ * @param base_w 容器的基准宽（设计宽）
+ * @param base_h 容器的基准高（设计高）
+ * @param now_w 容器的当前宽
+ * @param now_h 容器的当前高
+ * @return void 无返回值
+ * @note 纯整数算术、不碰 Win32，所以可脱窗单测
+ */
 void cg_layout_apply(cg_layout_box_t *boxes, int count,
                      int base_w, int base_h, int now_w, int now_h);
 
@@ -321,20 +343,41 @@ struct cg_app {
     unsigned long start_tick;
 };
 
-/** 依名字在绑定表里找函数；找不到返回 NULL 并打印一次警告 */
+/**
+ * @brief 依名字在绑定表里找回调函数
+ * @param app 应用
+ * @param name .cgui 里写的事件回调名
+ * @return cg_event_fn 找到的函数指针；找不到返回 NULL 并打印一次警告
+ */
 cg_event_fn cg_resolve_binding(cg_app_t *app, const char *name);
 
-/** 事件派发中枢：后端拿到原生事件后调它 */
+/**
+ * @brief 事件派发中枢：查回调、跑绑定传播、调业务回调
+ * @param w 事件来自哪个控件
+ * @param ev 事件类型
+ * @return int 1 派发给了业务回调、0 没回调（绑定传播照做）
+ */
 int cg_dispatch(cg_widget_t *w, cg_event_t ev);
 
-/** 装 / 换 / 清空本次"文件拖进窗口"的路径清单（各自复制一份；NULL 或 n<=0 即清空）。
- *  后端取完路径调它填进来，再派发 CG_EVENT_DROP，回调返回后立刻
- *  `cg_app_drop_put(app, NULL, 0)` 收掉。对外取用见 cg_drop_count() / cg_drop_file()；
- *  实现在 cg_event.c（与那条 drop 事件放在一起）。 */
+/**
+ * @brief 装 / 换 / 清空本次"文件拖进窗口"的路径清单（各自复制一份）
+ * @param app 应用
+ * @param paths 路径数组（UTF-8）；NULL 或 n <= 0 即清空
+ * @param n 路径个数
+ * @return void 无返回值
+ * @note 后端取完路径调它填进来，再派发 CG_EVENT_DROP，回调返回后立刻
+ *       `cg_app_drop_put(app, NULL, 0)` 收掉。对外取用见 cg_drop_count() / cg_drop_file()；
+ *       实现在 cg_event.c（与那条 drop 事件放在一起）
+ */
 void cg_app_drop_put(cg_app_t *app, const char *const *paths, int n);
 
-/** 菜单项被点中：记下是哪一项，再给对应控件派发 click。返回 1 表示处理了。
- *  menu 走 WM_COMMAND（lParam 为 0），menubutton 走 TrackPopupMenu 的返回值。 */
+/**
+ * @brief 菜单项被点中：记下是哪一项，再给对应控件派发 click
+ * @param app 应用
+ * @param cmd 菜单命令 id（WM_COMMAND 的 LOWORD）
+ * @return int 1 处理了、0 这个 cmd 不属于任何菜单项
+ * @note menu 走 WM_COMMAND（lParam 为 0），menubutton 走 TrackPopupMenu 的返回值
+ */
 int cg_dispatch_menu_cmd(cg_app_t *app, int cmd);
 
 /* -------------------------------------------------- 动作（core/cg_action.c）
@@ -342,57 +385,132 @@ int cg_dispatch_menu_cmd(cg_app_t *app, int cmd);
  * 于是同一个回调与同一份启用状态同时管住所有引用点。
  * 用法与语义见 cstackgui.h 的「动作（actions）」一节。 */
 
-/** 按 .cgui 的 actions 建运行时动作表：查 handler、解析 accel、发加速键命令 id，
- *  并校验所有引用点（动作名存在 / 该类型支持 click / 没同时绑 click）。
- *  启动时调一次（在控件树建好之后 —— 校验要读控件的 action 引用）。 */
+/**
+ * @brief 按 .cgui 的 actions 建运行时动作表：查 handler、解析 accel、发加速键命令 id
+ * @param app 应用
+ * @return void 无返回值
+ * @note 启动时调一次（在控件树建好之后 —— 校验要读控件的 action 引用）；
+ *       顺带校验所有引用点（动作名存在 / 该类型支持 click / 没同时绑 click）
+ */
 void cg_action_build(cg_app_t *app);
-/** 释放动作表（收尾时调；幂等、NULL 安全）。 */
+/**
+ * @brief 释放动作表
+ * @param app 应用
+ * @return void 无返回值（收尾时调；幂等、NULL 安全）
+ */
 void cg_action_release(cg_app_t *app);
-/** 按名字找动作下标；找不到返回 -1。 */
+/**
+ * @brief 按名字找动作下标
+ * @param app 应用
+ * @param name 动作名（.cgui 顶层 actions 的键）
+ * @return int 下标；找不到返回 -1
+ */
 int  cg_action_index(const cg_app_t *app, const char *name);
-/** 按**加速键的命令 id** 触发动作（TranslateAccelerator 发回来的 WM_COMMAND / WM_SYSCOMMAND）。
- *  @return 1 = 命中了某个动作的快捷键并已处理；0 = 不是（调用方按菜单命令那条路走） */
+/**
+ * @brief 按**加速键的命令 id** 触发动作
+ * @param app 应用
+ * @param cmd TranslateAccelerator 发回来的 WM_COMMAND / WM_SYSCOMMAND 命令 id
+ * @return int 1 命中了某个动作的快捷键并已处理；0 不是（调用方按菜单命令那条路走）
+ */
 int  cg_action_invoke_cmd(cg_app_t *app, int cmd);
 
-/** 按 id 找到运行时控件；找不到返回 NULL */
+/**
+ * @brief 按 id 找到运行时控件
+ * @param app 应用
+ * @param id 控件 id（窗口伪控件是 CG_WINDOW_ID）
+ * @return cg_widget_t* 控件；找不到返回 NULL
+ */
 cg_widget_t *cg_widget_by_id(cg_app_t *app, const char *id);
-/** 按 Win32 控件 ID 找控件；找不到返回 NULL */
+/**
+ * @brief 按 Win32 控件 ID 找控件
+ * @param app 应用
+ * @param ctrl_id 运行时分配的控件命令 id（1001 起）
+ * @return cg_widget_t* 控件；找不到返回 NULL
+ */
 cg_widget_t *cg_widget_by_ctrl_id(cg_app_t *app, int ctrl_id);
-/** 是否数值输入框（edit + 调节器且非多行）：value 是真相、文本由 value 派生。
- *  bind 抄 value、cg_widget_set_value 写文本、backends 同步文本都按它分流。 */
+/**
+ * @brief 这个控件是不是数值输入框（edit + 调节器且非多行）
+ * @param w 控件
+ * @return int 1 是、0 不是
+ * @note 只有它的 value 才是真相、文本由 value 派生：bind 抄 value、cg_widget_set_value
+ *       写文本、后端同步文本都按它分流
+ */
 int cg_widget_is_numedit(const cg_widget_t *w);
-/** 按原生窗口句柄（HWND，以 void* 传入）反查控件；同时比对 native 与 native2；
- *  找不到返回 NULL。自绘外观层（cg_skin.c）用它把 WM_DRAWITEM 的 hwndItem 映射到控件。 */
+/**
+ * @brief 按原生窗口句柄反查控件（native 与 native2 都比对）
+ * @param app 应用
+ * @param hwnd HWND，以 void* 传入
+ * @return cg_widget_t* 控件；找不到返回 NULL
+ * @note 自绘外观层（cg_skin.c）用它把 WM_DRAWITEM 的 hwndItem 映射到控件
+ */
 cg_widget_t *cg_widget_by_hwnd(cg_app_t *app, void *hwnd);
 
-/** 某个控件"背后"是什么颜色（0xRRGGBB）：主窗口上的控件 = 窗口底色；分组框 / 容器块 /
- *  卡片 / 图形里的 = 面板 style.bg（没设就用系统面色）；标签页里的 = 采样到的页体色。
- *  无底色标签、以及"清掉自身底色"的自绘按钮/开关/勾选框都该用它，
- *  否则控件在带底色的面板里会露出一块窗口底色的方块。 */
+/**
+ * @brief 问某个控件"背后"是什么颜色（0xRRGGBB）
+ * @param app 应用
+ * @param hwnd 控件的原生窗口句柄（以 void* 传入）
+ * @return unsigned 主窗口上的控件 = 窗口底色；分组框 / 容器块 / 卡片 / 图形里的 =
+ *         面板 style.bg（没设就用系统面色）；标签页里的 = 采样到的页体色
+ * @note 无底色标签、以及"清掉自身底色"的自绘按钮 / 开关 / 勾选框都该用它，
+ *       否则控件在带底色的面板里会露出一块窗口底色的方块
+ */
 unsigned cg_win_behind_rgb(cg_app_t *app, void *hwnd);
 
-/** 由文档树构建运行时控件树（不含原生句柄），失败返回 NULL */
+/**
+ * @brief 由文档树构建运行时控件树（不含原生句柄）
+ * @param app 应用（doc 已解析好）
+ * @return cg_widget_t* 窗口伪控件（树的根）；失败返回 NULL
+ */
 cg_widget_t *cg_build_widgets(cg_app_t *app);
 
 /* ---------------------------------------------- 日志与诊断（cg_log.c / cg_win_diag.c）
  * GUI 版没有控制台，光 fprintf(stderr, ...) 用户看不到，所以要有文件日志与错误弹窗。 */
 
-/** 打开日志文件（追加）；path 为空表示只写 stderr。后端启动时调 */
+/**
+ * @brief 打开日志文件（追加）
+ * @param path 日志路径（UTF-8）；为 NULL / 空串表示只写 stderr
+ * @return void 无返回值
+ * @note 后端启动时调
+ */
 void cg_log_open(const char *path);
-/** 关闭日志文件（进程收尾） */
+/**
+ * @brief 关闭日志文件（之后只写 stderr）
+ * @return void 无返回值
+ * @note 进程收尾时调
+ */
 void cg_log_close(void);
-/** 当前日志文件路径；没打开返回 NULL（弹窗里用它告诉用户日志在哪） */
+/**
+ * @brief 取当前日志文件路径
+ * @return const char* 内部缓冲，别 free；没打开返回 NULL（弹窗里用它告诉用户日志在哪）
+ */
 const char *cg_log_file(void);
 
-/** 起始诊断（win32 实现）：定位日志文件、轮转、装未处理异常过滤器。
- *  cg_app_run / cg_app_selftest 一开始就调，这样"找不到界面文件"也留得下记录。 */
+/**
+ * @brief 起始诊断：定位日志文件、轮转、装未处理异常过滤器
+ * @return void 无返回值
+ * @note cg_app_run / cg_app_selftest 一开始就调，这样"找不到界面文件"也留得下记录
+ */
 void cg_diag_init(void);
-/** 弹一个阻塞式错误框（win32 实现）。只在 cg_app_run（有界面）里用，自检别弹 */
+/**
+ * @brief 弹一个阻塞式错误框
+ * @param title 标题
+ * @param text 正文（建议带上日志路径）
+ * @return void 无返回值
+ * @note 只在 cg_app_run（有界面）里用，自检别弹
+ */
 void cg_fatal_dialog(const char *title, const char *text);
 
-/** 启动期"回调名没在 C 侧登记"的收集（cg_event.c）：cg_app_run 汇总弹一次。
- *  名字写错不编译报错，是新手最容易卡住的地方，光在 stderr 飘一行不够。 */
+/**
+ * @brief 启动期"回调名没在 C 侧登记"的条数
+ * @return int 条数；cg_app_run 据此决定要不要汇总弹一次
+ * @note 名字写错不编译报错，是新手最容易卡住的地方，光在 stderr 飘一行不够
+ */
 int cg_unresolved_count(void);
+/**
+ * @brief 取第 i 个没登记的回调名（遍历用）
+ * @param i 序号，0 起
+ * @return const char* 名字（文档内部字符串，别 free）；越界返回 NULL
+ */
 const char *cg_unresolved_name(int i);
 
 /* -------------------------------------------------- 后端接口 */
@@ -411,77 +529,178 @@ typedef struct cg_backend {
 extern const cg_backend_t cg_backend_win32;
 extern const cg_backend_t *cg_backend_active;
 
-/** 后端子控件注册回调：原生事件 -> cg_dispatch */
+/**
+ * @brief 后端子控件注册回调：原生事件 -> cg_dispatch
+ * @param w 事件来自哪个控件
+ * @param ev 事件类型
+ * @return void 无返回值
+ */
 void cg_backend_notify(cg_widget_t *w, cg_event_t ev);
 
-/** 分配控件 ID（后端建控件时用），从 1001 起递增 */
+/**
+ * @brief 分配一个控件命令 id
+ * @param app 应用（内部计数器递增）
+ * @return int 从 1001 起递增的 id
+ * @note 后端建控件时用
+ */
 int cg_alloc_ctrl_id(cg_app_t *app);
 
-/** 分配菜单命令 ID。菜单走 WM_COMMAND 的 LOWORD，必须和控件 ID 分开，
- *  所以从 0x8000 起单独发号，避免撞上控件的 1001 起那一片。 */
+/**
+ * @brief 分配一个菜单命令 id
+ * @param app 应用（内部计数器递增）
+ * @return int 从 0x8000 起递增的 id
+ * @note 菜单走 WM_COMMAND 的 LOWORD，必须和控件 id 分开，否则会撞上 1001 起那一片
+ */
 int cg_alloc_menu_cmd(cg_app_t *app);
 
-/** 毫秒级时基（后端提供），用于双击判定与定时器 */
+/**
+ * @brief 取毫秒级时基（后端提供）
+ * @return unsigned long 自系统启动起的毫秒数，用于双击判定与定时器
+ */
 unsigned long cg_ticks(void);
-/** 系统双击间隔，默认 500ms */
+/**
+ * @brief 取系统的双击间隔
+ * @return unsigned long 毫秒，默认 500
+ */
 unsigned long cg_double_click_ms(void);
 
-/* 定时器（cg_timer.c）：后端心跳驱动 */
+/**
+ * @brief 推进一个应用的全部定时器（后端心跳调，50ms 一次）
+ * @param app 应用
+ * @return void 无返回值
+ * @note 到点的先摘链再回调，避免"回调里再挂一颗"被同一轮重复触发
+ */
 void cg_timers_tick(cg_app_t *app);
+/**
+ * @brief 清掉一个应用的全部定时器
+ * @param app 正在关闭的应用
+ * @return void 无返回值
+ */
 void cg_timers_clear(cg_app_t *app);
 
-/** 当前 exe 的完整路径（含文件名），成功返回 0 */
+/**
+ * @brief 取当前 exe 的完整路径（含文件名）
+ * @param buf 输出缓冲
+ * @param size buf 的字节数
+ * @return int 0 成功、非 0 失败
+ */
 int cg_exe_path(char *buf, size_t size);
 
 /* Win32 后端内部的联动入口（cg_app.c 的公共 API 会调）：
  * hint / period 改完要动 tooltip 和 SetTimer，那些句柄只有后端知道。 */
+/**
+ * @brief 把控件的悬停提示推给后端的 tooltip 窗口
+ * @param w 控件
+ * @return void 无返回值
+ */
 void cg_win_set_hint(cg_widget_t *w);
+/**
+ * @brief 按控件的 period 重设 Win32 定时器
+ * @param w timer 控件（period 为 0 时停掉定时器）
+ * @return void 无返回值
+ */
 void cg_win_restart_timer(cg_widget_t *w);
-/** 动作的启用/勾选变了：把结果同步到后端的**菜单项**（菜单项灰掉/打勾、
- *  带动作的菜单项文字也在这里刷新）。控件那一半不走这里 —— cg_action_set_enabled
- *  直接调 cg_widget_set_enabled，它自己的契约要求把两个 HWND 都覆盖。
- *  无窗口时是空操作（自检/单测里就这么跑）。 */
+/**
+ * @brief 动作的启用 / 勾选变了：把结果同步到后端的**菜单项**（灰掉 / 打勾，文字也刷新）
+ * @param app 应用
+ * @param name 动作名
+ * @return void 无返回值
+ * @note 控件那一半不走这里 —— cg_action_set_enabled 直接调 cg_widget_set_enabled，
+ *       它自己的契约要求把两个 HWND 都覆盖；无窗口时是空操作（自检 / 单测里就这么跑）
+ */
 void cg_win_action_sync(cg_app_t *app, const char *name);
-/** 菜单行表变了（运行时增删改）：让后端重建窗口菜单栏。
- *  menubutton 的弹出菜单不在这里 —— 它每次点击都现场重建，改完行表自然生效。
- *  无窗口时是空操作（自检/单测里就这么跑）。 */
+/**
+ * @brief 菜单行表变了（运行时增删改）时让后端重建窗口菜单栏
+ * @param w 菜单所属控件
+ * @return void 无返回值
+ * @note menubutton 的弹出菜单不在这里 —— 它每次点击都现场重建，改完行表自然生效；
+ *       无窗口时是空操作（自检 / 单测里就这么跑）
+ */
 void cg_win_menu_rebuild(cg_widget_t *w);
-/** 串口组件的到达轮询定时器（打开才转；同 timer 复用 ctrl_id 做 Win32 定时器 id） */
+/**
+ * @brief 按控件配置重启"串口到达"轮询定时器
+ * @param w serial 组件控件（打开才转；复用 ctrl_id 做 Win32 定时器 id）
+ * @return void 无返回值
+ */
 void cg_win_restart_serial(cg_widget_t *w);
 
-/** 新建一个运行时控件（内部用） */
+/**
+ * @brief 新建一个运行时控件（内部用，不建原生窗口）
+ * @param app 所属应用
+ * @param type 控件类型名
+ * @param id 唯一标识
+ * @param x 初始左边界（逻辑像素）
+ * @param y 初始上边界（逻辑像素）
+ * @param w 初始宽度（逻辑像素）
+ * @param h 初始高度（逻辑像素）
+ * @param text 初始文字
+ * @return cg_widget_t* 控件；失败返回 NULL
+ */
 cg_widget_t *cg_widget_new(cg_app_t *app, const char *type, const char *id,
                            int x, int y, int w, int h, const char *text);
+/**
+ * @brief 释放控件的全部资源（结构化内容、画板记录、行级数组、文字等）
+ * @param w 控件；NULL 安全
+ * @return void 无返回值（只释放逻辑模型，原生化句柄归后端 detach）
+ */
 void cg_widget_free(cg_widget_t *w);
 
-/** 表格行数变多时把行级附加数组（勾选/数值/图标）一起补长到 want */
+/**
+ * @brief 表格行数变多时把行级附加数组（勾选 / 数值 / 图标）一起补长到 want
+ * @param w table 控件
+ * @param want 目标行数
+ * @return void 无返回值
+ */
 void cg_table_rows_grow(cg_widget_t *w, int want);
 
-/** 控件类型守卫：w 的类型等于 type 就返回 1，否则打一行明确的报错并返回 0。
- *  cg_widget_data.c 拆成七个文件后由多个控件族共用（定义在 cg_widget_tree.c），
- *  提升到这里声明，免得每个文件各写一份。 */
+/**
+ * @brief 控件类型守卫：w 的类型等于 type 就返回 1，否则打一行明确的报错并返回 0
+ * @param w 控件
+ * @param type 期望的类型名，如 "table"
+ * @param who 报错时用的调用方名字，如 "cg_table_clear"
+ * @return int 1 类型相符、0 不符（已打印报错）
+ * @note cg_widget_data.c 拆成七个文件后由多个控件族共用（定义在 cg_widget_tree.c），
+ *       提升到这里声明，免得每个文件各写一份
+ */
 int want_type(const cg_widget_t *w, const char *type, const char *who);
 
 /* -------------------------------------------------- 控件绑定（cg_bind.c）
  * 一个控件的值/文字/勾选变化时，自动抄到另一个控件上。写在 .cgui 的 bind 字段，
  * 或运行时用 cg_bind()。规则见 cg_bind.c 顶部注释。 */
 
-/** 控件 w 的状态变了：把它的值/文字抄给所有"以它为源"的控件（双向的还要推回源）。
- *  事件派发与公共 set 都会调它；没有任何绑定时直接返回，开销为零。 */
+/**
+ * @brief 控件 w 的状态变了：把它的值 / 文字抄给所有"以它为源"的控件（双向的还要推回源）
+ * @param w 变化的控件（源）
+ * @return void 无返回值
+ * @note 事件派发与公共 set 都会调它；没有任何绑定时直接返回，开销为零
+ */
 void cg_bind_propagate(cg_widget_t *w);
 
-/** 启动时把 .cgui 里的绑定全部应用一次（源控件已经有初值，目标控件跟上）。
- *  bind.src 找不到的在这里记一笔并警告。 */
+/**
+ * @brief 启动时把 .cgui 里的绑定全部应用一次（源控件已经有初值，目标控件跟上）
+ * @param app 应用
+ * @return void 无返回值
+ * @note bind.src 找不到的在这里记一笔并警告
+ */
 void cg_bind_apply_all(cg_app_t *app);
 
-/** 内部用：把源的值抄到目标，返回 1 表示真的改了（顺便 sync） */
+/**
+ * @brief 把源控件的值 / 文字 / 勾选抄到目标控件
+ * @param src 源控件
+ * @param dst 目标控件
+ * @return int 1 真的改了（顺便 sync）、0 没变或抄不了
+ */
 int cg_bind_copy(cg_widget_t *src, cg_widget_t *dst);
 
 /* -------------------------------------------------- 分隔条（cg_widget_split.c）
  * 几何计算在 core（纯 rect 运算，可脱窗单测），后端的鼠标处理只负责把位移喂进来。 */
 
-/** 拖动分隔条：撑开前一个兄弟、自己与之后的兄弟整体让位、最后一块吃掉余量。
- *  @return 实际位移（可能被最小尺寸夹小）；0 表示没动 */
+/**
+ * @brief 拖动分隔条：撑开前一个兄弟、自己与之后的兄弟整体让位、最后一块吃掉余量
+ * @param w splitter 控件
+ * @param delta 鼠标位移（逻辑像素，可正可负）
+ * @return int 实际位移（可能被最小尺寸夹小）；0 表示没动
+ */
 int cg_splitter_apply(cg_widget_t *w, int delta);
 
 /* -------------------------------------------------- 环形字节缓冲（core/cg_ringbuf.c）
@@ -497,51 +716,126 @@ typedef struct {
     long long      dropped;  /* 累计因为满而丢掉的字节数（排错用） */
 } cg_ring_t;
 
-int  cg_ring_init(cg_ring_t *r, int cap);                      /* cap<=0 返回 0；可以递未初始化的结构体进来
-                                                                  （它不读旧内容），但**重建前要先 free** */
-void cg_ring_free(cg_ring_t *r);                               /* 幂等、NULL 安全 */
-int  cg_ring_push(cg_ring_t *r, const void *data, int len);    /* 返回实际写入 */
-int  cg_ring_pop(cg_ring_t *r, void *out, int cap);            /* 返回实际取出 */
+/**
+ * @brief 建环（先无条件清零，绝不读旧内容）
+ * @param r 目标环；可以递未初始化的结构体进来
+ * @param cap 容量字节数；<= 0 视为非法
+ * @return int 1 成功、0 失败（参数非法或没内存）
+ * @note 代价是"要用新容量重建，得先自己 cg_ring_free"
+ */
+int  cg_ring_init(cg_ring_t *r, int cap);
+/**
+ * @brief 释放环占用的缓冲（幂等、NULL 安全）
+ * @param r 目标环
+ * @return void 无返回值
+ */
+void cg_ring_free(cg_ring_t *r);
+/**
+ * @brief 写入字节
+ * @param r 目标环
+ * @param data 要写的字节
+ * @param len 字节数
+ * @return int 实际写入的字节数；满了丢最老的，一次超过容量时只留最后 cap 个字节
+ */
+int  cg_ring_push(cg_ring_t *r, const void *data, int len);
+/**
+ * @brief 取出字节（先进先出）
+ * @param r 目标环
+ * @param out 输出缓冲
+ * @param cap out 的字节数
+ * @return int 实际取出的字节数
+ */
+int  cg_ring_pop(cg_ring_t *r, void *out, int cap);
+/**
+ * @brief 可读字节数
+ * @param r 目标环
+ * @return int 字节数；r 为 NULL 或没建好返回 0
+ */
 int  cg_ring_count(const cg_ring_t *r);
+/**
+ * @brief 清空（dropped 是"历史上一共丢了多少"的累计，清空不清它）
+ * @param r 目标环
+ * @return void 无返回值
+ */
 void cg_ring_clear(cg_ring_t *r);
 
 /* -------------------------------------------------- 串口（kit/cg_serial.c） */
 
-/** 内部：拿一个**已经打开好的句柄**建链路并起读线程。
- *  正常的 cg_serial_open() 走的就是它（先 CreateFile + 配 DCB 再进来）；单测拿**文件句柄**
- *  喂进来，于是"读线程 + 环形缓冲 + 取回"这条链在没有串口设备的机器上也能验掉。
- *  失败返回 NULL（此时句柄不被接管，调用方自己关）。name 只用于日志与错误信息。 */
+/**
+ * @brief 拿一个**已经打开好的句柄**建链路并起读线程（内部用）
+ * @param handle 已打开的 HANDLE（串口或文件句柄），以 void* 传入
+ * @param name 只用于日志与错误信息
+ * @param rx_cap 接收环形缓冲的容量字节数
+ * @return cg_serial_t* 链路句柄；失败返回 NULL（此时句柄不被接管，调用方自己关）
+ * @note 正常的 cg_serial_open() 走的就是它（先 CreateFile + 配 DCB 再进来）
+ * @note 单测拿**文件句柄**喂进来，于是"读线程 + 环形缓冲 + 取回"这条链在没有串口设备的
+ *       机器上也能验掉
+ */
 cg_serial_t *cg_serial_from_handle(void *handle, const char *name, int rx_cap);
 
 /* -------------------------------------------------- 状态灯 / 仪表盘（cg_widget_gauge.c） */
 
-/** led：此刻灯亮着吗（状态 = 闪时按 period 前后半周期翻转）。
- *  算在 core 而不是画的时候，是为了能脱窗单测时序 —— 闪烁算错了不崩、只是"看不出来在闪"。 */
+/**
+ * @brief 取 led 此刻是否亮着（闪态按 period 前后半周期翻转）
+ * @param w led 控件
+ * @param now_ms 当前毫秒时基（传 cg_ticks()）
+ * @return int 1 亮、0 灭
+ * @note 算在 core 而不是画的时候，是为了能脱窗单测时序 —— 闪烁算错了不崩、
+ *       只是"看不出来在闪"
+ */
 int cg_led_lit(const cg_widget_t *w, unsigned long now_ms);
 
-/** meter：值 -> 表盘角度（度）。arc 从 135° 起顺时针扫 270°，half 从 180° 起扫 180°（左端到右端）；
- *  值超量程按边界夹取、max<=min 时按 range=1 处理。同样放 core 是为了能脱窗单测。 */
+/**
+ * @brief meter：把读数换算成表盘角度（度）
+ * @param w meter 控件
+ * @param value 读数；超量程按边界夹取
+ * @return int 角度：arc 从 135° 起顺时针扫 270°，half 从 180° 起扫 180°（左端到右端）
+ * @note max <= min 时按 range = 1 处理；同样放 core 是为了能脱窗单测
+ */
 int cg_meter_angle_deg(const cg_widget_t *w, int value);
 
 /* -------------------------------------------------- 图表（cg_widget_gauge.c） */
 
-/** chart：把点缓冲对齐当前配置（items 的系列数 / value 的窗口点数）。
- *  配置变了就重建，**重建会丢已有点**（旧的窗口配不上新的）；配置没变时只是一次比较。
- *  cg_widget_sync() 每次都会调它，所以查询与绘制看到的存储永远与配置一致。
- *  @return 系列数；0 = 没内存 */
+/**
+ * @brief chart：把点缓冲对齐当前配置（items 的系列数 / value 的窗口点数）
+ * @param w chart 控件
+ * @return int 系列数；0 = 没内存
+ * @note 配置变了就重建，**重建会丢已有点**（旧的窗口配不上新的）；配置没变时只是一次比较。
+ *       cg_widget_sync() 每次都会调它，所以查询与绘制看到的存储永远与配置一致
+ */
 int cg_chart_ensure(cg_widget_t *w);
 
 /* ---------------------------------------------- cg_app.c 拆分后的跨模块接口
  * 原来这几个是 cg_app.c 里的 static 助手，拆成 cg_widget.c / cg_event.c 之后
  * 需要跨模块调用。名字都加了 cg_ 前缀，避免和业务代码里的同名符号撞车。 */
 
-/** @brief 复制字符串到堆内存（调用方 free），失败返回 NULL */
+/**
+ * @brief 复制字符串到堆内存
+ * @param s 源串；为 NULL 时返回 NULL
+ * @return char * 堆串，由调用方 free；失败返回 NULL
+ */
 char *cg_str_dup(const char *s);
-/** @brief 把运行时控件挂到父控件末尾，child->parent 设好；失败就静默丢弃 */
+/**
+ * @brief 把运行时控件挂到父控件的 children 末尾（尾插）
+ * @param parent 父控件
+ * @param child 子控件，child->parent 会被设好
+ * @return void 无返回值（分配失败就静默丢弃）
+ */
 void cg_widget_attach_child(cg_widget_t *parent, cg_widget_t *child);
-/** @brief 在控件的树模型末尾追加一个节点，返回新节点下标（-1 表示失败） */
+/**
+ * @brief 在控件的树模型末尾追加一个节点
+ * @param w tree 控件
+ * @param parent 父节点下标；-1 表示根
+ * @param text 节点文字（会复制一份）
+ * @param expanded 1 展开、0 折叠
+ * @return int 新节点下标（大于等于 0）；-1 表示失败
+ */
 int cg_widget_tree_push(cg_widget_t *w, int parent, const char *text, int expanded);
-/** @brief 把控件逻辑状态推给后端（无后端时是空操作） */
+/**
+ * @brief 把控件逻辑状态推给后端（标记 dirty 并让后端重建对应部分）
+ * @param w 控件
+ * @return void 无返回值（无后端时是空操作）
+ */
 void cg_widget_sync(cg_widget_t *w);
 
 #endif /* CG_INTERNAL_H */

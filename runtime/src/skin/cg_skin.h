@@ -12,40 +12,42 @@
 
 /**
  * @brief 用矢量绘制一个 M3 风格按钮（圆角 + 主题色 + 悬停/按下/禁用状态）
- * @param app 所属应用（读 app->scale 做 DPI 缩放）；dis WM_DRAWITEM 的结构体
+ * @param app 所属应用（读 app->scale 做 DPI 缩放）
+ * @param dis WM_DRAWITEM 的结构体
  * @return void 无返回值；GDI+ 不可用时回退到 GDI RoundRect，按钮不会消失
  */
 void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis);
 
 /**
  * @brief 用矢量绘制一个 M3 风格复选/单选框（圆角方框 + 勾 / 圆环 + 实心点），支持禁用态
- * @param app 所属应用（读 app->scale 与 doc.bg 做缩放与背景填充）；dis WM_DRAWITEM 的结构体
+ * @param app 所属应用（读 app->scale 与 doc.bg 做缩放与背景填充）
+ * @param dis WM_DRAWITEM 的结构体
  * @return void 无返回值；控件类型由 w->type 区分（"checkbox" / "radio"）
  */
 void cg_skin_draw_check(cg_app_t *app, const DRAWITEMSTRUCT *dis);
 
 /**
  * @brief M3 开关自绘：右侧胶囊轨道（on 主题紫 / off 灰）+ 白色圆钮，规格对齐画布
- * @param w 开关控件（读 checked/enabled/hot/text）；hdc 目标 DC；rc 控件矩形
+ * @param w 开关控件（读 checked / enabled / hot / text）
+ * @param hdc 目标 DC
+ * @param rc 控件矩形
  * @return void 无返回值；GDI+ 不可用时回退 GDI
  */
 void cg_skin_draw_switch(cg_widget_t *w, HDC hdc, const RECT *rc);
 
 /**
  * @brief 滑块（trackbar）的 NM_CUSTOMDRAW 自绘：把轨道和滑块画成 M3 圆角
- * @param app 所属应用；hdr NM_CUSTOMDRAW 通知头（hwndFrom 必须是 slider）
+ * @param app 所属应用
+ * @param hdr NM_CUSTOMDRAW 通知头（hwndFrom 必须是 slider）
  * @return LRESULT 返回给 WM_NOTIFY 的 CDRF_* 值，告诉系统哪些阶段我们跳过默认绘制
  */
 LRESULT cg_skin_draw_slider_notify(cg_app_t *app, const NMHDR *hdr);
 
 /**
- * @brief 进度条（progress）的 NM_CUSTOMDRAW 自绘：浅灰圆角轨道 + 主题紫填充，与画布一致
- * @param w 进度条控件（读 value/vmin/vmax 算填充比例）；hdr NM_CUSTOMDRAW 通知头
- * @return LRESULT 返回给 WM_NOTIFY 的 CDRF_* 值；PREPAINT 画完整条并 SKIPDEFAULT
- */
-/**
  * @brief 进度条自绘：浅灰圆角轨道 + 主题紫填充，与画布预览一致
- * @param w 进度条控件（读 value/vmin/vmax 算填充比例）；hdc 目标 DC；rc 客户区矩形
+ * @param w 进度条控件（读 value / vmin / vmax 算填充比例）
+ * @param hdc 目标 DC
+ * @param rc 客户区矩形
  * @return void 无返回值；GDI+ 不可用时回退 GDI RoundRect
  */
 void cg_skin_draw_progress(cg_widget_t *w, HDC hdc, const RECT *rc);
@@ -53,7 +55,8 @@ void cg_skin_draw_progress(cg_widget_t *w, HDC hdc, const RECT *rc);
 /**
  * @brief **中性灰部件**（轨道 / 槽 / 描边 / 灭态灯点 / 图表边框）在浅底与深底下的取值
  * @param app 取它的 dark；可传 NULL（那就当浅色）
- * @param light 浅色下用的值；dark 深色下用的值（都是 0xRRGGBB，与 style.fg/bg 同一种写法）
+ * @param light 浅色下用的值（0xRRGGBB，与 style.fg/bg 同一种写法）
+ * @param dark 深色下用的值（编码同上）
  * @return unsigned 该用的颜色
  * @details 导出的理由：这类"浅灰细部件"原先写死在**六个地方**（皮肤的圆环轨道 / 滑块槽 /
  *          进度槽 / 进度描边，win32 的灭态灯点 / 图表边框），值各不相同；深色下就是
@@ -65,7 +68,9 @@ unsigned cg_skin_neutral(const cg_app_t *app, unsigned light, unsigned dark);
 
 /**
  * @brief 圆环进度（progressring）的轨道 + 进度弧，走 GDI+ 抗锯齿
- * @param w 圆环控件（读 value/vmin/vmax/style）；hdc 目标 DC；rc 客户区矩形
+ * @param w 圆环控件（读 value / vmin / vmax / style）
+ * @param hdc 目标 DC
+ * @param rc 客户区矩形
  * @return void 无返回值；中心百分比文字由调用方补（那要用 cg_win_util.c 的 cgw_font_for）
  */
 void cg_skin_draw_ring(cg_widget_t *w, HDC hdc, const RECT *rc);
