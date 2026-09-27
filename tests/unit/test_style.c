@@ -182,7 +182,8 @@ static void test_style_bad_values(void)
         "{ \"cgui\": 1,"
         "  \"app\": { \"width\": 300, \"height\": 200 },"
         "  \"styles\": {"
-        "    \"s\": { \"font\": \"Consolas\", \"size\": 9, \"fg\": \"#00FF00\", \"bg\": \"#101010\" }"
+        "    \"s\": { \"font\": \"Consolas\", \"size\": 9, \"bold\": true, \"radius\": 8,"
+        "             \"fg\": \"#00FF00\", \"bg\": \"#101010\" }"
         "  },"
         "  \"widgets\": ["
         "    { \"id\": \"a_bad\", \"type\": \"label\","
@@ -190,7 +191,9 @@ static void test_style_bad_values(void)
         "    { \"id\": \"b_good\", \"type\": \"label\","
         "      \"style\": { \"use\": \"s\", \"fg\": \"#0000FF\" } },"
         "    { \"id\": \"c_size\", \"type\": \"label\", \"style\": { \"use\": \"s\", \"size\": 20 } },"
-        "    { \"id\": \"d_align\", \"type\": \"label\", \"style\": { \"use\": \"s\", \"align\": \"middle\" } }"
+        "    { \"id\": \"d_align\", \"type\": \"label\", \"style\": { \"use\": \"s\", \"align\": \"middle\" } },"
+        "    { \"id\": \"e_junk\", \"type\": \"label\","
+        "      \"style\": { \"use\": \"s\", \"size\": \"abc\", \"bold\": \"yes\", \"radius\": \"x\" } }"
         "  ] }");
 
     cg_test_ok("能解析", doc != NULL);
@@ -203,6 +206,14 @@ static void test_style_bad_values(void)
     cg_test_int("  且这三个字段没被记成「写了」（掩码里一位都没有）",
                 (long long)(kid(doc, 0)->style_mask &
                             (CG_STYLE_HAS_FONT | CG_STYLE_HAS_FG | CG_STYLE_HAS_BG)), 0);
+
+    cg_test_note("---- size / bold / radius 也是同一个口径（哨兵实现） ----");
+    cg_test_int("size 写错 -> 命名样式的字号还在", kid(doc, 4)->style.size, 9);
+    cg_test_int("bold 写错 -> 命名样式的粗体还在", kid(doc, 4)->style.bold, 1);
+    cg_test_int("radius 写错 -> 命名样式的圆角还在", kid(doc, 4)->style.radius, 8);
+    cg_test_int("  这三个字段也没被记成「写了」",
+                (long long)(kid(doc, 4)->style_mask &
+                            (CG_STYLE_HAS_SIZE | CG_STYLE_HAS_BOLD | CG_STYLE_HAS_RADIUS)), 0);
 
     cg_test_note("---- 反面对照：写了真值当然要盖 ----");
     cg_test_int("合法 fg 覆盖生效", (long long)kid(doc, 1)->style.fg, 0x0000FF);

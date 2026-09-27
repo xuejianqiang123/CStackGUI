@@ -107,13 +107,25 @@ static void style_overlay(const cj_val_t *o, cg_style_t *st, unsigned *mask)
             if (mask) *mask |= CG_STYLE_HAS_FONT;
         }
     }
+    /* size / bold / radius：与 font 一样**取不到值就算没写**。
+     * `cj_int` / `cj_bool` 解析失败只返回传进去的默认值、分不出成功与否，所以传一个
+     * **不可能是合法值的哨兵**进去再比对：size/radius 用 INT_MIN，bold 用 -1（它只可能是 0/1）。
+     * （这样就不必给 cj_* 加带 ok 出参的兄弟函数。） */
     if ((v = cj_get(o, "size")) != NULL) {
-        st->size = cj_int(v, st->size);
-        if (mask) *mask |= CG_STYLE_HAS_SIZE;
+        int n = cj_int(v, -2147483647 - 1);
+
+        if (n != -2147483647 - 1) {
+            st->size = n;
+            if (mask) *mask |= CG_STYLE_HAS_SIZE;
+        }
     }
     if ((v = cj_get(o, "bold")) != NULL) {
-        st->bold = cj_bool(v, st->bold);
-        if (mask) *mask |= CG_STYLE_HAS_BOLD;
+        int b = cj_bool(v, -1);
+
+        if (b >= 0) {
+            st->bold = b;
+            if (mask) *mask |= CG_STYLE_HAS_BOLD;
+        }
     }
     /* fg / bg：用 CG_COLOR_NONE 当"没读到"的哨兵（它就是本项目"没有颜色"的表示，
      * 而语法里**没有**"强制无色"的写法 —— 见 CGUI-FORMAT 的已知缺口），
@@ -135,8 +147,12 @@ static void style_overlay(const cj_val_t *o, cg_style_t *st, unsigned *mask)
         }
     }
     if ((v = cj_get(o, "radius")) != NULL) {
-        st->radius = cj_int(v, st->radius);
-        if (mask) *mask |= CG_STYLE_HAS_RADIUS;
+        int n = cj_int(v, -2147483647 - 1);      /* 哨兵同 size */
+
+        if (n != -2147483647 - 1) {
+            st->radius = n;
+            if (mask) *mask |= CG_STYLE_HAS_RADIUS;
+        }
     }
     v = cj_get(o, "align");
     if (v && v->type == CJ_STR) {
