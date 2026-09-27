@@ -4,7 +4,7 @@
  * @details 断言来源分两类，都不靠"看起来对"：
  *            - **跨实现对齐**：用 cg_proto_build 拼 Modbus/RTU 帧，必须与 `cg_modbus_build_read()`
  *              的输出**逐字节相同**（同族两个文件是两套独立实现）；
- *            - **独立脚本算过的常数**：累加和 0x71、异或 0x95、16 位累加和 0x0171
+ *            - **独立脚本算过的常数**：累加和 0x6E、异或 0x95、16 位累加和 0x0171
  *              （另用 node 算过一遍，不是手算印象）。
  */
 #include "cg_test.h"
@@ -102,11 +102,11 @@ static void test_proto_sum(void)
     p.with_len = 1;
     p.data     = k_d4;
     p.data_len = 4;
-    p.sum      = CG_SUM_ADD8;              /* 覆盖 01 10 04 00 6B 00 03 = 0x7F */
+    p.sum      = CG_SUM_ADD8;              /* 覆盖 01 10 04 00 6B 00 03 = 0x83 */
     n = cg_proto_build(&p, got, (int)sizeof(got));
     cg_test_int("帧长 8（地址+功能+长度+数据4+校验）", n, 8);
     cg_test_int("长度字节 = 4", got[2], 4);
-    cg_test_int("累加和 = 0x7F", got[7], 0x01 + 0x10 + 0x04 + 0x00 + 0x6B + 0x00 + 0x03);
+    cg_test_int("累加和 = 0x83", got[7], 0x01 + 0x10 + 0x04 + 0x00 + 0x6B + 0x00 + 0x03);
 
     cg_test_note("---- 不写地址 / 不写功能码（传 -1）----");
     memset(&p, 0, sizeof p);

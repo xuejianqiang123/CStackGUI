@@ -145,14 +145,14 @@ static void test_net_loopback(void)
     printf("        服务端看到的对端：%s\n", cg_net_peer(srv_side));
 
     cg_test_note("---- 客户端 -> 服务端 ----");
-    cg_test_int("客户端发出 22 字节", cg_net_write(cli, hello, (int)strlen(hello)),
+    cg_test_int("客户端发出 20 字节", cg_net_write(cli, hello, (int)strlen(hello)),
                 (int)strlen(hello));
     cg_test_int("等到了数据", wait_rx(srv_side, (int)strlen(hello), 2000), 1);
     memset(rx, 0, sizeof(rx));
-    cg_test_int("服务端读出 22 字节", cg_net_read(srv_side, rx, sizeof(rx) - 1),
+    cg_test_int("服务端读出 20 字节", cg_net_read(srv_side, rx, sizeof(rx) - 1),
                 (int)strlen(hello));
     cg_test_str("内容一个字节不差", rx, hello);
-    cg_test_int("服务端累计收了 22", (int)cg_net_rx_bytes(srv_side), (int)strlen(hello));
+    cg_test_int("服务端累计收了 20", (int)cg_net_rx_bytes(srv_side), (int)strlen(hello));
     cg_test_int("取完就空了", cg_net_available(srv_side), 0);
 
     cg_test_note("---- 服务端 -> 客户端（反向也要通） ----");
@@ -161,7 +161,7 @@ static void test_net_loopback(void)
     memset(rx, 0, sizeof(rx));
     cg_net_read(cli, rx, sizeof(rx) - 1);
     cg_test_str("客户端收到 WORLD", rx, reply);
-    cg_test_int("客户端累计发了 22", (int)cg_net_tx_bytes(cli), (int)strlen(hello));
+    cg_test_int("客户端累计发了 20", (int)cg_net_tx_bytes(cli), (int)strlen(hello));
 
     cg_test_note("---- 掉线信号：客户端一关，服务端 connected 变 0 ----");
     cg_net_close(cli);

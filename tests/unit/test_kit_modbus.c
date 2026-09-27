@@ -68,7 +68,7 @@ static void test_modbus_build_read(void)
     cg_test_note("---- 位类（读线圈）----");
     n = cg_modbus_build_read(CG_MODBUS_RTU, 0, 2, 1, 0x0013, 0x0025, f, sizeof f);
     cg_test_int("读线圈 0x0013 起 0x25 个：长度 = 8", n, 8);
-    cg_test_int("  PDU 与规范一致（01 功能码 + 大端地址/个数）", (long long)cg_crc16(f, n), 0);
+    cg_test_int("  整帧 CRC 自检 = 0", (long long)cg_crc16(f, n), 0);
     cg_test_str("  逐字节（CRC 由独立实现算出：我手算的 0C84 是错的）",
                 hexs(f, n, s, sizeof s), "02 01 00 13 00 25 0C 27");
 

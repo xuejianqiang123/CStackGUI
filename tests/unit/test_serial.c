@@ -253,7 +253,7 @@ static void test_serial_data_path(void)
     cg_test_int("取完就空了", cg_serial_available(s), 0);
     cg_test_int("空了以后再取返回 0", cg_serial_read(s, out, sizeof(out)), 0);
 
-    cg_test_note("---- 满了丢最老：真实 I/O 路径上再验一次（容量 16 喂 22 字节） ----");
+    cg_test_note("---- 满了丢最老：真实 I/O 路径上再验一次（容量 16 喂 23 字节） ----");
     {
         cg_serial_t *small;
         HANDLE       h2 = CreateFileW(tmpfile, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
@@ -269,7 +269,7 @@ static void test_serial_data_path(void)
             memset(out, 0, sizeof(out));
             cg_serial_read(small, out, 16);
             cg_test_str("留住的是最后 16 个字节", out, payload + strlen(payload) - 16);
-            cg_test_ok("累计收字节数仍然是全部 22（丢的是缓冲里的，不是账）",
+            cg_test_ok("累计收字节数仍然是全部 23（丢的是缓冲里的，不是账）",
                        cg_serial_rx_bytes(small) == (long long)strlen(payload));
             cg_serial_flush_rx(small);
             cg_serial_close(small);
