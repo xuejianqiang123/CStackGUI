@@ -19,6 +19,7 @@ rem    tools\run-tests.bat --list           只列套件，不跑
 rem    tools\run-tests.bat --grep=json      只跑名字里含 "json" 的套件
 rem    tools\run-tests.bat --memcheck       给 malloc/free 挂钩，报告泄漏的块
 rem    tools\run-tests.bat --no-kit         跳过 tools\check-kit.bat
+rem    tools\run-tests.bat --no-comments    跳过 tools\check-comments.mjs 注释门禁
 rem    tools\run-tests.bat --full           再跑一遍 tools\check-format.bat
 rem
 rem  退出码：0 = 全部通过。
@@ -43,10 +44,12 @@ rem ---- 把本脚本自己的开关和测试程序认识的开关分开 ----
 set "MEMCHECK="
 set "RUNKIT=1"
 set "RUNFORMAT="
+set "RUNCOMMENTS=1"
 set "EXEOPT="
 for %%a in (%*) do (
     if /i "%%~a"=="--memcheck" (set "MEMCHECK=1"
     ) else if /i "%%~a"=="--no-kit" (set "RUNKIT="
+    ) else if /i "%%~a"=="--no-comments" (set "RUNCOMMENTS="
     ) else if /i "%%~a"=="--full" (set "RUNFORMAT=1"
     ) else set "EXEOPT=!EXEOPT! %%a"
 )
@@ -62,6 +65,24 @@ if defined MEMCHECK (
     set "CFLAGS=-std=c11 -O1 -g -Wall -Wextra -Wno-unused-parameter -Iruntime\include -Iruntime\src\core -Iruntime\src\skin -Itests"
     set "DEFS=-DCG_TEST_MEMCHECK"
     set "LINKFLAGS=-Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc -Wl,--wrap=free -Wl,--wrap=_strdup"
+)
+
+rem ---- 注释规范门禁（tools\check-comments.mjs；只读源码，几秒） ----
+rem  放在编译之前：注释不合规是"写代码时就该拦住"的事，不该等编完再发现。
+if defined RUNCOMMENTS (
+    echo.
+    echo ==== C comment contract ====
+    where node >nul 2>nul
+    if errorlevel 1 (
+        echo [fail] node not found - tools\check-comments.mjs needs it
+        exit /b 1
+    )
+    node tools\check-comments.mjs gate
+    if errorlevel 1 (
+        echo.
+        echo [fail] C comment contract violated. Run: node tools\check-comments.mjs
+        exit /b 1
+    )
 )
 
 set "SRC="
