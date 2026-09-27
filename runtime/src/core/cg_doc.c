@@ -779,6 +779,9 @@ static void dump_node(const cg_node_t *n, FILE *out, int depth)
     if (n->nodes) fprintf(out, " tree=%lu", (unsigned long)n->nnodes);
     if (n->cols) fprintf(out, " cols=%lu", (unsigned long)n->ncols);
     if (n->rows) fprintf(out, " rows=%lu", (unsigned long)n->nrows);
+    /* grow 也要打出来：示例域的队友指出过——没有它，`selftest OK` 只能证明"文件读进去了"，
+     * 证明不了 grow 真的进了控件（门禁对它是盲的）。只在非 0 时打，保持旧输出不变。 */
+    if (n->grow) fprintf(out, " grow=%d", n->grow);
     if (n->style.font || n->style.size)
         fprintf(out, " font=%s/%d%s", n->style.font ? n->style.font : "-", n->style.size,
                 n->style.bold ? " bold" : "");
