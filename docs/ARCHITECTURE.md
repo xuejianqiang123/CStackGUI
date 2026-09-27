@@ -328,14 +328,19 @@ runtime/
       cg_kit_bytes.c    字节操作：反转 / 切片 / 查找 / 按字节序读写 u16·u32（拼帧拆帧的基元）
       cg_kit_check.c    校验：CRC32（IEEE 802.3）/ CRC16-Modbus（逐位算不建表 ⇒ 线程安全）、
                         MD5 / SHA-1 / SHA-256 / SHA-512（手写，零新增链接依赖；含分块文件摘要）
-      cg_kit_wireless.c 无线状态：WiFi 网卡/当前 SSID·信号/周边网络、蓝牙无线电与已知设备
-                        （IoT 上位机先看这一眼）。**零新增链接依赖**：符号全部运行期从
-                        wlanapi.dll / BluetoothApis.dll 取 —— 直接链会让既有用户项目的
-                        链接命令都得改（实测 undefined reference）。不提供主动扫描：WlanScan
-                        在本机实测返回 87 而撤掉，列表只用系统缓存
+      cg_kit_wireless.c 无线状态：WiFi 网卡/当前 SSID·信号/周边网络（可用 cg_wifi_scan 主动刷）、
+                        蓝牙无线电与已知设备（IoT 上位机先看这一眼）。
+                        **零新增链接依赖**：符号全部运行期从 wlanapi.dll / BluetoothApis.dll
+                        取 —— 直接链会让既有用户项目的链接命令都得改（实测 undefined reference）。
+                        **注意**：运行期取符号 + 自制 typedef 时**必须逐个参数对官方声明** ——
+                        漏一个参数在 x64 上是从栈上捡垃圾当指针用（野写），2026-09-27 为此
+                        追了一整天（见 .codebuddy/plans/memcheck-flake.md）
       cg_kit_modbus.c   Modbus 帧编解码（RTU / TCP）：拼读·写请求、解响应与异常帧
                         （RTU 自动挂 CRC 并校验，异常响应替你剥 0x80）。
                         **纯函数、不持状态、不碰 I/O** —— 连接 / 超时 / 重试仍归业务
+      cg_kit_frame.c    字节流切帧：把"半帧 / 一整帧 / 两帧粘一起"切成整帧。四种定界办法收在
+                        一个状态机里（帧间静默 = Modbus RTU 的 t3.5 / 定长 / 分隔符 / 头里带长度
+                        = Modbus TCP 的 MBAP）。**时间由调用方给** ⇒ 纯状态机，单测不需要真串口
       cg_kit_sys.c      剪贴板 / 外部程序 / 时间 / 注册表 /
                         系统信息（cg_env 环境变量、系统版本与位数、磁盘剩余、进程在不在）
       cg_kit_internal.h kit 层内部头：跨文件共用的三个助手（kit_w / kit_u8 / kit_lower）
