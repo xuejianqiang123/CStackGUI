@@ -1282,6 +1282,61 @@ unsigned long cg_frame_frames(const cg_frame_t *f);
  *  与 cg_time_now()（格式化成"2026-09-27 12:00:00"那种给人看的）不是一回事。 */
 unsigned long cg_now_ms(void);
 
+/* ---- 通用报文组装（帧头 / 地址 / 功能码 / 数据 / 校验 / 帧尾） ----
+ * 工控、仪表、模块的私有协议基本都长成这个骨架，区别只在"哪几段有、校验怎么算"。
+ * 与同族两个的分工：`cg_modbus_*` 是**一种**具体协议；`cg_frame_*` 管把**收到的**字节流切成帧；
+ * 这里管按骨架**拼出去的**帧、并按同一骨架**验收到的**帧。都是纯函数，不持状态、不碰 I/O。
+ *
+ *   static cg_proto_t p;                      // 例：AA 55 | 01 | 03 | 数据 | 累加和 | 0D 0A
+ *   unsigned char     frame[64], data[2] = { 0x00, 0x6B };
+ *   memset(&p, 0, sizeof p);
+ *   p.head = "\xAA\x55"; p.head_len = 2;
+ *   p.addr = 0x01;  p.func = 0x03;
+ *   p.data = data;  p.data_len = 2;
+ *   p.sum  = CG_SUM_ADD8;                     // 校验 = 帧头+地址+功能码+数据的累加和
+ *   p.tail = "\r\n"; p.tail_len = 2;
+ *   n = cg_proto_build(&p, frame, sizeof frame);      // AA 55 01 03 00 6B 71 0D 0A
+ *
+ * 三条约定（手写时最容易错）：
+ *   1. **校验覆盖"校验值之前的全部字节"**（帧头 + 地址 + 功能码 + [长度] + 数据）；
+ *   2. 多字节校验的**字节序**是开关（`sum_big_endian`）：Modbus 那套是低字节在前（传 0）；
+ *   3. **地址 / 功能码传 -1 = 这一段不写**；帧头 / 帧尾 / 数据长度传 0 = 这一段没有。
+ */
+#define CG_SUM_NONE         0   /* 不校验 */
+#define CG_SUM_ADD8         1   /* 累加和取低 8 位 */
+#define CG_SUM_XOR8         2   /* 逐字节异或 */
+#define CG_SUM_ADD16        3   /* 累加和取低 16 位 */
+#define CG_SUM_CRC16_MODBUS 4   /* CRC16/Modbus（与 cg_crc16 同一套）*/
+
+/** 报文骨架。**先 memset 成 0** 再填要用的字段（没填的段就是"没有"）。 */
+typedef struct {
+    const void *head;             /* 帧头（可空，如 AA 55）*/
+    int         head_len;
+    int         addr;             /* 地址字节 0..255；**-1 = 不写这一段** */
+    int         func;             /* 功能码 0..255；**-1 = 不写这一段** */
+    int         with_len;         /* 1 = 在功能码后插一个"数据长度"字节（很多私有协议有）*/
+    const void *data;             /* 数据区 */
+    int         data_len;         /* 数据区长度（with_len 时不能超过 255）*/
+    int         sum;              /* CG_SUM_* */
+    int         sum_big_endian;   /* 多字节校验：0 = 低字节在前（Modbus 那套），1 = 高字节在前 */
+    const void *tail;             /* 帧尾（可空，如 0D 0A）*/
+    int         tail_len;
+} cg_proto_t;
+
+/** 按骨架拼一帧。
+ *  @return int 帧长（写进 out）；**-1** = 参数非法或 out 放不下 */
+int cg_proto_build(const cg_proto_t *p, void *out, int out_size);
+
+/** 按同一骨架验一帧，并把字段拆出来（不想看的那一段传 NULL）。
+ *  @param out_addr / out_func 收到的地址与功能码
+ *  @param out_data / out_data_len 数据区指针（指向 frame 内部，不用释放）与长度
+ *  @return int 0 = 通过；**-1** = 帧太短或参数非法；**-2** = 校验不对（线上数据坏了）；
+ *              **-3** = 对不上骨架（帧头 / 地址 / 功能码 / 帧尾 / 长度字节 不一致）
+ *  @note 数据长度：`with_len` 时取长度字节（并与实际长度核对），否则由帧长推算
+ *        （所以解析时**不看** `cg_proto_t.data_len`）。 */
+int cg_proto_parse(const cg_proto_t *p, const void *frame, int len,
+                   int *out_addr, int *out_func, const unsigned char **out_data, int *out_data_len);
+
 /* ---- 哈希（摘要） ----
  * MD5 / SHA-1 / SHA-256 / SHA-512，**手写实现**，不调系统的 CryptoAPI。
  * 理由有两条（原先写的"会改掉用户的链接命令"是错的，已按实验更正 —— advapi32 本来就能
