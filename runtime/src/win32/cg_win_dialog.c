@@ -17,18 +17,6 @@ static HWND dialog_owner(const cg_widget_t *parent)
     return (parent && parent->app && parent->app->hwnd) ? (HWND)parent->app->hwnd : NULL;
 }
 
-/** 把 UTF-16 路径写回调用者的 UTF-8 缓冲区（截断安全） */
-static void put_path_utf8(char *out, int out_size, const wchar_t *wpath)
-{
-    int need;
-    if (!out || out_size <= 0) return;
-    need = WideCharToMultiByte(CP_UTF8, 0, wpath, -1, NULL, 0, NULL, NULL);
-    if (need <= 0) { out[0] = '\0'; return; }
-    if (need > out_size) need = out_size;   /* 缓冲不够就截断 */
-    WideCharToMultiByte(CP_UTF8, 0, wpath, -1, out, need, NULL, NULL);
-    out[out_size - 1] = '\0';
-}
-
 /** filter 写法沿用网页习惯 "文本|*.txt|全部|*.*"，转成 Win32 要的双 0 分隔 */
 static wchar_t *make_filter_w(const char *filter)
 {
@@ -82,7 +70,7 @@ int cg_open_file_dialog(cg_widget_t *parent, const char *title,
     free(wfilter);
     free(wtitle);
     if (!ok) return 0;
-    put_path_utf8(out_path, out_size, buf);
+    cgw_utf8_into(buf, out_path, out_size);   /* 宽->窄转换统一在 cg_win_util.c */
     return 1;
 }
 
@@ -126,7 +114,7 @@ int cg_save_file_dialog(cg_widget_t *parent, const char *title,
     free(wtitle);
     free(wext);
     if (!ok) return 0;
-    put_path_utf8(out_path, out_size, buf);
+    cgw_utf8_into(buf, out_path, out_size);   /* 宽->窄转换统一在 cg_win_util.c */
     return 1;
 }
 

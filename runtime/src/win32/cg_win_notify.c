@@ -26,10 +26,8 @@ void cgw_pull_edit_text(cg_widget_t *w, HWND hwnd)
         *d = 0;
     }
     {
-        int need = WideCharToMultiByte(CP_UTF8, 0, buf, -1, NULL, 0, NULL, NULL);
-        char *u8 = (char *)malloc((size_t)(need > 0 ? need : 1));
+        char *u8 = cgw_utf8_from_wcs(buf);   /* 宽->窄转换统一在 cg_win_util.c */
         if (u8) {
-            WideCharToMultiByte(CP_UTF8, 0, buf, -1, u8, need, NULL, NULL);
             cg_widget_set_text(w, u8);
             free(u8);
         }

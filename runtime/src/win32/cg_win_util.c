@@ -308,9 +308,8 @@ int cg_exe_path(char *buf, size_t size)
 }
 
 /** @brief 宽字符 -> UTF-8 堆串（调用方 free）；NULL 进 NULL 出，转换失败也返回 NULL
- *  @note 后端里另有几处"写进调用方缓冲"的私有版本（cg_win_diag.c / cg_win_dialog.c /
- *        cg_win_notify.c），签名与新代码要用的这种"返回堆串"不同，**暂未合并** ——
- *        要合就得一次改三处调用点，留作单独一片更稳。 */
+ *  @note 后端里"写进调用方缓冲"的调用点统一走下面的 cgw_utf8_into()：宽->窄转换的
+ *        实现在本文件里只有这一处，其它子模块不再各留一份私有副本。 */
 char *cgw_utf8_from_wcs(const wchar_t *ws)
 {
     int   need;
@@ -326,6 +325,31 @@ char *cgw_utf8_from_wcs(const wchar_t *ws)
         return NULL;
     }
     return out;
+}
+
+/** @brief 宽字符 -> UTF-8，写进调用方给的缓冲（截断安全、失败或缓冲不足留空串）
+ *  @details 要缓冲语义的调用点（对话框回填路径、诊断取 %LOCALAPPDATA%）不想为一次
+ *           转换再 malloc/free —— 尤其诊断路径要在崩溃/低内存下跑 —— 所以保留这个
+ *           入口，但它复用 cgw_utf8_from_wcs 的转换逻辑，不是第二份实现。
+ *  @param ws       宽字符串；NULL 视作空串
+ *  @param out      目标缓冲；NULL 或 out_size<=0 时什么也不做
+ *  @param out_size out 的容量（字节）
+ *  @note 缓冲装不下整串（含结尾 NUL）时，与合并前三处私有副本一致地留空串
+ *        （不返回半条路径）；任何路径下 out 都以 NUL 结尾。
+ */
+void cgw_utf8_into(const wchar_t *ws, char *out, int out_size)
+{
+    char  *u8;
+    size_t need;
+
+    if (!out || out_size <= 0) return;
+    out[0] = '\0';
+    if (!ws) return;
+    u8 = cgw_utf8_from_wcs(ws);
+    if (!u8) return;
+    need = strlen(u8) + 1;                  /* 含结尾 NUL */
+    if (need <= (size_t)out_size) memcpy(out, u8, need);
+    free(u8);
 }
 
 /** @brief 毫秒级时基（后端提供），用于双击判定与定时器 */

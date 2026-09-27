@@ -87,6 +87,9 @@ void cgw_win_drop(cg_app_t *app, HDROP hdrop);
 
 /** @brief 宽字符 -> UTF-8 堆串（调用方 free）；失败 NULL */
 char *cgw_utf8_from_wcs(const wchar_t *ws);
+/** @brief 宽字符 -> UTF-8 写进调用方缓冲（截断安全；失败/装不下留空串，总以 NUL 结尾）。
+ *  与 cgw_utf8_from_wcs 同一份转换逻辑，给不要 malloc 的调用点用。 */
+void cgw_utf8_into(const wchar_t *ws, char *out, int out_size);
 
 /* ---------------- cg_win_layout.c：余量分配（.cgui 的 grow） ---------------- */
 

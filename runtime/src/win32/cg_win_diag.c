@@ -14,21 +14,6 @@
 #include <string.h>
 #include <wchar.h>      /* wcsrchr / _snwprintf */
 
-/** UTF-16 -> UTF-8（截断安全，失败写空串） */
-static void diag_put_utf8(char *out, int out_size, const wchar_t *ws)
-{
-    int need;
-
-    if (!out || out_size <= 0) return;
-    out[0] = '\0';
-    if (!ws) return;
-    need = WideCharToMultiByte(CP_UTF8, 0, ws, -1, NULL, 0, NULL, NULL);
-    if (need <= 0) return;
-    if (need > out_size) need = out_size;
-    WideCharToMultiByte(CP_UTF8, 0, ws, -1, out, need, NULL, NULL);
-    out[out_size - 1] = '\0';
-}
-
 /** @brief 取 %LOCALAPPDATA%（UTF-8）；拿不到写空串 */
 static void diag_localappdata(char *out, int out_size)
 {
@@ -37,7 +22,7 @@ static void diag_localappdata(char *out, int out_size)
                                        (DWORD)(sizeof(wbuf) / sizeof(wbuf[0])));
     out[0] = '\0';
     if (n == 0 || n >= (DWORD)(sizeof(wbuf) / sizeof(wbuf[0]))) return;
-    diag_put_utf8(out, out_size, wbuf);
+    cgw_utf8_into(wbuf, out, out_size);   /* 宽->窄转换统一在 cg_win_util.c */
 }
 
 /** @brief 取路径的文件名部分（兼容 \\ 与 /） */
