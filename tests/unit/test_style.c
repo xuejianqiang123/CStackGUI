@@ -168,6 +168,50 @@ static void test_dark_flag(void)
     if (d5) cg_doc_free(d5);
 }
 
+/** @brief **值取不到的字段算"没写"**：不许把命名样式里的好值顶掉
+ *  @details 契约原先只把 `align` 写成这个口径，font/fg/bg 是"键存在即算写了" ——
+ *           那是实现顺手带来的，不是设计。后果很隐蔽：在 `use` 覆盖对象里写错一个色值
+ *           （`"fg": "乱码"`）就会盖掉命名样式里的 fg ⇒ 控件变黑，
+ *           而"我明明引用了样式"的人根本想不到是这里。
+ *           这一条是**与画布域对齐口径**时一起定的（2026-09-27）：
+ *           画布对这种键只能丢掉（语法里没有"写了但没有值"的写法），
+ *           所以运行时要跟它一致 —— 丢掉 = 没写。 */
+static void test_style_bad_values(void)
+{
+    cg_doc_t *doc = parse(
+        "{ \"cgui\": 1,"
+        "  \"app\": { \"width\": 300, \"height\": 200 },"
+        "  \"styles\": {"
+        "    \"s\": { \"font\": \"Consolas\", \"size\": 9, \"fg\": \"#00FF00\", \"bg\": \"#101010\" }"
+        "  },"
+        "  \"widgets\": ["
+        "    { \"id\": \"a_bad\", \"type\": \"label\","
+        "      \"style\": { \"use\": \"s\", \"font\": 123, \"fg\": \"乱码\", \"bg\": \"#GGGGGG\" } },"
+        "    { \"id\": \"b_good\", \"type\": \"label\","
+        "      \"style\": { \"use\": \"s\", \"fg\": \"#0000FF\" } },"
+        "    { \"id\": \"c_size\", \"type\": \"label\", \"style\": { \"use\": \"s\", \"size\": 20 } },"
+        "    { \"id\": \"d_align\", \"type\": \"label\", \"style\": { \"use\": \"s\", \"align\": \"middle\" } }"
+        "  ] }");
+
+    cg_test_ok("能解析", doc != NULL);
+    if (!doc) return;
+
+    cg_test_note("---- 取不到值的字段 = 没写（不许顶掉命名样式） ----");
+    cg_test_str("font 写错 -> 命名样式的字体还在", kid(doc, 0)->style.font, "Consolas");
+    cg_test_int("fg 写错 -> 命名样式的颜色还在", (long long)kid(doc, 0)->style.fg, 0x00FF00);
+    cg_test_int("bg 写错 -> 命名样式的底色还在", (long long)kid(doc, 0)->style.bg, 0x101010);
+    cg_test_int("  且这三个字段没被记成「写了」（掩码里一位都没有）",
+                (long long)(kid(doc, 0)->style_mask &
+                            (CG_STYLE_HAS_FONT | CG_STYLE_HAS_FG | CG_STYLE_HAS_BG)), 0);
+
+    cg_test_note("---- 反面对照：写了真值当然要盖 ----");
+    cg_test_int("合法 fg 覆盖生效", (long long)kid(doc, 1)->style.fg, 0x0000FF);
+    cg_test_int("合法 size 覆盖生效", kid(doc, 2)->style.size, 20);
+    cg_test_int("align 写不认识的名字 = 没写（老口径，未变）", kid(doc, 3)->style.align, 0);
+
+    cg_doc_free(doc);
+}
+
 CG_TEST_SUITE("样式：style 的三种形态与合并", test_style_forms);
 CG_TEST_SUITE("样式：嵌套容器里的引用", test_style_nested);
 /** @brief 运行时切深色的两个 API：空指针安全、状态跟着走、没有窗口也不崩
@@ -191,3 +235,4 @@ static void test_theme_api(void)
 
 CG_TEST_SUITE("样式：app.dark 三态", test_dark_flag);
 CG_TEST_SUITE("样式：深色的两个 API", test_theme_api);
+CG_TEST_SUITE("样式：取不到值的字段算没写", test_style_bad_values);

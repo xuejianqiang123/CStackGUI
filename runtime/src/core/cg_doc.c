@@ -95,9 +95,17 @@ static void style_overlay(const cj_val_t *o, cg_style_t *st, unsigned *mask)
     if (!o || o->type != CJ_OBJ) return;
 
     if ((v = cj_get(o, "font")) != NULL) {
-        free(st->font);
-        st->font = dup_or_null(cj_str(v, NULL));
-        if (mask) *mask |= CG_STYLE_HAS_FONT;
+        const char *s = cj_str(v, NULL);
+
+        /* **取不到值的字段 = 没写**（不置掩码），与下面 align 的口径一致。
+         * 理由：写错一个字体名/色值不该把命名样式里那个好值悄悄顶掉 ——
+         * 契约原先只把 align 写成这个口径、其余"键存在即算写了"，
+         * 那是实现顺手带来的，不是设计（2026-09-27 与画布域对齐时改掉）。 */
+        if (s) {
+            free(st->font);
+            st->font = dup_or_null(s);
+            if (mask) *mask |= CG_STYLE_HAS_FONT;
+        }
     }
     if ((v = cj_get(o, "size")) != NULL) {
         st->size = cj_int(v, st->size);
@@ -107,13 +115,24 @@ static void style_overlay(const cj_val_t *o, cg_style_t *st, unsigned *mask)
         st->bold = cj_bool(v, st->bold);
         if (mask) *mask |= CG_STYLE_HAS_BOLD;
     }
+    /* fg / bg：用 CG_COLOR_NONE 当"没读到"的哨兵（它就是本项目"没有颜色"的表示，
+     * 而语法里**没有**"强制无色"的写法 —— 见 CGUI-FORMAT 的已知缺口），
+     * 所以读不出颜色时就当这个键没写。 */
     if ((v = cj_get(o, "fg")) != NULL) {
-        st->fg = cj_color(v, st->fg);
-        if (mask) *mask |= CG_STYLE_HAS_FG;
+        unsigned c = cj_color(v, CG_COLOR_NONE);
+
+        if (c != CG_COLOR_NONE) {
+            st->fg = c;
+            if (mask) *mask |= CG_STYLE_HAS_FG;
+        }
     }
     if ((v = cj_get(o, "bg")) != NULL) {
-        st->bg = cj_color(v, st->bg);
-        if (mask) *mask |= CG_STYLE_HAS_BG;
+        unsigned c = cj_color(v, CG_COLOR_NONE);
+
+        if (c != CG_COLOR_NONE) {
+            st->bg = c;
+            if (mask) *mask |= CG_STYLE_HAS_BG;
+        }
     }
     if ((v = cj_get(o, "radius")) != NULL) {
         st->radius = cj_int(v, st->radius);
