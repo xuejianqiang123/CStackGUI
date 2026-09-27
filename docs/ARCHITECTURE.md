@@ -317,7 +317,8 @@ runtime/
       cg_kit_ini.c      INI 配置读写
       cg_kit_str.c      文本与编码：格式化 / 裁剪 / 替换 / 比较、UTF-8 ↔ GBK、
                         十六进制 / Base64 / URL 编解码、进制转换与补码（工控看寄存器值用）
-      cg_kit_check.c    校验：CRC32（IEEE 802.3）/ CRC16-Modbus —— 逐位算不建表，天然线程安全
+      cg_kit_check.c    校验：CRC32（IEEE 802.3）/ CRC16-Modbus（逐位算不建表 ⇒ 线程安全）、
+                        MD5 / SHA-1 / SHA-256 / SHA-512（手写，零新增链接依赖；含分块文件摘要）
       cg_kit_sys.c      剪贴板 / 外部程序 / 时间 / 注册表
       cg_kit_internal.h kit 层内部头：跨文件共用的三个助手（kit_w / kit_u8 / kit_lower）
                         有了它业务代码才真的"只 include cstackgui.h"

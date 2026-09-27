@@ -964,9 +964,14 @@ int cg_base_convert(const char *s, int from_base, int to_base, char *out, int ou
 long long         cg_to_signed(unsigned long long v, int bits);    /* 0xFFF6 按 12 位 = -10 */
 unsigned long long cg_from_signed(long long v, int bits);
 
-/* 校验（CRC）：逐位算不建表，天然线程安全 */
+/* 校验（CRC）：逐位算不建表，天然线程安全；_file 版本分块读，不整读进内存 */
 unsigned cg_crc32(const void *data, int len);   /* IEEE 802.3 / zlib；"123456789" = 0xCBF43926 */
 unsigned cg_crc16(const void *data, int len);   /* CRC16/Modbus；"123456789" = 0x4B37，挂帧尾低字节在前 */
+int      cg_crc32_file(const char *path, unsigned *out);   /* 1 = 成功 */
+
+/* 哈希（摘要）：手写实现，零新增链接依赖；返回小写十六进制堆串，用完 cg_free */
+char *cg_hash(const void *data, int len, const char *algo);      /* md5 / sha1 / sha256 / sha512 */
+char *cg_hash_file(const char *path, const char *algo);          /* 分块读，核固件用 */
 char *cg_clip_get_text(void);
 int   cg_clip_set_text(const char *text);
 int   cg_shell_open(const char *path_or_url);               /* 默认程序打开文件/网址 */
