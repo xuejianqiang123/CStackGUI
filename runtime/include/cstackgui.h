@@ -1324,6 +1324,49 @@ typedef struct {
     int  remembered;             /* 1 = 配对过 / 记得过 */
 } cg_ble_device_t;
 
+/* ---- BLE 基元：地址 / UUID / 属性 ----
+ * 这一段**不需要蓝牙外设**就能用，而且正是写 BLE 工具最容易踩的三处坑：
+ *   - **地址字节序**：对外统一用**一个 64 位整数**（`0xAABBCCDDEEFF` 就是 AA:BB:CC:DD:EE:FF），
+ *     与 `BLUETOOTH_ADDRESS.rgBytes` 的换算由框架负责 —— 那个数组是**小端**，
+ *     摆错一次就永远连不上，而报错只会说"设备没找到"；
+ *   - **UUID 的两种写法**：设备手册写 "FFF1"、协议栈写
+ *     "0000fff1-0000-1000-8000-00805f9b34fb" —— `cg_ble_uuid_equal()` 认为它们相等；
+ *   - **属性位**：能不能读 / 写 / 订阅全在那一个 properties 字里，`cg_ble_attr_flags()` 解出来。
+ * **连接与读写不在这一版**：GATT 的入口要一个设备句柄，而 `bluetoothleapis.h` 里**没有**
+ * 任何获取它的函数（纯 C 得靠 SetupAPI 枚举设备接口 + CreateFile，而那必须有真外设才枚举得到）
+ * —— 等有板子时再做，见 .codebuddy/plans/wireless-ble.md。
+ */
+#define CG_BLE_ATTR_READ      0x01   /* 可读 */
+#define CG_BLE_ATTR_WRITE_NR  0x02   /* 可写（无需响应） */
+#define CG_BLE_ATTR_WRITE     0x04   /* 可写（要响应） */
+#define CG_BLE_ATTR_NOTIFY    0x08   /* 通知 */
+#define CG_BLE_ATTR_INDICATE  0x10   /* 指示（要确认的通知） */
+
+/** 地址 -> 文本：与 Windows 设置里一致（**大写**、冒号分隔）。out 需要 18 字节 */
+void cg_ble_addr_str(unsigned long long addr, char *out, int out_size);
+/** 文本 -> 地址：分隔符随便（冒号 / 连字符 / 空格 / 不写），大小写都认，但**必须正好 6 字节**
+ *  —— 少一位算写错，不"尽量猜"（猜错了表现为"设备找不到"，比当场报错难查得多）。
+ *  @return int 0 = 成功；-1 = 格式不对 */
+int  cg_ble_addr_from_str(const char *text, unsigned long long *out);
+
+/** 16 位短 UUID -> 标准基写法的文本（36 字符 + NUL，**小写**：蓝牙文档与 Windows 都这么写）。
+ *  @return int 写入长度（36）；放不下返回 -1 */
+int cg_ble_uuid16_str(unsigned short uuid16, char *out, int out_size);
+/** 文本 -> 16 位短 UUID：认 "fff1" / "0xfff1" / "0000fff1-0000-1000-8000-00805f9b34fb"
+ *  （带不带大括号都行）。**不是标准基形态的 128 位 UUID 返回 -1** —— 那不是 16 位能表达的。
+ *  @return int 0 = 成功；-1 = 认不出来 */
+int cg_ble_uuid16_parse(const char *text, unsigned short *out16);
+/** 两个 UUID 是不是同一个：能当 16 位解的两边按 16 位比 —— 所以 "fff1" 与它那个长写法**相等**
+ *  （现场最常见的用法：拿手册上的短 UUID 去比对设备报出来的长 UUID）。
+ *  @return int 1 = 相等；0 = 不等或认不出来 */
+int cg_ble_uuid_equal(const char *a, const char *b);
+/** 特征的 properties 字 -> 能力位（CG_BLE_ATTR_* 的按位或）。位定义与 GATT 规范一致 */
+int cg_ble_attr_flags(unsigned properties);
+/** 在已知设备里按**地址**或**名字**找：能解析成地址就按地址精确比，否则按名字做
+ *  不区分大小写的**子串**匹配（现场记的名字常常只是设备名的一段）。
+ *  @return int 0 = 找到（填进 out）；-1 = 没找到 */
+int cg_ble_find_device(const char *addr_or_name, cg_ble_device_t *out);
+
 /** 有几个蓝牙无线电（0 = 没有蓝牙或没开；蓝牙关了也算 0） */
 int cg_ble_radio_count(void);
 /** 取第 idx 个无线电：0 = 成功；-1 = 越界 / 取不到 */

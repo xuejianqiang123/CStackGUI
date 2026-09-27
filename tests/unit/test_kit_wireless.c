@@ -143,5 +143,96 @@ static void test_bluetooth(void)
     }
 }
 
+/* ------------------------------------------------------------ BLE 基元（不需要外设就能验完） */
+
+static void test_ble_basics(void)
+{
+    unsigned long long v = 0;
+    unsigned short     u = 0;
+    char               buf[64];
+
+    cg_test_note("---- 地址：文本 <-> 64 位（字节序最容易错的一处）----");
+    cg_test_int("解析 AA:BB:CC:DD:EE:FF", cg_ble_addr_from_str("AA:BB:CC:DD:EE:FF", &v), 0);
+    cg_test_int("  = 0xAABBCCDDEEFF（最高那组在最高位）", (long long)v, 0xAABBCCDDEEFFLL);
+    cg_ble_addr_str(0xAABBCCDDEEFFULL, buf, sizeof buf);
+    cg_test_str("格式化回去一致", buf, "AA:BB:CC:DD:EE:FF");
+
+    v = 0;
+    cg_test_int("小写、无分隔符也认", cg_ble_addr_from_str("aabbccddeeff", &v), 0);
+    cg_test_int("  -> 同一个值", (long long)v, 0xAABBCCDDEEFFLL);
+    cg_test_int("连字符分隔也认", cg_ble_addr_from_str("AA-BB-CC-DD-EE-FF", &v), 0);
+    cg_test_int("  -> 同一个值", (long long)v, 0xAABBCCDDEEFFLL);
+    cg_test_int("空格分隔也认", cg_ble_addr_from_str("aa bb cc dd ee ff", &v), 0);
+
+    cg_test_int("少一位 -> 写错（不许猜）", cg_ble_addr_from_str("AA:BB:CC:DD:EE", &v), -1);
+    cg_test_int("多一位 -> 写错", cg_ble_addr_from_str("AA:BB:CC:DD:EE:FF:00", &v), -1);
+    cg_test_int("非十六进制字符 -> 写错", cg_ble_addr_from_str("AA:BB:CC:DD:EE:GG", &v), -1);
+    cg_test_int("空串 -> 写错", cg_ble_addr_from_str("", &v), -1);
+    cg_test_int("NULL -> -1", cg_ble_addr_from_str(NULL, &v), -1);
+    cg_test_int("出口 NULL -> -1", cg_ble_addr_from_str("AA:BB:CC:DD:EE:FF", NULL), -1);
+    {
+        char small[6];
+
+        memset(small, '#', sizeof small);
+        cg_ble_addr_str(0xAABBCCDDEEFFULL, small, (int)sizeof small);   /* 缓冲太小不许写越界 */
+        cg_test_int("缓冲太小：仍然 NUL 结尾且没越界", (int)strlen(small) <= 5, 1);
+    }
+
+    cg_test_note("---- UUID：短写法 <-> 标准基写法 ----");
+    cg_test_int("fff1 -> 长写法", cg_ble_uuid16_str(0xFFF1, buf, sizeof buf), 36);
+    cg_test_str("  文本（小写，与蓝牙文档一致）", buf, "0000fff1-0000-1000-8000-00805f9b34fb");
+    cg_test_int("短写法能解回来", cg_ble_uuid16_parse("fff1", &u), 0);
+    cg_test_int("  = 0xFFF1", (long long)u, 0xFFF1);
+    cg_test_int("长写法也能解回同一个值", cg_ble_uuid16_parse(buf, &u), 0);
+    cg_test_int("  = 0xFFF1", (long long)u, 0xFFF1);
+    cg_test_int("大写 + 大括号也认", cg_ble_uuid16_parse("{0000FFF1-0000-1000-8000-00805F9B34FB}", &u), 0);
+    cg_test_int("  = 0xFFF1", (long long)u, 0xFFF1);
+    cg_test_int("0x 前缀也认", cg_ble_uuid16_parse("0xfff1", &u), 0);
+    cg_test_int("  = 0xFFF1", (long long)u, 0xFFF1);
+    cg_test_int("标准的心率测量 2A37", cg_ble_uuid16_parse("00002a37-0000-1000-8000-00805f9b34fb", &u), 0);
+    cg_test_int("  = 0x2A37", (long long)u, 0x2A37);
+
+    cg_test_note("---- UUID：不是标准基形态的必须拒绝 ----");
+    cg_test_int("自定义 128 位 UUID -> -1（不是 16 位能表达的）",
+                cg_ble_uuid16_parse("12345678-1234-5678-1234-567812345678", &u), -1);
+    /* 下面这条是我自己写错过的那一处：高 16 位不是 0000 时不能当标准基（索引基准对错就差在这） */
+    cg_test_int("高 16 位非 0000 -> -1", cg_ble_uuid16_parse("ffee0000-0000-1000-8000-00805f9b34fb", &u), -1);
+    cg_test_int("尾巴有一位不对 -> -1", cg_ble_uuid16_parse("0000fff1-0000-1000-8000-00805f9b34fZ", &u), -1);
+    cg_test_int("位数不对 -> -1", cg_ble_uuid16_parse("fff", &u), -1);
+    cg_test_int("空串 -> -1", cg_ble_uuid16_parse("", &u), -1);
+    cg_test_int("NULL -> -1", cg_ble_uuid16_parse(NULL, &u), -1);
+
+    cg_test_note("---- UUID：比较（现场拿手册的短 UUID 比设备报的长 UUID）----");
+    cg_test_int("fff1 与它的长写法相等", cg_ble_uuid_equal("fff1", "0000fff1-0000-1000-8000-00805f9b34fb"), 1);
+    cg_test_int("大小写不敏感", cg_ble_uuid_equal("FFF1", "0xFFF1"), 1);
+    cg_test_int("不同的不等", cg_ble_uuid_equal("fff1", "fff2"), 0);
+    cg_test_int("自定义 128 位：带不带大括号相等",
+                cg_ble_uuid_equal("12345678-1234-5678-1234-567812345678",
+                                  "{12345678-1234-5678-1234-567812345678}"), 1);
+    cg_test_int("自定义 128 位 vs 标准基短写法：不等",
+                cg_ble_uuid_equal("12345678-1234-5678-1234-567812345678", "fff1"), 0);
+    cg_test_int("NULL -> 0", cg_ble_uuid_equal(NULL, "fff1"), 0);
+
+    cg_test_note("---- 特征属性位 ----");
+    cg_test_int("只有读（0x02）", cg_ble_attr_flags(0x02), CG_BLE_ATTR_READ);
+    cg_test_int("通知（0x10）", cg_ble_attr_flags(0x10), CG_BLE_ATTR_NOTIFY);
+    cg_test_int("读 + 写(要响应) + 通知（0x1A）",
+                cg_ble_attr_flags(0x1A), CG_BLE_ATTR_READ | CG_BLE_ATTR_WRITE | CG_BLE_ATTR_NOTIFY);
+    cg_test_int("0 -> 什么都不能", cg_ble_attr_flags(0), 0);
+
+    cg_test_note("---- 按地址/名字找已知设备（这台机器没有已知设备，走'找不到'那条）----");
+    {
+        cg_ble_device_t d;
+
+        cg_test_int("不存在的地址 -> -1", cg_ble_find_device("AA:BB:CC:DD:EE:FF", &d), -1);
+        cg_test_int("不存在的名字 -> -1", cg_ble_find_device("zzz-没有这个设备-zzz", &d), -1);
+        cg_test_int("NULL -> -1", cg_ble_find_device(NULL, &d), -1);
+        cg_test_int("出口 NULL -> -1", cg_ble_find_device("AA:BB:CC:DD:EE:FF", NULL), -1);
+        snprintf(buf, sizeof buf, "已知设备 %d 个（有的话上面那两条会变成 0）", cg_ble_device_count());
+        cg_test_note(buf);
+    }
+}
+
 CG_TEST_SUITE("无线：WiFi 状态与周边网络", test_wifi);
 CG_TEST_SUITE("无线：蓝牙无线电与已知设备", test_bluetooth);
+CG_TEST_SUITE("无线：BLE 地址 / UUID / 属性基元", test_ble_basics);

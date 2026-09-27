@@ -80,6 +80,10 @@ static int                g_wlan_tried;      /* 0 = 还没试过 */
 static int                g_bt_tried;
 static int                g_bt_ready;
 
+/* 定义在文件末尾的 BLE 基元区；这里前置声明是因为蓝牙那两个 info 函数要用它换算地址
+ * （踩过一次：不加前置声明，编译器给"implicit declaration"、链接时才炸） */
+static unsigned long long addr_of_bytes(const unsigned char *b);
+
 /** @brief 取 WLAN 那批符号（进程内一次）；取不到返回 0 */
 static int wlan_ready(void)
 {
@@ -332,9 +336,7 @@ int cg_ble_radio_info(int idx, cg_ble_radio_t *out)
             if (g_bt_radio_info(radio, &info) == ERROR_SUCCESS) {
                 copy_w(info.szName, (int)(sizeof info.szName / sizeof(wchar_t)),
                        out->name, sizeof out->name);
-                snprintf(out->address, sizeof out->address, "%02X:%02X:%02X:%02X:%02X:%02X",
-                         info.address.rgBytes[5], info.address.rgBytes[4], info.address.rgBytes[3],
-                         info.address.rgBytes[2], info.address.rgBytes[1], info.address.rgBytes[0]);
+                cg_ble_addr_str(addr_of_bytes(info.address.rgBytes), out->address, sizeof out->address);
             }
             CloseHandle(radio);
             g_bt_close_radio(find);
@@ -410,10 +412,227 @@ int cg_ble_device_info(int idx, cg_ble_device_t *out)
     if (!bt_walk_devices(&di, idx, NULL)) return -1;
 
     copy_w(di.szName, (int)(sizeof di.szName / sizeof(wchar_t)), out->name, sizeof out->name);
-    snprintf(out->address, sizeof out->address, "%02X:%02X:%02X:%02X:%02X:%02X",
-             di.Address.rgBytes[5], di.Address.rgBytes[4], di.Address.rgBytes[3],
-             di.Address.rgBytes[2], di.Address.rgBytes[1], di.Address.rgBytes[0]);
+    cg_ble_addr_str(addr_of_bytes(di.Address.rgBytes), out->address, sizeof out->address);
     out->connected  = di.fConnected ? 1 : 0;
     out->remembered = di.fRemembered ? 1 : 0;
     return 0;
+}
+
+/* ------------------------------------------------------------ BLE 基元：地址 / UUID / 属性
+ *
+ * 这一段**不需要蓝牙外设**就能做完、也就能真验完；而它恰好是写 BLE 工具最容易踩的三处坑：
+ *
+ *   1. **地址的字节序**：`BLUETOOTH_ADDRESS` 里 `rgBytes[0]` 是**打印出来最后一组**（小端），
+ *      所以 "AA:BB:CC:DD:EE:FF" 对应的 rgBytes 是 `{FF,EE,DD,CC,BB,AA}` ——
+ *      摆错一次就永远连不上，而报错只会说"设备没找到"。对外统一用**一个 64 位整数**表示
+ *      地址（`0xAABBCCDDEEFF` 就是 AA:BB:CC:DD:EE:FF），换算由本文件负责，调用方不碰 rgBytes。
+ *   2. **UUID 的两种写法**：设备手册写 "FFF1"，协议栈写
+ *      "0000fff1-0000-1000-8000-00805f9b34fb" —— 是同一个东西（后者是蓝牙的标准基 UUID）。
+ *   3. **属性位**：一个特征能不能读 / 写 / 订阅，全在那一个 properties 字里。
+ *
+ *  为什么"连接与读写"不在这里（下一步）：GATT 的入口要一个 `HANDLE hDevice`，而
+ *  **`bluetoothleapis.h` 里没有任何获取它的函数**（2026-09-27 查过：只有 BluetoothGATT*
+ *  那一族**拿走**句柄；`bluetoothapis.h` 的 find 句柄是"枚举句柄"，不是设备句柄）——
+ *  纯 C 里得靠 SetupAPI 枚举设备接口、再 CreateFile 打开，而那**必须有真外设**才枚举得到。
+ *  没有板子时把那段写出来只能是"看着对"，正是本项目一直在惩罚的东西（探针/断言的教训）。
+ */
+
+/** @brief 把 BLUETOOTH_ADDRESS 的 rgBytes 拼成对外那个 64 位表示（rgBytes[5] 是最高一组） */
+static unsigned long long addr_of_bytes(const unsigned char *b)
+{
+    unsigned long long v = 0;
+    int                i;
+
+    for (i = 5; i >= 0; i--) v = (v << 8) | b[i];
+    return v;
+}
+
+void cg_ble_addr_str(unsigned long long addr, char *out, int out_size)
+{
+    if (!out || out_size <= 0) return;
+    /* 与 Windows 设置里显示的写法一致：**大写**、冒号分隔、最高字节在前 */
+    snprintf(out, (size_t)out_size, "%02X:%02X:%02X:%02X:%02X:%02X",
+             (unsigned)((addr >> 40) & 0xFF), (unsigned)((addr >> 32) & 0xFF),
+             (unsigned)((addr >> 24) & 0xFF), (unsigned)((addr >> 16) & 0xFF),
+             (unsigned)((addr >> 8) & 0xFF), (unsigned)(addr & 0xFF));
+}
+
+int cg_ble_addr_from_str(const char *text, unsigned long long *out)
+{
+    unsigned long long v      = 0;
+    int                digits = 0;
+
+    if (!out || !text) return -1;
+    for (; *text; text++) {
+        char c = *text;
+
+        if (c == ':' || c == '-' || c == ' ') continue;       /* 分隔符随便（冒号/连字符/空格） */
+        if (c >= '0' && c <= '9')      c = (char)(c - '0');
+        else if (c >= 'a' && c <= 'f') c = (char)(c - 'a' + 10);
+        else if (c >= 'A' && c <= 'F') c = (char)(c - 'A' + 10);
+        else return -1;                                       /* 别的字符一律算写错，不"尽量猜" */
+        if (digits >= 12) return -1;
+        v = (v << 4) | (unsigned long long)(unsigned char)c;
+        digits++;
+    }
+    if (digits != 12) return -1;                              /* 必须正好 6 字节 */
+    *out = v;
+    return 0;
+}
+
+int cg_ble_uuid16_str(unsigned short uuid16, char *out, int out_size)
+{
+    int n;
+
+    if (!out || out_size <= 0) return -1;
+    /* **小写**：蓝牙文档、nRF Connect、Windows 都这么写 —— 要跟数据手册逐字比对的就是它的字形
+     * （与"进制输出一律大写"那条不冲突：那条说的是寄存器数值，这条说的是 UUID 的字面量） */
+    n = snprintf(out, (size_t)out_size, "0000%04x-0000-1000-8000-00805f9b34fb", (unsigned)uuid16);
+    return (n == 36 && n < out_size) ? n : -1;
+}
+
+/** @brief 把一个字符当十六进制数字解（不是就返回 -1） */
+static int hexval(char c)
+{
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+int cg_ble_uuid16_parse(const char *text, unsigned short *out16)
+{
+    char canon[40];
+    int  n = 0, i;
+
+    if (!text || !out16) return -1;
+    for (; *text; text++) {
+        char c = *text;
+
+        if (c == ' ' || c == '\t') continue;
+        if (c == '-' || c == '{' || c == '}') continue;       /* GUID 的大括号、短横线都吃掉 */
+        if (n == 0 && c == '0' && (text[1] == 'x' || text[1] == 'X')) { text++; continue; }
+        canon[n++] = c;
+        if (n >= (int)sizeof(canon) - 1) return -1;
+    }
+    canon[n] = 0;
+    if (n == 4) {                                             /* 短写法 "fff1" */
+        unsigned v = 0;
+
+        for (i = 0; i < 4; i++) {
+            int d = hexval(canon[i]);
+
+            if (d < 0) return -1;
+            v = (v << 4) | (unsigned)d;
+        }
+        *out16 = (unsigned short)v;
+        return 0;
+    }
+    if (n == 32) {                                            /* 长写法：必须是标准基形态 */
+        /* 去掉横线后共 32 位十六进制：`0000` + `xxxx`（要取的那 4 位）+ 后面 24 位固定尾巴。
+         * 索引要对准：尾巴从**第 8 位**开始、长 24 —— 第一版写成从第 4 位开始比 28 位，
+         * 既错位又越界（读 base_tail 之外），靠"拿标准 UUID 走一遍单测"才抓出来。 */
+        static const char *base_tail = "0000" "1000" "8000" "00805f9b34fb";   /* 24 位 */
+        unsigned v = 0;
+
+        if (canon[0] != '0' || canon[1] != '0' || canon[2] != '0' || canon[3] != '0') return -1;
+                                                                             /* 高 16 位必须是 0000 */
+                                                                             /* （4..7 位才是要取的值） */
+        for (i = 0; i < 24; i++) {
+            int a = hexval(canon[8 + i]), b = hexval(base_tail[i]);
+
+            if (a < 0 || a != b) return -1;                  /* 尾巴必须与基 UUID 相同 */
+        }
+        for (i = 0; i < 4; i++) {                            /* 真正要取的是中间那 4 位 */
+            int d = hexval(canon[4 + i]);
+
+            v = (v << 4) | (unsigned)d;
+        }
+        *out16 = (unsigned short)v;
+        return 0;
+    }
+    return -1;
+}
+
+/** @brief 把文本 UUID 归一成"小写、去掉短横线/大括号/0x"的形式；放不下返回 -1 */
+static int uuid_canon(const char *text, char *out, int out_size)
+{
+    int n = 0;
+
+    if (!text || !out || out_size <= 0) return -1;
+    for (; *text; text++) {
+        char c = *text;
+
+        if (c == ' ' || c == '\t' || c == '-' || c == '{' || c == '}') continue;
+        if (n == 0 && c == '0' && (text[1] == 'x' || text[1] == 'X')) { text++; continue; }
+        if (c >= 'A' && c <= 'F') c = (char)(c - 'A' + 'a');
+        else if (hexval(c) < 0) return -1;
+        if (n >= out_size - 1) return -1;
+        out[n++] = c;
+    }
+    out[n] = 0;
+    return (n > 0) ? n : -1;
+}
+
+int cg_ble_uuid_equal(const char *a, const char *b)
+{
+    char ca[40], cb[40];
+    unsigned short ua, ub;
+
+    if (!a || !b) return 0;
+    /* 能当 16 位解的两边就按 16 位比 —— 这样 "fff1" 与它那个长写法**相等**（最常见的用法） */
+    if (cg_ble_uuid16_parse(a, &ua) == 0 && cg_ble_uuid16_parse(b, &ub) == 0) return ua == ub;
+    if (uuid_canon(a, ca, sizeof ca) < 0) return 0;
+    if (uuid_canon(b, cb, sizeof cb) < 0) return 0;
+    return strcmp(ca, cb) == 0;
+}
+
+int cg_ble_attr_flags(unsigned properties)
+{
+    int f = 0;
+
+    if (properties & 0x02u) f |= CG_BLE_ATTR_READ;
+    if (properties & 0x04u) f |= CG_BLE_ATTR_WRITE_NR;
+    if (properties & 0x08u) f |= CG_BLE_ATTR_WRITE;
+    if (properties & 0x10u) f |= CG_BLE_ATTR_NOTIFY;
+    if (properties & 0x20u) f |= CG_BLE_ATTR_INDICATE;
+    return f;
+}
+
+int cg_ble_find_device(const char *addr_or_name, cg_ble_device_t *out)
+{
+    unsigned long long want = 0;
+    int                by_addr, n, i;
+
+    if (!addr_or_name || !out) return -1;
+    by_addr = (cg_ble_addr_from_str(addr_or_name, &want) == 0);
+    n       = cg_ble_device_count();
+    for (i = 0; i < n; i++) {
+        cg_ble_device_t d;
+        unsigned long long got;
+
+        if (cg_ble_device_info(i, &d) != 0) continue;
+        if (by_addr) {
+            if (cg_ble_addr_from_str(d.address, &got) == 0 && got == want) { *out = d; return 0; }
+        } else if (d.name[0]) {
+            /* 名字用**不区分大小写的子串**匹配：现场记的名字常常只是设备名的一段 */
+            const char *h = d.name, *t = addr_or_name;
+            int         ok = 0;
+
+            for (; *h; h++) {
+                const char *p = h, *q = t;
+
+                while (*p && *q) {
+                    char cp = (*p >= 'A' && *p <= 'Z') ? (char)(*p + 32) : *p;
+                    char cq = (*q >= 'A' && *q <= 'Z') ? (char)(*q + 32) : *q;
+
+                    if (cp != cq) break;
+                    p++; q++;
+                }
+                if (!*q) { ok = 1; break; }
+            }
+            if (ok) { *out = d; return 0; }
+        }
+    }
+    return -1;                                                /* 没找到就是没找到，不编一个出来 */
 }
