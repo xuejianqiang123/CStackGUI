@@ -170,9 +170,8 @@ export default function ActionSection({ doc, node, patch }: ActionSectionProps) 
         <div className="hint-box warn-box">
           <div className="hint-title">还绑着 click 事件</div>
           <p className="muted small">
-            {node.action ? `已经由动作「${node.action}」接管` : "菜单里已经有菜单项引用动作"}，
-            同时绑 <code>click</code> → <code>{node.events?.click}</code> 会被自检判为错误
-            （运行时忽略这一份）。
+            已经由动作「{node.action}」接管，同时绑 <code>click</code> →{" "}
+            <code>{node.events?.click}</code> 会被自检判为错误（运行时忽略这一份）。
           </p>
           <button className="mini" onClick={clearClick}>
             清掉 click 绑定
