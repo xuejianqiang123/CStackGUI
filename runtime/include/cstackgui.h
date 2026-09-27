@@ -1163,6 +1163,108 @@ int cg_modbus_build_write(int tcp, int tid, int slave, int func, int start,
  *              负值分得这么细，是为了让日志能直接说清"是坏了还是我拼错了"。 */
 int cg_modbus_parse(int tcp, const void *frame, int len, cg_modbus_rsp_t *out);
 
+/* ---- 字节流切帧（串口 / TCP 都适用） ----
+ * 串口与 TCP 给的都是**字节流**：一次 cg_serial_read 拿到的可能是半帧、一整帧，也可能两帧
+ * 粘在一起（"粘包"）。现场协议的定界办法基本跑不出四种（静默 / 定长 / 分隔符 / 头里带长度），
+ * 这里四种收在同一个状态机里 —— 别在每个项目里再手写一遍。
+ *
+ *   static cg_frame_t    g_fr;                    // 一条链路一份，别共享
+ *   static unsigned char g_buf[512];
+ *
+ *   void on_open(...)  { cg_frame_init(&g_fr, g_buf, sizeof g_buf, CG_FRAME_SILENCE, 4); }
+ *
+ *   void on_arrive(...) {                                    // 串口的"数据到达"事件
+ *       char          buf[4096];
+ *       unsigned char frame[512];
+ *       int           n = cg_serial_read(cg_widget_serial(self), buf, sizeof buf);
+ *       int           flen;
+ *
+ *       if (n <= 0) return;
+ *       cg_frame_feed(&g_fr, buf, n, cg_now_ms());            // 静默模式：这句会把上一帧收尾
+ *       while ((flen = cg_frame_take(&g_fr, frame, sizeof frame)) > 0) {
+ *           cg_modbus_rsp_t r;                                // 切出整帧，才谈得上解析
+ *           if (cg_modbus_parse(CG_MODBUS_RTU, frame, flen, &r) == 0) { ... }
+ *       }
+ *   }
+ *
+ * **时间由调用方给**（cg_now_ms()）：于是它是纯状态机，能用"任意切法的字节序列 + 任意时间戳"
+ * 严格测，不需要 sleep、不需要真串口。
+ * 静默模式下没有定时器也能用（下一个字节到来时同样会发现空档）；但**想让最后一帧马上出来**
+ * （对端只发一帧就不发了），就在定时器里调 cg_frame_tick()。
+ *
+ * 一条物理事实：两帧之间一旦短于 gap 就**无法**再分开（RTU 要求帧间 ≥ t3.5，从站违反它时
+ * 任何切帧器都没辙）⇒ 静默模式必须配 CRC 用（cg_crc16 / cg_modbus_parse），坏了丢帧重来。
+ */
+#define CG_FRAME_SILENCE  0   /* 帧间静默：隔 gap_ms 没新字节算一帧结束（Modbus RTU 的 t3.5） */
+#define CG_FRAME_FIXED    1   /* 定长：每 N 字节一帧 */
+#define CG_FRAME_DELIM    2   /* 分隔符：读到该字节算一帧结束（**分隔符留在帧里**） */
+#define CG_FRAME_LENFIELD 3   /* 头里带长度：第 off 字节起 width 字节是长度 */
+
+/** 队列上限：一次最多排这么多整帧等调用方取走，再多就丢掉并计数（**不静默丢**） */
+#define CG_FRAME_QUEUE 8
+
+/** 切帧状态。**自己声明一份、别共享**：一条链路（一个串口 / 一个 socket）一份。
+ *  缓冲由调用方给（与 cg_serial_read / 编码那批同一口径：这里不 malloc）。 */
+typedef struct {
+    int            mode;                    /* CG_FRAME_* */
+    unsigned long  gap_ms;                  /* SILENCE：静默多久算一帧结束 */
+    int            fixed;                   /* FIXED：每帧字节数 */
+    int            delim;                   /* DELIM：结束字节 */
+    int            lf_off;                  /* LENFIELD：长度字段在帧内偏移 */
+    int            lf_width;                /* LENFIELD：1 或 2 字节 */
+    int            lf_le;                   /* LENFIELD：小端？ */
+    int            lf_add;                  /* LENFIELD：帧总长 = 长度值 + lf_add */
+    int            min_len;                 /* 少于这么多字节不算一帧（噪声） */
+    int            max_len;                 /* 一帧上限：超了整帧丢掉并计数 */
+    unsigned char *buf;                     /* 调用方给的攒帧缓冲 */
+    int            cap;                     /* 缓冲大小 */
+    int            len;                     /* 当前正在攒的那帧已有多少字节 */
+    unsigned long  last_ms;                 /* 收到最后一个字节的时刻 */
+    unsigned long  dropped;                 /* 累计丢掉的字节数（诊断用） */
+    unsigned long  frames;                  /* 累计切出来的整帧数 */
+    int            q_base;                  /* 队首那帧在缓冲里的偏移 */
+    int            q_head;                  /* 队列头下标 */
+    int            q_count;                 /* 队列里几帧 */
+    int            q_len[CG_FRAME_QUEUE];   /* 各帧长度（位置由 q_base 累加得出） */
+} cg_frame_t;
+
+/** 初始化切帧器：buf/buf_size 是调用方给的攒帧缓冲（够放"最大的一帧"即可）。
+ *  arg 按 mode 解释：SILENCE = 静默毫秒 / FIXED = 每帧字节数 / DELIM = 结束字节 /
+ *  LENFIELD = 长度字段的字节偏移（缺省宽 2、大端、帧总长 = 长度值 + 偏移 + 2）。
+ *  @return int 0 = 成功；-1 = 参数不合法（mode 不认识 / 缓冲太小 / arg 越界） */
+int cg_frame_init(cg_frame_t *f, void *buf, int buf_size, int mode, int arg);
+
+/** LENFIELD 的细节：长度字段宽度（1 或 2 字节）、是否小端、帧总长 = 长度值 + add（> 0 才生效） */
+void cg_frame_lenfield(cg_frame_t *f, int width, int little_endian, int add);
+
+/** 帧长界：低于 min_len 当噪声丢掉；高于 max_len 整帧丢掉（都累加进 dropped）。
+ *  只传 > 0 的值才生效；max_len 不许超过缓冲大小。 */
+void cg_frame_limits(cg_frame_t *f, int min_len, int max_len);
+
+/** 喂入刚收到的字节；now_ms 传 cg_now_ms()。
+ *  @return int 0 = 已收下；-1 = 参数非法，或缓冲被没取走的帧占满（先 cg_frame_take） */
+int cg_frame_feed(cg_frame_t *f, const void *data, int len, unsigned long now_ms);
+
+/** 取一帧（切好的整帧按到达顺序给出）。
+ *  @return int > 0 = 帧长（已写进 out）；0 = 还没有完整帧；-1 = out 放不下（帧仍在队列里） */
+int cg_frame_take(cg_frame_t *f, void *out, int cap);
+
+/** 时间在走：静默到点就把攒着的收尾（没有定时器也能用，但最后一帧要立刻出来就得调它） */
+void cg_frame_tick(cg_frame_t *f, unsigned long now_ms);
+
+/** 丢掉没攒完的半帧与队列里没取走的帧（"清空接收"按钮用）。丢字节的统计量不清零。 */
+void cg_frame_reset(cg_frame_t *f);
+
+/** 累计丢掉的字节数（噪声 / 超上限 / 队列满）—— **丢要丢得看得见** */
+unsigned long cg_frame_dropped(const cg_frame_t *f);
+
+/** 累计切出来的整帧数（含还没取走的） */
+unsigned long cg_frame_frames(const cg_frame_t *f);
+
+/** 毫秒时基（系统 uptime）：切帧、超时判定、去抖都用它。
+ *  与 cg_time_now()（格式化成"2026-09-27 12:00:00"那种给人看的）不是一回事。 */
+unsigned long cg_now_ms(void);
+
 /* ---- 哈希（摘要） ----
  * MD5 / SHA-1 / SHA-256 / SHA-512，**手写实现**，不调系统的 CryptoAPI。
  * 理由有两条（原先写的"会改掉用户的链接命令"是错的，已按实验更正 —— advapi32 本来就能

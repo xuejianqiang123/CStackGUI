@@ -118,6 +118,15 @@ int cg_run_process(const char *cmd_line, int wait)
     return rc;
 }
 
+/** @brief 毫秒时基（系统 uptime）：切帧、超时判定、去抖都用它
+ *  @return unsigned long 自系统启动起的毫秒数
+ *  @note 用 GetTickCount64 而不是 GetTickCount：后者 49.7 天回绕，长时间运行的上位机会撞上，
+ *        而"时间倒退"会让切帧器的空档判定永远不成立（帧再也切不出来）。 */
+unsigned long cg_now_ms(void)
+{
+    return (unsigned long)GetTickCount64();
+}
+
 /** @brief 当前时间字符串；fmt 传 NULL 用 "2026-09-21 02:33:53" */
 char *cg_time_now(const char *fmt)
 {
