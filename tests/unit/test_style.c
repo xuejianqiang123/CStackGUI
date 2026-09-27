@@ -193,7 +193,9 @@ static void test_style_bad_values(void)
         "    { \"id\": \"c_size\", \"type\": \"label\", \"style\": { \"use\": \"s\", \"size\": 20 } },"
         "    { \"id\": \"d_align\", \"type\": \"label\", \"style\": { \"use\": \"s\", \"align\": \"middle\" } },"
         "    { \"id\": \"e_junk\", \"type\": \"label\","
-        "      \"style\": { \"use\": \"s\", \"size\": \"abc\", \"bold\": \"yes\", \"radius\": \"x\" } }"
+        "      \"style\": { \"use\": \"s\", \"size\": \"abc\", \"bold\": \"yes\", \"radius\": \"x\" } },"
+        "    { \"id\": \"f_missing\", \"type\": \"label\", \"style\": \"nope\" },"
+        "    { \"id\": \"g_missing2\", \"type\": \"label\", \"style\": { \"use\": \"nope2\" } }"
         "  ] }");
 
     cg_test_ok("能解析", doc != NULL);
@@ -214,6 +216,13 @@ static void test_style_bad_values(void)
     cg_test_int("  这三个字段也没被记成「写了」",
                 (long long)(kid(doc, 4)->style_mask &
                             (CG_STYLE_HAS_SIZE | CG_STYLE_HAS_BOLD | CG_STYLE_HAS_RADIUS)), 0);
+
+    cg_test_note("---- 失效引用要**计数**（供 WARN 与 --selftest 用），不许一声不吭 ----");
+    cg_test_int("两个控件引用了不存在的样式名", doc->style_missing, 2);
+    cg_test_str("  并记下第一个失效的名字（写进那条 WARN）", doc->style_missing_name, "nope");
+    cg_test_int("  失效的控件风格是全缺省（= 没写 style）", kid(doc, 5)->style.size, 0);
+    cg_test_int("  但引用名仍然留着（画布标红 / 诊断要看得出它引的是什么）",
+                kid(doc, 5)->style_name != NULL, 1);
 
     cg_test_note("---- 反面对照：写了真值当然要盖 ----");
     cg_test_int("合法 fg 覆盖生效", (long long)kid(doc, 1)->style.fg, 0x0000FF);

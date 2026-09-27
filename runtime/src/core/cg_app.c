@@ -425,16 +425,19 @@ int cg_app_selftest(const cg_app_desc_t *desc)
 
     printf("-- 合成事件 --\n");
     if (app.window) selftest_walk(&app, app.window, &st, 0);
-    printf("-- 结果: 控件 %d 个, 触发回调 %d 次, 未登记 %d 个, 事件不支持 %d 个, 绑定出错 %d 个, 动作出错 %d 个 --\n",
+    printf("-- 结果: 控件 %d 个, 触发回调 %d 次, 未登记 %d 个, 事件不支持 %d 个, 绑定出错 %d 个, 动作出错 %d 个, 样式引用失效 %d 个 --\n",
            st.total, st.fired, st.unresolved, app.unsupported_events, app.bad_binds,
-           app.bad_actions);
+           app.bad_actions, app.doc.style_missing);
 
     {
-        int bad = st.unresolved + app.unsupported_events + app.bad_binds + app.bad_actions;
+        /* 必须在 app_close() **之前**取出来：它会把 doc 释放掉，之后再读就是悬空访问 */
+        int missing = app.doc.style_missing;
+        int bad = st.unresolved + app.unsupported_events + app.bad_binds + app.bad_actions + missing;
+
         app_close(&app);
         if (bad) {
-            cg_log(CG_LOG_ERROR, "自检失败：未登记回调 %d 个，绑了不支持的事件 %d 个，绑定源不存在 %d 个，动作出错 %d 个",
-                   st.unresolved, app.unsupported_events, app.bad_binds, app.bad_actions);
+            cg_log(CG_LOG_ERROR, "自检失败：未登记回调 %d 个，绑了不支持的事件 %d 个，绑定源不存在 %d 个，动作出错 %d 个，样式引用失效 %d 个",
+                   st.unresolved, app.unsupported_events, app.bad_binds, app.bad_actions, missing);
             cg_log_close();
             return 5;
         }

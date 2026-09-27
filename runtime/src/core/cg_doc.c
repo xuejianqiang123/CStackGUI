@@ -226,17 +226,29 @@ static void style_merge_named(cg_style_t *st, unsigned mask, const cg_named_styl
 }
 
 /**
- * @brief 把整棵树上引用了命名样式的控件都合并一遍
+ * @brief 把整棵树上引用了命名样式的控件都合并一遍，并**统计失效引用**
  * @param n 子树根（调用方传 doc->root）
- * @param styles 样式表；nstyles 条数
+ * @param doc 所属文档（样式表在里面，失效计数也记在它上面）
  * @return void 无返回值
  * @note 必须等 styles{} **读完**再调用：样式表在 .cgui 里的位置不保证在控件之前。
+ *       找不到名字**不是错误**（不崩、不中断加载），但**不能一声不吭** ——
+ *       外观会悄悄退回缺省。与动作的"未登记"一个口径：这里计数，收尾报一条 WARN，
+ *       `--selftest` 再据此判失败。
  */
-static void resolve_named_styles(cg_node_t *n, const cg_named_style_t *styles, size_t nstyles)
+static void resolve_named_styles(cg_node_t *n, cg_doc_t *doc)
 {
-    if (!n) return;
-    if (n->style_name) style_merge_named(&n->style, n->style_mask, style_find(styles, nstyles, n->style_name));
-    for (size_t i = 0; i < n->nchildren; i++) resolve_named_styles(n->children[i], styles, nstyles);
+    if (!n || !doc) return;
+    if (n->style_name) {
+        const cg_named_style_t *base = style_find(doc->styles, doc->nstyles, n->style_name);
+
+        if (base) {
+            style_merge_named(&n->style, n->style_mask, base);
+        } else {
+            if (doc->style_missing == 0) doc->style_missing_name = n->style_name;
+            doc->style_missing++;
+        }
+    }
+    for (size_t i = 0; i < n->nchildren; i++) resolve_named_styles(n->children[i], doc);
 }
 
 /**
@@ -867,8 +879,14 @@ cg_doc_t *cg_doc_parse(const char *json, char *err, size_t errsz)
         node_add_child(doc->root, n);
     }
 
-    /* 树建完了，把命名样式合并进各控件（命名打底、内联优先） */
-    if (doc->nstyles) resolve_named_styles(doc->root, doc->styles, doc->nstyles);
+    /* 树建完了，把命名样式合并进各控件（命名打底、内联优先）。
+     * **不管有没有 styles{} 都要走一遍** —— 没有样式表时引用才更能看出是失效的
+     * （stats 计数与那条 WARN 都在这里产生）。 */
+    resolve_named_styles(doc->root, doc);
+    if (doc->style_missing) {
+        cg_log(CG_LOG_WARN, "有 %d 个控件引用了不存在的样式名（第一个是 \"%s\"）：这些控件按「没写 style」处理，外观退回缺省",
+               doc->style_missing, doc->style_missing_name ? doc->style_missing_name : "?");
+    }
 
     cj_free(root);
     return doc;

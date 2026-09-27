@@ -206,7 +206,7 @@ typedef struct cg_node {
     int      x, y, w, h;
     /** 引用的命名样式名（.cgui 的 `"style": "名字"` 或 `{ "use": "名字" }`）；NULL = 没引用。
      *  解析时只记名字，合并（命名打底 + 内联覆盖）在 styles{} 读完后的
-     *  resolve_named_styles() 里统一做 —— 见 .codebuddy/plans/named-styles-dark.md §2。 */
+     *  resolve_named_styles() 里统一做 —— 见 .codebuddy/plans/styles-dark.md 的"取值口径"一节。 */
     char    *style_name;
     /** 控件**自己**写了哪几个样式字段（CG_STYLE_HAS_* 位或）。
      *  没有它就分不出"没写"与"写成默认值"，后者会把命名样式里的值顶掉。 */
@@ -357,9 +357,16 @@ typedef struct {
     size_t       nactions;
     /** 顶层 styles：命名样式表（可为空）。控件用 "style": "名字" 引用它。
      *  与 actions 同一口径：按书写顺序存，重名后者覆盖。
-     *  语义见 .codebuddy/plans/named-styles-dark.md */
+     *  语义见 .codebuddy/plans/styles-dark.md */
     cg_named_style_t *styles;
     size_t            nstyles;
+    /** 引用了**不存在**的样式名的控件个数（解析时统计，>0 就是 .cgui 里有失效引用）。
+     *  运行时按"没写 style"处理（不崩、不中断加载），但要**报一条 WARN**、并被 `--selftest`
+     *  计入失败 —— 否则这种失效是**完全静默**的：外观悄悄退回缺省，谁都不知道为什么。
+     *  与动作那句"未登记"同一个口径（2026-09-27 补，此前只跳过、一声不吭）。 */
+    int               style_missing;
+    /** 第一个失效引用的名字（指向节点里的字符串，随文档一起释放；只给那条 WARN 用） */
+    const char       *style_missing_name;
     /** 深色模式（.cgui 的 app.dark）：1 = 深色，0 = 浅色（缺省），**-1 = "auto" 跟随系统**。
      *  core 不碰 Win32，所以 auto 只记成 -1，由**后端**去读系统主题（HKCU 的 AppsUseLightTheme）。
      *  运行时要切换用 cg_theme_set_dark()。 */
