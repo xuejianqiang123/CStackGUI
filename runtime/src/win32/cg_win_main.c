@@ -283,6 +283,14 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             }
         }
         break;
+    case WM_THEMECHANGED:
+        /* 用户在系统设置里换了浅/深色。**只有 auto 才该跟着变** —— 显式写了
+         * dark:true/false 的工程照旧，不然用户设的配色被系统主题悄悄改掉。 */
+        if (app && app->doc.dark == -1) {
+            cgw_theme_init(app);
+            cgw_theme_apply(app);
+        }
+        return 0;
     case WM_DPICHANGED: {
         if (app) {
             RECT *r = (RECT *)lp;

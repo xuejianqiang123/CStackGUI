@@ -281,6 +281,11 @@ struct cg_widget {
 struct cg_app {
     cg_doc_t     doc;
     cg_widget_t *widgets;
+    /** 当前是不是深色（**有效值**，不是 .cgui 里的原始意图）。
+     *  .cgui 的 app.dark 写 true/false/"auto"：前两者直接定，`"auto"` 由**后端**在
+     *  建窗口时读系统主题解析（core 不碰注册表）。运行时切换走 cg_theme_set_dark()。
+     *  皮肤层画"默认色"时读它（w->app->dark）；控件自己写了 fg/bg 的一律以自己为准。 */
+    int          dark;
     cg_widget_t *window;     /* 代表主窗口的伪控件，承接 CG_EVENT_CLOSE */
     int          next_ctrl_id;
     int          next_menu_cmd;

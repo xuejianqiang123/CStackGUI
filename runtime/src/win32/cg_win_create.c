@@ -158,6 +158,10 @@ void cgw_create_native(cg_widget_t *w)
     /* 调节器建好了：交给自绘层按客户区内侧摆位（并给右边留出箭头宽度） */
     if (!strcmp(type, "edit") && w->spin)
         cg_skin_edit_fit_spin(w);
+
+    /* 深色：列表/表格/树换系统深色主题、RichEdit 给底色。放在这里而不是窗口建完之后
+     * 统一扫一遍，是为了**运行期动态建的控件**也自动跟上（cg_widget_add 走同一条路）。 */
+    cgw_theme_widget(w);
 }
 
 /** 递归建原生控件：父先于子 */

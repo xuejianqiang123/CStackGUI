@@ -11,6 +11,7 @@
  */
 #include "cg_test.h"
 #include "cg_doc.h"
+#include "cg_internal.h"     /* cg_app_t 的完整定义（深色那两个 API 要一个 app） */
 
 #include <stdio.h>
 #include <string.h>
@@ -169,4 +170,24 @@ static void test_dark_flag(void)
 
 CG_TEST_SUITE("样式：style 的三种形态与合并", test_style_forms);
 CG_TEST_SUITE("样式：嵌套容器里的引用", test_style_nested);
+/** @brief 运行时切深色的两个 API：空指针安全、状态跟着走、没有窗口也不崩
+ *  @details 真机观感只能靠截图（见 build\darktest\ 的探针），这里只钉**接口契约**：
+ *           传 NULL 不许崩、set 之后 is_dark 要变、`--selftest` 这种没有窗口的场合
+ *           调 set 也必须安全（cgw_theme_apply 在没有后端状态时直接返回）。 */
+static void test_theme_api(void)
+{
+    cg_app_t app;                     /* 白盒：栈上一个"没有窗口"的应用（natives = NULL） */
+
+    memset(&app, 0, sizeof(app));
+    cg_test_int("没有窗口的应用默认不是深色", cg_theme_is_dark(&app), 0);
+    cg_test_int("切成深色返回成功", cg_theme_set_dark(&app, 1), 1);
+    cg_test_int("  -> 现在报深色", cg_theme_is_dark(&app), 1);
+    cg_test_int("切回浅色", cg_theme_set_dark(&app, 0), 1);
+    cg_test_int("  -> 现在报浅色", cg_theme_is_dark(&app), 0);
+
+    cg_test_int("传 NULL 给 set 不崩、报失败", cg_theme_set_dark(NULL, 1), 0);
+    cg_test_int("传 NULL 给 is 报 0（不是深色）", cg_theme_is_dark(NULL), 0);
+}
+
 CG_TEST_SUITE("样式：app.dark 三态", test_dark_flag);
+CG_TEST_SUITE("样式：深色的两个 API", test_theme_api);

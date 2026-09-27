@@ -413,9 +413,9 @@ unsigned cg_win_behind_rgb(cg_app_t *app, void *hwnd)
         if (cgw_is_t(pw, "card")) {
             /* 卡片没设底色时自己填的就是系统面色（panel_draw_card_shape 的 facergb 分支），
              * 子控件的"背后"必须跟它对齐 —— 否则卡片里的无底色 label 按递归拿到页面色，
-             * 灰卡上糊一块页面色方块（2026-09-25 用户截图：卡片里的标签是页面青色底）。 */
-            unsigned face = GetSysColor(COLOR_BTNFACE);
-            return ((face & 0xFFu) << 16) | (face & 0xFF00u) | ((face >> 16) & 0xFFu);
+             * 灰卡上糊一块页面色方块（2026-09-25 用户截图：卡片里的标签是页面青色底）。
+             * 深色下这个面色也跟着变深（色调由 cg_win_theme.c 给）。 */
+            return cgw_theme_card_face(app);
         }
         /* 父容器没设底色：递归问"它背后是什么"（容器自己画底色用的就是这条递归，
          * cg_win_draw_panel.c 的 behind_rgb_of）。不能去拿窗口类背景刷 —— 那是面板类
@@ -472,6 +472,12 @@ HBRUSH cgw_ctlcolor_brush(cg_app_t *app, WPARAM wp, LPARAM lp)
         SetTextColor(dc, cgw_to_colorref(w->style.fg));
     } else if (cgw_is_t(w, "link")) {
         SetTextColor(dc, RGB(0x0B, 0x57, 0xD0));   /* 链接默认蓝，没设颜色时用 */
+    } else {
+        /* 没写 fg 的输入框/标签：深色下必须给浅字，否则深底黑字等于看不见。
+         * 浅色下 cgw_theme_text() 返回 CG_COLOR_NONE = 这一支什么都不做（保持系统默认）。 */
+        unsigned fg = cgw_theme_text(app);
+
+        if (fg != CG_COLOR_NONE) SetTextColor(dc, cgw_to_colorref(fg));
     }
     if (w->style.bg != CG_COLOR_NONE) {
         SetBkColor(dc, cgw_to_colorref(w->style.bg));

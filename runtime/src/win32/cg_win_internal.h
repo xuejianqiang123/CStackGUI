@@ -56,7 +56,26 @@ typedef struct {
     int             layout_base_w;
     int             layout_base_h;
     int             layout_ready;
+    int             dark;        /* 当前深色（= app->dark 的镜像；皮肤/背景刷都用它） */
 } cg_win_state_t;
+
+/* ---------------- cg_win_theme.c：深色模式 ---------------- */
+
+/** @brief 读系统的"应用深色"设置（HKCU …Themes\Personalize 的 AppsUseLightTheme）；读不到按浅色 */
+int cgw_theme_system_dark(void);
+/** @brief 定下"现在是深色吗"并建好背景刷 —— 建窗口时调一次；WM_THEMECHANGED 时再调（重判 auto） */
+void cgw_theme_init(cg_app_t *app);
+/** @brief 把当前主题应用到窗口与全部控件（换背景刷、重设系统控件的深色主题、重画） */
+void cgw_theme_apply(cg_app_t *app);
+/** @brief 窗口底色（深色 = 深面；否则 doc.bg 或系统面色） */
+unsigned cgw_theme_window_bg(const cg_app_t *app);
+/** @brief 卡片"没设底色时"自己填的那个面色（深色下一并变深） */
+unsigned cgw_theme_card_face(const cg_app_t *app);
+/** @brief 无显式前景色时该用的文字色；返回 CG_COLOR_NONE = 别动（浅色下就是这条） */
+unsigned cgw_theme_text(const cg_app_t *app);
+/** @brief 让**一个**控件的原生窗口跟随当前主题（cgw_create_native 建完就调；
+ *         cgw_theme_apply 换主题时对全部控件调） */
+void cgw_theme_widget(cg_widget_t *w);
 
 /* ---------------- cg_win_layout.c：余量分配（.cgui 的 grow） ---------------- */
 
