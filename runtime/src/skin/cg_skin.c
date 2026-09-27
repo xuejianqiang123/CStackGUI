@@ -566,7 +566,12 @@ void cg_skin_draw_switch(cg_widget_t *w, HDC hdc, const RECT *rc)
             RECT tr = *rc;
             tr.right = x + wpx - tw - 6 * scale / 100;
             SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, sk_colorref(disabled ? 0x9A9A9Eu : 0x1D1B20u));
+            /* 这里的字画在**透明底**上（= cg_win_behind_rgb 那套"背后色"），所以深色下必须
+             * 换成浅字，否则复选/单选/开关的文字就是深底暗字（2026-09-27 探针截图抓到的）。
+             * 注意**不要**顺手改上面按钮那句 textcol：那是画在 M3 浅紫填充上的字，
+             * 深色下按钮填充仍是浅紫，字就该保持深色。 */
+            SetTextColor(hdc, sk_colorref(disabled ? 0x9A9A9Eu
+                                          : (w->app && w->app->dark ? 0xE6E0E9u : 0x1D1B20u)));
             DrawTextW(hdc, wt, -1, &tr,
                       DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
             free(wt);

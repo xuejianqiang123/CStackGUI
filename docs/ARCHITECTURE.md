@@ -296,7 +296,10 @@ runtime/
       cg_win_create.c   原生控件创建与销毁
       cg_win_sync.c     控件状态同步与条目重建
       cg_win_layout.c   把 core 算好的 grow 布局落到原生窗口（基准取自第一次 WM_SIZE）
-      cg_win_theme.c    深色模式：底色 / 无底色控件的字色 / 列表·表格·树的 DarkMode_Explorer
+      cg_win_theme.c    深色模式：底色 / 无底色控件的字色 / RichEdit 底色。
+                        注意**清单控件（listbox/table/tree）实测在 Win11 上不跟随深色** ——
+                        代码里试过系统未公开的深色开关（uxtheme 序号 135/133/104）也无效，
+                        所以面向用户的覆盖表按"不跟随"写（见 CGUI-FORMAT 的 app.dark 一节）
       cg_win_notify.c   原生通知 -> 事件映射
       cg_win_event.c    焦点子类与窗口级事件
       cg_win_main.c     主窗口过程
