@@ -325,6 +325,7 @@ runtime/
       cg_kit_ini.c      INI 配置读写
       cg_kit_str.c      文本与编码：格式化 / 裁剪 / 替换 / 比较、UTF-8 ↔ GBK、
                         十六进制 / Base64 / URL 编解码、进制转换与补码（工控看寄存器值用）
+      cg_kit_bytes.c    字节操作：反转 / 切片 / 查找 / 按字节序读写 u16·u32（拼帧拆帧的基元）
       cg_kit_check.c    校验：CRC32（IEEE 802.3）/ CRC16-Modbus（逐位算不建表 ⇒ 线程安全）、
                         MD5 / SHA-1 / SHA-256 / SHA-512（手写，零新增链接依赖；含分块文件摘要）
       cg_kit_sys.c      剪贴板 / 外部程序 / 时间 / 注册表 /

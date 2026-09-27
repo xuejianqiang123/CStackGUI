@@ -1179,6 +1179,18 @@ int cg_base64_decode(const char *text, void *out, int out_size);
 int cg_url_encode(const char *text, int space_plus, char *out, int out_size);
 int cg_url_decode(const char *text, char *out, int out_size);
 
+/* 字节操作：拼帧 / 拆帧的基元（风格同上：调用方给缓冲、返回写出的长度）。
+ * 字节序参数统一：big_endian 非 0 = 大端（网络序 / Modbus 寄存器序），0 = 小端。
+ * 越界一律"什么都不写 + 返回失败码" —— 半个字段写进帧里比报错更难查。 */
+void cg_bytes_reverse(void *data, int len);                          /* 原地反转 */
+int  cg_bytes_slice(const void *data, int len, int from, int count,  /* count = -1 取到底 */
+                    void *out, int out_size);
+int  cg_bytes_find(const void *data, int len, const void *needle, int nlen, int from);
+int  cg_bytes_get_u16(const void *data, int len, int offset, int big_endian);   /* 越界 -1 */
+long long cg_bytes_get_u32(const void *data, int len, int offset, int big_endian);  /* 见头文件：避免与 -1 撞车 */
+int  cg_bytes_put_u16(void *out, int out_size, int offset, unsigned v, int big_endian);
+int  cg_bytes_put_u32(void *out, int out_size, int offset, unsigned v, int big_endian);
+
 /* 进制与补码：输出一律大写；cg_base_to_int 认 0x/0b/0o 前缀，整串必须合法 */
 int cg_int_to_base(long long v, int base, char *out, int out_size);
 int cg_base_to_int(const char *s, int base, long long *out);   /* 1 = 成功，0 = 失败 */
