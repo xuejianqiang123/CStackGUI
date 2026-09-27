@@ -149,6 +149,25 @@ typedef struct {
     cg_align_t align;
 } cg_style_t;
 
+/** style 里"到底写了哪几个字段" —— 合并命名样式与内联字段时**必须**知道，
+ *  否则分不出"没写"与"写成默认值"（后者会把命名样式里的值顶掉）。
+ *  见 .codebuddy/plans/named-styles-dark.md §2。 */
+enum {
+    CG_STYLE_HAS_FONT   = 1 << 0,
+    CG_STYLE_HAS_SIZE   = 1 << 1,
+    CG_STYLE_HAS_BOLD   = 1 << 2,
+    CG_STYLE_HAS_FG     = 1 << 3,
+    CG_STYLE_HAS_BG     = 1 << 4,
+    CG_STYLE_HAS_RADIUS = 1 << 5,
+    CG_STYLE_HAS_ALIGN  = 1 << 6
+};
+
+/** 顶层 `styles{}` 里的一条命名样式 */
+typedef struct {
+    char       *name;   /* 引用名（.cgui 里 "style": "name" 用的就是它） */
+    cg_style_t  st;     /* 把它当"内联字段全写满"的一份样式 */
+} cg_named_style_t;
+
 /* --------------------------------------------------- 结构化条目
  * 这几种控件的内容不是一句 text 能表达的，.cgui 里各有一个字段描述：
  *   listbox / combo / tabs / statusbar -> "items":  ["第一项", "第二项"]
@@ -185,6 +204,13 @@ typedef struct cg_node {
     char    *id;
     char    *text;
     int      x, y, w, h;
+    /** 引用的命名样式名（.cgui 的 `"style": "名字"` 或 `{ "use": "名字" }`）；NULL = 没引用。
+     *  解析时只记名字，合并（命名打底 + 内联覆盖）在 styles{} 读完后的
+     *  resolve_named_styles() 里统一做 —— 见 .codebuddy/plans/named-styles-dark.md §2。 */
+    char    *style_name;
+    /** 控件**自己**写了哪几个样式字段（CG_STYLE_HAS_* 位或）。
+     *  没有它就分不出"没写"与"写成默认值"，后者会把命名样式里的值顶掉。 */
+    unsigned style_mask;
     /** 余量分配权重（.cgui 的 grow，0..99）：容器变大时按权重吃多出来的空间；
      *  与它位置重叠的兄弟（同一行 / 同一列，即"同一条带"）原地不动，排在这一行 / 列**之后**的
      *  兄弟整体平移；0 / 不写 = 不吃余量。
@@ -329,6 +355,15 @@ typedef struct {
      *  按 .cgui 里的书写顺序存，重复名后者覆盖。 */
     cg_action_t *actions;
     size_t       nactions;
+    /** 顶层 styles：命名样式表（可为空）。控件用 "style": "名字" 引用它。
+     *  与 actions 同一口径：按书写顺序存，重名后者覆盖。
+     *  语义见 .codebuddy/plans/named-styles-dark.md */
+    cg_named_style_t *styles;
+    size_t            nstyles;
+    /** 深色模式（.cgui 的 app.dark）：1 = 深色，0 = 浅色（缺省），**-1 = "auto" 跟随系统**。
+     *  core 不碰 Win32，所以 auto 只记成 -1，由**后端**去读系统主题（HKCU 的 AppsUseLightTheme）。
+     *  运行时要切换用 cg_theme_set_dark()。 */
+    int               dark;
 } cg_doc_t;
 
 /** 解析 .cgui 文本。失败返回 NULL 并写错误信息。 */

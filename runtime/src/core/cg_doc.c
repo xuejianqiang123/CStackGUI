@@ -72,42 +72,168 @@ char *cg_read_file(const char *path)
 
 static const char *const k_align_names[] = { "left", "center", "right" };
 
+/** @brief 恢复成"什么都没写"的默认值 */
+static void style_defaults(cg_style_t *st)
+{
+    memset(st, 0, sizeof(*st));            /* size 0 = 用系统 UI 字体 */
+    st->fg = CG_COLOR_NONE;
+    st->bg = CG_COLOR_NONE;
+}
+
 /**
- * @brief 解析 style 对象（font/size/bold/fg/bg/radius/align），缺省给默认值
- * @param o JSON 里的 style 对象，可为 NULL
- * @param st 输出：样式（调用方先清零）
- * @return void 无返回值
+ * @brief 把 JSON 对象里**写了**的样式字段盖到 st 上；mask 记下写了哪几个
+ * @param o JSON 对象（NULL / 非对象直接返回）
+ * @param st 目标样式（只被"写了的"字段覆盖，其余保持原样）
+ * @param mask 可传 NULL（= 不关心写了哪些；解析样式表时就是这么用的）
+ * @note 与"无条件铺默认值"的区别是**关键**：合并命名样式时必须分得出
+ *       "没写某个字段"和"把某个字段写成默认值"，否则后者会把命名样式里的值顶掉（契约 §2）。
  */
-static void parse_style(const cj_val_t *o, cg_style_t *st)
+static void style_overlay(const cj_val_t *o, cg_style_t *st, unsigned *mask)
 {
     const cj_val_t *v;
 
-    st->font = NULL;
-    st->size = 0;              /* 0 = 用系统 UI 字体 */
-    st->bold = 0;
-    st->fg = CG_COLOR_NONE;
-    st->bg = CG_COLOR_NONE;
-    st->radius = 0;
-    st->align = CG_ALIGN_LEFT;
-
     if (!o || o->type != CJ_OBJ) return;
 
-    st->font = dup_or_null(cj_str(cj_get(o, "font"), NULL));
-    st->size = cj_int(cj_get(o, "size"), 0);
-    st->bold = cj_bool(cj_get(o, "bold"), 0);
-    st->fg = cj_color(cj_get(o, "fg"), CG_COLOR_NONE);
-    st->bg = cj_color(cj_get(o, "bg"), CG_COLOR_NONE);
-    st->radius = cj_int(cj_get(o, "radius"), 0);
-
+    if ((v = cj_get(o, "font")) != NULL) {
+        free(st->font);
+        st->font = dup_or_null(cj_str(v, NULL));
+        if (mask) *mask |= CG_STYLE_HAS_FONT;
+    }
+    if ((v = cj_get(o, "size")) != NULL) {
+        st->size = cj_int(v, st->size);
+        if (mask) *mask |= CG_STYLE_HAS_SIZE;
+    }
+    if ((v = cj_get(o, "bold")) != NULL) {
+        st->bold = cj_bool(v, st->bold);
+        if (mask) *mask |= CG_STYLE_HAS_BOLD;
+    }
+    if ((v = cj_get(o, "fg")) != NULL) {
+        st->fg = cj_color(v, st->fg);
+        if (mask) *mask |= CG_STYLE_HAS_FG;
+    }
+    if ((v = cj_get(o, "bg")) != NULL) {
+        st->bg = cj_color(v, st->bg);
+        if (mask) *mask |= CG_STYLE_HAS_BG;
+    }
+    if ((v = cj_get(o, "radius")) != NULL) {
+        st->radius = cj_int(v, st->radius);
+        if (mask) *mask |= CG_STYLE_HAS_RADIUS;
+    }
     v = cj_get(o, "align");
     if (v && v->type == CJ_STR) {
         for (int i = 0; i < 3; i++) {
-            if (strcmp(v->str ? v->str : "", k_align_names[i]) == 0) {
+            if (v->str && strcmp(v->str, k_align_names[i]) == 0) {
                 st->align = (cg_align_t)i;
+                if (mask) *mask |= CG_STYLE_HAS_ALIGN;
                 break;
             }
         }
     }
+}
+
+/** @brief 按名字找命名样式；没有返回 NULL（找不到**不报错**，按"没有 use"处理） */
+static const cg_named_style_t *style_find(const cg_named_style_t *styles, size_t n, const char *name)
+{
+    if (!styles || !name || !*name) return NULL;
+    for (size_t i = n; i-- > 0; ) {        /* 倒着找：重名时后者覆盖（与 actions 一个口径） */
+        if (styles[i].name && strcmp(styles[i].name, name) == 0) return &styles[i];
+    }
+    return NULL;
+}
+
+/**
+ * @brief 解析控件的 `style`（三种形态），**只记下**引用的名字与"自己写了哪几个字段"
+ * @param o .cgui 里 style 的值（对象 / 字符串 / NULL）
+ * @param st 输出：内联字段已就位（命名样式那部分要等 resolve_named_styles）
+ * @param name_out 输出：引用的样式名（调用方 free）；没有引用写 NULL
+ * @param mask 输出：写了哪几个字段（CG_STYLE_HAS_* 位或）
+ * @note 形态：`{...}` 内联 / `"名字"` 纯引用 / `{ "use": "名字", ...覆盖 }` —— 契约 §2
+ */
+static void parse_style(const cj_val_t *o, cg_style_t *st, char **name_out, unsigned *mask)
+{
+    const cj_val_t *use;
+
+    style_defaults(st);
+    if (mask) *mask = 0;
+    if (name_out) *name_out = NULL;
+    if (!o) return;
+
+    if (o->type == CJ_STR) {               /* "style": "log" —— 纯命名引用 */
+        if (name_out && o->str && *o->str) *name_out = dup_str(o->str);
+        return;
+    }
+    use = cj_get(o, "use");
+    if (name_out && use && use->type == CJ_STR && use->str && *use->str) {
+        *name_out = dup_str(use->str);
+    }
+    style_overlay(o, st, mask);            /* 局部覆盖（"use" 本身不是样式字段） */
+}
+
+/**
+ * @brief 把命名样式填进控件自己**没写**的字段上（内联优先，契约 §2）
+ * @param st 目标样式（已经放着内联字段）
+ * @param mask 控件自己写了哪几个字段
+ * @param base 命名样式；NULL（找不到那个名字）时什么都不做
+ */
+static void style_merge_named(cg_style_t *st, unsigned mask, const cg_named_style_t *base)
+{
+    if (!base) return;
+    if (!(mask & CG_STYLE_HAS_FONT)) {
+        free(st->font);
+        st->font = dup_or_null(base->st.font);
+    }
+    if (!(mask & CG_STYLE_HAS_SIZE))   st->size   = base->st.size;
+    if (!(mask & CG_STYLE_HAS_BOLD))   st->bold   = base->st.bold;
+    if (!(mask & CG_STYLE_HAS_FG))     st->fg     = base->st.fg;
+    if (!(mask & CG_STYLE_HAS_BG))     st->bg     = base->st.bg;
+    if (!(mask & CG_STYLE_HAS_RADIUS)) st->radius = base->st.radius;
+    if (!(mask & CG_STYLE_HAS_ALIGN))  st->align  = base->st.align;
+}
+
+/**
+ * @brief 把整棵树上引用了命名样式的控件都合并一遍
+ * @param n 子树根（调用方传 doc->root）
+ * @param styles 样式表；nstyles 条数
+ * @return void 无返回值
+ * @note 必须等 styles{} **读完**再调用：样式表在 .cgui 里的位置不保证在控件之前。
+ */
+static void resolve_named_styles(cg_node_t *n, const cg_named_style_t *styles, size_t nstyles)
+{
+    if (!n) return;
+    if (n->style_name) style_merge_named(&n->style, n->style_mask, style_find(styles, nstyles, n->style_name));
+    for (size_t i = 0; i < n->nchildren; i++) resolve_named_styles(n->children[i], styles, nstyles);
+}
+
+/**
+ * @brief 解析顶层 `styles{}`：键是样式名，值是字段子集
+ * @param o `styles` 的值
+ * @param count 输出：条数
+ * @return cg_named_style_t* 数组（调用方 free，条目里的 name/font 也要放）；空/类型不对返回 NULL
+ * @note 容错：空名跳过、值不是对象跳过 —— 不报错、不中断加载（与 actions 一个口径）。
+ */
+static cg_named_style_t *parse_named_styles(const cj_val_t *o, size_t *count)
+{
+    cg_named_style_t *out;
+    size_t            n = 0;
+
+    *count = 0;
+    if (!o || o->type != CJ_OBJ || o->count == 0 || !o->keys) return NULL;
+    out = (cg_named_style_t *)calloc(o->count, sizeof(cg_named_style_t));
+    if (!out) return NULL;
+
+    for (size_t i = 0; i < o->count; i++) {
+        const char      *name = o->keys[i];
+        const cj_val_t  *v    = o->items[i];
+
+        if (!name || !*name) continue;                  /* 空名：跳过 */
+        if (!v || v->type != CJ_OBJ) continue;          /* 值不是对象：跳过 */
+        out[n].name = dup_str(name);
+        style_defaults(&out[n].st);
+        style_overlay(v, &out[n].st, NULL);             /* 样式表里写了的字段全算数 */
+        n++;
+    }
+    *count = n;
+    return out;
 }
 
 /**
@@ -313,6 +439,7 @@ static void node_free(cg_node_t *n)
     free(n->type);
     free(n->id);
     free(n->text);
+    free(n->style_name);
     free(n->src);
     free(n->format);
     free(n->hint);
@@ -405,7 +532,10 @@ static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
     n->grow = cj_int(cj_get(o, "grow"), 0);
     if (n->grow < 0 || n->grow > 99) n->grow = 0;
 
-    parse_style(cj_get(o, "style"), &n->style);
+    /* style 三种形态都收（契约 §2）：内联对象 / "名字" / { "use": "名字", ...覆盖 }。
+     * 这里**只记下引用的名字与"自己写了哪几个字段"**，真正的合并等 styles{} 解析完
+     * 再统一做（resolve_named_styles()）—— 因为样式表在文档里的位置不保证在控件之前。 */
+    parse_style(cj_get(o, "style"), &n->style, &n->style_name, &n->style_mask);
 
     /* state 与顶层字段都读，顶层优先（方便手写小文件） */
     {
@@ -566,6 +696,15 @@ cg_doc_t *cg_doc_parse(const char *json, char *err, size_t errsz)
     if (doc->width < 80) doc->width = 80;
     if (doc->height < 60) doc->height = 60;
 
+    /* app.dark：true / false / "auto"。auto 只记成 -1，**由后端**读系统主题
+     * （core 平台中立，不许碰 HKCU 注册表；后端把 -1 解析成实际状态）。 */
+    {
+        const cj_val_t *dk = cj_get(app, "dark");
+
+        if (dk && dk->type == CJ_STR && dk->str && strcmp(dk->str, "auto") == 0) doc->dark = -1;
+        else doc->dark = cj_bool(dk, 0) ? 1 : 0;
+    }
+
     /* 窗口属性（app 节点，全部可选；不写就保持 Windows 默认观感） */
     {
         const cj_val_t *vx = cj_get(app, "x");
@@ -679,6 +818,10 @@ cg_doc_t *cg_doc_parse(const char *json, char *err, size_t errsz)
         cg_doc_free(doc);
         return NULL;
     }
+    /* 顶层 styles：命名样式表（与 actions 同级）。控件解析时**只记名字**，
+     * 合并统一放到树建完之后 —— 样式表在 .cgui 里的位置不保证在控件之前。 */
+    doc->styles = parse_named_styles(cj_get(root, "styles"), &doc->nstyles);
+
     for (size_t i = 0; i < cj_count(ws); i++) {
         cg_node_t *n = parse_node(cj_at(ws, i), err, errsz);
         if (!n) {
@@ -688,6 +831,9 @@ cg_doc_t *cg_doc_parse(const char *json, char *err, size_t errsz)
         }
         node_add_child(doc->root, n);
     }
+
+    /* 树建完了，把命名样式合并进各控件（命名打底、内联优先） */
+    if (doc->nstyles) resolve_named_styles(doc->root, doc->styles, doc->nstyles);
 
     cj_free(root);
     return doc;
@@ -721,6 +867,13 @@ void cg_doc_release(cg_doc_t *doc)
             free(doc->actions[i].handler);
         }
         free(doc->actions);
+    }
+    if (doc->styles) {
+        for (size_t i = 0; i < doc->nstyles; i++) {
+            free(doc->styles[i].name);
+            free(doc->styles[i].st.font);
+        }
+        free(doc->styles);
     }
     node_free(doc->root);
     memset(doc, 0, sizeof(*doc));
