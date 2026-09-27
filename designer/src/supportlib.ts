@@ -234,6 +234,16 @@ if (lab) cg_widget_set_text(lab, "已处理");`,
           c("cg_win_set_state", "最小化/最大化", "void cg_win_set_state(cg_app_t *app, const char *cmd)", "cmd 传 \"min\" / \"max\" / \"normal\""),
           c("cg_win_set_topmost", "总在最前", "void cg_win_set_topmost(cg_app_t *app, int on)", "1 置顶，0 取消"),
           c("cg_win_set_icon", "换窗口图标", "void cg_win_set_icon(cg_app_t *app, const char *ico_path)", "传 .ico 路径；NULL 还原自带图标"),
+          c("cg_win_screenshot", "把整个窗口存成 PNG", "int cg_win_screenshot(cg_app_t *app, const char *path)",
+            "工单取证用：走 PrintWindow，所以窗口**被挡住、不在前台**也拿得到正确内容；少数控件不响应时退回抓屏并在日志里说明。GDI+ 起不来的机器返回 0", {
+              params: ["path：输出路径（UTF-8，扩展名随意，编码固定 PNG）", "整个窗口，含标题栏"],
+              ret: "1 = 成功；0 = 失败（原因写进日志）",
+              sample: `/* 现场出问题时一键取证：存到 exe 同目录，路径贴进工单 */\nchar *p = cg_path_join(cg_app_dir(), "screenshot.png");\nif (cg_win_screenshot(app, p)) cg_status_set(sb, 0, p);\ncg_free(p);`,
+            }),
+          c("cg_widget_screenshot", "把某个控件存成 PNG", "int cg_widget_screenshot(cg_widget_t *w, const char *path)",
+            "「这个框里到底显示成什么样」取证用；日期时间这类两个原生窗口拼的控件存的是主窗口那个", {
+              ret: "1 = 成功；0 = 失败（原因写进日志）",
+            }),
         ],
       },
       {

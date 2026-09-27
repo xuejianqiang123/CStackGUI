@@ -131,7 +131,8 @@ function coerceActions(raw: unknown): Record<string, CgAction> | undefined {
 
 /* ---------------------------------------------------------------- 字段取值
  * **运行时是权威**：这里是 cg_json.c 的 cj_num / cj_int / cj_bool / cj_color 四套取值函数的
- * 逐一对齐版。手写 .cgui 里运行时**认**的值，画布不能丢 —— 打开再存就抹掉 = 静默删数据
+ * 逐一对齐版（`numOf` / `intOk` / `boolOk` / `colorOf`）。手写 .cgui 里运行时**认**的值，
+ * 画布不能丢 —— 打开再存就抹掉 = 静默删数据
  * （`"size": "11"` / `"bold": "true"` / `"fg": 16711680` 运行时都认）。
  * 写回时按**规范形态**（数字 / 布尔 / "#RRGGBB"）落盘，语义不变即可（不要求字节恒等）。
  */
@@ -148,23 +149,6 @@ function numOf(v: unknown, def: number): number {
     }
     const d = parseFloat(v); /* strtod：前缀是数字就取，认不出来才是 def */
     return Number.isNaN(d) ? def : d;
-  }
-  return def;
-}
-
-/** = cj_int：四舍五入（负数也远离零，与 C 的 `(int)(d < 0 ? d - 0.5 : d + 0.5)` 一致） */
-function intOf(v: unknown, def: number): number {
-  const d = numOf(v, def);
-  return d < 0 ? Math.ceil(d - 0.5) : Math.floor(d + 0.5);
-}
-
-/** = cj_bool：布尔 / 数字（0|非 0）/ 字符串 "true" / "1" / "false" / "0" */
-function boolOf(v: unknown, def: boolean): boolean {
-  if (typeof v === "boolean") return v;
-  if (typeof v === "number") return Number.isFinite(v) && v !== 0;
-  if (typeof v === "string") {
-    if (v === "true" || v === "1") return true;
-    if (v === "false" || v === "0") return false;
   }
   return def;
 }
