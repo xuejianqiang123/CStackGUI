@@ -164,7 +164,9 @@ typedef struct cg_item {
     char             *id;         /* 菜单项标识，回调里用 cg_menu_last_id 取回 */
     /** 引用的动作名（.cgui 的 action）；NULL = 这个菜单项不是动作。
      *  有它时：文字取动作的 text（非空时覆盖本项的 text）、点击触发动作、
-     *  启用与勾选都跟随动作 —— 本项自己的 events.click 会被忽略（自检报错）。 */
+     *  启用与勾选都跟随动作 —— 这一项**不再**给菜单控件派发 click。
+     *  注意本结构**没有 events 字段**：菜单项本来就写不出自己的事件绑定，
+     *  所以"动作项与普通项混用一根菜单"是正常写法（普通项照旧走菜单控件的 events.click）。 */
     char             *action;
     int               expanded;   /* 树：初始展开 */
     int               checked;    /* 菜单：勾选标记 */
