@@ -1216,6 +1216,15 @@ int cg_ble_radio_count(void);                  /* 有几个蓝牙无线电（0 =
 int cg_ble_radio_info(int idx, cg_ble_radio_t *out);
 int cg_ble_device_count(void);                 /* 已配对/记得过的设备数（不做主动搜索） */
 int cg_ble_device_info(int idx, cg_ble_device_t *out);
+int cg_ble_find_device(const char *addr_or_name, cg_ble_device_t *out);  /* 按地址或名字找，0 = 找到 */
+
+/* BLE 基元（不需要外设就能用；写 BLE 工具最容易踩的三处坑都在这里） */
+void cg_ble_addr_str(unsigned long long addr, char *out, int out_size);  /* "AA:BB:CC:DD:EE:FF" */
+int  cg_ble_addr_from_str(const char *text, unsigned long long *out);    /* 必须正好 6 字节 */
+int  cg_ble_uuid16_str(unsigned short uuid16, char *out, int out_size);  /* -> 小写标准基写法 */
+int  cg_ble_uuid16_parse(const char *text, unsigned short *out16);       /* "fff1" 与长写法都认 */
+int  cg_ble_uuid_equal(const char *a, const char *b);                    /* "fff1" == 它的长写法 */
+int  cg_ble_attr_flags(unsigned properties);                             /* -> CG_BLE_ATTR_* 组合 */
 
 /* Modbus 帧编解码（纯函数：不持状态、不碰 I/O；RTU 自动挂 CRC 并校验，TCP 带 MBAP 头） */
 int cg_modbus_build_read (int tcp, int tid, int slave, int func, int start, int count,

@@ -31,7 +31,29 @@
 **没做**：主动扫描（`WlanScan` 实测返回 87 = ERROR_INVALID_PARAMETER，参数与文档一致却失败、
 原因不明 ⇒ 撤掉，列表只用系统缓存）。**没验**：周边网络列表非空的那条路径（本机缓存一直为空）。
 
-## 下一步：BLE 组件（IoT 的核心片）
+## 第二片（已交付）：BLE 基元 —— 地址 / UUID / 属性
+
+`cg_ble_addr_str` / `cg_ble_addr_from_str` / `cg_ble_uuid16_str` / `cg_ble_uuid16_parse` /
+`cg_ble_uuid_equal` / `cg_ble_attr_flags` / `cg_ble_find_device`。
+选它的理由：**不需要外设就能做完、也就能真验完**，而它恰好是写 BLE 工具最容易踩的三处坑：
+
+- **地址字节序**：`BLUETOOTH_ADDRESS.rgBytes` 是**小端**（`rgBytes[0]` 是打印出来最后一组），
+  摆错一次就永远连不上、而报错只说"设备没找到" ⇒ 对外统一用**一个 64 位整数**，换算由框架负责；
+- **UUID 两种写法**：手册的 "FFF1" 与协议栈的 `0000fff1-0000-1000-8000-00805f9b34fb` 是同一个东西；
+- **属性位**：能不能读 / 写 / 订阅全在那一个 properties 字里。
+
+写这段时自己踩了两次：**UUID 标准基的索引基准写成 4（应为 8）、尾串长度写 28（应为 24，越界）** ——
+被"拿标准 UUID 走一遍单测"抓住；另外静态辅助函数用在使用之后 ⇒ 编译报 implicit declaration。
+两处都留了注释。
+
+## 下一步：BLE 组件（需要一块板子）
+
+**为什么这一片停在这里（不是偷懒，是证据）**：GATT 的入口是
+`BluetoothGATTGetServices(HANDLE hDevice, …)`，而 **`bluetoothleapis.h` 里没有任何获取 `hDevice`
+的函数**（2026-09-27 查过：只有 BluetoothGATT* 那一族**拿走**句柄；`bluetoothapis.h` 的 find 句柄
+是"枚举句柄"，不是设备句柄）。纯 C 里得靠 **SetupAPI 枚举设备接口 + `CreateFile`** 打开它，
+而那**必须有真外设**才枚举得到 —— 用户当前没有板子，所以那段写出来只能是"看着对"，
+正是本项目一直在惩罚的东西（探针 bug / 会飘的断言，这一轮各有一次）。
 
 事实依据（探针已给）：GATT 全套符号在 `BluetoothApis.dll` 里，纯 C 可用，**不需要 WinRT**：
 
