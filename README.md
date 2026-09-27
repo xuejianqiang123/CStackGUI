@@ -73,6 +73,11 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
 加速键表，所以 **Ctrl+S 在输入框里也按得出来**（按键会被输入框吃掉，窗口级事件收不到）。
 见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md) 第 2.8.1 节。
 
+再往上一层是**命名样式（`styles{}`）**：`.cgui` 顶层把一套字体 / 字号 / 配色写一次、给个名字，
+控件按名字引用（`"style": "log"`，还能 `"use": "log"` 再局部覆盖几个字段）——
+**改一次字号不用再改几十处**。它只有「名字引用 + 局部覆盖」这一层，**不是 CSS**
+（没有选择器 / 继承 / 层叠 / 优先级计算），见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md) 第 2.2.1 节。
+
 仓库自带三类示例，分工不同：
 
 - `examples\lesson01_basics` ~ `examples\lesson06_window` —— **六课教学示例**：基础与容器 →
@@ -93,6 +98,14 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
   多出来的空间按权重分给同一容器里的兄弟（**同一行 / 同列的并排控件各自把这一带填满**），带之后的兄弟整体平移，
   和分隔条（`splitter`）是同一套心智模型（见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md) 2.1.1）。
 - 画布目前是单选，没有多选、组合、对齐工具条（有网格吸附和邻近参考线）。
+- **深色模式**（`app.dark`，或运行时 `cg_theme_set_dark()`）跟着变的是**默认值**：窗口与面板
+  （`group` / `box` / `card` / `shape`）的底色、没写 `fg` 的标签与自绘文字（复选框 / 单选钮 / 开关的标签）、
+  没写颜色的输入框、终端、圆环的轨道与图表的画布区，以及分组框里的标签与输入框。
+  **不跟随的**：列表框 / 表格 / 树（Win11 实测无效）、标签页、下拉列表、月历、日期选择、状态栏、
+  工具栏、滑块的底槽、进度条的槽（自绘但填充色写死浅色；**同族的圆环轨道反而跟随**）；
+  按钮 / 勾选 / 开关这类自绘控件**底色跟着深、填充色不跟**（仍是 M3 浅紫 —— 画在它上面的文字也就不跟着变浅），
+  自己写了 `fg`/`bg` 的控件一律保持原样，所以**它让界面暗下来，但不是一套完整的深色皮肤**。
+  见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md) 1.1.1。
 - 菜单可以在运行时增删改（`cg_menu_add_item` / `remove` / `clear_items` / `set_item_*`），但有两个边界：
   新增的项**不支持引用动作**（要快捷键就在 `.cgui` 里写固定项）；改的是内存里的菜单，**不写回 `.cgui`**。
 - 控件绑定只镜像**值 / 文字 / 勾选**三类语义，**不做格式换算**（不能把 0~100 映射成 0~5、或自动加
