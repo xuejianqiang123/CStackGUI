@@ -315,7 +315,9 @@ runtime/
       cg_kit.c          路标：四个子文件各管什么（原 857 行按子系统拆开，别往里加实现）
       cg_kit_fs.c       文件 / 目录 / 路径 / 程序目录 / 数据目录，外加内存桥 cg_free
       cg_kit_ini.c      INI 配置读写
-      cg_kit_str.c      文本与编码：格式化 / 裁剪 / 替换 / 比较、UTF-8 ↔ GBK
+      cg_kit_str.c      文本与编码：格式化 / 裁剪 / 替换 / 比较、UTF-8 ↔ GBK、
+                        十六进制 / Base64 / URL 编解码、进制转换与补码（工控看寄存器值用）
+      cg_kit_check.c    校验：CRC32（IEEE 802.3）/ CRC16-Modbus —— 逐位算不建表，天然线程安全
       cg_kit_sys.c      剪贴板 / 外部程序 / 时间 / 注册表
       cg_kit_internal.h kit 层内部头：跨文件共用的三个助手（kit_w / kit_u8 / kit_lower）
                         有了它业务代码才真的"只 include cstackgui.h"

@@ -947,6 +947,26 @@ int   cg_ini_write(const char *path, const char *section, const char *key, const
 char *cg_str_format(const char *fmt, ...) / cg_str_trim / cg_str_replace;
 int   cg_str_equal(const char *a, const char *b);           /* 忽略大小写 */
 char *cg_utf8_to_gbk(const char *utf8) / cg_gbk_to_utf8;    /* 老 ANSI/GBK 文件互转 */
+
+/* 编码：十六进制 / Base64 / URL —— 都是"调用方给缓冲"，返回写出的长度；
+ * 参数或内容非法返回 -1，解码类缓冲放不下返回 -2（编码类需要的长度能事先算出来）。 */
+int cg_hex_encode(const void *data, int len, const char *sep, int upper, char *out, int out_size);
+int cg_hex_decode(const char *text, void *out, int out_size);
+int cg_base64_encode(const void *data, int len, char *out, int out_size);
+int cg_base64_decode(const char *text, void *out, int out_size);
+int cg_url_encode(const char *text, int space_plus, char *out, int out_size);
+int cg_url_decode(const char *text, char *out, int out_size);
+
+/* 进制与补码：输出一律大写；cg_base_to_int 认 0x/0b/0o 前缀，整串必须合法 */
+int cg_int_to_base(long long v, int base, char *out, int out_size);
+int cg_base_to_int(const char *s, int base, long long *out);   /* 1 = 成功，0 = 失败 */
+int cg_base_convert(const char *s, int from_base, int to_base, char *out, int out_size);
+long long         cg_to_signed(unsigned long long v, int bits);    /* 0xFFF6 按 12 位 = -10 */
+unsigned long long cg_from_signed(long long v, int bits);
+
+/* 校验（CRC）：逐位算不建表，天然线程安全 */
+unsigned cg_crc32(const void *data, int len);   /* IEEE 802.3 / zlib；"123456789" = 0xCBF43926 */
+unsigned cg_crc16(const void *data, int len);   /* CRC16/Modbus；"123456789" = 0x4B37，挂帧尾低字节在前 */
 char *cg_clip_get_text(void);
 int   cg_clip_set_text(const char *text);
 int   cg_shell_open(const char *path_or_url);               /* 默认程序打开文件/网址 */
