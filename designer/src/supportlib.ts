@@ -975,6 +975,12 @@ cg_free(ip);`,
             sample: `cg_clip_set_text(cg_widget_text(cg_find(cg_app_of(self), "edt_body")));
 cg_message_box(self, "已复制到剪贴板", "提示", 0);`,
           }),
+          c("cg_clip_get_image", "把剪贴板里的图片存成 PNG", "int cg_clip_get_image(const char *path)",
+            "示波器 / 相机截的图直接落进调试记录：优先取 CF_BITMAP、没有就取 CF_DIB 自己拼一张。剪贴板里没有图片返回 0（写日志）", {
+              params: ["path：输出路径（UTF-8，编码固定 PNG）"],
+              ret: "1 = 成功；0 = 剪贴板里没有图片 / 打不开剪贴板 / 存盘失败",
+              sample: `/* 例：按 Ctrl+V 时把剪贴板里的图存下来（.cgui 里给 keydown 绑 on_paste）*/\nchar *p = cg_path_join(cg_app_dir(), "paste.png");\nif (!cg_clip_get_image(p)) cg_status_set(sb, 0, "剪贴板里没有图片");\ncg_free(p);`,
+            }),
           c("cg_shell_open", "用默认程序打开", "int cg_shell_open(const char *path_or_url)", "打开文件 / 文件夹 / 网址（浏览器、记事本……都行）", {
             sample: `cg_shell_open("https://www.example.com");
 cg_shell_open(cg_app_data_dir());      /* 打开数据目录 */`,
