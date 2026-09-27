@@ -19,7 +19,10 @@ const wchar_t *g_win_richedit_class = NULL;
  *  起不来（理论上看不到）就退回静态占位文本。 */
 int g_win_atl_ok = 0;
 
-/** @brief 控件 -> Win32 窗口类名（group/box/card/shape 走自注册 Panel 类） */
+/** @brief 控件 -> Win32 窗口类名（group/box/card/shape 走自注册 Panel 类）
+ *  @param w 目标控件；type 字段决定返回哪个窗口类
+ *  @return const wchar_t * 静态类名字符串，静态存储不归调用方释放
+ */
 const wchar_t *cgw_class_of(const cg_widget_t *w)
 {
     if (!strcmp(w->type, "button"))    return L"BUTTON";      /* 自绘：BS_OWNERDRAW（cg_skin 画 M3 圆角） */
@@ -65,19 +68,28 @@ const wchar_t *cgw_class_of(const cg_widget_t *w)
     return CG_PANEL_CLASS;   /* group / box */
 }
 
-/** 日期时间：是"日期"还是"时间"，决定 DTS_* 样式 */
+/** @brief 日期时间：是"日期"还是"时间"，决定 DTS_* 样式
+ *  @param w datepicker 控件；format == "time" 视为时间
+ *  @return int 非 0 = 时间，0 = 日期
+ */
 int cgw_is_time_only(const cg_widget_t *w)
 {
     return w->format && strcmp(w->format, "time") == 0;
 }
 
-/** @brief datepicker 是否为"日期+时间"双控件模式（format == "datetime"） */
+/** @brief datepicker 是否为"日期+时间"双控件模式（format == "datetime"）
+ *  @param w datepicker 控件；format == "datetime" 视为双控件模式
+ *  @return int 非 0 = 日期+时间，0 = 否
+ */
 int cgw_is_datetime(const cg_widget_t *w)
 {
     return w->format && strcmp(w->format, "datetime") == 0;
 }
 
-/** @brief 分隔条是不是竖的（左右分栏）：format 缺省 "col" 是竖条，"row" 才是横条 */
+/** @brief 分隔条是不是竖的（左右分栏）：format 缺省 "col" 是竖条，"row" 才是横条
+ *  @param w splitter 控件；format == "row" 视为横条
+ *  @return int 非 0 = 竖条，0 = 横条
+ */
 int cgw_splitter_is_vert(const cg_widget_t *w)
 {
     return !(w->format && strcmp(w->format, "row") == 0);
@@ -90,7 +102,10 @@ int cgw_splitter_is_vert(const cg_widget_t *w)
  *   失焦：能解析就夹到该类型的范围里重写，解析不了就清空（"没填"是合法状态，不弹窗）。
  * 两处都只动文本、不派发 change —— 本工程的规矩是"程序改文本不触发回调"。 */
 
-/** @brief "YYYY-MM-DD" 或 "YYYY-MM-DD HH:MM" 的形状检查（不查日历真假，那是业务的事） */
+/** @brief "YYYY-MM-DD" 或 "YYYY-MM-DD HH:MM" 的形状检查（不查日历真假，那是业务的事）
+ *  @param s 待校验的宽字符串
+ *  @return int 非 0 = 形状合法（长度 10 或 16），0 = 不合法
+ */
 static int cgw_edit_date_ok(const wchar_t *s)
 {
     int i;
@@ -119,14 +134,22 @@ static int cgw_edit_date_ok(const wchar_t *s)
 /** @brief 校验/过滤用的输入方式档位。
  *  数值输入框（edit + 调节器）没写 input 时按「整数」办：value 是整数，
  *  放任字母进来只会被 wcstol 解析成 0（原来独立类型 spinner 是写死 ES_NUMBER 挡住的）。
- *  作者显式写了档位（含只读 1 / 密码 2 / 整数文本 3）就听作者的。 */
+ *  作者显式写了档位（含只读 1 / 密码 2 / 整数文本 3）就听作者的。
+ *  @param w edit 控件；input 为 0 且属数值框时按整数档位
+ *  @return int 输入方式档位
+ */
 static int edit_input_mode(const cg_widget_t *w)
 {
     if (cg_widget_is_numedit(w) && w->input == 0) return 7;   /* 整数 */
     return w->input;
 }
 
-/** @brief 这个字符要不要吞掉（由 cg_win_event.c 的 WM_CHAR 调用） */
+/** @brief 这个字符要不要吞掉（由 cg_win_event.c 的 WM_CHAR 调用）
+ *  @param w 目标控件；非 edit 或档位 < 4 一律放行
+ *  @param hwnd 控件窗口；用于读光标位置与已输入文本
+ *  @param ch 待判定的输入字符（UTF-16 码元）
+ *  @return int 非 0 = 吞掉，0 = 放行
+ */
 int cgw_edit_char_reject(const cg_widget_t *w, HWND hwnd, wchar_t ch)
 {
     DWORD   sel_a = 0, sel_b = 0;
@@ -155,7 +178,11 @@ int cgw_edit_char_reject(const cg_widget_t *w, HWND hwnd, wchar_t ch)
     return 1;
 }
 
-/** @brief 失焦时校验文本：越界夹回、非法清空（由 cg_win_notify.c 的 EN_KILLFOCUS 调用） */
+/** @brief 失焦时校验文本：越界夹回、非法清空（由 cg_win_notify.c 的 EN_KILLFOCUS 调用）
+ *  @param w 目标控件；非 edit 或档位 < 4 不校验
+ *  @param hwnd 控件窗口；文本以它为读写来源与去处
+ *  @return void 无返回值
+ */
 void cgw_edit_validate(cg_widget_t *w, HWND hwnd)
 {
     wchar_t buf[128];
@@ -199,7 +226,10 @@ void cgw_edit_validate(cg_widget_t *w, HWND hwnd)
     }
 }
 
-/** @brief 控件 -> WS 样式位（table 按 multi 决定单/多选） */
+/** @brief 控件 -> WS 样式位（table 按 multi 决定单/多选）
+ *  @param w 目标控件；type 与其它字段共同决定样式位
+ *  @return DWORD WS_* 及控件类样式位的按位组合
+ */
 DWORD cgw_style_of(const cg_widget_t *w)
 {
     if (!strcmp(w->type, "button"))    return WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW;  /* M3 圆角自绘 */
@@ -275,7 +305,10 @@ DWORD cgw_style_of(const cg_widget_t *w)
     return WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN;
 }
 
-/** @brief 控件 -> 扩展样式位（输入类控件给立体边框） */
+/** @brief 控件 -> 扩展样式位（输入类控件给立体边框）
+ *  @param w 目标控件；type 决定扩展样式位
+ *  @return DWORD WS_EX_* 的按位组合，0 表示无扩展样式
+ */
 DWORD cgw_exstyle_of(const cg_widget_t *w)
 {
     /* edit 的边框由 cg_skin 自绘（六种边框样式 + 聚焦紫），
@@ -300,18 +333,26 @@ DWORD cgw_exstyle_of(const cg_widget_t *w)
 #define COLOR_ENDCOLORS 30
 #endif
 
-/** @brief COLORREF(0x00BBGGRR) -> 0xRRGGBB */
+/** @brief COLORREF(0x00BBGGRR) -> 0xRRGGBB
+ *  @param c 系统 COLORREF，红/绿/蓝各 8 位
+ *  @return unsigned 0xRRGGBB
+ */
 static unsigned rgb_of(COLORREF c)
 {
     return ((unsigned)GetRValue(c) << 16) | ((unsigned)GetGValue(c) << 8) | (unsigned)GetBValue(c);
 }
 
-/* ---- 让父容器"自己画"出背后那一小块，取它的真实颜色 ----
- * 标签页的页体是主题画的（本机 #F9F9F9）：既不是类背景刷（BTNFACE 灰）也不是
+/** @brief 让父容器"自己画"出背后那一小块，取它的真实颜色
+ * @param parent 父容器窗口；目标 DC 与页体矩形都取自它
+ * @param child 子控件窗口；采样时避开它及其它可见子窗口覆盖的点
+ * @param out 输出：采样到的颜色（COLORREF），仅成功时写入
+ * @return int 非 0 = 采样成功，0 = 无可用采样点或取 DC 失败
+ * @details 标签页的页体是主题画的（本机 #F9F9F9）：既不是类背景刷（BTNFACE 灰）也不是
  * COLOR_WINDOW（纯白），而且它裁掉子窗口（子控件下面什么都没画，所以不能"不画背景"）。
  * 与其猜颜色（uxtheme 的 GetThemeColor 对 TAB 返回的是没用的高亮色），不如让父窗口
  * 把子控件中心那一小块画进 1x1 位图、读像素 —— 什么主题、什么渐变都对得上。
- * 结果按父窗口缓存，一个容器只采样一次。 */
+ * 结果按父窗口缓存，一个容器只采样一次。
+ */
 static int parent_paint_point(HWND parent, HWND child, COLORREF *out)
 {
     RECT disp;
@@ -361,6 +402,8 @@ static int parent_paint_point(HWND parent, HWND child, COLORREF *out)
 }
 
 /** @brief 某个父容器"背后"的颜色（按父窗口缓存，一个容器只采样一次）
+ *  @param parent 父容器窗口；同时用作缓存键
+ *  @param child 子控件窗口；转给采样函数以避开它覆盖的点
  *  @return unsigned 0xRRGGBB；采样失败退回纯白
  */
 static unsigned parent_body_rgb(HWND parent, HWND child)
@@ -434,7 +477,9 @@ unsigned cg_win_behind_rgb(cg_app_t *app, void *hwnd)
 }
 
 /** @brief 无底色标签该用哪个背景刷（= "背后"的颜色）
- *  @return HBRUSH 直接当 WM_CTLCOLOR* 的返回值用
+ *  @param app 所属应用；转给"背后色"查询
+ *  @param child 目标控件窗口；按它的**直接父窗口**判断"背后"
+ *  @return HBRUSH 直接当 WM_CTLCOLOR* 的返回值用（共享缓存，勿删）
  */
 static HBRUSH transparent_bg_for(cg_app_t *app, HWND child)
 {
@@ -442,6 +487,10 @@ static HBRUSH transparent_bg_for(cg_app_t *app, HWND child)
 }
 
 /** @brief 自绘控件画自己的内容前，先把整块填成"背后"的颜色
+ *  @param w 目标控件；用于查它"背后"的颜色
+ *  @param dc 目标设备上下文；在它上面填充
+ *  @param rc 要填充的矩形区域（左上右下像素坐标）
+ *  @return void 无返回值
  *  @details owner-draw 按钮/自绘控件默认会铺一层系统面色（BTNFACE），不清掉就是一块灰底；
  *           徽章 / 标签片 / 评分这类"只在中间画一块"的控件必须清，"背后"是什么就填什么。
  */
@@ -451,7 +500,9 @@ void cgw_clear_to_behind(cg_widget_t *w, HDC dc, const RECT *rc)
 }
 
 /** @brief WM_CTLCOLOR* 的共用处理：决定控件文字/背景色该用哪个画刷
- *  @param app 所属应用；wp 目标 DC；lp 那个控件窗口
+ *  @param app 所属应用；用于查主窗口状态与主题色
+ *  @param wp 目标 DC（WM_CTLCOLOR* 的 wParam）
+ *  @param lp 那个控件窗口（WM_CTLCOLOR* 的 lParam）
  *  @return HBRUSH NULL = 不处理（交给系统默认），否则返回值该直接当 LRESULT 返回
  *  @details WM_CTLCOLOR* 只发给控件的**直接父窗口**，所以控件放进分组框/标签页后
  *           消息会落到容器上；cgw_PanelProc / cgw_FocusProc 必须把它转发到主窗口走这里，
@@ -498,7 +549,9 @@ HBRUSH cgw_ctlcolor_brush(cg_app_t *app, WPARAM wp, LPARAM lp)
  */
 /**
  * @brief 把 text 里的日期时间写法解析成 SYSTEMTIME（缺省用今天/现在）
- * @param w datepicker 控件；date/time 输出：日期与时间
+ * @param w datepicker 控件；text/format 提供要解析的写法
+ * @param date 输出：日期部分；先填本地当天，解析成功再覆盖
+ * @param time 输出：时间部分；先与 date 同值，解析成功再覆盖
  * @return void 无返回值
  */
 void cgw_datetime_from_text(const cg_widget_t *w, SYSTEMTIME *date, SYSTEMTIME *time)
@@ -538,7 +591,12 @@ void cgw_datetime_from_text(const cg_widget_t *w, SYSTEMTIME *date, SYSTEMTIME *
     }
 }
 
-/** 把控件里的日期时间写回 text（回调里用 cg_widget_text 读） */
+/** @brief 把控件里的日期时间写回 text（回调里用 cg_widget_text 读）
+ *  @param w datepicker 控件；写回的 text 供 cg_widget_text 读取
+ *  @param date_hwnd 日期控件窗口；取它当前的 SYSTEMTIME，为 NULL 直接返回
+ *  @param time_hwnd 时间控件窗口；datetime 模式取它的时间，其余模式可为 NULL
+ *  @return void 无返回值
+ */
 void cgw_datetime_pull_text(cg_widget_t *w, HWND date_hwnd, HWND time_hwnd)
 {
     SYSTEMTIME d, t;
