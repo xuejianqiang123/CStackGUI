@@ -1003,6 +1003,27 @@ unsigned cg_crc32(const void *data, int len);
  *  文本 "123456789" 的校验值是 0x4B37；空输入返回 0xFFFF。返回值低 16 位有效 */
 unsigned cg_crc16(const void *data, int len);
 
+/** 算整个文件的 CRC32（**分块读，不把文件整读进内存** —— 固件镜像动辄几十上百 MB）。
+ *  @param path 文件路径（UTF-8）
+ *  @param out 校验值出口；成功才写入
+ *  @return int 1 = 成功；0 = 打不开或中途读出错（宁可报失败，也不给一个"看着像但不完整"的值） */
+int cg_crc32_file(const char *path, unsigned *out);
+
+/* ---- 哈希（摘要） ----
+ * MD5 / SHA-1 / SHA-256 / SHA-512，**手写实现**，不调系统的 CryptoAPI。
+ * 理由不是"省依赖"：用 advapi32 就得让**所有既有用户项目的链接命令**补 -ladvapi32
+ * （否则 undefined reference to CryptAcquireContextW），而链接命令是别人看得见的东西；
+ * 附带还躲开了 FIPS 策略下 MD5 被系统拒绝、以及平台强绑定两个坑。
+ * 正确性靠公开向量（RFC 1321 / FIPS 180-1,2,4）+ 由 Node/OpenSSL 独立派生的检验值双重钉死。
+ */
+
+/** 算一段内存或一个文件的摘要，返回**小写十六进制**堆串（记得 cg_free()）
+ *  @param algo "md5" / "sha1" / "sha256" / "sha512"，大小写不敏感
+ *  @return char* 摘要串（MD5 32 字符、SHA-1 40、SHA-256 64、SHA-512 128）；
+ *         算法名不认识、文件打不开、内存不足都返回 NULL */
+char *cg_hash(const void *data, int len, const char *algo);
+char *cg_hash_file(const char *path, const char *algo);
+
 /* ---- 剪贴板 / 外部程序 / 时间 ---- */
 /** 取剪贴板文本（没有文本返回 NULL；用完 cg_free） */
 char *cg_clip_get_text(void);
