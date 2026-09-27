@@ -78,7 +78,10 @@ function findFunctionLine(lines, name) {
     const line = lines[i];
     if (line === '' || /^\s/.test(line)) continue;      // 只看顶格
     if (/^[#}\/*]/.test(line)) continue;
-    const m = line.match(/^([A-Za-z_][\w\s*]*?)\s+([A-Za-z_]\w*)\s*\(/);
+    // 注意 `\s*`（不是 `\s+`）：`const char *cg_event_name(` 这种**星号贴着函数名**的
+    // 签名，返回类型与名字之间没有空格，用 `\s+` 会一条都匹配不到（2026-09-28 踩过：
+    // 一次落盘 9 块报"找不到函数"，全是这形状）
+    const m = line.match(/^([A-Za-z_][\w\s*]*?)\s*([A-Za-z_]\w*)\s*\(/);
     if (m && m[2] === name) return i;
   }
   return -1;

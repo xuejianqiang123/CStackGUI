@@ -41,7 +41,7 @@ static char *dup_or_null(const char *s)
 /**
  * @brief 读一个文件到堆内存
  * @param path 文件路径
- * @return char* UTF-8 原文，失败返回 NULL（调用方负责 free）
+ * @return char* UTF-8 原文；失败返回 NULL（调用方负责 free）
  */
 char *cg_read_file(const char *path)
 {
@@ -73,6 +73,11 @@ char *cg_read_file(const char *path)
 static const char *const k_align_names[] = { "left", "center", "right" };
 
 /** @brief 恢复成"什么都没写"的默认值 */
+/**
+ * @brief 恢复成"什么都没写"的默认值
+ * @param st 目标样式；整体清零（size 0 = 用系统 UI 字体，fg/bg 无色）
+ * @return void 无返回值
+ */
 static void style_defaults(cg_style_t *st)
 {
     memset(st, 0, sizeof(*st));            /* size 0 = 用系统 UI 字体 */
@@ -81,12 +86,13 @@ static void style_defaults(cg_style_t *st)
 }
 
 /**
- * @brief 把 JSON 对象里**写了**的样式字段盖到 st 上；mask 记下写了哪几个
+ * @brief 把 JSON 对象里**写了**的样式字段盖到目标样式上，并记下写了哪几个
  * @param o JSON 对象（NULL / 非对象直接返回）
  * @param st 目标样式（只被"写了的"字段覆盖，其余保持原样）
  * @param mask 可传 NULL（= 不关心写了哪些；解析样式表时就是这么用的）
+ * @return void 无返回值
  * @note 与"无条件铺默认值"的区别是**关键**：合并命名样式时必须分得出
- *       "没写某个字段"和"把某个字段写成默认值"，否则后者会把命名样式里的值顶掉（契约 §2）。
+ *       "没写某个字段"和"把某个字段写成默认值"，否则后者会把命名样式里的值顶掉
  */
 static void style_overlay(const cj_val_t *o, cg_style_t *st, unsigned *mask)
 {
@@ -167,6 +173,14 @@ static void style_overlay(const cj_val_t *o, cg_style_t *st, unsigned *mask)
 }
 
 /** @brief 按名字找命名样式；没有返回 NULL（找不到**不报错**，按"没有 use"处理） */
+/**
+ * @brief 按名字找命名样式
+ * @param styles 命名样式表
+ * @param n 表里有效条目数
+ * @param name 要查的样式名；空串等同找不到
+ * @return const cg_named_style_t* 命中的条目（指向表内部，不转移所有权）；没有返回 NULL
+ * @note 找不到**不报错**，按"没有 use"处理
+ */
 static const cg_named_style_t *style_find(const cg_named_style_t *styles, size_t n, const char *name)
 {
     if (!styles || !name || !*name) return NULL;
@@ -179,10 +193,11 @@ static const cg_named_style_t *style_find(const cg_named_style_t *styles, size_t
 /**
  * @brief 解析控件的 `style`（三种形态），**只记下**引用的名字与"自己写了哪几个字段"
  * @param o .cgui 里 style 的值（对象 / 字符串 / NULL）
- * @param st 输出：内联字段已就位（命名样式那部分要等 resolve_named_styles）
+ * @param st 输出：内联字段已就位（命名样式那部分要等合并命名样式时再填）
  * @param name_out 输出：引用的样式名（调用方 free）；没有引用写 NULL
  * @param mask 输出：写了哪几个字段（CG_STYLE_HAS_* 位或）
- * @note 形态：`{...}` 内联 / `"名字"` 纯引用 / `{ "use": "名字", ...覆盖 }` —— 契约 §2
+ * @return void 无返回值
+ * @note 形态：`{...}` 内联 / `"名字"` 纯引用 / `{ "use": "名字", ...覆盖 }`
  */
 static void parse_style(const cj_val_t *o, cg_style_t *st, char **name_out, unsigned *mask)
 {
@@ -205,10 +220,11 @@ static void parse_style(const cj_val_t *o, cg_style_t *st, char **name_out, unsi
 }
 
 /**
- * @brief 把命名样式填进控件自己**没写**的字段上（内联优先，契约 §2）
+ * @brief 把命名样式填进控件自己**没写**的字段上（内联优先）
  * @param st 目标样式（已经放着内联字段）
  * @param mask 控件自己写了哪几个字段
  * @param base 命名样式；NULL（找不到那个名字）时什么都不做
+ * @return void 无返回值
  */
 static void style_merge_named(cg_style_t *st, unsigned mask, const cg_named_style_t *base)
 {
@@ -322,7 +338,8 @@ static char **parse_str_array(const cj_val_t *arr, size_t *count)
 
 /**
  * @brief 释放字符串数组
- * @param arr 数组；n 元素个数
+ * @param arr 字符串数组；可传 NULL
+ * @param n 数组里有效元素个数
  * @return void 无返回值
  */
 static void str_array_free(char **arr, size_t n)
@@ -332,8 +349,14 @@ static void str_array_free(char **arr, size_t n)
     free(arr);
 }
 
-/** 树节点（可嵌套："nodes": [{ "text": "根", "expanded": true, "children": [...] }]）
- *  children 是"指针数组"，因为嵌套深度不定，逐层单独分配比连续数组好写。 */
+/**
+ * @brief 把 tree 的 `nodes` 数组解析成节点数组（递归解 children）
+ * @param arr JSON 数组
+ * @param count 输出：顶层元素个数
+ * @return cg_item_t** 节点指针数组（调用方用释放函数回收）；空 / 类型不对返回 NULL
+ * @note 元素形如 `{ "text": "根", "expanded": true, "children": [...] }`；
+ *       children 是"指针数组"，因为嵌套深度不定，逐层单独分配比连续数组好写
+ */
 static cg_item_t **parse_tree_items(const cj_val_t *arr, size_t *count)
 {
     cg_item_t **out;
@@ -369,7 +392,8 @@ static cg_item_t **parse_tree_items(const cj_val_t *arr, size_t *count)
 
 /**
  * @brief 递归释放树节点数组（含子节点）
- * @param items 节点指针数组；n 个数
+ * @param items 节点指针数组；可传 NULL
+ * @param n 数组里节点个数
  * @return void 无返回值
  */
 static void tree_items_free(cg_item_t **items, size_t n)
@@ -387,6 +411,14 @@ static void tree_items_free(cg_item_t **items, size_t n)
 }
 
 /** 表格列："columns": [{ "title": "姓名", "w": 120 }] */
+/**
+ * @brief 把表格的 `columns` 数组解析成列数组
+ * @param arr JSON 数组
+ * @param count 输出：列数
+ * @return cg_col_t* 列数组（调用方逐个 free title 再 free 本体）；空 / 类型不对返回 NULL
+ * @note 对象写法 `{ "title": "姓名", "w": 120 }`，也允许
+ *       `"columns": ["姓名","年龄"]` 这样的纯字符串写法（此时宽度 0 = 均分）
+ */
 static cg_col_t *parse_columns(const cj_val_t *arr, size_t *count)
 {
     cg_col_t *out;
@@ -413,6 +445,14 @@ static cg_col_t *parse_columns(const cj_val_t *arr, size_t *count)
 }
 
 /** 表格行："rows": [["张三","18"], ["李四","20"]] */
+/**
+ * @brief 把表格的 `rows` 数组解析成二维字符串数组（各行按最宽的一行补齐）
+ * @param arr JSON 数组
+ * @param nrows 输出：行数
+ * @param row_cells 输出：每行的单元格个数（取所有行里最多的；一行都没有时按 1）
+ * @return char*** 行数组（调用方用释放函数回收）；空 / 类型不对返回 NULL
+ * @note 形如 `"rows": [["张三","18"], ["李四","20"]]`
+ */
 static char ***parse_rows(const cj_val_t *arr, size_t *nrows, size_t *row_cells)
 {
     char ***out;
@@ -448,7 +488,9 @@ static char ***parse_rows(const cj_val_t *arr, size_t *nrows, size_t *row_cells)
 
 /**
  * @brief 释放表格行二维数组
- * @param rows 行数组；nrows 行数；cells 每行单元格数
+ * @param rows 行数组；可传 NULL
+ * @param nrows 行数
+ * @param cells 每行的单元格个数（与解析时拿到的值一致）
  * @return void 无返回值
  */
 static void rows_free(char ***rows, size_t nrows, size_t cells)
@@ -894,8 +936,8 @@ cg_doc_t *cg_doc_parse(const char *json, char *err, size_t errsz)
 
 /** @brief 释放文档内容，但 doc 本身（可能嵌在别的结构里，或是栈变量）不动 */
 /**
- * @brief 释放文档内容（doc 本身不动——它可能内嵌在 cg_app_t 里）
- * @param doc 目标文档
+ * @brief 释放文档内容（doc 本身不动 —— 它可能内嵌在应用结构里，或是栈变量）
+ * @param doc 目标文档；可传 NULL（内容清空后本身仍可复用）
  * @return void 无返回值
  */
 void cg_doc_release(cg_doc_t *doc)
@@ -934,8 +976,8 @@ void cg_doc_release(cg_doc_t *doc)
 
 /** @brief 释放内容并释放 doc 本身 */
 /**
- * @brief 释放文档内容并释放 doc 本身（只给 cg_doc_parse 的返回值用）
- * @param doc cg_doc_parse 返回的文档
+ * @brief 释放文档内容并释放 doc 本身（只给解析函数的返回值用）
+ * @param doc 解析函数返回的文档；可传 NULL
  * @return void 无返回值
  */
 void cg_doc_free(cg_doc_t *doc)
@@ -951,7 +993,9 @@ void cg_doc_free(cg_doc_t *doc)
 
 /**
  * @brief 以缩进形式递归打印一个节点（含状态、事件绑定、结构化内容摘要）
- * @param n 节点；out 输出流；depth 缩进层数
+ * @param n 节点
+ * @param out 输出流
+ * @param depth 缩进层数（顶层子节点传 1，每下一层加一）
  * @return void 无返回值
  */
 static void dump_node(const cg_node_t *n, FILE *out, int depth)
@@ -1002,9 +1046,10 @@ static void dump_node(const cg_node_t *n, FILE *out, int depth)
 
 /** @brief 以缩进树的形式打印到 out（自检 / 排查用） */
 /**
- * @brief 把整份文档树打印到 out（自检 / 排查用）
- * @param doc 文档；out 输出流
- * @return void 无返回值
+ * @brief 把整份文档树打印到 out
+ * @param doc 文档
+ * @param out 输出流
+ * @return void 无返回值（自检 / 排查用）
  */
 void cg_doc_dump(const cg_doc_t *doc, FILE *out)
 {

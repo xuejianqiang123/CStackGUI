@@ -40,9 +40,10 @@ typedef struct {
 static biz_t s_biz;
 
 /**
- * @brief set_status
+ * @brief 把一行状态文字写进页 0 的状态标签
  * @param app 所属应用
- * @param text text
+ * @param text 要显示的状态文字
+ * @return void 无返回值
  */
 static void set_status(cg_app_t *app, const char *text)
 {
@@ -52,10 +53,11 @@ static void set_status(cg_app_t *app, const char *text)
 
 /* 把一行日志同时写到控制台和页 0 的 lst_log */
 /**
- * @brief log_line
+ * @brief 把一行日志同时打印到控制台并追加到日志列表框
  * @param app 所属应用
- * @param fmt fmt
- * @param ... ...
+ * @param fmt printf 风格格式串
+ * @param ... 与 fmt 对应的可变参数
+ * @return void 无返回值
  */
 static void log_line(cg_app_t *app, const char *fmt, ...)
 {
@@ -73,8 +75,9 @@ static void log_line(cg_app_t *app, const char *fmt, ...)
 
 /* 把业务状态推回界面：滑块 -> 进度条 + 文字 */
 /**
- * @brief refresh_level
+ * @brief 把业务等级推回界面，刷新等级文字与进度条
  * @param app 所属应用
+ * @return void 无返回值
  */
 static void refresh_level(cg_app_t *app)
 {
@@ -91,10 +94,11 @@ static void refresh_level(cg_app_t *app)
 
 /* 把一句话同时写到状态栏第二段和 stdout */
 /**
- * @brief status
+ * @brief 把一句话同时写到状态栏第二段和 stdout
  * @param app 所属应用
- * @param fmt fmt
- * @param ... ...
+ * @param fmt printf 风格格式串
+ * @param ... 与 fmt 对应的可变参数
+ * @return void 无返回值
  */
 static void status(cg_app_t *app, const char *fmt, ...)
 {
@@ -112,9 +116,11 @@ static void status(cg_app_t *app, const char *fmt, ...)
 
 /* 状态栏第 1 段显示业务概况（第 2 段留给 status() 写最近一次操作） */
 /**
- * @brief refresh_status_summary
+ * @brief 在状态栏第一段显示业务概况
  * @param app 所属应用
  * @param biz 业务状态结构
+ * @return void 无返回值
+ * @note 状态栏第 2 段留给 status() 写最近一次操作
  */
 static void refresh_status_summary(cg_app_t *app, biz_t *biz)
 {
@@ -127,10 +133,11 @@ static void refresh_status_summary(cg_app_t *app, biz_t *biz)
 /* ============================================================ 页 2 新特性 */
 
 /**
- * @brief lab_statusf
+ * @brief 把格式化后的一句话写进页 2 的状态标签
  * @param app 所属应用
- * @param fmt fmt
- * @param ... ...
+ * @param fmt printf 风格格式串
+ * @param ... 与 fmt 对应的可变参数
+ * @return void 无返回值
  */
 static void lab_statusf(cg_app_t *app, const char *fmt, ...)
 {
@@ -148,8 +155,10 @@ static void lab_statusf(cg_app_t *app, const char *fmt, ...)
 
 /* 定时器回调：cg_set_timer 到点后在消息循环里执行，此时跳出原事件栈，安全 */
 /**
- * @brief reset_level_later
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @brief 定时器到点后把等级回落到 40 并刷新界面
+ * @param user 定时器传入的应用指针（不是挂在控件上的业务数据）
+ * @return void 无返回值
+ * @note 定时器回调：到点后在消息循环里执行，此时已跳出原事件栈，安全
  */
 static void reset_level_later(void *user)
 {
@@ -163,10 +172,11 @@ static void reset_level_later(void *user)
 }
 
 /**
- * @brief on_ok_click
+ * @brief 单击时累加点击次数并把姓名、VIP、等级写到状态栏
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_ok_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -186,10 +196,11 @@ static void on_ok_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_ok_dblclick
+ * @brief 双击时把等级拉满到 100 并安排 2 秒后回落
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_ok_dblclick(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -212,10 +223,11 @@ static void on_ok_dblclick(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_reset_click
+ * @brief 重置按钮清零业务状态、等级回到 40 并同步界面
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_reset_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -238,10 +250,11 @@ static void on_reset_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_quit_click
+ * @brief 退出按钮打印业务摘要后退出应用
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_quit_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -255,10 +268,11 @@ static void on_quit_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_name_change
+ * @brief 姓名框变动时把文本同步进业务状态并提示
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_name_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -272,10 +286,11 @@ static void on_name_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_name_submit
+ * @brief 姓名框回车提交时记一条日志并提示
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_name_submit(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -287,10 +302,11 @@ static void on_name_submit(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_vip_change
+ * @brief VIP 勾选变化时把勾选状态写进业务并提示
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_vip_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -303,10 +319,11 @@ static void on_vip_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_level_change
+ * @brief 等级滑块变化时把数值写进业务并刷新界面
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_level_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -322,10 +339,12 @@ static void on_level_change(cg_widget_t *self, cg_event_t ev, void *user)
 
 /* 菜单栏：所有菜单项都汇到这一个回调，用 cg_menu_last_id 区分是哪一项 */
 /**
- * @brief on_menu_click
+ * @brief 菜单项被点击时按 id 分发处理
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
+ * @note 菜单栏：所有菜单项都汇到这一个回调，用"最近点中的菜单项 id"区分是哪一项
  */
 static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -348,10 +367,12 @@ static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
 
 /* 菜单按钮：点一下弹菜单，选中项同样回到这个回调 */
 /**
- * @brief on_more_click
+ * @brief 菜单按钮选中项被点击时把选中项文字显示到状态栏
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
+ * @note 菜单按钮：点一下弹菜单，选中项同样回到这个回调
  */
 static void on_more_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -363,10 +384,12 @@ static void on_more_click(cg_widget_t *self, cg_event_t ev, void *user)
 
 /* 工具栏：value 是第几个按钮（0 起） */
 /**
- * @brief on_toolbar_click
+ * @brief 工具栏按钮被点击时显示是第几个按钮
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
+ * @note 工具栏：控件的 value 是第几个按钮（0 起）
  */
 static void on_toolbar_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -380,10 +403,11 @@ static void on_toolbar_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_richtext_change
+ * @brief 富文本改动时置脏标记并在状态栏显示当前字数
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_richtext_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -399,10 +423,11 @@ static void on_richtext_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_date_change
+ * @brief 日期变化时把新日期显示到状态栏
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_date_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -413,10 +438,11 @@ static void on_date_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_time_change
+ * @brief 时间变化时把新时间显示到状态栏
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_time_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -427,10 +453,11 @@ static void on_time_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_datetime_change
+ * @brief 日期时间变化时把新值显示到状态栏
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_datetime_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -441,10 +468,11 @@ static void on_datetime_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_notify_change
+ * @brief 通知开关变化时更新业务、按钮文字与状态栏概况
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_notify_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -459,10 +487,11 @@ static void on_notify_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_count_change
+ * @brief 数量微调变化时联动圆环与标签并刷新概况
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_count_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -482,10 +511,11 @@ static void on_count_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_tree_select
+ * @brief 选中树节点时把节点文字显示到标签和状态栏
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_tree_select(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -501,10 +531,11 @@ static void on_tree_select(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_tree_dblclick
+ * @brief 双击树节点时在状态栏显示节点文字
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_tree_dblclick(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -515,10 +546,11 @@ static void on_tree_dblclick(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_add_node
+ * @brief 点击按钮向树里动态添加节点
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_add_node(cg_widget_t *self, cg_event_t ev, void *user)
 {

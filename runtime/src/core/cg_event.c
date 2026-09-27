@@ -54,6 +54,12 @@ static const char *const k_ev_names[CG_EVENT_COUNT] = {
 
 /** @brief 事件名的规范写法，也是 .cgui 中 events 对象的键名 */
 /** @brief 事件枚举转规范名（"click"...）；越界返回 "?" */
+/**
+ * @brief 事件枚举转规范名（如 "click"）
+ * @param ev 事件枚举值（0 .. CG_EVENT_COUNT-1）
+ * @return const char* 规范事件名；越界返回 "?"
+ * @note 这些名字也是 .cgui 中 events 对象的键名
+ */
 const char *cg_event_name(cg_event_t ev)
 {
     return (ev >= 0 && ev < CG_EVENT_COUNT) ? k_ev_names[ev] : "?";
@@ -61,6 +67,11 @@ const char *cg_event_name(cg_event_t ev)
 
 /** @brief 名字反查事件 */
 /** @brief 事件名反查枚举；不认识返回 -1 */
+/**
+ * @brief 事件名反查枚举
+ * @param name 事件名（.cgui 里写的规范名）；NULL 视为不认识
+ * @return int 事件枚举值；不认识返回 -1
+ */
 int cg_event_from_name(const char *name)
 {
     if (!name) return -1;
@@ -84,6 +95,11 @@ int cg_event_from_name(const char *name)
  */
 
 /** @brief 内部：复制一个字符串（NULL 进 NULL 出） */
+/**
+ * @brief 内部：复制一个字符串（NULL 进 NULL 出）
+ * @param s 源字符串；NULL 直接返回 NULL
+ * @return char* 新分配的副本（调用方 free）；内存不足返回 NULL
+ */
 static char *ev_dup(const char *s)
 {
     size_t n;
@@ -96,6 +112,14 @@ static char *ev_dup(const char *s)
     return p;
 }
 
+/**
+ * @brief 记下本次拖放进来的路径清单（覆盖上一次的）
+ * @param app 所属应用；为空则空操作
+ * @param paths 路径数组；NULL 或 n <= 0 表示只清空
+ * @param n 路径个数
+ * @return void 无返回值
+ * @note 深拷贝由 app 持有，随下一次 put 或释放 app 而释放
+ */
 void cg_app_drop_put(cg_app_t *app, const char *const *paths, int n)
 {
     int i;
@@ -119,27 +143,68 @@ void cg_app_drop_put(cg_app_t *app, const char *const *paths, int n)
     }
 }
 
+/**
+ * @brief 当前拖放进来的文件个数
+ * @param app 所属应用
+ * @return int 个数；app 为空返回 0
+ */
 int cg_drop_count(cg_app_t *app)
 {
     return app ? app->ndrop : 0;
 }
 
+/**
+ * @brief 取拖放进来的第 index 个路径
+ * @param app 所属应用
+ * @param index 下标（0 起，上界为个数减一）
+ * @return char* 路径副本（调用方 cg_free）；越界或无拖放返回 NULL
+ */
 char *cg_drop_file(cg_app_t *app, int index)
 {
     if (!app || index < 0 || index >= app->ndrop) return NULL;
     return ev_dup(app->drop_files[index]);
 }
 /** @brief 最近一次鼠标事件的 x（相对窗口客户区）；没有则 0 */
+/**
+ * @brief 最近一次鼠标事件的 x（相对窗口客户区）
+ * @param self 触发事件的控件
+ * @return int x 坐标（逻辑像素）；没有则为 0
+ */
 int cg_event_x(const cg_widget_t *self) { return self ? self->ev_x : 0; }
 /** @brief 最近一次鼠标事件的 y（相对窗口客户区）；没有则 0 */
+/**
+ * @brief 最近一次鼠标事件的 y（相对窗口客户区）
+ * @param self 触发事件的控件
+ * @return int y 坐标（逻辑像素）；没有则为 0
+ */
 int cg_event_y(const cg_widget_t *self) { return self ? self->ev_y : 0; }
 /** @brief 功能键状态：1=Ctrl 2=Shift 4=Alt（对齐） */
+/**
+ * @brief 最近一次事件的功能键状态
+ * @param self 触发事件的控件
+ * @return int 1=Ctrl 2=Shift 4=Alt 的按位或；没有则为 0
+ */
 int cg_event_keys(const cg_widget_t *self) { return self ? self->ev_keys : 0; }
 /** @brief 键代码（keydown/keyup 是虚拟键码，char 是字符码） */
+/**
+ * @brief 最近一次事件的键代码
+ * @param self 触发事件的控件
+ * @return int keydown / keyup 是虚拟键码，char 是字符码；没有则为 0
+ */
 int cg_event_key(const cg_widget_t *self) { return self ? self->ev_key : 0; }
 /** @brief 滚轮滚动量（正数向上） */
+/**
+ * @brief 最近一次滚轮事件的滚动量
+ * @param self 触发事件的控件
+ * @return int 正数向上；没有则为 0
+ */
 int cg_event_delta(const cg_widget_t *self) { return self ? self->ev_delta : 0; }
 /** @brief 托盘动作：1=左键单击 2=左键双击 3=右键单击 */
+/**
+ * @brief 最近一次托盘事件的动作
+ * @param self 触发事件的控件
+ * @return int 1=左键单击 2=左键双击 3=右键单击；没有则为 0
+ */
 int cg_tray_action(const cg_widget_t *self) { return self ? self->ev_action : 0; }
 
 /* ------------------------------------------------------------ 绑定 */
@@ -152,6 +217,11 @@ static const char *s_unresolved[CG_MAX_UNRESOLVED];
 static int         s_unresolved_n;
 
 /** @brief 记下一个没登记的回调名（name 指向文档树，生命周期同 app） */
+/**
+ * @brief 记下一个没登记的回调名
+ * @param name 指向文档树的名字（不复制，生命周期同 app）；超出容量上限则丢弃
+ * @return void 无返回值
+ */
 static void unresolved_add(const char *name)
 {
     if (s_unresolved_n >= CG_MAX_UNRESOLVED) return;
@@ -159,12 +229,21 @@ static void unresolved_add(const char *name)
 }
 
 /** @brief 没登记的回调名个数 */
+/**
+ * @brief 没登记的回调名个数
+ * @return int 个数（上限 CG_MAX_UNRESOLVED）
+ */
 int cg_unresolved_count(void)
 {
     return s_unresolved_n;
 }
 
 /** @brief 第 i 个没登记的回调名；越界返回 NULL */
+/**
+ * @brief 取第 i 个没登记的回调名
+ * @param i 下标（0 起）
+ * @return const char* 名字（生命周期同 app）；越界返回 NULL
+ */
 const char *cg_unresolved_name(int i)
 {
     return (i >= 0 && i < s_unresolved_n) ? s_unresolved[i] : NULL;
@@ -172,8 +251,9 @@ const char *cg_unresolved_name(int i)
 
 /**
  * @brief 依名字在绑定表里找函数指针
- * @param app 所属应用；name .cgui 里写的事件回调名
- * @return cg_event_fn 函数指针；找不到记一条日志/一条待提示并返回 NULL
+ * @param app 所属应用
+ * @param name .cgui 里写的事件回调名
+ * @return cg_event_fn 函数指针；找不到记一条日志并返回 NULL
  */
 cg_event_fn cg_resolve_binding(cg_app_t *app, const char *name)
 {
@@ -193,6 +273,13 @@ cg_event_fn cg_resolve_binding(cg_app_t *app, const char *name)
 
 /** @brief 直接在 C 里给控件绑回调（覆盖 .cgui 里的名字绑定） */
 /** @brief 直接给控件绑回调（覆盖 .cgui 里的名字绑定）；参数不对返回 -1 */
+/**
+ * @brief 直接给控件绑回调（覆盖 .cgui 里的名字绑定）
+ * @param w 目标控件
+ * @param ev 事件类型
+ * @param fn 回调；NULL 表示清掉这一项
+ * @return int 0 成功；参数不对返回 -1
+ */
 int cg_on(cg_widget_t *w, cg_event_t ev, cg_event_fn fn)
 {
     if (!w || ev < 0 || ev >= CG_EVENT_COUNT) return -1;
@@ -202,6 +289,13 @@ int cg_on(cg_widget_t *w, cg_event_t ev, cg_event_fn fn)
 
 /** @brief 按 .cgui 里的名字绑定 */
 /** @brief 按名字给控件绑回调（名字必须在绑定表里登记过）；失败返回 -1 */
+/**
+ * @brief 按名字给控件绑回调（名字必须在绑定表里登记过）
+ * @param w 目标控件
+ * @param ev 事件类型
+ * @param callback_name .cgui 里写的事件回调名
+ * @return int 0 成功；参数不对或名字解析不到返回 -1
+ */
 int cg_on_named(cg_widget_t *w, cg_event_t ev, const char *callback_name)
 {
     if (!w || !w->app || ev < 0 || ev >= CG_EVENT_COUNT) return -1;
@@ -212,6 +306,11 @@ int cg_on_named(cg_widget_t *w, cg_event_t ev, const char *callback_name)
 /* ------------------------------------------------------------ 状态同步 */
 
 /** @brief 把控件逻辑状态推给后端（无原生句柄时是空操作） */
+/**
+ * @brief 把控件逻辑状态推给后端（无原生句柄时是空操作）
+ * @param w 目标控件；为空则空操作
+ * @return void 无返回值
+ */
 void cg_widget_sync(cg_widget_t *w)
 {
     if (!w) return;
@@ -228,8 +327,9 @@ void cg_widget_sync(cg_widget_t *w)
 
 /**
  * @brief 事件派发中枢：校验事件支持、合成双击，再调注册的回调
- * @param w 触发控件；ev 事件类型
- * @return int 1 = 有回调处理了，0 = 没处理（不支持/未绑定/禁用）
+ * @param w 触发控件
+ * @param ev 事件类型
+ * @return int 1 = 有回调处理了，0 = 没处理（不支持 / 未绑定 / 禁用）
  */
 int cg_dispatch(cg_widget_t *w, cg_event_t ev)
 {
@@ -289,6 +389,12 @@ int cg_dispatch(cg_widget_t *w, cg_event_t ev)
 
 /** @brief 后端子控件注册回调：原生事件 -> cg_dispatch */
 /** @brief 后端子控件注册回调的入口（等同 cg_dispatch，供后端通知用） */
+/**
+ * @brief 后端子控件把原生事件转给运行时的入口
+ * @param w 触发控件
+ * @param ev 事件类型
+ * @return void 无返回值
+ */
 void cg_backend_notify(cg_widget_t *w, cg_event_t ev)
 {
     cg_dispatch(w, ev);
@@ -297,8 +403,9 @@ void cg_backend_notify(cg_widget_t *w, cg_event_t ev)
 /** @brief 菜单项被点中：记下是哪一项，再给对应控件派发 click */
 /**
  * @brief 菜单命令 ID 反查控件，记下菜单项再派发 click
- * @param app 所属应用；cmd WM_COMMAND 里的菜单命令 ID
- * @return int 1 = 命中并派发，0 = 没找到（会打警告）
+ * @param app 所属应用
+ * @param cmd WM_COMMAND 里的菜单命令 ID
+ * @return int 命中并处理返回 1；带 action 的菜单项返回动作的调用结果（动作被禁用时为 0）；没找到返回 0（会打警告）
  */
 int cg_dispatch_menu_cmd(cg_app_t *app, int cmd)
 {

@@ -26,6 +26,12 @@
 #define CG_TERM_MAX_LINE 1024
 
 /** @brief 时间戳 "HH:MM:SS"（和 cg_log 的写法一致：秒级够看间隔） */
+/**
+ * @brief 时间戳 "HH:MM:SS"（秒级够看间隔）
+ * @param buf 输出缓冲
+ * @param size 缓冲容量（字节）
+ * @return void 无返回值
+ */
 static void term_stamp(char *buf, size_t size)
 {
     time_t     t = time(NULL);
@@ -36,6 +42,11 @@ static void term_stamp(char *buf, size_t size)
 }
 
 /** @brief 方向标记 -> 行首那三个字符的记号 */
+/**
+ * @brief 方向标记 -> 行首那三个字符的记号
+ * @param dir 行方向标记；其它值当 CG_TERM_SYS 处理
+ * @return const char* 静态常量串（不释放），形如 "RX " / "TX " / "-- "
+ */
 static const char *term_dir_tag(int dir)
 {
     switch (dir) {
@@ -46,6 +57,11 @@ static const char *term_dir_tag(int dir)
 }
 
 /** @brief 当前是不是 HEX 显示模式（.cgui 的 format == "hex"） */
+/**
+ * @brief 当前是不是 HEX 显示模式（.cgui 的 format == "hex"）
+ * @param w terminal 控件
+ * @return int 1 = HEX，0 = 文本
+ */
 static int term_is_hex(const cg_widget_t *w)
 {
     return w->format && strcmp(w->format, "hex") == 0;
@@ -53,6 +69,12 @@ static int term_is_hex(const cg_widget_t *w)
 
 /**
  * @brief 把一段字节渲染成可读文字
+ * @param w terminal 控件（读它的 format 判断 HEX / 文本）
+ * @param data 原始字节
+ * @param len 字节数；<= 0 时 out 写成空串
+ * @param out 输出缓冲（始终以 '\0' 结尾）
+ * @param out_size out 的容量（字节）
+ * @return void 无返回值
  * @details HEX 模式两个一组空格分开；文本模式原样保留可见字节，
  *          只把控制字符换成 '.' —— 0x80 以上一律保留，这样中文（UTF-8 多字节）
  *          不会被搅成点，而 \r\n\0 这些也不会把界面搞乱。
@@ -86,6 +108,14 @@ static void term_format_payload(const cg_widget_t *w, const unsigned char *data,
 }
 
 /** @brief 组装一行（首字节 = 方向标记，其余是给人看的文字）；调用方 free */
+/**
+ * @brief 组装一行（首字节 = 方向标记，其余是给人看的文字）
+ * @param w terminal 控件（读 checked 决定要不要加时间戳）
+ * @param dir 方向标记；越界按 CG_TERM_SYS 处理
+ * @param data 原始字节
+ * @param len 字节数
+ * @return char* 新分配的行串（首字节是方向标记，调用方 free）；内存不足返回 NULL
+ */
 static char *term_make_line(cg_widget_t *w, int dir, const unsigned char *data, int len)
 {
     char    payload[CG_TERM_MAX_LINE];
@@ -107,10 +137,16 @@ static char *term_make_line(cg_widget_t *w, int dir, const unsigned char *data, 
     return line;
 }
 
-/** @brief 追加一行到 items 并按上限丢弃最老的（不 sync，给 cg_term_write 批量用）
- *  @return 本次从头部裁剪掉的行数（0 = 没裁）。裁剪必须同步回退 term_pushed，
- *          否则后端 sync_terminal 看到 `term_pushed >= nitems` 直接 return、新行永不推送
- *          —— 终端到上限后"彻底停刷新"就是这样来的（2026-09-25）。 */
+/**
+ * @brief 追加一行到行表并按上限丢弃最老的（不 sync，给批量写用）
+ * @param w terminal 控件（上限取 value，<= 0 时用默认行数）
+ * @param dir 方向标记
+ * @param data 原始字节
+ * @param len 字节数
+ * @return int 本次从头部裁剪掉的行数（0 = 没裁）
+ * @note 裁剪必须同步回退"已推进行数"，否则后端看到"已推 >= 总行数"直接 return、
+ *       新行永不推送 —— 终端到上限后"彻底停刷新"就是这样来的（2026-09-25）
+ */
 static int term_append_line(cg_widget_t *w, int dir, const unsigned char *data, int len)
 {
     char **ni;
@@ -139,10 +175,11 @@ static int term_append_line(cg_widget_t *w, int dir, const unsigned char *data, 
  * @brief 往终端里写一段数据（一次调用 = 一行；带 \r\n 的会自动切成多行）
  * @param w terminal 控件
  * @param dir 方向：CG_TERM_RX / CG_TERM_TX / CG_TERM_SYS（决定行首标记与颜色）
- * @param data 数据；len 传 -1 表示按 C 字符串取长度（文本用）
- * @param len 字节数
- * @details 串口/网络一次收进来 "OK\r\nERR\r\n" 是常态，所以这里按 '\n' 切行，
- *          '\r' 丢掉；一次调用只触发一次界面刷新。
+ * @param data 数据缓冲；NULL 视为空
+ * @param len 字节数；传 -1 表示按 C 字符串取长度（文本用）
+ * @return void 无返回值
+ * @details 串口 / 网络一次收进来 "OK\r\nERR\r\n" 是常态，所以这里按 '\n' 切行、
+ *          '\r' 丢掉；一次调用只触发一次界面刷新
  */
 void cg_term_write(cg_widget_t *w, int dir, const void *data, int len)
 {
@@ -177,6 +214,11 @@ void cg_term_write(cg_widget_t *w, int dir, const void *data, int len)
 }
 
 /** @brief 清空终端 */
+/**
+ * @brief 清空终端
+ * @param w terminal 控件
+ * @return void 无返回值
+ */
 void cg_term_clear(cg_widget_t *w)
 {
     if (!w || !want_type(w, "terminal", "cg_term_clear")) return;
@@ -190,6 +232,12 @@ void cg_term_clear(cg_widget_t *w)
 }
 
 /** @brief 切 HEX / 文本显示（只影响**之后**写入的行，已经显示的不动） */
+/**
+ * @brief 切 HEX / 文本显示（只影响**之后**写入的行，已经显示的不动）
+ * @param w terminal 控件
+ * @param on 非 0 = HEX，0 = 文本
+ * @return void 无返回值
+ */
 void cg_term_set_hex(cg_widget_t *w, int on)
 {
     if (!w || !want_type(w, "terminal", "cg_term_set_hex")) return;
@@ -202,18 +250,35 @@ void cg_term_set_hex(cg_widget_t *w, int on)
 }
 
 /** @brief 当前是不是 HEX 模式 */
+/**
+ * @brief 当前是不是 HEX 模式
+ * @param w terminal 控件
+ * @return int 1 = HEX，0 = 文本（w 为空返回 0）
+ */
 int cg_term_hex(const cg_widget_t *w)
 {
     return w && term_is_hex(w);
 }
 
 /** @brief 每行前面要不要带 [HH:MM:SS]（存的是控件的 checked 字段） */
+/**
+ * @brief 每行前面要不要带 [HH:MM:SS]（存的是控件的 checked 字段）
+ * @param w terminal 控件
+ * @param on 非 0 = 带时间戳
+ * @return void 无返回值
+ */
 void cg_term_set_timestamp(cg_widget_t *w, int on)
 {
     cg_widget_set_checked(w, on ? 1 : 0);
 }
 
 /** @brief 最多保留多少行（超了从最老的丢；0 或负数 = 恢复默认 500） */
+/**
+ * @brief 最多保留多少行（超了从最老的丢）
+ * @param w terminal 控件
+ * @param lines 行数上限；0 或负数表示恢复默认值
+ * @return void 无返回值
+ */
 void cg_term_set_max_lines(cg_widget_t *w, int lines)
 {
     if (!w || !want_type(w, "terminal", "cg_term_set_max_lines")) return;
@@ -222,14 +287,21 @@ void cg_term_set_max_lines(cg_widget_t *w, int lines)
 }
 
 /** @brief 当前有多少行 */
+/**
+ * @brief 当前有多少行
+ * @param w terminal 控件
+ * @return int 行数；w 为空返回 0
+ */
 int cg_term_count(const cg_widget_t *w)
 {
     return w ? w->nitems : 0;
 }
 
 /**
- * @brief 把终端里的内容存成文本文件（UTF-8，行尾 CRLF；不带方向标记与时间戳外的装饰）
- * @return int 0 成功；-1 参数不对；其它 = fopen 失败
+ * @brief 把终端里的内容存成文本文件（UTF-8，行尾 CRLF）
+ * @param w terminal 控件
+ * @param path 目标文件路径（UTF-8）
+ * @return int 0 成功；-1 参数不对 / 类型不符 / 打开文件失败
  */
 int cg_term_save(cg_widget_t *w, const char *path)
 {

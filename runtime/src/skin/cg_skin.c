@@ -19,14 +19,17 @@
 #include <string.h>
 #include <math.h>       /* 圆环的 GDI 回退要算弧上的点 */
 
-/** @brief 画在「背后色」（= 透明底）上的**默认**文字色：深色下必须变浅
- *  @param w 控件（取它的 app->dark）；可传 NULL（那就当浅色）
- *  @param disabled 禁用态（浅色下是灰、深色下用暗一点的灰，别用浅色那套灰 —— 那在深底上太亮）
- *  @note 2026-09-27 的教训，值得留着：同一份"写死的深色字"在这个文件里有**两处**
- *        （开关那处 / 复选框·单选那处），当时只改了前者、漏了后者 —— 而且两处的常量
- *        差最后一位（`0x1D1B20` 与 `0x1C1B1F`），**按常量 grep 都搜不全**。
- *        是深色示例的队友拿代码 + 截图证据报回来的。所以收成一个函数：以后要调只改这里。
- *        （按钮那句 textcol 不在此列：那是画在 M3 浅紫填充上的字，深色下填充仍是浅紫。） */
+/**
+ * @brief 画在「背后色」（= 透明底）上的**默认**文字色：深色下必须变浅
+ * @param w 控件（取它的 app 判断明暗）；可传 NULL（那就当浅色）
+ * @param disabled 禁用态（浅色下是灰、深色下用暗一点的灰，别用浅色那套灰 —— 那在深底上太亮）
+ * @return unsigned 0xRRGGBB 文字色（不带 alpha）
+ * @note 2026-09-27 的教训，值得留着：同一份"写死的深色字"在这个文件里有**两处**
+ *       （开关那处 / 复选框·单选那处），当时只改了前者、漏了后者 —— 而且两处的常量
+ *       差最后一位（`0x1D1B20` 与 `0x1C1B1F`），**按常量 grep 都搜不全**。
+ *       是深色示例的队友拿代码 + 截图证据报回来的。所以收成一个函数：以后要调只改这里。
+ *       （按钮那句文字色不在此列：那是画在浅紫填充上的字，深色下填充仍是浅紫。）
+ */
 static unsigned sk_default_text(const cg_widget_t *w, int disabled)
 {
     int dark = (w && w->app && w->app->dark);
@@ -74,18 +77,35 @@ __declspec(dllimport) GpStatus WINAPI GdipSetPenEndCap(GpPen *pen, int cap);
 #define SK_RING_STEPS 72
 
 /* 0xAARRGGBB */
+/**
+ * @brief 把 8 位透明度与 RGB 拼成 GDI+ 要的 0xAARRGGBB
+ * @param a 透明度 0..255（0 = 全透明，255 = 不透明）
+ * @param rgb 颜色 0xRRGGBB（只用低 24 位，高位丢掉）
+ * @return unsigned int 0xAARRGGBB
+ */
 static unsigned int sk_argb(unsigned char a, unsigned rgb)
 {
     return ((unsigned int)a << 24) | (rgb & 0xFFFFFFu);
 }
 
 /** 0xRRGGBB -> COLORREF（GDI 文本用） */
+/**
+ * @brief 0xRRGGBB 转成 GDI 的 COLORREF
+ * @param rgb 颜色 0xRRGGBB
+ * @return COLORREF 颜色（GDI 文本 / 画刷用）
+ */
 static COLORREF sk_colorref(unsigned rgb)
 {
     return RGB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
 }
 
 /** 把颜色按系数变亮/变暗（f<1 变暗，f>1 变亮） */
+/**
+ * @brief 把颜色按系数变亮 / 变暗
+ * @param c 颜色 0xRRGGBB
+ * @param f 系数；小于 1 变暗、大于 1 变亮（结果逐通道夹回 0..255）
+ * @return unsigned 0xRRGGBB
+ */
 static unsigned sk_shade(unsigned c, float f)
 {
     int r = (int)((float)((c >> 16) & 0xFF) * f + 0.5f);
@@ -101,6 +121,11 @@ static unsigned sk_shade(unsigned c, float f)
 }
 
 /** 相对亮度（0..1），用于决定文字黑/白 */
+/**
+ * @brief 相对亮度（0..1），用于决定文字黑 / 白
+ * @param c 颜色 0xRRGGBB
+ * @return float 感知亮度（权重 0.2126 / 0.7152 / 0.0722）
+ */
 static float sk_luminance(unsigned c)
 {
     float r = (float)((c >> 16) & 0xFF) / 255.0f;
@@ -110,6 +135,11 @@ static float sk_luminance(unsigned c)
 }
 
 /** UTF-8 -> UTF-16（MultiByteToWideChar，CP_UTF8） */
+/**
+ * @brief UTF-8 转 UTF-16（含结尾 0）
+ * @param s UTF-8 字符串；可传 NULL
+ * @return wchar_t* 堆上宽字符串（调用方 free）；NULL / 转换失败返回 NULL
+ */
 static wchar_t *sk_to_wcs(const char *s)
 {
     int n;
@@ -124,6 +154,16 @@ static wchar_t *sk_to_wcs(const char *s)
 }
 
 /** 往 GDI+ Path 里加一个圆角矩形（四角用圆弧） */
+/**
+ * @brief 往已有的 GDI+ Path 里追加一个圆角矩形（四角用圆弧）
+ * @param p 目标路径（不接管所有权）
+ * @param x 左上角横坐标（物理像素）
+ * @param y 左上角纵坐标（物理像素）
+ * @param w 宽（物理像素）
+ * @param h 高（物理像素）
+ * @param r 圆角半径（物理像素）；超过宽 / 高一半时按一半夹取，<= 0 退化成直角矩形
+ * @return void 无返回值
+ */
 static void sk_round_rect(GpPath *p, REAL x, REAL y, REAL w, REAL h, REAL r)
 {
     if (r > w / 2) r = w / 2;
@@ -143,25 +183,32 @@ static void sk_round_rect(GpPath *p, REAL x, REAL y, REAL w, REAL h, REAL r)
     GdipClosePathFigure(p);
 }
 
-/** @brief **中性灰部件**（轨道 / 槽 / 描边这类）在浅底与深底下的取值
- *  @param app 取它的 dark；可传 NULL（那就当浅色）
- *  @param light 浅色下用的值；dark 深色下用的值
- *  @note 2026-09-27 收拢：这类"浅灰细部件"原先写死在**八处**、值还不尽相同
- *        （圆环轨道 `0xE0DAE6`、滑块槽 `0xE7E0EC`、进度槽 `0xE6E1E9`、进度描边 `0xCAC4D0`、
- *         灭态灯点 `0xC0BCC6`、图表边框 `0xB4B0BB`、图表网格 `0xE7E0EC`），
- *        深色下就是"深底上一条条发亮的浅槽"——深色示例那一路截图里最扎眼的一处。
- *        与 sk_default_text 同一类教训：同一件事散在多处、且**常量各不相同**，
- *        按值 grep 根本找不全 ⇒ 收成一个函数，以后要调只改这里。
- *        （**不**包括品牌色填充：按钮 / 勾选 / 开关 / 进度填充的 M3 浅紫不跟随，
- *          画在它上面的字也就不跟着变浅 —— 见 sk_default_text 的注释。） */
+/**
+ * @brief **中性灰部件**（轨道 / 槽 / 描边这类）在浅底与深底下的取值
+ * @param app 取它的明暗标志；可传 NULL（那就当浅色）
+ * @param light 浅色下用的值 0xRRGGBB
+ * @param dark 深色下用的值 0xRRGGBB
+ * @return unsigned 0xRRGGBB 当前主题该用的那个值
+ * @note 2026-09-27 收拢：这类"浅灰细部件"原先写死在**八处**、值还不尽相同
+ *       （圆环轨道、滑块槽、进度槽、进度描边、灭态灯点、图表边框、图表网格），
+ *       深色下就是"深底上一条条发亮的浅槽"——深色示例那一路截图里最扎眼的一处。
+ *       与默认文字色同一类教训：同一件事散在多处、且**常量各不相同**，
+ *       按值 grep 根本找不全 ⇒ 收成一个函数，以后要调只改这里。
+ *       （**不**包括品牌色填充：按钮 / 勾选 / 开关 / 进度填充的浅紫不跟随，
+ *         画在它上面的字也就不跟着变浅）
+ */
 unsigned cg_skin_neutral(const cg_app_t *app, unsigned light, unsigned dark)
 {
     return (app && app->dark) ? dark : light;
 }
 
-/** 控件"背后"是什么颜色（0xRRGGBB）：自绘控件要清掉自身底色时拿它填充。
- *  不能一律填窗口底色 —— 控件在带「背景色」的分组框/容器块里时，那块地方是面板的颜色，
- *  填窗口底色就会露出一块方块（表现为"分组框背景色没生效、反而控件变色"）。 */
+/**
+ * @brief 控件"背后"是什么颜色（0xRRGGBB），自绘控件清自身底色时拿它填充
+ * @param w 控件；NULL 或缺 app 时按缺省浅底处理
+ * @return unsigned 0xRRGGBB 背后色（在带背景色的分组框 / 容器里就是那块面板的颜色）
+ * @note 不能一律填窗口底色 —— 控件在带「背景色」的分组框 / 容器块里时，那块地方是面板的颜色，
+ *       填窗口底色就会露出一块方块（表现为"分组框背景色没生效、反而控件变色"）
+ */
 static unsigned sk_behind(const cg_widget_t *w)
 {
     if (!w || !w->app) return 0xF3EDF7u;
@@ -235,11 +282,13 @@ void cg_skin_fill_round_rect(HDC hdc, const RECT *rc, int radius,
 
 /**
  * @brief 圆环进度（progressring）的轨道 + 进度弧，全部走 GDI+ 抗锯齿
- * @param w 圆环控件（读 value/vmin/vmax/style）；hdc 目标 DC；rc 客户区矩形
- * @return void 无返回值；GDI+ 不可用时回退 GDI AngleArc（有锯齿但不至于不显示）
- * @details 中心百分比文字不在这里画：那要用 `cgw_font_for()`（在 cg_win_util.c），
- *          调用方画完圆环再补文字。GDI 的粗线/粗弧锯齿很明显，圆环上最扎眼，
- *          所以这里一定优先 GDI+。
+ * @param w 圆环控件（读 value/vmin/vmax/style，比例与暗色标志取自它的 app）
+ * @param hdc 目标 DC
+ * @param rc 客户区矩形（物理像素）
+ * @return void 无返回值；GDI+ 不可用时回退 GDI 画弧（有锯齿但不至于不显示）
+ * @details 中心百分比文字不在这里画：那要用字体缓存（在 cg_win_util.c），
+ *          调用方画完圆环再补文字。GDI 的粗线 / 粗弧锯齿很明显，圆环上最扎眼，
+ *          所以这里一定优先 GDI+
  */
 void cg_skin_draw_ring(cg_widget_t *w, HDC hdc, const RECT *rc)
 {
@@ -336,6 +385,15 @@ void cg_skin_draw_ring(cg_widget_t *w, HDC hdc, const RECT *rc)
     }
 }
 
+/**
+ * @brief 自绘 owner-draw 按钮（圆角填充 / 背景图 / 悬停按下蒙版 / 居中文字）
+ * @param app 应用（取缩放，并用绘制项里的控件句柄反查控件）
+ * @param dis 绘制项（控件句柄 / 矩形 / 状态 / DC 都从这里取）
+ * @return void 无返回值；反查不到控件或矩形为空时直接返回，不画
+ * @details 背景图（源路径指定的位图）优先：有图就不再铺纯色，悬停 / 按下 / 禁用改为在图上
+ *          叠一层半透明蒙版；文字色在无图时按底色亮度自动黑 / 白，有图且设了前景色时听用户的。
+ *          GDI+ 起不来则回退 GDI 圆角矩形（有背景图时图已经画上了）
+ */
 void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
 {
     cg_widget_t *w = cg_widget_by_hwnd(app, dis->hwndItem);
@@ -494,6 +552,15 @@ void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
 }
 
 /** M3 开关：右侧胶囊轨道 + 白色圆钮，规格对齐画布（track 2:1、钮内缩 3px） */
+/**
+ * @brief 画开关：右侧胶囊轨道 + 白色圆钮
+ * @param w 开关控件（读 checked / enabled / hot / pressed / text 与应用的缩放）
+ * @param hdc 目标 DC
+ * @param rc 客户区矩形（物理像素）
+ * @return void 无返回值；GDI+ 不可用时回退 GDI 圆角矩形 + 椭圆
+ * @details 规格对齐画布（轨道 2:1、钮内缩 3px）；左侧文字画在**透明底**上，
+ *          颜色走默认文字色，深色下必须换成浅字
+ */
 void cg_skin_draw_switch(cg_widget_t *w, HDC hdc, const RECT *rc)
 {
     int on, disabled, scale, hot, pressed;
@@ -614,6 +681,15 @@ void cg_skin_draw_switch(cg_widget_t *w, HDC hdc, const RECT *rc)
 }
 
 /** M3 复选/单选：圆角方框 + 勾，或圆环 + 实心点；圆角与禁用态都按状态走 */
+/**
+ * @brief 自绘复选 / 单选：圆角方框 + 白勾，或圆环 + 实心点
+ * @param app 应用（取缩放，并用绘制项里的控件句柄反查控件）
+ * @param dis 绘制项（控件句柄 / 矩形 / 状态 / DC 都从这里取）
+ * @return void 无返回值；反查不到控件或矩形为空时直接返回
+ * @details 圆角与禁用态都按状态走（禁用 + 选中用降饱和紫，别和可用态混淆）；文字跟在方框右边，
+ *          颜色走默认文字色。选中态用控件自己的 checked —— owner-draw 下
+ *          绘制项里的选中位不跟着设勾命令走
+ */
 void cg_skin_draw_check(cg_app_t *app, const DRAWITEMSTRUCT *dis)
 {
     cg_widget_t *w = cg_widget_by_hwnd(app, dis->hwndItem);
@@ -728,6 +804,16 @@ void cg_skin_draw_check(cg_app_t *app, const DRAWITEMSTRUCT *dis)
 }
 
 /** 滑块 NM_CUSTOMDRAW：把轨道和滑块画成 M3 圆角；返回给 WM_NOTIFY 的 CDRF 标志 */
+/**
+ * @brief 滑块自绘通知：把轨道和滑块画成圆角，返回给通知消息的标志
+ * @param app 应用（取明暗，中性灰轨道跟它走）
+ * @param hdr 通知头（按绘制阶段 / 项标识分派到轨道与钮）
+ * @return LRESULT 绘制标志；本函数画过的项返回"跳过默认绘制"，其余返回"按默认绘制"
+ * @note 只请求 item 通知：**不**在这里填背景。2026-09-27 实测过两条路（预绘制里填"背后色"；
+ *       再补"跳过默认绘制"），像素断言显示**一个像素都没变** —— 原生 trackbar 那层主题灰底
+ *       不是从这里画上去的，所以拦不住。彻底解决要像进度条那样把控件换成自绘窗口类
+ *       （连输入一起接管），没做；文档里按"槽跟随、画布底不跟随"如实写着
+ */
 LRESULT cg_skin_draw_slider_notify(cg_app_t *app, const NMHDR *hdr)
 {
     const NMCUSTOMDRAW *cd = (const NMCUSTOMDRAW *)hdr;
@@ -798,9 +884,17 @@ LRESULT cg_skin_draw_slider_notify(cg_app_t *app, const NMHDR *hdr)
     return CDRF_DODEFAULT;
 }
 
-/** 进度条绘制：浅灰圆角轨道 + 主题紫填充，与画布预览一致。
- *  进度条不走原生控件——Win32 的 PROGRESS_CLASS 不支持 custom draw（开不开主题都不发通知），
- *  所以整个控件换成运行时自绘类（ProgressProc，在 cg_win_draw_canvas.c），这里只管往 DC 上画。 */
+/**
+ * @brief 画进度条：圆角轨道 + 填充条，与画布预览一致
+ * @param w 进度条控件（读 value/vmin/vmax、底色 / 前景色与应用的暗色标志）
+ * @param hdc 目标 DC
+ * @param rc 客户区矩形（物理像素）
+ * @return void 无返回值；GDI+ 不可用时回退 GDI 圆角矩形（轨道中性灰、填充同一口径）
+ * @details 进度条不走原生控件 —— Win32 的 PROGRESS_CLASS 不支持 custom draw（开不开主题都不发通知），
+ *          所以整个控件换成运行时自绘类（在 cg_win_draw_canvas.c），这里只管往 DC 上画。
+ *          填充色以前景色优先（没设才是主色，与圆环 / 仪表盘 / 状态灯同一口径），
+ *          不是写死的"主题紫"；轨道与描边是中性灰，随应用的明暗走
+ */
 void cg_skin_draw_progress(cg_widget_t *w, HDC hdc, const RECT *rc)
 {
     int x, y, wp, hp, rad, fw;

@@ -57,6 +57,12 @@ static const struct {
 };
 
 /** 不区分大小写的整串比较（"Ctrl" / "ctrl" / "CTRL" 都认） */
+/**
+ * @brief 不区分大小写的整串比较（"Ctrl" / "ctrl" / "CTRL" 都认）
+ * @param a 参与比较的字符串；NULL 视为不相等
+ * @param b 参与比较的字符串；NULL 视为不相等
+ * @return int 1 = 忽略大小写完全相同，0 = 不同
+ */
 static int eqi(const char *a, const char *b)
 {
     if (!a || !b) return 0;
@@ -71,6 +77,11 @@ static int eqi(const char *a, const char *b)
 }
 
 /** 去掉首尾空白，返回指向 buf 内部的起点 */
+/**
+ * @brief 去掉首尾空白，返回指向缓冲内部的起点
+ * @param buf 就地修改的缓冲（末尾空白被写成 '\0'）
+ * @return char* 指向去空白后的起点（可能是 buf 本身）
+ */
 static char *trim(char *buf)
 {
     char *e;
@@ -83,7 +94,7 @@ static char *trim(char *buf)
 /**
  * @brief 解析键名（最后一段）：字母 / 数字 / F1-F24 / 具名键
  * @param tok 已去空白的键名
- * @return cg_accel_key_t 键值；不认识返回 CG_ACCEL_NONE
+ * @return int 键值（快捷键键枚举之一）；不认识返回 CG_ACCEL_NONE
  */
 static int accel_key_of(const char *tok)
 {
@@ -115,6 +126,12 @@ static int accel_key_of(const char *tok)
 }
 
 /** F1-F24：**唯一允许不带修饰键**的键（裸 Esc/Delete/字母都会被它抢走输入框的按键） */
+/**
+ * @brief 这个键是不是 F1-F24
+ * @param key 键值
+ * @return int 1 = F1-F24，0 = 其它
+ * @note F 键是**唯一允许不带修饰键**的：裸 Esc / Delete / 字母都会被它抢走输入框的按键
+ */
 static int accel_is_function_key(int key)
 {
     return key >= CG_ACCEL_F1 && key < CG_ACCEL_F1 + 24;
@@ -172,6 +189,13 @@ int cg_accel_parse(const char *accel, cg_accel_t *out)
 }
 
 /** 键值 -> 显示名（F1 / A / PageUp…）；不认识返回 0 */
+/**
+ * @brief 键值 -> 显示名（F1 / A / PageUp…）
+ * @param key 键值
+ * @param buf 输出缓冲；不认识这个键时内容未定义
+ * @param cap buf 的容量（字节）
+ * @return int 1 = 写成功，0 = 不认识这个键
+ */
 static int accel_key_name(int key, char *buf, size_t cap)
 {
     size_t i;
@@ -199,7 +223,9 @@ static int accel_key_name(int key, char *buf, size_t cap)
 
 /**
  * @brief 把快捷键统一成规范显示形式（修饰键顺序固定 Ctrl+Shift+Alt）
- * @param accel 原文；buf 输出缓冲；cap 缓冲容量
+ * @param accel 原文
+ * @param buf 输出缓冲；失败时写成空串
+ * @param cap buf 的容量（字节）
  * @return int 1 = 成功；0 = 解析不了（buf 写成空串）
  */
 int cg_accel_format(const char *accel, char *buf, size_t cap)
@@ -223,7 +249,8 @@ int cg_accel_format(const char *accel, char *buf, size_t cap)
 
 /**
  * @brief 按名字找动作下标
- * @param app 所属应用；name 动作名
+ * @param app 所属应用
+ * @param name 动作名
  * @return int 下标；没有这个动作（或参数为空）返回 -1
  */
 int cg_action_index(const cg_app_t *app, const char *name)
@@ -435,7 +462,8 @@ void cg_action_release(cg_app_t *app)
 
 /**
  * @brief 触发一个动作
- * @param app 所属应用；name 动作名
+ * @param app 所属应用
+ * @param name 动作名
  * @return int 1 = 真的调用了回调；0 = 没这个动作 / 被禁用 / handler 没登记
  */
 int cg_action_invoke(cg_app_t *app, const char *name)
@@ -462,7 +490,8 @@ int cg_action_invoke(cg_app_t *app, const char *name)
 
 /**
  * @brief 按加速键的命令 id 触发动作
- * @param app 所属应用；cmd WM_COMMAND / WM_SYSCOMMAND 里回来的命令 id
+ * @param app 所属应用
+ * @param cmd WM_COMMAND / WM_SYSCOMMAND 里回来的命令 id
  * @return int 1 = 命中了某个动作的快捷键并已处理；0 = 不是（调用方按菜单命令那条路走）
  */
 int cg_action_invoke_cmd(cg_app_t *app, int cmd)
@@ -478,7 +507,9 @@ int cg_action_invoke_cmd(cg_app_t *app, int cmd)
 
 /**
  * @brief 启用 / 禁用一个动作，并同步到所有引用它的 UI
- * @param app 所属应用；name 动作名；enabled 非 0 = 启用
+ * @param app 所属应用
+ * @param name 动作名
+ * @param enabled 非 0 = 启用
  * @return void 无返回值
  */
 void cg_action_set_enabled(cg_app_t *app, const char *name, int enabled)
@@ -500,7 +531,8 @@ void cg_action_set_enabled(cg_app_t *app, const char *name, int enabled)
 
 /**
  * @brief 动作当前是否启用
- * @param app 所属应用；name 动作名
+ * @param app 所属应用
+ * @param name 动作名
  * @return int 1 = 启用；没这个动作返回 0
  */
 int cg_action_is_enabled(const cg_app_t *app, const char *name)
@@ -511,7 +543,9 @@ int cg_action_is_enabled(const cg_app_t *app, const char *name)
 
 /**
  * @brief 勾选 / 取消勾选一个动作（同步到引用它的菜单项）
- * @param app 所属应用；name 动作名；checked 非 0 = 勾选
+ * @param app 所属应用
+ * @param name 动作名
+ * @param checked 非 0 = 勾选
  * @return void 无返回值
  */
 void cg_action_set_checked(cg_app_t *app, const char *name, int checked)
@@ -524,7 +558,8 @@ void cg_action_set_checked(cg_app_t *app, const char *name, int checked)
 
 /**
  * @brief 动作当前是否勾选
- * @param app 所属应用；name 动作名
+ * @param app 所属应用
+ * @param name 动作名
  * @return int 1 = 勾选；没这个动作返回 0
  */
 int cg_action_is_checked(const cg_app_t *app, const char *name)
@@ -555,8 +590,9 @@ int cg_action_count(const cg_app_t *app)
 
 /**
  * @brief 第 i 个动作的名字（遍历用）
- * @param app 所属应用；i 下标
- * @return const char* 名字；越界返回 NULL
+ * @param app 所属应用
+ * @param i 下标（0 起，上界为动作数减一）
+ * @return const char* 名字（动作表持有，不释放）；越界返回 NULL
  */
 const char *cg_action_at(const cg_app_t *app, int i)
 {
@@ -566,7 +602,8 @@ const char *cg_action_at(const cg_app_t *app, int i)
 
 /**
  * @brief 动作的快捷键（规范化显示形式）
- * @param app 所属应用；name 动作名
+ * @param app 所属应用
+ * @param name 动作名
  * @return const char* 形如 "Ctrl+S"；没有快捷键或没这个动作返回空串
  */
 const char *cg_action_accel(const cg_app_t *app, const char *name)
