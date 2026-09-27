@@ -3,7 +3,7 @@
   "app": {
     "title": "串口助手（cg_serial 示例）",
     "width": 1000,
-    "height": 760,
+    "height": 860,
     "bg": "#F3EDF7",
     "events": {
       "close": "on_close",
@@ -24,7 +24,7 @@
     {
       "id": "sb_main",
       "type": "statusbar",
-      "rect": { "x": 0, "y": 734, "w": 1000, "h": 26 },
+      "rect": { "x": 0, "y": 834, "w": 1000, "h": 26 },
       "items": ["未连接", "RX 0 B", "TX 0 B", "0 帧 / 丢 0 B"]
     },
     {
@@ -380,9 +380,170 @@
       ]
     },
     {
+      "id": "grp_proto",
+      "type": "group",
+      "rect": { "x": 8, "y": 652, "w": 984, "h": 122 },
+      "text": "协议组帧（帧头 / 地址 / 功能码 / 数据 / 校验 / 帧尾 —— 通用骨架，`cg_proto_build`）",
+      "style": { "use": "label", "bg": "#F7F2FA" },
+      "children": [
+        {
+          "id": "lab_ph",
+          "type": "label",
+          "rect": { "x": 12, "y": 28, "w": 40, "h": 20 },
+          "text": "帧头",
+          "style": "label"
+        },
+        {
+          "id": "edt_ph",
+          "type": "edit",
+          "rect": { "x": 54, "y": 26, "w": 110, "h": 26 },
+          "text": "AA 55",
+          "style": "input",
+          "hint": "十六进制；留空 = 没有帧头",
+          "events": { "change": "on_proto_change" }
+        },
+        {
+          "id": "lab_pa",
+          "type": "label",
+          "rect": { "x": 174, "y": 28, "w": 32, "h": 20 },
+          "text": "地址",
+          "style": "label"
+        },
+        {
+          "id": "spn_pa",
+          "type": "edit",
+          "rect": { "x": 208, "y": 26, "w": 52, "h": 26 },
+          "spin": true,
+          "min": -1,
+          "max": 255,
+          "value": 1,
+          "hint": "从站地址（十进制 0..255）；**-1 = 这一帧不写地址字段**",
+          "style": "input",
+          "events": { "change": "on_proto_change" }
+        },
+        {
+          "id": "lab_pf",
+          "type": "label",
+          "rect": { "x": 268, "y": 28, "w": 44, "h": 20 },
+          "text": "功能码",
+          "style": "label"
+        },
+        {
+          "id": "spn_pf",
+          "type": "edit",
+          "rect": { "x": 314, "y": 26, "w": 52, "h": 26 },
+          "spin": true,
+          "min": -1,
+          "max": 255,
+          "value": 3,
+          "hint": "功能码 / 命令字（十进制 0..255）；**-1 = 这一帧不写功能码**",
+          "style": "input",
+          "events": { "change": "on_proto_change" }
+        },
+        {
+          "id": "lab_ps",
+          "type": "label",
+          "rect": { "x": 374, "y": 28, "w": 32, "h": 20 },
+          "text": "校验",
+          "style": "label"
+        },
+        {
+          "id": "cmb_ps",
+          "type": "combo",
+          "rect": { "x": 408, "y": 26, "w": 120, "h": 200 },
+          "items": ["不校验", "累加和(8位)", "异或(8位)", "累加和(16位)", "CRC16-Modbus"],
+          "value": 0,
+          "hint": "校验覆盖「校验值之前的全部字节」；CRC16-Modbus 是低字节在前（工控最常见）",
+          "events": { "select": "on_proto_change" }
+        },
+        {
+          "id": "lab_pt",
+          "type": "label",
+          "rect": { "x": 536, "y": 28, "w": 40, "h": 20 },
+          "text": "帧尾",
+          "style": "label"
+        },
+        {
+          "id": "edt_pt",
+          "type": "edit",
+          "rect": { "x": 578, "y": 26, "w": 110, "h": 26 },
+          "text": "0D 0A",
+          "style": "input",
+          "hint": "十六进制；留空 = 没有帧尾（很多设备用 0D 0A 收尾）",
+          "events": { "change": "on_proto_change" }
+        },
+        {
+          "id": "chk_plen",
+          "type": "checkbox",
+          "rect": { "x": 700, "y": 26, "w": 150, "h": 26 },
+          "text": "带数据长度字节",
+          "hint": "在功能码后插一个「数据长度」字节（很多私有协议这么定）",
+          "events": { "change": "on_proto_change" }
+        },
+        {
+          "id": "lab_pd",
+          "type": "label",
+          "rect": { "x": 12, "y": 66, "w": 40, "h": 20 },
+          "text": "数据",
+          "style": "label"
+        },
+        {
+          "id": "edt_pd",
+          "type": "edit",
+          "rect": { "x": 54, "y": 62, "w": 500, "h": 26 },
+          "text": "01 02 03",
+          "style": "input",
+          "hint": "十六进制数据区；留空 = 没有数据段",
+          "events": { "change": "on_proto_change" }
+        },
+        {
+          "id": "lab_prev",
+          "type": "label",
+          "rect": { "x": 566, "y": 66, "w": 410, "h": 22 },
+          "text": "（组出来的帧会显示在这里）",
+          "style": { "fg": "#1B6E33" },
+          "hint": "实时预览：改上面任一格就重新拼一次，拼出来多少字节、长什么样一目了然"
+        },
+        {
+          "id": "btn_psend",
+          "type": "button",
+          "rect": { "x": 12, "y": 94, "w": 90, "h": 26 },
+          "text": "发送一帧",
+          "hint": "把拼好的帧发出去（十六进制原文，不加任何别的东西）",
+          "events": { "click": "on_proto_send" }
+        },
+        {
+          "id": "chk_ploop",
+          "type": "checkbox",
+          "rect": { "x": 112, "y": 94, "w": 110, "h": 26 },
+          "text": "周期发送",
+          "hint": "按下面的周期反复发这一帧（轮询设备时用；停止按钮也会停它）",
+          "events": { "change": "on_proto_loop" }
+        },
+        {
+          "id": "spn_pcyc",
+          "type": "edit",
+          "rect": { "x": 228, "y": 94, "w": 64, "h": 26 },
+          "spin": true,
+          "min": 50,
+          "max": 60000,
+          "value": 1000,
+          "hint": "协议帧的发送周期（毫秒）",
+          "style": "input"
+        },
+        {
+          "id": "lab_pcyc",
+          "type": "label",
+          "rect": { "x": 300, "y": 98, "w": 200, "h": 20 },
+          "text": "周期ms（周期发送用）",
+          "style": "label"
+        }
+      ]
+    },
+    {
       "id": "cht_rate",
       "type": "chart",
-      "rect": { "x": 8, "y": 660, "w": 984, "h": 66 },
+      "rect": { "x": 8, "y": 774, "w": 984, "h": 60 },
       "items": ["B/s"],
       "value": 60,
       "min": 0,

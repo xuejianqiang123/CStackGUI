@@ -86,7 +86,7 @@ typedef struct {
     char          autosave_path[1200];
 
     cg_timer_t   *sched;          /**< 发送调度定时器（0 = 没在发） */
-    int           sched_multi;    /**< 0 = 定时发单条；1 = 多条依次 */
+    int           sched_kind;     /**< 0 = 定时发单条；1 = 多条依次；2 = 协议组帧那一帧 */
     int           sched_loop;     /**< 多条是否循环 */
     int           sched_idx;      /**< 多条发到第几条 */
     int           sched_iv;       /**< 周期（毫秒） */
@@ -763,8 +763,11 @@ static int multi_line_at(cg_app_t *app, int idx, char *out, int cap)
     return 0;
 }
 
+/** 组帧（定义在本节后面的"协议组帧"里；调度要用它，所以在调度之前先声明） */
+static int proto_build_now(cg_app_t *app, void *out, int cap);
+
 /**
- * @brief 停掉发送调度（定时发送 / 多条轮发）
+ * @brief 停掉发送调度（定时发送 / 多条轮发 / 协议帧周期发送）
  * @param app 所属应用
  * @param how 说明文字（为空则不写日志）
  * @return void
@@ -778,6 +781,7 @@ static void sched_stop(cg_app_t *app, const char *how)
     if (how && *how) sys_line(app, how);
     /* 界面上的勾也要跟着落下来，不然"显示在发、其实没发" */
     cg_widget_set_checked(cg_find(app, "chk_timed"), 0);
+    cg_widget_set_checked(cg_find(app, "chk_ploop"), 0);
 }
 
 /**
@@ -792,7 +796,16 @@ static void sched_tick(void *user)
 
     s_biz.sched = NULL;                    /* 一次性定时器：这一颗已经用掉了 */
 
-    if (s_biz.sched_multi) {
+    if (s_biz.sched_kind == 2) {            /* 协议组帧：每次现拼（改了字段立刻生效）*/
+        unsigned char frame[1024];
+        int           n = proto_build_now(app, frame, (int)sizeof(frame));
+
+        if (n <= 0) {
+            sched_stop(app, "协议组帧：这一帧拼不出来了，周期发送已停。");
+            return;
+        }
+        send_bytes(app, frame, n);
+    } else if (s_biz.sched_kind == 1) {
         char line[1600];
 
         if (!multi_line_at(app, s_biz.sched_idx, line, (int)sizeof(line))) {
@@ -822,9 +835,10 @@ static void sched_tick(void *user)
  * @param loop 多条是否循环
  * @return void
  */
-static void sched_start(cg_app_t *app, int multi, int loop)
+static void sched_start(cg_app_t *app, int kind, int loop)
 {
-    int iv = cg_widget_value(cg_find(app, multi ? "spn_multi" : "spn_cycle"));
+    int iv = cg_widget_value(cg_find(app, kind == 2 ? "spn_pcyc"
+                                       : kind == 1 ? "spn_multi" : "spn_cycle"));
 
     if (iv < 50) iv = 50;
 
@@ -832,20 +846,179 @@ static void sched_start(cg_app_t *app, int multi, int loop)
         cg_kill_timer(s_biz.sched);
         s_biz.sched = NULL;
     }
-    s_biz.sched_multi = multi;
-    s_biz.sched_loop  = loop;
-    s_biz.sched_idx   = 0;
-    s_biz.sched_iv    = iv;
+    s_biz.sched_kind = kind;
+    s_biz.sched_loop = loop;
+    s_biz.sched_idx  = 0;
+    s_biz.sched_iv   = iv;
 
-    if (multi) {
+    if (kind == 1) {                       /* 多条：先确认框里真有可发的行 */
         char line[1600];
 
         if (!multi_line_at(app, 0, line, (int)sizeof(line))) {
             sys_line(app, "「多条发送」框里没有可发的行（空行与 # 注释会跳过）。");
             return;
         }
+    } else if (kind == 2) {                /* 协议帧：先确认这一帧拼得出来 */
+        unsigned char frame[1024];
+
+        if (proto_build_now(app, frame, (int)sizeof(frame)) <= 0) {
+            sys_line(app, "协议组帧：这一帧拼不出来（十六进制写错或参数越界），没开始发。");
+            cg_widget_set_checked(cg_find(app, "chk_ploop"), 0);
+            return;
+        }
     }
     sched_tick(app);                       /* 立刻发第一条，不等一个周期 */
+}
+
+/* ------------------------------------------------------------ 协议组帧（cg_proto_build 的界面）
+ *
+ * 这一节就是 XCOM 那个「协议传输」页签的通用版：它把正点原子的私有 IAP 格式（地址/功能码/
+ * 数据长度/帧序列/校验值）写死在界面上，换个厂家的设备就不适用；这里是**通用骨架** ——
+ * 帧头 / 地址 / 功能码 / [数据长度] / 数据 / 校验 / 帧尾，哪几段有你自己定，校验五选一。
+ * 组帧与验帧都是纯函数（`cg_proto_build` / `cg_proto_parse`），所以逻辑有单测兜着，
+ * 这里只负责把界面上的几格翻译成结构体。
+ */
+
+/** 组帧时用的三块缓冲（帧头 / 数据 / 帧尾的十六进制解出来放这儿）；只被主线程用 */
+static unsigned char s_ph[64];
+static unsigned char s_pd[512];
+static unsigned char s_pt[64];
+
+/** 校验下拉的 5 项 -> CG_SUM_*（下标与 .cgui 里 cmb_ps 的 items 一一对应） */
+static const int k_sums[5] = { CG_SUM_NONE, CG_SUM_ADD8, CG_SUM_XOR8, CG_SUM_ADD16,
+                               CG_SUM_CRC16_MODBUS };
+
+/**
+ * @brief 把界面上那几格填进 cg_proto_t，并拼出一帧
+ * @param app 所属应用
+ * @param out 输出缓冲
+ * @param cap 输出缓冲大小
+ * @return int > 0 = 帧长；**-1** = 十六进制写错了（三格里任一格）；**-2** = 参数越界或放不下
+ * @note 帧头 / 数据 / 帧尾留空 = 没有这一段；地址 / 功能码填 -1 = 不写这一段。
+ */
+static int proto_build_now(cg_app_t *app, void *out, int cap)
+{
+    static cg_proto_t p;
+    const char       *h   = cg_widget_text(cg_find(app, "edt_ph"));
+    const char       *d   = cg_widget_text(cg_find(app, "edt_pd"));
+    const char       *t   = cg_widget_text(cg_find(app, "edt_pt"));
+    int               idx = cg_widget_value(cg_find(app, "cmb_ps"));
+    int               hn = 0, dn = 0, tn = 0;
+
+    if (idx < 0 || idx > 4) idx = 0;
+
+    if (h && *h) hn = cg_hex_decode(h, s_ph, (int)sizeof(s_ph));
+    if (d && *d) dn = cg_hex_decode(d, s_pd, (int)sizeof(s_pd));
+    if (t && *t) tn = cg_hex_decode(t, s_pt, (int)sizeof(s_pt));
+    if (hn < 0 || dn < 0 || tn < 0) return -1;
+
+    memset(&p, 0, sizeof p);
+    p.head     = (hn > 0) ? s_ph : NULL;
+    p.head_len = hn;
+    p.addr     = cg_widget_value(cg_find(app, "spn_pa"));
+    p.func     = cg_widget_value(cg_find(app, "spn_pf"));
+    p.with_len = cg_widget_checked(cg_find(app, "chk_plen")) ? 1 : 0;
+    p.data     = (dn > 0) ? s_pd : NULL;
+    p.data_len = dn;
+    p.sum      = k_sums[idx];
+    p.tail     = (tn > 0) ? s_pt : NULL;
+    p.tail_len = tn;
+
+    return cg_proto_build(&p, out, cap);
+}
+
+/**
+ * @brief 刷新预览标签：把拼出来的帧显示成十六进制（拼不出来就说原因）
+ * @param app 所属应用
+ * @return void
+ * @note 改一格就重拼一次 —— 拼错了当场看得见，比"点了发送才发现"好得多。
+ */
+static void proto_preview(cg_app_t *app)
+{
+    cg_widget_t  *lab = cg_find(app, "lab_prev");
+    unsigned char frame[1024];
+    int           n;
+
+    if (!lab) return;
+    n = proto_build_now(app, frame, (int)sizeof(frame));
+    if (n == -1) {
+        cg_widget_set_text(lab, "十六进制有错：只允许 0-9 A-F 与分隔符，数字个数要是偶数");
+        return;
+    }
+    if (n <= 0) {
+        cg_widget_set_text(lab, "这一帧拼不出来（参数越界或太长）");
+        return;
+    }
+    {
+        char hex[3 * 64 + 8];
+        char *line;
+        int   shown = n > 64 ? 64 : n;
+
+        cg_hex_encode(frame, shown, " ", 1, hex, (int)sizeof(hex));
+        line = cg_str_format("%s%s（%d 字节）", hex, n > shown ? " …" : "", n);
+        if (line) {
+            cg_widget_set_text(lab, line);
+            cg_free(line);
+        }
+    }
+}
+
+/**
+ * @brief 组帧面板上任一格变了：重新预览
+ * @param self 触发的控件
+ * @param ev change / select
+ * @param user 未使用
+ * @return void
+ */
+static void on_proto_change(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev;
+    (void)user;
+    proto_preview(cg_app_of(self));         /* 不写日志：每敲一个字符都会来一次 */
+}
+
+/**
+ * @brief 「发送一帧」：把拼好的帧原样发出去
+ * @param self 按钮
+ * @param ev click
+ * @param user 未使用
+ * @return void
+ */
+static void on_proto_send(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t      *app = cg_app_of(self);
+    unsigned char  frame[1024];
+    int            n;
+
+    (void)ev;
+    (void)user;
+    n = proto_build_now(app, frame, (int)sizeof(frame));
+    if (n == -1) {
+        sys_line(app, "协议组帧：十六进制写错了，没发。");
+        return;
+    }
+    if (n <= 0) {
+        sys_line(app, "协议组帧：这一帧拼不出来（参数越界或太长），没发。");
+        return;
+    }
+    send_bytes(app, frame, n);
+}
+
+/**
+ * @brief 「周期发送」勾选变化：按周期反复发这一帧（轮询设备用）
+ * @param self 复选框
+ * @param ev change
+ * @param user 未使用
+ * @return void
+ */
+static void on_proto_loop(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+
+    (void)ev;
+    (void)user;
+    if (cg_widget_checked(self)) sched_start(app, 2, 0);
+    else                         sched_stop(app, "协议组帧：周期发送已停。");
 }
 
 /* ------------------------------------------------------------ 事件回调 */
@@ -1224,8 +1397,7 @@ static void on_loop_change(cg_widget_t *self, cg_event_t ev, void *user)
     (void)ev;
     (void)user;
     s_biz.sched_loop = cg_widget_checked(self);
-    if (s_biz.sched && s_biz.sched_multi) {
-        s_biz.sched_loop = cg_widget_checked(self);
+    if (s_biz.sched && s_biz.sched_kind == 1) {
         sys_line(app, s_biz.sched_loop ? "多条发送：发完自动从头轮。" : "多条发送：发完就停。");
     }
 }
@@ -1561,6 +1733,31 @@ static void run_demo(cg_app_t *app)
                bt ? bt : "-", st ? st : "-", pt ? pt : "-");
     }
 
+    /* 协议组帧：把面板那几格填成 AA 55 | 地址 1 | 功能码 3 | 数据 01 02 03 | 累加和 | 0D 0A */
+    {
+        unsigned char frame[64];
+        int           n;
+
+        cg_widget_set_text(cg_find(app, "edt_ph"), "AA 55");
+        cg_widget_set_value(cg_find(app, "spn_pa"), 1);
+        cg_widget_set_value(cg_find(app, "spn_pf"), 3);
+        cg_widget_set_value(cg_find(app, "cmb_ps"), 1);          /* 累加和(8位) */
+        cg_widget_set_text(cg_find(app, "edt_pd"), "01 02 03");
+        cg_widget_set_text(cg_find(app, "edt_pt"), "0D 0A");
+        n = proto_build_now(app, frame, (int)sizeof(frame));
+        if (n > 0) {
+            char hex[3 * 64];
+
+            cg_hex_encode(frame, n, " ", 1, hex, (int)sizeof(hex));
+            printf("[demo] 协议组帧：%d 字节 = %s（独立算过：累加和低 8 位 = 09）\n", n, hex);
+        } else {
+            printf("[demo] 协议组帧失败：%d\n", n);
+        }
+        proto_preview(app);                                      /* 预览标签也要跟着变 */
+        printf("[demo]   面板预览：%s\n", cg_widget_text(cg_find(app, "lab_prev")));
+        fflush(stdout);
+    }
+
     /* 发送侧：解析（不真发，因为演示模式不开串口） */
     {
         unsigned char out[64];
@@ -1680,6 +1877,9 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND("on_sendall_click",   on_sendall_click),
     CG_BIND("on_stop_click",      on_stop_click),
     CG_BIND("on_loop_change",     on_loop_change),
+    CG_BIND("on_proto_change",    on_proto_change),
+    CG_BIND("on_proto_send",      on_proto_send),
+    CG_BIND("on_proto_loop",      on_proto_loop),
     CG_BIND("on_openfile_click",  on_openfile_click),
     CG_BIND("on_sendfile_click",  on_sendfile_click),
     CG_BIND("on_split_release",   on_split_release),
