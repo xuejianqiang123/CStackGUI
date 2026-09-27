@@ -9,9 +9,10 @@
  *
  *          1. **切帧不能靠"读一次 = 一帧"**。TCP 是字节流：一次 cg_net_read 拿到的可能
  *             是半帧、也可能是一帧半。Modbus/TCP 好在**头里有长度字段**（MBAP 的第 5、6 字节，
- *             含单元标识），所以正确的做法是把收到的字节攒着，攒够 `6 + 长度` 就切一帧出来，
- *             剩下的留给下一轮（见 drain_frames 的注释）。串口上的 Modbus/RTU 没有长度字段，
- *             得靠"帧间静默"或 CRC 反向定位 —— 那是另一个话题，本示例只做 TCP。
+ *             含单元标识），于是把收到的字节喂给 `cg_frame_*`（长度字段模式）就能一帧帧取出来。
+ *             串口上的 Modbus/RTU 没有长度字段，**同一个 API 换成 `CG_FRAME_SILENCE`**（帧间静默）
+ *             即可 —— 本示例连的是 TCP 从站，所以用长度字段模式；
+ *             切帧器本身（含静默模式的边界行为）在 tests/unit/test_kit_frame.c 里有单测。
  *
  *          2. **请求要能被认出"没回来"**。上位机不能发完就当成功：这里记下"在等回应"和
  *             发出时刻，超过 REQ_TIMEOUT_MS 没收到就报一句超时（现场最常见的故障就是
@@ -57,8 +58,9 @@
  */
 
 static cg_net_t      *s_conn;            /* 只有一条连接（Modbus/TCP 客户端角色） */
-static unsigned char  s_rx[RX_CAP];      /* 收字节攒在这里，够一帧就切走 */
-static int            s_rxlen;
+static unsigned char  s_rxbuf[RX_CAP];   /* 切帧器自己攒字节用的缓冲（够放几帧） */
+static cg_frame_t     s_fr;              /* 字节流切帧（长度字段模式，见 drain_frames） */
+static unsigned long  s_fr_dropped;      /* 上次报过的"凑不成帧丢掉的字节数"，用来只报增量 */
 
 static unsigned       s_ms;              /* 自己数的毫秒（POLL_MS 一拍加一次） */
 static int            s_auto;            /* 自动轮询开关（勾选框） */
@@ -285,6 +287,12 @@ static void handle_frame(cg_app_t *app, const unsigned char *frame, int len)
     } else {
         fill_table(app, &r, start, func);
         s_ok++;
+        if (s_demo) {
+            /* 演示 / CI 模式把进度打到 stdout：截图只能给人看，CI 需要一个能断言的文字证据。
+             * 走的是同一批函数、同一份数据，不另开代码路径。 */
+            printf("[demo] 已成功读回 %d 次（寄存器表在刷新）\n", s_ok);
+            fflush(stdout);
+        }
     }
 
     s_waiting = 0;
@@ -292,45 +300,46 @@ static void handle_frame(cg_app_t *app, const unsigned char *frame, int len)
 }
 
 /**
- * @brief 从接收缓冲取字节，并按 MBAP 的长度字段切成整帧
+ * @brief 从连接取字节，按 MBAP 的长度字段切成整帧交给 handle_frame
  * @param app 所属应用
  * @return void
- * @details **切帧**是这个文件最该看的一段：TCP 是字节流，一次 read 拿到的可能不是一帧。
- *          攒着 + 按头里的长度字段切，是这个协议下最省事也最不会错的做法。
+ * @details **切帧**仍然是最该看的一段，但它现在**不用自己写**了：攒字节、按长度字段找边界、
+ *          "半帧留着下轮再拼"、"凑不出帧的垃圾怎么丢"—— 全在 `cg_frame_*` 里（runtime 自带，
+ *          见 cstackgui.h 的"字节流切帧"）。这里只剩两件事：把收到的字节喂进去、把帧取出来。
+ *          早先这段是手写的，而手写版本正是**每个上位机都要重抄一遍**的那种代码。
+ *
+ *          同一个 API 换成串口就是 Modbus/RTU：init 时把模式改成 `CG_FRAME_SILENCE`、
+ *          传静默毫秒（RTU 规范要求帧间 ≥ t3.5），其余一字不改 —— CRC 坏了的帧由
+ *          `cg_modbus_parse` 报 -2，按"丢掉重来"处理即可。
  */
 static void drain_frames(cg_app_t *app)
 {
+    unsigned char frame[FRAME_MAX];
+    int           flen;
+
     for (;;) {
-        int n = cg_net_read(s_conn, s_rx + s_rxlen, RX_CAP - s_rxlen);
+        unsigned char buf[1024];
+        int           n = cg_net_read(s_conn, buf, sizeof buf);
 
         if (n <= 0) break;
-        s_rxlen += n;
+        if (cg_frame_feed(&s_fr, buf, n, cg_now_ms()) != 0) break;
     }
 
-    while (s_rxlen >= 7) {
-        int need = 6 + ((s_rx[4] << 8) | s_rx[5]);      /* MBAP：长度字段含单元标识 */
-
-        if (need < 8 || need > FRAME_MAX) {
-            /* 头就不像 Modbus（长度字段离谱）：丢掉缓冲，别拿垃圾当帧去解 */
-            log_sys(app, "收到的东西不像 Modbus/TCP（长度字段离谱），已清空接收缓冲。");
-            s_err++;
-            s_rxlen = 0;
-            refresh_ui(app);
-            return;
-        }
-        if (s_rxlen < need) break;                       /* 还没攒够一帧，等下一轮 */
-
-        log_hex(app, CG_TERM_RX, s_rx, need);
-        handle_frame(app, s_rx, need);
-
-        memmove(s_rx, s_rx + need, (size_t)(s_rxlen - need));
-        s_rxlen -= need;
+    while ((flen = cg_frame_take(&s_fr, frame, sizeof frame)) > 0) {
+        log_hex(app, CG_TERM_RX, frame, flen);
+        handle_frame(app, frame, flen);
     }
 
-    if (s_rxlen == RX_CAP) {                             /* 缓冲满还没切出一帧：没法更糟了 */
-        log_sys(app, "接收缓冲满了还凑不出完整的一帧，丢掉重来。");
+    /* "长度字段离谱"和"缓冲满了凑不出帧"这两种在切帧器里都算丢掉，这里只负责报出来 */
+    if (cg_frame_dropped(&s_fr) != s_fr_dropped) {
+        char msg[160];
+
+        snprintf(msg, sizeof msg, "线上有 %lu 个字节凑不成 Modbus/TCP 帧，已丢掉（长度字段离谱或噪声）。",
+                 cg_frame_dropped(&s_fr) - s_fr_dropped);
+        log_sys(app, msg);
+        s_fr_dropped = cg_frame_dropped(&s_fr);
         s_err++;
-        s_rxlen = 0;
+        refresh_ui(app);
     }
 }
 
@@ -352,9 +361,9 @@ static void poll_tick(void *user)
     if (s_conn && !cg_net_connected(s_conn)) {
         log_sys(app, "对端把连接关了（cg_net_connected 变 0）。");
         cg_net_close(s_conn);
-        s_conn   = NULL;
+        s_conn    = NULL;
         s_waiting = 0;
-        s_rxlen  = 0;
+        cg_frame_reset(&s_fr);           /* 半帧留着没意义：对端都走了 */
         refresh_ui(app);
     }
     if (s_conn) drain_frames(app);
@@ -403,7 +412,7 @@ static void on_connect(cg_widget_t *self, cg_event_t ev, void *user)
         cg_net_close(s_conn);
         s_conn    = NULL;
         s_waiting = 0;
-        s_rxlen   = 0;
+        cg_frame_reset(&s_fr);
         log_sys(app, "已断开。");
         cg_widget_set_text(self, "连接");
         refresh_ui(app);
@@ -421,7 +430,12 @@ static void on_connect(cg_widget_t *self, cg_event_t ev, void *user)
         refresh_ui(app);
         return;
     }
-    s_rxlen   = 0;
+    /* 切帧器：Modbus/TCP 走**长度字段**模式（MBAP 第 5、6 字节是长度）。
+     * 短于 8 字节不像一帧、超过 300 字节当垃圾 —— 两者都会被丢掉并计数（drain_frames 里报出来）。 */
+    if (cg_frame_init(&s_fr, s_rxbuf, sizeof s_rxbuf, CG_FRAME_LENFIELD, 4) == 0) {
+        cg_frame_limits(&s_fr, 8, FRAME_MAX);
+        s_fr_dropped = 0;
+    }
     s_waiting = 0;
     {
         char msg[192];
