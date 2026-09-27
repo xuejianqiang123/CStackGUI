@@ -387,6 +387,27 @@ const char *cg_menu_last_text(const cg_widget_t *w);
 /** 菜单里有多少个可点的项（不含分隔线和顶级弹出项），调试用 */
 int         cg_menu_count(const cg_widget_t *w);
 
+/* ---- 运行时改菜单（v1：纯菜单项）
+ *
+ * 定位一律用 .cgui 里的项 id；顶层用 parent_id = NULL 或 ""。
+ * 改完**自动重建**（menubutton 的弹出菜单本来就是每次点击重建，不需要同步）；
+ * 只改内存里的菜单，**不写回 .cgui** —— 重开界面回到文件里那份。
+ *
+ * 三条要知道的：
+ *   ① 往某个下拉里加项，那个下拉**必须先在 .cgui 里有 id**（画布菜单项 DSL 写 `文件 | menu_file`）；
+ *   ② 运行时新增的项**不支持引用动作**（要快捷键就在 .cgui 里写固定项，或用 cg_menu_last_id 分发）；
+ *   ③ 对**动作项**调 set_text / set_enabled / set_checked 不生效（那三项归动作管），只记一条 WARN。
+ *
+ * 逐字语义（pos / "-" 分隔线 / 返回值 / 索引平移）见 docs/CGUI-FORMAT.md 第 2.7 节。
+ */
+int  cg_menu_add_item(cg_widget_t *w, const char *parent_id, int pos,
+                      const char *text, const char *id);   /* 返回新项在行表里的下标；失败 -1 */
+int  cg_menu_remove_item(cg_widget_t *w, const char *id);  /* 返回删掉的行数（含子树）；失败 -1 */
+int  cg_menu_clear_items(cg_widget_t *w, const char *parent_id); /* 同上；下拉项自身保留 */
+void cg_menu_set_item_text(cg_widget_t *w, const char *id, const char *text);
+void cg_menu_set_item_enabled(cg_widget_t *w, const char *id, int enabled);
+void cg_menu_set_item_checked(cg_widget_t *w, const char *id, int checked);
+
 /* ------------------------------------------------------------ 动作（actions）
  * **一条命令写一次，挂在多处 UI 上**：文字 + 快捷键 + 一个回调名。
  * 菜单项和控件用 `.cgui` 的 "action" 字段引用它，于是「一个回调、一处启用状态」

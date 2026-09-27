@@ -212,6 +212,9 @@ static void menu_push_doc(cg_app_t *app, cg_widget_t *w, cg_item_t *const *items
          * 具体规则见 cstackgui.h 的「动作（actions）」一节 */
         w->menu[idx].action = (it->action && *it->action) ? cg_str_dup(it->action) : NULL;
         w->menu[idx].checked = it->checked;
+        /* memset 出来的 0 是"禁用"，与 .cgui 的缺省（可用）相反 —— 必须显式置 1，
+         * 否则整根菜单一上来就是灰的（这种"一处忘了就是全局症状"的值最容易漏） */
+        w->menu[idx].enabled = 1;
         w->menu[idx].parent = parent;
         w->menu[idx].popup = (it->nchildren > 0);
         /* 分隔线和下拉项本身不可点，只有叶子项才有菜单命令 id */

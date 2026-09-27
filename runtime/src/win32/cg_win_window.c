@@ -372,19 +372,10 @@ int cgw_win_init(cg_app_t *app)
             if (hm && mw->nmenu > 0) {
                 SetMenu(hwnd, hm);
                 DrawMenuBar(hwnd);
-                /* 菜单栏占掉的高度要补回窗口大小，客户区才是 .cgui 里写的尺寸 */
-                {
-                    RECT cr, wr;
-                    int fw, fh;
-                    GetClientRect(hwnd, &cr);
-                    GetWindowRect(hwnd, &wr);
-                    fw = (wr.right - wr.left) - (cr.right - cr.left);
-                    fh = (wr.bottom - wr.top) - (cr.bottom - cr.top);
-                    SetWindowPos(hwnd, NULL, 0, 0,
-                                 cgw_scale_px(app, app->doc.width) + fw,
-                                 cgw_scale_px(app, app->doc.height) + fh,
-                                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-                }
+                /* 菜单栏占掉的高度要补回窗口大小，客户区才是 .cgui 里写的尺寸。
+                 * 运行时重建菜单栏（cg_win_menu_rebuild）走的是同一个函数 ——
+                 * 同一规则只有一份实现，重建时忘了它客户区就会少一条菜单栏的高度。 */
+                cgw_menu_fit_client(app);
             } else if (hm) {
                 DestroyMenu(hm);
             }

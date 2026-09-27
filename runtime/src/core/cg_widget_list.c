@@ -8,6 +8,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>   /* 运行时改菜单那一段要 memmove / memset / strcmp / strcpy 家族 */
 
 /** @brief 取挂在控件上的业务数据；NULL 返回 NULL */
 void  *cg_widget_get_user(const cg_widget_t *w) { return w ? w->user : NULL; }
@@ -183,6 +184,292 @@ int cg_menu_count(const cg_widget_t *w)
         if (w->menu[i].cmd != 0) n++;
     }
     return n;
+}
+
+/* ------------------------------------------------------------ 运行时改菜单
+ *
+ * 行表是**唯一的真相**：HMENU 只是它的一次投影（cgw_menu_build 是纯函数），
+ * 所以"改完让后端重建一次"就够了 —— 不需要维护两套状态，也不需要逐项同步。
+ * 六个 API 的全部实现就是"改 menu[] 数组"，平台相关的事只有最后一行的 rebuild。
+ *
+ * 最容易错的是**索引平移**：parent 存的是数组下标，插入/删除会把后面所有行挪位，
+ * 忘了修正就会出现"加了一项，另一个下拉里的项跑到顶层去了"（单测专门钉这一条）。
+ */
+
+/** 菜单类控件的类型守卫（want_type 一次只认一个类型，而 menu/menubutton 是同一套行表） */
+static int want_menu(const cg_widget_t *w, const char *who)
+{
+    if (w && (!strcmp(w->type, "menu") || !strcmp(w->type, "menubutton"))) return 1;
+    cg_log(CG_LOG_ERROR, "%s：控件 \"%s\" 不是菜单（menu / menubutton）",
+           who, (w && w->id) ? w->id : "-");
+    return 0;
+}
+
+/** 按 id 找一个菜单项，返回行下标；找不到 -1。
+ *  只在**直接子项**里找（parent 必须等于 want_parent），这样同一个 id 分别出现在
+ *  两个下拉里时也能各自定位。 */
+static int menu_find_child(const cg_widget_t *w, int want_parent, const char *id)
+{
+    if (!w || !id || !*id) return -1;
+    for (int i = 0; i < w->nmenu; i++) {
+        if (w->menu[i].parent != want_parent) continue;
+        if (w->menu[i].id && strcmp(w->menu[i].id, id) == 0) return i;
+    }
+    return -1;
+}
+
+/** 定位"往哪个下拉里加项"：parent_id 空 = 顶层（-1）。
+ *  找不到 / 不是下拉都算失败 —— 不猜、也不退回顶层（否则"加错地方"这种事会静默发生）。 */
+static int menu_parent_of(const cg_widget_t *w, const char *parent_id, const char *who)
+{
+    int k;
+    if (!parent_id || !*parent_id) return -1;
+    k = menu_find_child(w, -1, parent_id);
+    if (k < 0) {
+        /* 下拉也可能是嵌套的（二级菜单），顶层找不到就在所有项里再找一遍 */
+        for (int i = 0; i < w->nmenu; i++) {
+            if (w->menu[i].id && strcmp(w->menu[i].id, parent_id) == 0) { k = i; break; }
+        }
+    }
+    if (k < 0) {
+        cg_log(CG_LOG_WARN, "%s：找不到父项 \"%s\"（要往某个下拉里加项，"
+                            "那个下拉必须先在 .cgui 里有 id）", who, parent_id);
+        return -2;
+    }
+    if (!w->menu[k].popup) {
+        cg_log(CG_LOG_WARN, "%s：\"%s\" 不是下拉项（它没有子项），不能往里加", who, parent_id);
+        return -2;
+    }
+    return k;
+}
+
+/** 第 j 行是不是 root 那一行（含自身）的子树上 */
+static int menu_in_subtree(const cg_widget_t *w, int j, int root)
+{
+    int p = w->menu[j].parent;
+    while (p >= 0) {
+        if (p == root) return 1;
+        p = w->menu[p].parent;
+    }
+    return 0;
+}
+
+/** 第 root 行子树的后一个位置（行表按下标连续存子树，所以是个闭区间） */
+static int menu_subtree_end(const cg_widget_t *w, int root)
+{
+    int j = root + 1;
+    while (j < w->nmenu && menu_in_subtree(w, j, root)) j++;
+    return j;
+}
+
+/** 删除 [from, to) 这些行（**纯操作**：不重建，调用方最后统一 rebuild 一次）。
+ *  返回删掉的行数。 */
+static int menu_drop_rows(cg_widget_t *w, int from, int to)
+{
+    int n = to - from;
+    if (n <= 0) return 0;
+    for (int i = from; i < to; i++) {
+        free(w->menu[i].text);
+        free(w->menu[i].id);
+        free(w->menu[i].action);
+    }
+    memmove(&w->menu[from], &w->menu[to],
+            ((size_t)w->nmenu - (size_t)to) * sizeof(cg_menu_row_t));
+    w->nmenu -= n;
+    memset(&w->menu[w->nmenu], 0, (size_t)n * sizeof(cg_menu_row_t));
+    for (int i = 0; i < w->nmenu; i++) {
+        if (w->menu[i].parent >= to) w->menu[i].parent -= n;
+    }
+    return n;
+}
+
+/**
+ * @brief 运行时往菜单里加一项
+ * @param w 菜单控件（menu / menubutton）
+ * @param parent_id 父下拉项的 id；NULL / "" = 顶层
+ * @param pos 插入到该父项第几个直接子项之前；-1 或越界 = 追加
+ * @param text 显示文字；"-" = 分隔线
+ * @param id 项标识，可空（空 = 之后没法用它定位）
+ * @return int 新项在行表里的下标；失败 -1
+ */
+int cg_menu_add_item(cg_widget_t *w, const char *parent_id, int pos,
+                     const char *text, const char *id)
+{
+    cg_menu_row_t *nr;
+    cg_app_t      *app;
+    const char    *txt = text ? text : "";
+    int            parent, at, is_sep;
+
+    if (!want_menu(w, "cg_menu_add_item")) return -1;
+    app    = w->app;
+    parent = menu_parent_of(w, parent_id, "cg_menu_add_item");
+    if (parent == -2) return -1;
+
+    /* 插入位置：该父项的**直接子项**里的第 pos 个之前；-1 / 越界 = 追加到该父项**子树的末尾**。
+     *
+     * 是"子树末尾"而不是"整张表末尾"：行表是深度优先摊平的，**子树必须连续** ——
+     * menu_subtree_end() 就是靠"连续区间"认出一整棵子树的（删项、清空都依赖它）。
+     * 把新项扔到表尾其实也能显示对（HMENU 按行序往各自父项上追加），但会悄悄破坏
+     * 这个连续性：之后删那个下拉时会漏掉它，而界面上看不出任何异常。
+     * （这一条是被单测抓出来的 —— 第一版就是这么写的。） */
+    at = -1;
+    {
+        int seen = 0;
+        for (int i = 0; i < w->nmenu; i++) {
+            if (w->menu[i].parent != parent) continue;
+            if (pos >= 0 && seen == pos) { at = i; break; }
+            seen++;
+        }
+        if (at < 0) at = (parent >= 0) ? menu_subtree_end(w, parent) : w->nmenu;
+    }
+
+    nr = (cg_menu_row_t *)realloc(w->menu, ((size_t)w->nmenu + 1) * sizeof(cg_menu_row_t));
+    if (!nr) return -1;
+    w->menu = nr;
+    if (at < w->nmenu) {
+        memmove(&w->menu[at + 1], &w->menu[at],
+                ((size_t)w->nmenu - (size_t)at) * sizeof(cg_menu_row_t));
+    }
+    w->nmenu++;
+    /* 索引平移：插在下标 at，则所有 parent >= at 的行都要往后挪一格。
+     * 新行自己跳过（它的 parent 马上按 parent 参数写死）。 */
+    for (int i = 0; i < w->nmenu; i++) {
+        if (i != at && w->menu[i].parent >= at) w->menu[i].parent++;
+    }
+
+    memset(&w->menu[at], 0, sizeof(cg_menu_row_t));
+    w->menu[at].parent  = parent;
+    w->menu[at].text    = cg_str_dup(txt);
+    w->menu[at].id      = (id && *id) ? cg_str_dup(id) : NULL;
+    w->menu[at].enabled = 1;
+    is_sep = (strcmp(txt, "-") == 0);
+    if (!is_sep) w->menu[at].cmd = cg_alloc_ctrl_id(app);   /* 分隔线没有命令 id */
+
+    cg_win_menu_rebuild(w);
+    return at;
+}
+
+/**
+ * @brief 运行时删掉一个菜单项（连同它的子树）
+ * @param w 菜单控件；id 项标识
+ * @return int 删掉的行数（含子树）；找不到 -1
+ */
+int cg_menu_remove_item(cg_widget_t *w, const char *id)
+{
+    int k, n;
+
+    if (!want_menu(w, "cg_menu_remove_item")) return -1;
+    if (!id || !*id) {
+        cg_log(CG_LOG_WARN, "cg_menu_remove_item：id 不能为空（没有 id 的项没法定位）");
+        return -1;
+    }
+    for (k = 0; k < w->nmenu; k++) {
+        if (w->menu[k].id && strcmp(w->menu[k].id, id) == 0) break;
+    }
+    if (k >= w->nmenu) {
+        cg_log(CG_LOG_WARN, "cg_menu_remove_item：找不到 id 为 \"%s\" 的菜单项", id);
+        return -1;
+    }
+    n = menu_drop_rows(w, k, menu_subtree_end(w, k));
+    if (n > 0) cg_win_menu_rebuild(w);
+    return n;
+}
+
+/**
+ * @brief 清空菜单里的项（某个下拉的全部子项，或整个菜单）
+ * @param w 菜单控件；parent_id 下拉项的 id，NULL / "" = 整个菜单
+ * @return int 删掉的行数；parent_id 找不到 -1
+ */
+int cg_menu_clear_items(cg_widget_t *w, const char *parent_id)
+{
+    int parent, total = 0;
+
+    if (!want_menu(w, "cg_menu_clear_items")) return -1;
+    parent = menu_parent_of(w, parent_id, "cg_menu_clear_items");
+    if (parent == -2) return -1;
+
+    /* 从后往前删：每次删除都会平移后面的下标，倒着来就不用重算（也不会连带删错子树） */
+    for (int i = w->nmenu - 1; i >= 0; i--) {
+        if (w->menu[i].parent != parent) continue;
+        total += menu_drop_rows(w, i, menu_subtree_end(w, i));
+    }
+    if (total > 0) cg_win_menu_rebuild(w);
+    return total;
+}
+
+/** 定位要改的那一项：找到 + 不是动作项（文字/启用/勾选归动作管，不悄悄改） */
+static cg_menu_row_t *menu_edit_target(cg_widget_t *w, const char *id, const char *who)
+{
+    int k;
+
+    if (!want_menu(w, who)) return NULL;
+    if (!id || !*id) {
+        cg_log(CG_LOG_WARN, "%s：id 不能为空", who);
+        return NULL;
+    }
+    for (k = 0; k < w->nmenu; k++) {
+        if (w->menu[k].id && strcmp(w->menu[k].id, id) == 0) break;
+    }
+    if (k >= w->nmenu) {
+        cg_log(CG_LOG_WARN, "%s：找不到 id 为 \"%s\" 的菜单项", who, id);
+        return NULL;
+    }
+    if (w->menu[k].action && *w->menu[k].action) {
+        cg_log(CG_LOG_WARN, "%s：菜单项 \"%s\" 引用了动作 \"%s\" —— 它的文字/启用/勾选"
+                            "归动作管，本次不生效（要改就 cg_action_set_*）",
+               who, id, w->menu[k].action);
+        return NULL;
+    }
+    return &w->menu[k];
+}
+
+/**
+ * @brief 改某个菜单项的文字
+ * @details 想把一项变成分隔线（文字写成 "-"）**不允许** —— 那会让它的命令 id 与
+ *          "分隔线"这个身份不一致（该用 cg_menu_remove_item 删掉再加一条）。
+ */
+void cg_menu_set_item_text(cg_widget_t *w, const char *id, const char *text)
+{
+    cg_menu_row_t *r = menu_edit_target(w, id, "cg_menu_set_item_text");
+    const char    *txt = text ? text : "";
+
+    if (!r) return;
+    if (strcmp(txt, "-") == 0) {
+        cg_log(CG_LOG_WARN, "cg_menu_set_item_text：不能把菜单项改成 \"-\""
+                            "（那是分隔线的记号，用 cg_menu_remove_item 删掉再加一条）");
+        return;
+    }
+    free(r->text);
+    r->text = cg_str_dup(txt);
+    cg_win_menu_rebuild(w);
+}
+
+/**
+ * @brief 启用 / 灰掉某个菜单项
+ * @param w 菜单控件；id 项标识；enabled 非 0 = 可用
+ * @return void 无返回值
+ */
+void cg_menu_set_item_enabled(cg_widget_t *w, const char *id, int enabled)
+{
+    cg_menu_row_t *r = menu_edit_target(w, id, "cg_menu_set_item_enabled");
+
+    if (!r) return;
+    r->enabled = enabled ? 1 : 0;
+    cg_win_menu_rebuild(w);
+}
+
+/**
+ * @brief 给某个菜单项打勾 / 取消勾选
+ * @param w 菜单控件；id 项标识；checked 非 0 = 打勾
+ * @return void 无返回值
+ */
+void cg_menu_set_item_checked(cg_widget_t *w, const char *id, int checked)
+{
+    cg_menu_row_t *r = menu_edit_target(w, id, "cg_menu_set_item_checked");
+
+    if (!r) return;
+    r->checked = checked ? 1 : 0;
+    cg_win_menu_rebuild(w);
 }
 
 /** @brief 改窗口标题（同步后端与文档） */

@@ -48,6 +48,9 @@ typedef struct {
      *  启用与勾选跟随动作。 */
     char *action;
     int   checked;
+    /** 可用（1）/ 灰掉（0）。**建表时必须显式置 1**：memset 出来的 0 是"禁用"，
+     *  与 .cgui 的缺省语义（可用）相反。动作项由动作的 enabled 覆盖它。 */
+    int   enabled;
     int   parent;   /* 父项下标，-1 = 顶层 */
     int   popup;    /* 1 = 有子项，是个下拉 */
 } cg_menu_row_t;
@@ -406,6 +409,10 @@ void cg_win_restart_timer(cg_widget_t *w);
  *  直接调 cg_widget_set_enabled，它自己的契约要求把两个 HWND 都覆盖。
  *  无窗口时是空操作（自检/单测里就这么跑）。 */
 void cg_win_action_sync(cg_app_t *app, const char *name);
+/** 菜单行表变了（运行时增删改）：让后端重建窗口菜单栏。
+ *  menubutton 的弹出菜单不在这里 —— 它每次点击都现场重建，改完行表自然生效。
+ *  无窗口时是空操作（自检/单测里就这么跑）。 */
+void cg_win_menu_rebuild(cg_widget_t *w);
 /** 串口组件的到达轮询定时器（打开才转；同 timer 复用 ctrl_id 做 Win32 定时器 id） */
 void cg_win_restart_serial(cg_widget_t *w);
 

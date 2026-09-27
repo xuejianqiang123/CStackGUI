@@ -254,6 +254,13 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
 /** @brief 菜单按钮：在按钮下方弹出菜单，选中项直接派发 */
 void cgw_popup_menu_for(cg_app_t *app, cg_widget_t *w, HWND hwnd);
+
+/** @brief 按客户区尺寸重算窗口大小（补上菜单栏占掉的高度）。
+ *  挂上菜单栏之后、以及**运行时重建菜单栏之后**都要走它 —— 同一规则一份实现：
+ *  重建时忘了它，客户区就会少掉一条菜单栏的高度（界面整体上移、底部被裁）。
+ *  注：给 core 调的那个跨层入口叫 `cg_win_menu_rebuild`，声明在 core 的 cg_internal.h
+ *  （本仓口径：跨层 `cg_win_*`、win32 内部 `cgw_*`）。 */
+void cgw_menu_fit_client(cg_app_t *app);
 /** @brief 由控件的菜单项数组建一个 HMENU（调用方 DestroyMenu）。
  *  as_bar=1 建**菜单栏**（窗口挂载用，必须 CreateMenu）；as_bar=0 建弹出菜单
  *  （menubutton / TrackPopupMenu 用，必须 CreatePopupMenu）。

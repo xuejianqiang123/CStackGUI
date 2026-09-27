@@ -59,7 +59,7 @@ HMENU cgw_menu_build(const cg_widget_t *w, int as_bar)
         const char  *accel = NULL;
         int          act = (r->action && *r->action) ? cg_action_index(w->app, r->action) : -1;
         int          checked = r->checked;
-        int          enabled = 1;
+        int          enabled = r->enabled;   /* 行表是真相；动作项下面会被动作的值覆盖 */
         wchar_t     *wt;
         DWORD        flags = MF_STRING;
 
@@ -133,6 +133,71 @@ void cg_win_action_sync(cg_app_t *app, const char *name)
     }
     /* 菜单栏不会因为 EnableMenuItem 自己重画，得推它一把 */
     DrawMenuBar((HWND)app->hwnd);
+}
+
+/** @brief 窗口菜单栏是哪个控件：**第一个** type=="menu" 的
+ *  @details 与建窗时（cgw_win_init 里那段扫描）同一口径 —— 多出来的 menu 在建窗时就报过
+ *           "被忽略"，所以这里的"第一个"与当时的"那一个"永远是同一个。 */
+static cg_widget_t *bar_menu_of(cg_app_t *app)
+{
+    for (cg_widget_t *w = app->widgets; w; w = w->next) {
+        if (cgw_is_t(w, "menu")) return w;
+    }
+    return NULL;
+}
+
+/** @brief 按客户区尺寸重算窗口大小（补上菜单栏占掉的高度） */
+void cgw_menu_fit_client(cg_app_t *app)
+{
+    HWND h;
+    RECT cr, wr;
+    int  fw, fh;
+
+    if (!app || !app->hwnd) return;
+    h = (HWND)app->hwnd;
+    GetClientRect(h, &cr);
+    GetWindowRect(h, &wr);
+    fw = (wr.right - wr.left) - (cr.right - cr.left);
+    fh = (wr.bottom - wr.top) - (cr.bottom - cr.top);
+    SetWindowPos(h, NULL, 0, 0,
+                 cgw_scale_px(app, app->doc.width) + fw,
+                 cgw_scale_px(app, app->doc.height) + fh,
+                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+/**
+ * @brief 菜单行表变了之后重建窗口菜单栏
+ * @details 行表是**唯一的真相**，HMENU 只是一次投影 —— 所以"改完重建"就够了，
+ *          不需要维护两套状态（这也是整套运行时菜单 API 能做得这么小的原因）。
+ *          勾选与可用由 cgw_menu_build() 每次从行表读出来，不用另外同步。
+ *          menubutton 的弹出菜单不归这里管：它每次点击现场重建，改完行表自然生效。
+ */
+void cg_win_menu_rebuild(cg_widget_t *w)
+{
+    cg_app_t *app;
+    HWND      h;
+    HMENU     hm, old;
+
+    if (!w || !w->app || !w->app->hwnd) return;
+    app = w->app;
+    if (bar_menu_of(app) != w) return;          /* 不是窗口菜单栏：没有需要重建的东西 */
+    h = (HWND)app->hwnd;
+
+    hm = cgw_menu_build(w, 1);
+    if (!hm) return;
+
+    old = GetMenu(h);
+    if (w->nmenu > 0) {
+        SetMenu(h, hm);
+    } else {
+        /* 项被清空了：把菜单栏整个撤掉 —— 与建窗时"没有可点的项就不挂菜单"同一口径。
+         * SetMenu 不会替你销毁旧表，所以两条路都得自己 DestroyMenu。 */
+        DestroyMenu(hm);
+        SetMenu(h, NULL);
+    }
+    if (old) DestroyMenu(old);
+    cgw_menu_fit_client(app);   /* 菜单栏高度可能变了，客户区尺寸要重算 */
+    DrawMenuBar(h);
 }
 
 /** 工具栏按钮：没有图标，用「文字池 + BTNS_SHOWTEXT」做纯文字按钮 */
