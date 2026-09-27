@@ -11,6 +11,11 @@
  */
 
 /** @brief 弹对话框时的属主窗口：优先父控件，退回主窗口 */
+/**
+ * @brief 弹对话框时的属主窗口：优先父控件，退回主窗口
+ * @param parent 定位用的控件，可为 NULL
+ * @return HWND 属主窗口；都没有时为 NULL
+ */
 static HWND dialog_owner(const cg_widget_t *parent)
 {
     if (parent && parent->native) return (HWND)parent->native;
@@ -18,6 +23,11 @@ static HWND dialog_owner(const cg_widget_t *parent)
 }
 
 /** filter 写法沿用网页习惯 "文本|*.txt|全部|*.*"，转成 Win32 要的双 0 分隔 */
+/**
+ * @brief 把网页习惯的过滤器串转成文件对话框要的双 NUL 分隔宽串
+ * @param filter UTF-8 过滤器串，如 "文本|*.txt|全部|*.*"，可为 NULL / 空
+ * @return wchar_t* 新分配的宽串（调用方负责 free）；无内容或转换失败时 NULL
+ */
 static wchar_t *make_filter_w(const char *filter)
 {
     wchar_t *wf;

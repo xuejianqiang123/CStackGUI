@@ -263,6 +263,12 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND_END
 };
 
+/**
+ * @brief 程序入口：按命令行参数走自检或正常运行
+ * @param argc 参数个数
+ * @param argv 参数数组（argv[1] = .cgui 路径，或 --selftest）
+ * @return int 进程退出码（0 正常）
+ */
 int main(int argc, char **argv)
 {
     cg_app_desc_t desc;

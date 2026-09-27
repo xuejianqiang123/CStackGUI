@@ -584,7 +584,11 @@ int cg_ble_device_info(int idx, cg_ble_device_t *out)
  *  没有板子时把那段写出来只能是"看着对"，正是本项目一直在惩罚的东西（探针/断言的教训）。
  */
 
-/** @brief 把 BLUETOOTH_ADDRESS 的 rgBytes 拼成对外那个 64 位表示（rgBytes[5] 是最高一组） */
+/**
+ * @brief 把 BLUETOOTH_ADDRESS 的 rgBytes 拼成对外那个 64 位表示（rgBytes[5] 是最高一组）
+ * @param b 指向 6 字节地址原始字节的数组，小端存放（b[0] 是打印出来最后一组）
+ * @return unsigned long long 形如 0xAABBCCDDEEFF 的地址（即 AA:BB:CC:DD:EE:FF）
+ */
 static unsigned long long addr_of_bytes(const unsigned char *b)
 {
     unsigned long long v = 0;

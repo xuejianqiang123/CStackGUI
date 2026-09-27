@@ -9,6 +9,12 @@
 
 
 /** 把编辑框里的当前文字读回控件模型 */
+/**
+ * @brief 把编辑框里的当前文字读回控件模型
+ * @param w 目标控件，文本写回它的文字字段（并去掉回车）
+ * @param hwnd 编辑框窗口
+ * @return void 无返回值
+ */
 void cgw_pull_edit_text(cg_widget_t *w, HWND hwnd)
 {
     int len = GetWindowTextLengthW(hwnd);
@@ -36,6 +42,15 @@ void cgw_pull_edit_text(cg_widget_t *w, HWND hwnd)
 }
 
 /** 真正的映射：原生通知 -> CStackGUI 事件。cmd_id 是 WM_COMMAND 的 LOWORD。 */
+/**
+ * @brief 把原生通知归一成框架事件并派发
+ * @param app 所属应用
+ * @param w 发通知的控件
+ * @param hwnd 控件窗口
+ * @param code 通知码（按钮点击 / 内容变化 / 选择变化等）
+ * @param cmd_id 命令 ID，即命令消息的低字
+ * @return void 无返回值
+ */
 void cgw_notify_body(cg_app_t *app, cg_widget_t *w, HWND hwnd, int code, int cmd_id)
 {
     /* 菜单按钮：不派发 click，改成弹菜单（菜单项被选中时再派发 click） */
@@ -198,6 +213,13 @@ void cgw_notify_body(cg_app_t *app, cg_widget_t *w, HWND hwnd, int code, int cmd
 }
 
 /** WM_NOTIFY：标签页 / 树 / 表格 / 微调 的富通知都从这条路进来 */
+/**
+ * @brief 富通知入口：把标签页 / 树 / 表格 / 微调 / 月历 / 日期时间的通知派发成事件
+ * @param app 所属应用
+ * @param hdr 通知头，发通知的窗口用来反查控件、通知码决定分支
+ * @return LRESULT 一般返回 0；数值框自动方式的"点击箭头"返回 1（已自管位置与文本）；
+ *         自绘滑块的绘制通知返回皮肤绘制结果
+ */
 LRESULT cgw_notify_common(cg_app_t *app, const NMHDR *hdr)
 {
     cg_widget_t *w = cgw_widget_by_hwnd(app, hdr->hwndFrom);

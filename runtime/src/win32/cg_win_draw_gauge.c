@@ -14,7 +14,14 @@
  */
 #define CG_GAUGE_SS 4
 
-/** @brief 形状绘制回调：dc 是 s 倍大小的内存 DC，rc 是 s 倍大小的矩形（在 s 倍坐标空间里画） */
+/**
+ * @brief 形状绘制回调：dc 是 s 倍大小的内存 DC，rc 是 s 倍大小的矩形（在 s 倍坐标空间里画）
+ * @param dc 放大后的内存 DC（当前绘制目标）
+ * @param rc 放大后坐标空间里的绘制矩形
+ * @param s 超采样倍数
+ * @param ctx 调用方透传的上下文（应用与控件）
+ * @return void 无返回值
+ */
 typedef void (*gauge_shape_fn)(HDC dc, const RECT *rc, int s, void *ctx);
 
 /** @brief 传给形状回调的公共参数（背景取色要用 app，样式/状态要用 widget） */

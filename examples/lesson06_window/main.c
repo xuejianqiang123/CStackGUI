@@ -324,12 +324,9 @@ static void on_btn_topmost_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief 「隐藏 1 秒再显示」按钮：演示 show / hide 事件
- * @param self 被点的按钮
- * @param ev click
- * @param user 未使用
+ * @brief 1 秒到点：把窗口重新显示出来（定时器回调）
+ * @param user 挂进去的应用指针
  * @return void 无返回值
- * @note `cg_set_timer()` 是**一次性**的：到点触发后就回收了，不会自动重挂 —— 周期性任务要自己重挂。
  */
 static void show_again(void *user)
 {
@@ -339,6 +336,14 @@ static void show_again(void *user)
     logev(app, "show：窗口又被显示出来了");
 }
 
+/**
+ * @brief 「隐藏 1 秒再显示」按钮：演示显示 / 隐藏事件
+ * @param self 被点的按钮
+ * @param ev 事件类型（click）
+ * @param user 未使用
+ * @return void 无返回值
+ * @note 定时器是**一次性**的：到点触发后就回收了，不会自动重挂 —— 周期性任务要自己重挂
+ */
 static void on_btn_hide_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -370,6 +375,12 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND_END
 };
 
+/**
+ * @brief 程序入口：按命令行参数走自检或正常运行
+ * @param argc 参数个数
+ * @param argv 参数数组（argv[1] = .cgui 路径，或 --selftest）
+ * @return int 进程退出码（0 正常）
+ */
 int main(int argc, char **argv)
 {
     cg_app_desc_t desc;

@@ -6,6 +6,12 @@
 #include "cg_win_internal.h"
 
 /** 图标按钮：把 src 图片按比例居中画在按钮里（没有图就画个占位框） */
+/**
+ * @brief 把图标按钮的图片按比例居中画进按钮，没图时画个占位框
+ * @param w 图标按钮控件（图片取自它的位图字段，底色取样式或背后色）
+ * @param dis 系统传入的自绘结构，提供目标 DC 与项矩形
+ * @return void 无返回值
+ */
 static void draw_icon_button(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 {
     RECT   rc = dis->rcItem;
@@ -67,12 +73,24 @@ static void draw_icon_button(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
  */
 
 /** @brief 取控件前景色；style.fg 未设置时用 fallback */
+/**
+ * @brief 取控件前景色，未设置时返回给定兜底色
+ * @param w 目标控件
+ * @param fallback 前景色为"无"时采用的 0xRRGGBB 兜底色
+ * @return unsigned 0xRRGGBB 前景色
+ */
 static unsigned widget_fg_or(const cg_widget_t *w, unsigned fallback)
 {
     return (w->style.fg != CG_COLOR_NONE) ? w->style.fg : fallback;
 }
 
 /** 颜色选择：整个按钮就是一块当前颜色，边上勾一圈边框 */
+/**
+ * @brief 把颜色选择控件画成一块当前颜色并勾一圈边框
+ * @param w 颜色选择控件（值为 0xRRGGBB，未设时用默认紫）
+ * @param dis 系统传入的自绘结构，提供目标 DC 与项矩形
+ * @return void 无返回值
+ */
 static void draw_color_swatch(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 {
     unsigned rgb = (w->value > 0) ? (unsigned)w->value : 0x6750A4;
@@ -83,6 +101,12 @@ static void draw_color_swatch(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 }
 
 /** 徽章：圆角小圆片 + 文字，底色用 style.bg（没设用品牌红） */
+/**
+ * @brief 把徽章画成胶囊形圆角底加居中文字
+ * @param w 徽章控件（文字取自它，底色取样式，未设用品牌红）
+ * @param dis 系统传入的自绘结构，提供目标 DC 与项矩形
+ * @return void 无返回值
+ */
 static void draw_badge(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 {
     RECT rc = dis->rcItem;
@@ -105,6 +129,12 @@ static void draw_badge(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 }
 
 /** 标签片：圆角底 + 同色系边框 + 文字，像网页里的 tag */
+/**
+ * @brief 把标签片画成圆角底、同色系描边加居中文字
+ * @param w 标签片控件（文字、底色、描边取自它与样式）
+ * @param dis 系统传入的自绘结构，提供目标 DC 与项矩形
+ * @return void 无返回值
+ */
 static void draw_tag(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 {
     RECT rc = dis->rcItem;
@@ -133,6 +163,12 @@ static void draw_tag(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 }
 
 /** 评分：★☆ 按值画，样式字体没给就用默认大小 */
+/**
+ * @brief 按当前值画出实心与空心星形的评分
+ * @param w 评分控件（星数由量程给出、当前值在 value、字号取样式）
+ * @param dis 系统传入的自绘结构，提供目标 DC 与项矩形
+ * @return void 无返回值
+ */
 static void draw_rate(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 {
     RECT rc = dis->rcItem;
@@ -183,6 +219,12 @@ static void draw_rate(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 }
 
 /** 分页：<  页码  >，点两侧翻页（点击判定在 cgw_FocusProc） */
+/**
+ * @brief 画出分页的左右翻页符号与"当前页 / 总页数"
+ * @param w 分页控件（当前页在 value、页区间在量程）
+ * @param dis 系统传入的自绘结构，提供目标 DC 与项矩形
+ * @return void 无返回值
+ */
 static void draw_pagination(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 {
     RECT rc = dis->rcItem;
@@ -205,13 +247,23 @@ static void draw_pagination(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
 }
 
 /** WM_DRAWITEM：自绘控件统一分发（绘制本体在 cg_skin.c / 各 draw_* 函数） */
+/**
+ * @brief 按控件类型把自绘绘制转发给对应皮肤或本文件的绘制函数
+ * @param app 应用对象，用来按控件句柄反查控件
+ * @param dis 系统传入的自绘结构，提供目标 DC 与项矩形（可能是双缓冲的内存 DC）
+ * @return void 无返回值
+ */
 static void cgw_draw_own_item_impl(cg_app_t *app, const DRAWITEMSTRUCT *dis);  /* 在下面 */
 
-/** @brief owner-draw 统一分发（双缓冲）：整帧画进内存位图后一次贴屏
- *  @details 各皮肤是"填底 → 画形状 → 画文字"的多步直绘，每步都直接落在屏幕
- *           DC 上，中间态可见 —— 复选框/开关一重绘，文字先消失一帧再回来，
- *           悬停/点击的高频重绘下就是肉眼闪烁（2026-09-25 用户报"复选框的
- *           文字也会闪烁"）。与圆环/标签同一治法：内存位图画好一次 BitBlt。 */
+/**
+ * @brief 自绘控件的统一入口（双缓冲）：整帧画进内存位图后一次贴屏
+ * @param app 应用对象
+ * @param dis 系统传入的自绘结构，提供目标 DC 与项矩形；为空或矩形没有正面积则直接返回
+ * @return void 无返回值
+ * @note 各皮肤是"填底 -> 画形状 -> 画文字"的多步直绘，每步都直接落在屏幕 DC 上，
+ *       中间态可见 —— 复选框 / 开关一重绘，文字先消失一帧再回来，悬停 / 点击的高频重绘下
+ *       就是肉眼闪烁（2026-09-25 用户报过）。与圆环 / 标签同一治法：内存位图画好一次贴上屏
+ */
 void cgw_draw_own_item(cg_app_t *app, const DRAWITEMSTRUCT *dis)
 {
     int wpx, hpx;
@@ -245,6 +297,12 @@ void cgw_draw_own_item(cg_app_t *app, const DRAWITEMSTRUCT *dis)
     DeleteDC(mem);
 }
 
+/**
+ * @brief 按控件类型把自绘绘制转发给对应皮肤或本文件的绘制函数
+ * @param app 应用对象，用来按控件句柄反查控件
+ * @param dis 系统传入的自绘结构，提供目标 DC 与项矩形（可能是双缓冲的内存 DC）
+ * @return void 无返回值
+ */
 static void cgw_draw_own_item_impl(cg_app_t *app, const DRAWITEMSTRUCT *dis)
 {
     cg_widget_t *w = cgw_widget_by_hwnd(app, dis->hwndItem);
@@ -265,8 +323,11 @@ static void cgw_draw_own_item_impl(cg_app_t *app, const DRAWITEMSTRUCT *dis)
 }
 
 /**
- * @brief WM_COMMAND 入口：反查控件后走 cgw_notify_body（带防重入保护）
- * @param app 所属应用；hwnd 发通知的控件窗口；code 通知码；cmd_id 命令 ID
+ * @brief 控件通知的入口：反查控件后转给通知处理主体（带防重入保护）
+ * @param app 所属应用
+ * @param hwnd 发通知的控件窗口
+ * @param code 通知码（如按钮点击 / 编辑框内容变化）
+ * @param cmd_id 命令 ID，即命令消息的低字
  * @return void 无返回值
  */
 void cgw_notify_from(cg_app_t *app, HWND hwnd, int code, int cmd_id)

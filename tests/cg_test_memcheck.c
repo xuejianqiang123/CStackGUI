@@ -17,10 +17,37 @@
 
 #include <stddef.h>
 
+/**
+ * @brief 链接器换名后的真实 malloc（供包装函数转调）
+ * @param size 要分配的字节数
+ * @return void* 系统分配结果
+ */
 void *__real_malloc(size_t size);
+/**
+ * @brief 链接器换名后的真实 calloc（供包装函数转调）
+ * @param count 元素个数
+ * @param size 每个元素的字节数
+ * @return void* 系统分配结果
+ */
 void *__real_calloc(size_t count, size_t size);
+/**
+ * @brief 链接器换名后的真实 realloc（供包装函数转调）
+ * @param ptr 要调整大小的块
+ * @param size 新的大小（字节）
+ * @return void* 系统分配结果
+ */
 void *__real_realloc(void *ptr, size_t size);
+/**
+ * @brief 链接器换名后的真实 free（供包装函数转调）
+ * @param ptr 要释放的块
+ * @return void 无返回值
+ */
 void  __real_free(void *ptr);
+/**
+ * @brief 链接器换名后的真实字符串复制（供包装函数转调）
+ * @param s 要复制的字符串
+ * @return char* 系统分配结果
+ */
 char *__real__strdup(const char *s);
 
 /** 当前存活块数：分配 +1，释放 -1（free(NULL) 不算，与分配侧对称） */

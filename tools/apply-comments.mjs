@@ -72,8 +72,19 @@ if (blocks.length === 0) {
 
 /* ---------------- DOC 模式：按函数名定位它正上方的注释块 ---------------- */
 
-/** 找函数定义行：只认顶格行，形如 `<返回类型> <名字>(` */
+/** 这个匹配行是不是"带函数体的那个"（签名收在 ')' 上，下一非空行是 '{'） */
+function isDefinition(lines, i) {
+  let j = i;
+  while (j < lines.length && j - i < 12 && !/\)\s*$/.test(lines[j])) j++;
+  if (j >= lines.length || !/\)\s*$/.test(lines[j])) return false;
+  let k = j + 1;
+  while (k < lines.length && lines[k].trim() === '') k++;
+  return k < lines.length && /^\s*\{/.test(lines[k]);
+}
+
+/** 找函数行：优先**定义**（带函数体），没有才退回第一处声明 */
 function findFunctionLine(lines, name) {
+  const hits = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (line === '' || /^\s/.test(line)) continue;      // 只看顶格
@@ -82,9 +93,10 @@ function findFunctionLine(lines, name) {
     // 签名，返回类型与名字之间没有空格，用 `\s+` 会一条都匹配不到（2026-09-28 踩过：
     // 一次落盘 9 块报"找不到函数"，全是这形状）
     const m = line.match(/^([A-Za-z_][\w\s*]*?)\s*([A-Za-z_]\w*)\s*\(/);
-    if (m && m[2] === name) return i;
+    if (m && m[2] === name) hits.push(i);
   }
-  return -1;
+  for (const i of hits) if (isDefinition(lines, i)) return i;
+  return hits.length ? hits[0] : -1;
 }
 
 /** 函数上方紧邻的注释块范围 [start, end]；没有返回 null（中间的连续空行会跳过） */
@@ -94,7 +106,8 @@ function docRangeAbove(lines, fnLine) {
   if (k < 0 || !/\*\/\s*$/.test(lines[k])) return null;
   for (let m = k; m >= 0; m--) {
     if (/^\s*\/\*\*?/.test(lines[m])) {
-      if (m === k) break;                                // 同一行既开又闭（单行注释）不算块
+      // 单行块（m === k）只认 `/**` 那种文档块，好把 `/* ---- 分节 ---- */` 这类分隔线留下
+      if (m === k && !/^\s*\/\*\*/.test(lines[m])) return null;
       return [m, k];
     }
   }

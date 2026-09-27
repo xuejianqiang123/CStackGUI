@@ -18,6 +18,11 @@ int g_win_in_notify = 0;
 cg_app_t *g_win_app = NULL;
 
 /** @brief 鼠标消息的按键组合 -> 1=Ctrl 2=Shift 4=Alt（与 cg_win_main.c 的窗口级口径一致） */
+/**
+ * @brief 鼠标消息的按键组合 -> 功能键状态（与窗口级同一口径）
+ * @param wp 鼠标消息的附加参数（按键位）
+ * @return int 1=Ctrl 2=Shift 4=Alt 的按位组合
+ */
 static int widget_mods_from_mouse(WPARAM wp)
 {
     int m = 0;
@@ -28,6 +33,10 @@ static int widget_mods_from_mouse(WPARAM wp)
 }
 
 /** @brief 键盘消息的按键组合 -> 1=Ctrl 2=Shift 4=Alt */
+/**
+ * @brief 键盘消息的按键组合 -> 功能键状态
+ * @return int 1=Ctrl 2=Shift 4=Alt 的按位组合
+ */
 static int widget_mods_from_key(void)
 {
     int m = 0;
@@ -38,8 +47,10 @@ static int widget_mods_from_key(void)
 }
 
 /**
- * @brief 评分/分页的点击判定：按 x 落点换算成星数或翻页方向并派发 change
- * @param w rate / pagination 控件；hwnd 控件窗口；x 点击横坐标（客户区）
+ * @brief 评分 / 分页的点击判定：按横坐标落点换算成星数或翻页方向并派发变化事件
+ * @param w 评分 / 分页控件
+ * @param hwnd 控件窗口
+ * @param x 点击横坐标（客户区）
  * @return void 无返回值
  */
 static void rate_or_pag_click(cg_widget_t *w, HWND hwnd, int x)
@@ -77,6 +88,12 @@ static void rate_or_pag_click(cg_widget_t *w, HWND hwnd, int x)
 
 /**
  * @brief 全控件统一子类：焦点变化转事件、通知消息上浮主窗口、评分分页按点判定
+ * @param hwnd 子类窗口句柄
+ * @param msg 窗口消息号
+ * @param wp 消息的附加参数
+ * @param lp 消息的附加参数
+ * @param id 子类 ID（未使用）
+ * @param ref 子类引用数据（未使用）
  * @return LRESULT 交回原窗口过程
  */
 LRESULT CALLBACK cgw_FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
@@ -306,6 +323,11 @@ LRESULT CALLBACK cgw_FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
 }
 
 /** @brief 给控件挂统一子类（焦点事件 / 通知转发 / 评分分页按点判定） */
+/**
+ * @brief 给控件挂统一子类（焦点事件 / 通知转发 / 评分分页按点判定）
+ * @param h 要挂子类的控件窗口
+ * @return void 无返回值
+ */
 void cgw_subclass_for_events(HWND h)
 {
     SetWindowSubclass(h, cgw_FocusProc, 1, 0);
@@ -317,6 +339,12 @@ void cgw_subclass_for_events(HWND h)
  * 文本用 LPSTR_TEXTCALLBACK 现取，cg_widget_set_hint 改完立即生效。
  */
 /** @brief 把控件注册成 tooltip 的一个 tool（文本走 LPSTR_TEXTCALLBACK 现取） */
+/**
+ * @brief 把控件注册成工具提示的一个条目（文本按需回取）
+ * @param tooltip 整窗那个工具提示控件窗口
+ * @param forw 要注册的控件窗口
+ * @return void 无返回值
+ */
 void cgw_tooltip_add_for(HWND tooltip, HWND forw)
 {
     TOOLINFOW ti;
@@ -330,6 +358,11 @@ void cgw_tooltip_add_for(HWND tooltip, HWND forw)
 }
 
 /** @brief hint 变化后同步 tooltip：按需新增 / 删除 / 更新 tool */
+/**
+ * @brief 悬停提示变了之后同步工具提示：按需新增 / 删除 / 更新条目
+ * @param w 目标控件
+ * @return void 无返回值
+ */
 void cg_win_set_hint(cg_widget_t *w)
 {
     if (!w || !w->native || !g_win_app) return;
@@ -354,6 +387,12 @@ void cg_win_set_hint(cg_widget_t *w)
 }
 
 /** @brief 重设时钟控件的 Win32 定时器（period=0 即停止；id 复用 ctrl_id） */
+/**
+ * @brief 重设时钟控件的系统定时器（周期为 0 即停止）
+ * @param w 目标控件
+ * @return void 无返回值
+ * @note 拿控件的命令 id 当系统定时器 id 复用
+ */
 void cg_win_restart_timer(cg_widget_t *w)
 {
     if (!w || !w->app || !w->app->hwnd) return;
@@ -364,8 +403,12 @@ void cg_win_restart_timer(cg_widget_t *w)
     }
 }
 
-/** @brief 重设串口组件的到达轮询定时器（链路开着才转；id 复用 ctrl_id，同 timer 的招）。
- *  50ms 与 CG_TICK_MS 同拍：到达事件的延迟上限就是这一拍，再快只是空转。 */
+/**
+ * @brief 重设串口组件的到达轮询定时器（链路开着才转）
+ * @param w 目标控件
+ * @return void 无返回值
+ * @note 50ms 与心跳同拍：到达事件的延迟上限就是这一拍，再快只是空转；定时器 id 也复用命令 id
+ */
 void cg_win_restart_serial(cg_widget_t *w)
 {
     if (!w || !w->app || !w->app->hwnd) return;

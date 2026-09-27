@@ -180,7 +180,13 @@ static void image_draw(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
     }
 }
 
-/** @brief 图片一帧适配器：画进内存位图 */
+/**
+ * @brief 图片一帧适配器：画进内存位图
+ * @param mem 内存位图 DC（双缓冲的离屏 DC）
+ * @param rc 离屏位图矩形（左上角为 0,0）
+ * @param vctx 上下文（应用与控件）
+ * @return void 无返回值
+ */
 static void image_body(HDC mem, const RECT *rc, void *vctx)
 {
     image_ctx_t *c = (image_ctx_t *)vctx;
@@ -238,7 +244,9 @@ static void progress_body(HDC mem, const RECT *rc, void *vctx)
 }
 /**
  * @brief 画圆环中间那一行百分比文字
- * @param dc 目标 DC；w 控件；rc 客户区
+ * @param dc 目标 DC
+ * @param w 圆环控件
+ * @param rc 客户区矩形（文字居中画在里面）
  * @details 圆环本身（底色 / 轨道 / 进度弧）在 cg_skin.c 的 `cg_skin_draw_ring()` 里
  *          用 GDI+ 抗锯齿画（GDI 的粗弧锯齿非常明显）；文字要用本文件的 `cgw_font_for()`，
  *          所以留在调用方画完圆环之后补。

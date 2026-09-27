@@ -161,7 +161,10 @@ static void peer_remove(int idx)
     s_biz.peers[s_biz.n_peer] = NULL;
 }
 
-/** @brief 现在有没有一条能收发的链路（客户端连接、服务端已收到连接、或已打开的 UDP 端口） */
+/**
+ * @brief 现在有没有一条能收发的链路（客户端连接 / 服务端已收到连接 / 已打开的 UDP 端口）
+ * @return int 1 = 至少有一条链路；0 = 什么都没有
+ */
 static int has_link(void)
 {
     return (s_biz.cli != NULL) || (s_biz.udp != NULL) || (s_biz.n_peer > 0);
@@ -319,7 +322,11 @@ static int recv_udp(cg_app_t *app, cg_widget_t *term)
     return got;
 }
 
-/** @brief 曲线推一个点：这一秒收到的字节数，并按需自动扩 Y 轴上限 */
+/**
+ * @brief 曲线推一个点：这一秒收到的字节数，并按需自动扩纵轴上限
+ * @param app 所属应用
+ * @return void 无返回值
+ */
 static void push_rate_point(cg_app_t *app)
 {
     cg_widget_t *cht = cg_find(app, "cht_rate");
@@ -418,13 +425,20 @@ static void poll_tick(void *user)
     }
 }
 
-/** @brief 挂上轮询定时器（已经在跑就不重复挂） */
+/**
+ * @brief 挂上轮询定时器（已经在跑就不重复挂）
+ * @param app 所属应用
+ * @return void 无返回值
+ */
 static void start_poll(cg_app_t *app)
 {
     if (!s_biz.poll) s_biz.poll = cg_set_timer(app, POLL_MS, poll_tick, app);
 }
 
-/** @brief 撤掉轮询定时器（NULL 安全，重复调用没关系） */
+/**
+ * @brief 撤掉轮询定时器（空指针安全，重复调用没关系）
+ * @return void 无返回值
+ */
 static void stop_poll(void)
 {
     if (s_biz.poll) {

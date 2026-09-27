@@ -763,7 +763,13 @@ static int multi_line_at(cg_app_t *app, int idx, char *out, int cap)
     return 0;
 }
 
-/** 组帧（定义在本节后面的"协议组帧"里；调度要用它，所以在调度之前先声明） */
+/**
+ * @brief 组帧（定义在本文件后面的「协议组帧」一节；调度要用它，所以在调度之前先声明）
+ * @param app 所属应用
+ * @param out 输出缓冲
+ * @param cap 输出缓冲大小
+ * @return int 大于 0 = 帧长；-1 = 十六进制写错；-2 = 参数越界或放不下
+ */
 static int proto_build_now(cg_app_t *app, void *out, int cap);
 
 /**
@@ -831,9 +837,9 @@ static void sched_tick(void *user)
 /**
  * @brief 起发送调度
  * @param app 所属应用
- * @param multi 0 = 定时发单条；1 = 多条依次
- * @param loop 多条是否循环
- * @return void
+ * @param kind 发什么：0 = 定时发单条；1 = 多条依次；2 = 协议组帧那一帧
+ * @param loop 多条是否循环（kind = 1 时有意义）
+ * @return void 无返回值
  */
 static void sched_start(cg_app_t *app, int kind, int loop)
 {
@@ -1547,7 +1553,11 @@ static void on_destroy(cg_widget_t *self, cg_event_t ev, void *user)
 
 /* ------------------------------------------------------------ 演示模式（--demo） */
 
-/** 真链路演示的收尾汇总（定义在下面，这里先声明：real_demo 挂定时器要用） */
+/**
+ * @brief 真链路演示的收尾汇总（定义在下面，这里先声明：real_demo 挂定时器要用）
+ * @param user 挂进去的应用指针
+ * @return void 无返回值
+ */
 static void demo_report(void *user);
 
 /**
@@ -1639,9 +1649,9 @@ static void real_demo(cg_app_t *app)
 }
 
 /**
- * @brief 真链路演示的收尾汇总：RX 收了多少、切了几帧、自动保存文件建了没有
- * @param user 挂进去的 cg_app_t
- * @return void
+ * @brief 真链路演示的收尾汇总：收了多少、切了几帧、自动保存文件建了没有
+ * @param user 挂进去的应用指针
+ * @return void 无返回值
  */
 static void demo_report(void *user)
 {
