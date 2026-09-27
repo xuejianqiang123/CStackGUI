@@ -68,6 +68,10 @@ static const cg_node_t *child_by_id(const cg_node_t *parent, const char *id)
 }
 
 /** @brief 窗口属性与控件树的骨架 */
+/**
+ * @brief 窗口属性与控件树的骨架
+ * @return void 无返回值
+ */
 static void test_doc_skeleton(void)
 {
     char      err[256];
@@ -138,6 +142,10 @@ static void test_doc_skeleton(void)
 }
 
 /** @brief events 对象 -> 按事件枚举下标存的回调名 */
+/**
+ * @brief events 对象 -> 按事件枚举下标存的回调名
+ * @return void 无返回值
+ */
 static void test_doc_events(void)
 {
     char      err[256];
@@ -175,6 +183,10 @@ static void test_doc_events(void)
 }
 
 /** @brief 结构化内容：items / nodes / columns / rows */
+/**
+ * @brief 结构化内容：条目 / 节点 / 列 / 行
+ * @return void 无返回值
+ */
 static void test_doc_structured(void)
 {
     char      err[256];
@@ -235,6 +247,10 @@ static void test_doc_structured(void)
 }
 
 /** @brief 状态字段与"越界值修正"：这些自动修正决定了界面不会出现非法状态 */
+/**
+ * @brief 状态字段与"越界值修正"：这些自动修正决定了界面不会出现非法状态
+ * @return void 无返回值
+ */
 static void test_doc_state_clamp(void)
 {
     char      err[256];
@@ -285,6 +301,10 @@ static void test_doc_state_clamp(void)
 }
 
 /** @brief 能省的字段都省掉时的兜底行为（手写小 .cgui 会用到） */
+/**
+ * @brief 能省的字段都省掉时的兜底行为（手写小 .cgui 会用到）
+ * @return void 无返回值
+ */
 static void test_doc_defaults(void)
 {
     char      err[256];
@@ -324,6 +344,10 @@ static void test_doc_defaults(void)
 }
 
 /** @brief 坏文档必须报错，并且给出能定位的原因 */
+/**
+ * @brief 坏文档必须报错，并且给出能定位的原因
+ * @return void 无返回值
+ */
 static void test_doc_errors(void)
 {
     char      err[256];
@@ -370,6 +394,10 @@ static void test_doc_errors(void)
 }
 
 /** @brief cg_doc_dump 之前只有 --selftest 走过，这里单独盯一下 */
+/**
+ * @brief 文档打印之前只有自检走过，这里单独盯一下
+ * @return void 无返回值
+ */
 static void test_doc_dump(void)
 {
     char      err[256];
@@ -394,11 +422,11 @@ static void test_doc_dump(void)
 }
 
 /**
- * @brief 老写法自动升级：multiedit / spinner 已合并进 edit（2026-09-22）
- * @details 这两类型名从 k_kinds 删掉之后，未知类型是**整份文档解析失败**，
- *          所以解析层必须留兼容映射。这里盯的就是它：映射后的字段要正好等于
- *          以前写死在 style_of 里的那套（多行 + 纵向滚动 / 整数过滤 + 调节器）。
- *          用户手上那些老工程全靠这段代码还能打开，回归一次就是灾难。
+ * @brief 老写法自动升级：多行编辑框 / 调节器已合并进 edit（2026-09-22）
+ * @return void 无返回值
+ * @note 这两类型名从类型表删掉之后，未知类型是**整份文档解析失败**，所以解析层必须留兼容映射。
+ *       这里盯的就是它：映射后的字段要正好等于以前写死的那套（多行 + 纵向滚动 / 整数过滤 + 调节器）。
+ *       用户手上那些老工程全靠这段代码还能打开，回归一次就是灾难
  */
 static void test_doc_legacy_alias(void)
 {
@@ -450,6 +478,10 @@ static void test_doc_legacy_alias(void)
 }
 
 /** @brief 串口组件（serial）：字段解析、缺省回退、越界修正 */
+/**
+ * @brief 串口组件：字段解析、缺省回退、越界修正
+ * @return void 无返回值
+ */
 static void test_doc_serial(void)
 {
     static const char *doc_text =

@@ -41,6 +41,7 @@ static int s_mem_unreliable = 0;
  * @brief 注册一个套件（框架内部用，套件文件通过 CG_TEST_SUITE 宏调用）
  * @param name 套件名
  * @param fn 测试函数
+ * @return void 无返回值（超出上限会报 stderr 并计入丢弃计数）
  */
 void cg_test_register(const char *name, cg_test_fn fn)
 {
@@ -63,6 +64,7 @@ void cg_test_register(const char *name, cg_test_fn fn)
  * @brief 断言真假
  * @param what 这条断言在说什么
  * @param cond 非 0 算过
+ * @return void 无返回值
  */
 void cg_test_ok(const char *what, int cond)
 {
@@ -81,6 +83,7 @@ void cg_test_ok(const char *what, int cond)
  * @param what 这条断言在说什么
  * @param got 实际值
  * @param want 期望值
+ * @return void 无返回值
  */
 void cg_test_int(const char *what, long long got, long long want)
 {
@@ -99,6 +102,7 @@ void cg_test_int(const char *what, long long got, long long want)
  * @param what 这条断言在说什么
  * @param got 实际字符串，可为 NULL
  * @param want 期望字符串，可为 NULL
+ * @return void 无返回值
  */
 void cg_test_str(const char *what, const char *got, const char *want)
 {
@@ -118,6 +122,7 @@ void cg_test_str(const char *what, const char *got, const char *want)
 /**
  * @brief 打一行说明（不计入断言数）
  * @param text 要打印的文本
+ * @return void 无返回值
  */
 void cg_test_note(const char *text)
 {
@@ -125,6 +130,12 @@ void cg_test_note(const char *text)
 }
 
 /** @brief 套件名是否匹配 --grep 的子串（ASCII 忽略大小写） */
+/**
+ * @brief 套件名是否匹配名字过滤的子串（ASCII 忽略大小写）
+ * @param name 套件名
+ * @param pat 要匹配的子串；NULL 或空串表示全匹配
+ * @return int 1 = 匹配；0 = 不匹配
+ */
 static int name_matches(const char *name, const char *pat)
 {
     size_t plen;
@@ -147,8 +158,9 @@ static int name_matches(const char *name, const char *pat)
 }
 
 /**
- * @brief 跑一个套件：打印分节、跑它、报这一节的失败数（--memcheck 时量存活块增量）
+ * @brief 跑一个套件：打印分节、跑它、报这一节的失败数（内存检查时量存活块增量）
  * @param s 要跑的套件
+ * @return void 无返回值
  */
 static void run_one(const cg_test_suite_t *s)
 {
@@ -173,6 +185,11 @@ static void run_one(const cg_test_suite_t *s)
 }
 
 /** @brief 按过滤结果跑一遍全部套件，返回跑了的套件数 */
+/**
+ * @brief 按过滤结果跑一遍全部套件
+ * @param grep 名字子串过滤条件；NULL 表示全都跑
+ * @return int 实际跑了的套件数
+ */
 static int run_all(const char *grep)
 {
     int ran = 0;

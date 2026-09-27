@@ -14,6 +14,10 @@
 #include <string.h>
 
 /** 五种校验各自拼一帧，逐字节对上独立算过的期望值 */
+/**
+ * @brief 五种校验各自拼一帧，逐字节对上独立算过的期望值
+ * @return void 无返回值
+ */
 static void test_proto_sum(void)
 {
     static const unsigned char k_d2[2] = { 0x00, 0x6B };
@@ -117,6 +121,10 @@ static void test_proto_sum(void)
 }
 
 /** 拆回来：健帧通过、坏帧按原因分别报 -2 / -3 / -1 */
+/**
+ * @brief 拆回来：健帧通过、坏帧按原因分别报不同错误码
+ * @return void 无返回值
+ */
 static void test_proto_parse(void)
 {
     static const unsigned char k_d4[4] = { 0x00, 0x6B, 0x00, 0x03 };
@@ -189,6 +197,10 @@ static void test_proto_parse(void)
 }
 
 /** 参数越界与"不越界写"：金丝雀两字节守着输出缓冲 */
+/**
+ * @brief 参数越界与"不越界写"：金丝雀两字节守着输出缓冲
+ * @return void 无返回值
+ */
 static void test_proto_guard(void)
 {
     static const unsigned char k_d2[2] = { 0x00, 0x6B };

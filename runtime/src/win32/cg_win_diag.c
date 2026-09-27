@@ -15,6 +15,12 @@
 #include <wchar.h>      /* wcsrchr / _snwprintf */
 
 /** @brief 取 %LOCALAPPDATA%（UTF-8）；拿不到写空串 */
+/**
+ * @brief 取本机用户数据目录（UTF-8）；拿不到写空串
+ * @param out 输出缓冲；写 UTF-8 路径，保证以 NUL 结尾
+ * @param out_size out 的容量（字节）
+ * @return void 无返回值（环境变量缺失或缓冲不足时 out 为空串）
+ */
 static void diag_localappdata(char *out, int out_size)
 {
     wchar_t wbuf[1024];
@@ -26,6 +32,11 @@ static void diag_localappdata(char *out, int out_size)
 }
 
 /** @brief 取路径的文件名部分（兼容 \\ 与 /） */
+/**
+ * @brief 取路径的文件名部分（兼容反斜杠与斜杠）
+ * @param path 待切分的路径（窄字符）；调用方保证非空
+ * @return const char * 指向文件名起始处；指向 path 内部，调用方不得释放
+ */
 static const char *diag_base(const char *path)
 {
     const char *s1 = strrchr(path, '\\');
@@ -35,6 +46,11 @@ static const char *diag_base(const char *path)
 }
 
 /** @brief 未处理异常：写日志 + 弹一次，然后让进程照常结束 */
+/**
+ * @brief 未处理异常：写日志 + 弹一次，然后让进程照常结束
+ * @param ep 异常上下文；提供异常码、出错地址与访问冲突参数
+ * @return LONG 固定返回"已处理"，交回系统继续终结进程
+ */
 static LONG WINAPI diag_on_crash(EXCEPTION_POINTERS *ep)
 {
     DWORD code = (ep && ep->ExceptionRecord) ? ep->ExceptionRecord->ExceptionCode : 0;
@@ -93,6 +109,12 @@ static LONG WINAPI diag_on_crash(EXCEPTION_POINTERS *ep)
 }
 
 /** @brief 弹一个阻塞式错误框（UTF-8 入参）。给 core 用的致命错误出口 */
+/**
+ * @brief 弹一个阻塞式错误框（UTF-8 入参）；给运行时内核用的致命错误出口
+ * @param title 标题栏文字（UTF-8）；NULL 时用 "CStackGUI"
+ * @param text 正文文字（UTF-8）；NULL 时用空串
+ * @return void 无返回值（阻塞到用户点确定）
+ */
 void cg_fatal_dialog(const char *title, const char *text)
 {
     wchar_t *wt = cgw_wc_from_utf8(title ? title : "CStackGUI");
@@ -106,6 +128,10 @@ void cg_fatal_dialog(const char *title, const char *text)
 }
 
 /** @brief 启动诊断：定位日志文件、必要时轮转、装异常兜底、记一行启动信息 */
+/**
+ * @brief 启动诊断：定位日志文件、必要时轮转、装异常兜底、记一行启动信息
+ * @return void 无返回值
+ */
 void cg_diag_init(void)
 {
     char  exe[512] = { 0 }, path[1500] = { 0 }, base[1024] = { 0 }, stem[128] = { 0 };

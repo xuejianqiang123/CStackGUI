@@ -21,6 +21,15 @@
 #include <stdlib.h>
 
 /** @brief 造一个 box（省得每处写五行） */
+/**
+ * @brief 造一个布局盒（省得每处写五行）
+ * @param x 初始左边界
+ * @param y 初始上边界
+ * @param w 初始宽
+ * @param h 初始高
+ * @param g 生长权重
+ * @return cg_layout_box_t 填好字段的布局盒
+ */
 static cg_layout_box_t mk(int x, int y, int w, int h, int g)
 {
     cg_layout_box_t b;
@@ -30,6 +39,10 @@ static cg_layout_box_t mk(int x, int y, int w, int h, int g)
 }
 
 /** @brief 没人吃余量：一个像素都不许动 */
+/**
+ * @brief 没人吃余量：一个像素都不许动
+ * @return void 无返回值
+ */
 static void test_no_grow(void)
 {
     cg_layout_box_t b[2];
@@ -64,6 +77,10 @@ static void test_no_grow(void)
 }
 
 /** @brief 竖向三段（`[日志区 | 分隔条 | 发送区]` 的形状）：只有一条带吃余量，后面整体下移 */
+/**
+ * @brief 竖向三段（日志区 / 分隔条 / 发送区 的形状）：只有一条带吃余量，后面整体下移
+ * @return void 无返回值
+ */
 static void test_vertical_stack(void)
 {
     cg_layout_box_t b[3];
@@ -87,6 +104,10 @@ static void test_vertical_stack(void)
 }
 
 /** @brief 同一条带（左右并排）：各自填满，谁也不推谁 —— 这是写测试时揪出来的真错 */
+/**
+ * @brief 同一条带（左右并排）：各自填满，谁也不推谁 —— 这是写测试时揪出来的真错
+ * @return void 无返回值
+ */
 static void test_same_band(void)
 {
     cg_layout_box_t b[2];
@@ -117,6 +138,10 @@ static void test_same_band(void)
 }
 
 /** @brief 余数不许丢：三条带权重相同、变化量除不尽时，最后一个把余数全吃了 */
+/**
+ * @brief 余数不许丢：三条带权重相同、变化量除不尽时，最后一个把余数全吃了
+ * @return void 无返回值
+ */
 static void test_remainder(void)
 {
     cg_layout_box_t b[3];
@@ -136,6 +161,10 @@ static void test_remainder(void)
 }
 
 /** @brief 横向生长：右边兄弟被推走但自己不变宽 */
+/**
+ * @brief 横向生长：右边兄弟被推走但自己不变宽
+ * @return void 无返回值
+ */
 static void test_horizontal(void)
 {
     cg_layout_box_t b[2];
@@ -172,6 +201,10 @@ static void test_horizontal(void)
 }
 
 /** @brief 缩小、以及"回到设计尺寸就完全回到设计坐标" */
+/**
+ * @brief 缩小、以及"回到设计尺寸就完全回到设计坐标"
+ * @return void 无返回值
+ */
 static void test_shrink_and_reset(void)
 {
     cg_layout_box_t b[2];

@@ -41,6 +41,12 @@ static const char *k_col_doc =
     "}\n";
 
 /** @brief 解析文档 + 建控件树；**成功返回 1、失败返回 0**（调用点都写成 if (build_app(...))） */
+/**
+ * @brief 解析文档 + 建控件树
+ * @param app 回填的应用结构
+ * @param json 待解析的 .cgui 文本
+ * @return int 1 = 成功；0 = 解析失败（调用点都写成 if (build_app(...))）
+ */
 static int build_app(cg_app_t *app, const char *json)
 {
     char      err[256] = { 0 };
@@ -59,6 +65,11 @@ static int build_app(cg_app_t *app, const char *json)
 }
 
 /** @brief 收尾：先放控件（它们会回写节点），再放文档 */
+/**
+ * @brief 收尾：先放控件（它们会回写节点），再放文档
+ * @param app 待释放的应用
+ * @return void 无返回值
+ */
 static void free_app(cg_app_t *app)
 {
     cg_widget_t *w = app->widgets;
@@ -72,6 +83,11 @@ static void free_app(cg_app_t *app)
 }
 
 /** @brief p3 的右边界：总尺寸守恒时它必须一直贴在 600 */
+/**
+ * @brief 第三块的右边界：总尺寸守恒时它必须一直贴在设计右边缘
+ * @param app 待查询的应用
+ * @return long long 第三块的右边界；找不到时返回 -1
+ */
 static long long right_edge(cg_app_t *app)
 {
     cg_widget_t *p3 = cg_find(app, "p3");
@@ -79,6 +95,10 @@ static long long right_edge(cg_app_t *app)
 }
 
 /** @brief 基本拖动：撑开前一块、中间只平移、最后一块吃掉余量 */
+/**
+ * @brief 基本拖动：撑开前一块、中间只平移、最后一块吃掉余量
+ * @return void 无返回值
+ */
 static void test_splitter_drag(void)
 {
     cg_app_t     app;
@@ -114,6 +134,10 @@ static void test_splitter_drag(void)
 }
 
 /** @brief 只影响相邻两块 + 夹到最小尺寸（每段都从干净的布局开始，避免互相污染期望值） */
+/**
+ * @brief 只影响相邻两块 + 夹到最小尺寸（每段都从干净的布局开始，避免互相污染期望值）
+ * @return void 无返回值
+ */
 static void test_splitter_clamp(void)
 {
     cg_app_t     app;
@@ -164,6 +188,10 @@ static void test_splitter_clamp(void)
 }
 
 /** @brief 上下分行（format = row）：同一套逻辑换个轴 */
+/**
+ * @brief 上下分行：同一套逻辑换个轴
+ * @return void 无返回值
+ */
 static void test_splitter_rows(void)
 {
     cg_app_t     app;
@@ -187,6 +215,10 @@ static void test_splitter_rows(void)
 }
 
 /** @brief 结构不允许时的兜底：不该崩、也不该乱动 */
+/**
+ * @brief 结构不允许时的兜底：不该崩、也不该乱动
+ * @return void 无返回值
+ */
 static void test_splitter_refuse(void)
 {
     cg_app_t     app;

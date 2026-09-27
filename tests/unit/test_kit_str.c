@@ -18,6 +18,14 @@
 #include <stdio.h>
 
 /** @brief 比较两个字节串是否相同（相等返回 1） */
+/**
+ * @brief 比较两个字节串是否相同
+ * @param a 第一个字节串
+ * @param la 第一个的长度
+ * @param b 第二个字节串
+ * @param lb 第二个的长度
+ * @return int 1 = 相同；0 = 不同（长度不等或内容不同）
+ */
 static int bytes_eq(const void *a, int la, const void *b, int lb)
 {
     return (la == lb) && (la == 0 || memcmp(a, b, (size_t)la) == 0);
@@ -26,6 +34,10 @@ static int bytes_eq(const void *a, int la, const void *b, int lb)
 /* ------------------------------------------------------------ Base64 */
 
 /** @brief RFC 4648 §10 的标准样例：编码与解码各走一遍 */
+/**
+ * @brief 标准样例：编码与解码各走一遍
+ * @return void 无返回值
+ */
 static void test_base64_vectors(void)
 {
     static const struct { const char *plain; const char *b64; } k_cases[] = {
@@ -61,6 +73,10 @@ static void test_base64_vectors(void)
 }
 
 /** @brief 解码的边界：空白、无填充、坏长度、坏填充、尾部多余位、缓冲不够 */
+/**
+ * @brief 解码的边界：空白、无填充、坏长度、坏填充、尾部多余位、缓冲不够
+ * @return void 无返回值
+ */
 static void test_base64_decode_edges(void)
 {
     unsigned char out[64];
@@ -93,6 +109,10 @@ static void test_base64_decode_edges(void)
 /* ------------------------------------------------------------ 十六进制 */
 
 /** @brief 编码：分隔串、大小写；解码：示例里那套语义（分隔符随便写、半个字节算错） */
+/**
+ * @brief 编码：分隔串、大小写；解码：约定那套语义（分隔符随便写、半个字节算错）
+ * @return void 无返回值
+ */
 static void test_hex(void)
 {
     const unsigned char data[3] = { 0x01, 0x02, 0xAB };
@@ -149,6 +169,10 @@ static void test_hex(void)
 /* ------------------------------------------------------------ URL */
 
 /** @brief 百分号编码：不编码集、空格两种风格、UTF-8 中文按字节展开 */
+/**
+ * @brief 百分号编码：不编码集、空格两种风格、中文按字节展开
+ * @return void 无返回值
+ */
 static void test_url(void)
 {
     char buf[128];
@@ -198,6 +222,10 @@ static void test_url(void)
 /* ------------------------------------------------------------ 进制与补码 */
 
 /** @brief 2/8/10/16/36 双向转换、0x 前缀、严格性；以及补码解释 */
+/**
+ * @brief 2 / 8 / 10 / 16 / 36 进制双向转换、0x 前缀、严格性；以及补码解释
+ * @return void 无返回值
+ */
 static void test_base(void)
 {
     char      buf[80];

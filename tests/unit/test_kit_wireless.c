@@ -18,6 +18,11 @@
 #include <stdio.h>
 
 /** @brief 地址是不是 "AA:BB:CC:DD:EE:FF" 这个形状（17 字符 + 5 个冒号） */
+/**
+ * @brief 地址是不是 "AA:BB:CC:DD:EE:FF" 这个形状（17 字符 + 5 个冒号）
+ * @param a 待检查的地址串
+ * @return int 1 = 形状对；0 = 不对
+ */
 static int addr_looks_ok(const char *a)
 {
     int i;
@@ -33,6 +38,10 @@ static int addr_looks_ok(const char *a)
     return 1;
 }
 
+/**
+ * @brief WiFi 契约：计数与取值的边界一致、越界 / 空指针给 -1、能取到时字段落在合法范围
+ * @return void 无返回值
+ */
 static void test_wifi(void)
 {
     cg_wifi_info_t w;
@@ -105,6 +114,10 @@ static void test_wifi(void)
     }
 }
 
+/**
+ * @brief 蓝牙契约：无线电 / 设备计数、越界 / 空指针给 -1、能取到时地址形状合法
+ * @return void 无返回值
+ */
 static void test_bluetooth(void)
 {
     cg_ble_radio_t  r;
@@ -153,6 +166,10 @@ static void test_bluetooth(void)
 
 /* ------------------------------------------------------------ BLE 基元（不需要外设就能验完） */
 
+/**
+ * @brief 蓝牙基元：地址文本与 64 位互转、UUID 短写法与标准基互转、比较、特征属性位、按地址 / 名字找设备
+ * @return void 无返回值
+ */
 static void test_ble_basics(void)
 {
     unsigned long long v = 0;

@@ -23,6 +23,14 @@ static const COLORREF k_chart_colors[8] = {
 };
 
 /** @brief 值 -> 绘图区里的 y 像素（超范围按边界裁剪，所以越界数据不会画出框） */
+/**
+ * @brief 值 -> 绘图区里的 y 像素
+ * @param w 图表控件（取量程上下限）
+ * @param v 待换算的值（越界会被夹到量程内）
+ * @param top 绘图区上边 y（对应上限）
+ * @param bottom 绘图区下边 y（对应下限）
+ * @return int 该值在绘图区的 y 像素（超范围按边界裁剪，所以越界数据不会画出框）
+ */
 static int chart_map_y(const cg_widget_t *w, int v, int top, int bottom)
 {
     int range = w->vmax - w->vmin;
@@ -34,6 +42,13 @@ static int chart_map_y(const cg_widget_t *w, int v, int top, int bottom)
 }
 
 /** @brief 第 i 个点落在哪一列（右对齐：最新一个点在最右边） */
+/**
+ * @brief 第 i 个点落在哪一列（右对齐：最新一个点在最右边）
+ * @param i 点序号（0 是最早的点）
+ * @param fill 已填充的点数
+ * @param pw 绘图区的像素宽度
+ * @return int 像素列序号；点数或宽度不足时恒为 0
+ */
 static int chart_column(int i, int fill, int pw)
 {
     if (fill <= 1 || pw <= 1) return 0;
@@ -41,6 +56,16 @@ static int chart_column(int i, int fill, int pw)
 }
 
 /** @brief 画一个系列（折线或柱） */
+/**
+ * @brief 画一个系列（折线或柱）
+ * @param dc 目标 DC
+ * @param w 图表控件（数据、量程、系列名）
+ * @param series 系列序号（0 起）
+ * @param plot 绘图区矩形（数据只画在里面）
+ * @param col 本系列的颜色（由调用方按系列序取）
+ * @param bars 非 0 画柱状，0 画折线
+ * @return void 无返回值
+ */
 static void chart_draw_series(HDC dc, const cg_widget_t *w, int series,
                               const RECT *plot, COLORREF col, int bars)
 {
@@ -125,6 +150,14 @@ static void chart_draw_series(HDC dc, const cg_widget_t *w, int series,
 }
 
 /** @brief 画整个图表：底、网格、边框、各系列、范围文字、图例 */
+/**
+ * @brief 画整个图表：底、网格、边框、各系列、范围文字、图例
+ * @param app 所属应用（字体、背后取色、主题中性色）
+ * @param w 图表控件（数据、系列名、量程、样式）
+ * @param dc 目标 DC
+ * @param rc 客户区矩形
+ * @return void 无返回值
+ */
 static void chart_paint(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
 {
     RECT  plot;
@@ -232,6 +265,13 @@ static void chart_paint(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
 typedef struct { cg_app_t *app; cg_widget_t *w; } chart_ctx_t;
 
 /** @brief 图表一帧适配器：整张画进内存位图 */
+/**
+ * @brief 图表一帧适配器：整张画进内存位图
+ * @param mem 内存位图 DC（双缓冲的离屏 DC）
+ * @param rc 离屏位图矩形（左上角为 0,0）
+ * @param vctx 上下文（应用与控件）
+ * @return void 无返回值
+ */
 static void chart_body(HDC mem, const RECT *rc, void *vctx)
 {
     chart_ctx_t *c = (chart_ctx_t *)vctx;
@@ -239,6 +279,14 @@ static void chart_body(HDC mem, const RECT *rc, void *vctx)
 }
 
 /** @brief 图表窗口过程（自绘，纯显示；没绑任何事件） */
+/**
+ * @brief 图表窗口过程（自绘，纯显示；没绑任何事件）
+ * @param hwnd 本控件窗口
+ * @param msg 消息号
+ * @param wp 附加参数（随 msg 而定，本过程未使用）
+ * @param lp 附加参数（随 msg 而定，本过程未使用）
+ * @return LRESULT 处理结果，未处理的消息交给 DefWindowProcW
+ */
 static LRESULT CALLBACK ChartProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     cg_app_t    *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
@@ -273,6 +321,10 @@ static LRESULT CALLBACK ChartProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 }
 
 /** @brief 注册图表的自绘窗口类（整进程一次） */
+/**
+ * @brief 注册图表的自绘窗口类（整进程一次）
+ * @return void 无返回值
+ */
 void cgw_register_chart_class(void)
 {
     static int done = 0;

@@ -27,37 +27,68 @@ char *__real__strdup(const char *s);
 static long s_live;
 
 /** @brief 当前存活堆块数（供测试运行器逐套件取快照） */
+/**
+ * @brief 当前存活堆块数（供测试运行器逐套件取快照）
+ * @return int 当前存活的堆块数
+ */
 int cg_test_mem_live(void)
 {
     return (int)s_live;
 }
 
+/**
+ * @brief 拦 malloc：存活块 +1 后再转给真实 malloc
+ * @param size 要分配的字节数
+ * @return void* 真实 malloc 的结果，失败为 NULL
+ */
 void *__wrap_malloc(size_t size)
 {
     s_live++;
     return __real_malloc(size);
 }
 
+/**
+ * @brief 拦 calloc：存活块 +1 后再转给真实 calloc
+ * @param count 元素个数
+ * @param size 每个元素的字节数
+ * @return void* 真实 calloc 的结果，失败为 NULL
+ */
 void *__wrap_calloc(size_t count, size_t size)
 {
     s_live++;
     return __real_calloc(count, size);
 }
 
-/* realloc：ptr 非 NULL 时是"原地替换"（旧块释放、新块分配），净值 0；
- * 失败时原块还在，同样净值 0。只有 ptr 为 NULL 才等于一次新分配。 */
+/**
+ * @brief 拦 realloc：只有原指针为 NULL 时才当一次新分配
+ * @param ptr 要调整大小的块，为 NULL 时等价于一次新分配
+ * @param size 新的大小（字节）
+ * @return void* 真实 realloc 的结果，失败为 NULL
+ * @note 原指针非 NULL 时是"原地替换"（旧块释放、新块分配），净值 0；
+ *       失败时原块还在，同样净值 0。只有原指针为 NULL 才等于一次新分配
+ */
 void *__wrap_realloc(void *ptr, size_t size)
 {
     if (!ptr) s_live++;
     return __real_realloc(ptr, size);
 }
 
+/**
+ * @brief 拦 free：非 NULL 才把存活块 -1，再转给真实 free
+ * @param ptr 要释放的块，可为 NULL
+ * @return void 无返回值
+ */
 void __wrap_free(void *ptr)
 {
     if (ptr) s_live--;
     __real_free(ptr);
 }
 
+/**
+ * @brief 拦字符串复制：入参非 NULL 才把存活块 +1，再转给真实实现
+ * @param s 要复制的字符串，可为 NULL
+ * @return char* 真实实现的结果，失败为 NULL
+ */
 char *__wrap__strdup(const char *s)
 {
     if (s) s_live++;

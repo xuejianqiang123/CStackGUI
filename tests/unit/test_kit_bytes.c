@@ -12,6 +12,10 @@
 
 #include <string.h>
 
+/**
+ * @brief 反转：奇数 / 偶数 / 单字节 / 长度 0 / 空指针 / 含 0x00 都要对
+ * @return void 无返回值
+ */
 static void test_bytes_reverse(void)
 {
     unsigned char a[] = { 'A', 'B', 'C', 'D', 'E' };
@@ -37,6 +41,10 @@ static void test_bytes_reverse(void)
     cg_test_int("再反转一次回到原样", memcmp(a, "ABCDE", 5) == 0, 1);
 }
 
+/**
+ * @brief 切片：取到底 / 取左取右取中间 / 超出剩余按剩余算 / 该失败时一个字节都不写
+ * @return void 无返回值
+ */
 static void test_bytes_slice(void)
 {
     const unsigned char src[5] = { 0x10, 0x20, 0x30, 0x40, 0x50 };
@@ -74,6 +82,10 @@ static void test_bytes_slice(void)
     cg_test_int("  上面几次失败后 out 没被动过（哨兵还是 0xEE）", out[0] == 0xEE && out[15] == 0xEE, 1);
 }
 
+/**
+ * @brief 找子集：起点推进 / 重叠图案 / 参数非法
+ * @return void 无返回值
+ */
 static void test_bytes_find(void)
 {
     const unsigned char hay[6] = { 0x01, 0x02, 0x03, 0x02, 0x03, 0x04 };
@@ -100,6 +112,10 @@ static void test_bytes_find(void)
     cg_test_int("AAAA 从下标 1 找 AAA = 1", cg_bytes_find("AAAA", 4, "AAA", 3, 1), 1);
 }
 
+/**
+ * @brief 16 / 32 位整数按字节序读写：明确的字节图案、大小端往返、越界一个字节都不写
+ * @return void 无返回值
+ */
 static void test_bytes_u16u32(void)
 {
     unsigned char frame[8];
@@ -152,6 +168,10 @@ static void test_bytes_u16u32(void)
     cg_test_int("  且没被动过（哨兵）", frame[5] == 0xDE, 1);
 }
 
+/**
+ * @brief 合起来用一次：拼一帧、再拆回来（工控的日常）
+ * @return void 无返回值
+ */
 static void test_bytes_frame(void)
 {
     unsigned char frame[16];

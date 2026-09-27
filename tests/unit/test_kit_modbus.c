@@ -26,6 +26,14 @@
 #include <stdio.h>
 
 /** @brief 把帧转成 "01 03 00 6B" 这种大写十六进制，便于断言（调用方给缓冲，不用静态状态） */
+/**
+ * @brief 把帧转成 "01 03 00 6B" 这种大写十六进制，便于断言
+ * @param f 帧字节
+ * @param n 帧长
+ * @param buf 输出缓冲
+ * @param size 输出缓冲大小
+ * @return const char* 转好的十六进制串（就是 buf）
+ */
 static const char *hexs(const unsigned char *f, int n, char *buf, int size)
 {
     cg_hex_encode(f, n, " ", 1, buf, size);
@@ -34,6 +42,10 @@ static const char *hexs(const unsigned char *f, int n, char *buf, int size)
 
 /* ------------------------------------------------------------ 拼读请求帧 */
 
+/**
+ * @brief 拼读请求帧：与规范一致的字节图案、CRC 自校验、参数边界
+ * @return void 无返回值
+ */
 static void test_modbus_build_read(void)
 {
     unsigned char f[64];
@@ -79,6 +91,10 @@ static void test_modbus_build_read(void)
 
 /* ------------------------------------------------------------ 拼写请求帧 */
 
+/**
+ * @brief 拼写请求帧：单寄存器 / 单线圈 / 多寄存器 / 多线圈（低位在前）及参数边界
+ * @return void 无返回值
+ */
 static void test_modbus_build_write(void)
 {
     unsigned char f[64];
@@ -133,6 +149,10 @@ static void test_modbus_build_write(void)
 
 /* ------------------------------------------------------------ 解响应帧 */
 
+/**
+ * @brief 解响应帧：正常读响应、异常响应剥异常位、坏帧区分 CRC 与格式错
+ * @return void 无返回值
+ */
 static void test_modbus_parse(void)
 {
     /* 规范例子的响应（数据 3 个寄存器 = AE41 / 5652 / 4340，CRC 由独立实现派生） */
@@ -195,6 +215,10 @@ static void test_modbus_parse(void)
 
 /* ------------------------------------------------------------ TCP 封装 */
 
+/**
+ * @brief TCP 封装：请求不带 CRC、响应解析、协议标识与长度字段的坏帧
+ * @return void 无返回值
+ */
 static void test_modbus_tcp(void)
 {
     unsigned char f[64];
@@ -235,6 +259,10 @@ static void test_modbus_tcp(void)
 
 /* ------------------------------------------------------------ 自洽性：拼出来的一定能解回去 */
 
+/**
+ * @brief 拼解自洽：各功能码拼出的请求帧 CRC 自检为 0，写响应的回显能解回来
+ * @return void 无返回值
+ */
 static void test_modbus_roundtrip(void)
 {
     unsigned char f[64];

@@ -45,6 +45,12 @@ static const char *k_doc =
     "}\n";
 
 /** @brief 解析文档 + 建控件树 + 应用 .cgui 里的绑定；失败返回 -1 */
+/**
+ * @brief 解析文档 + 建控件树 + 应用 .cgui 里的绑定
+ * @param app 待初始化的应用
+ * @param json 要解析的 .cgui 文本
+ * @return int 成功返回 0；解析失败返回 -1
+ */
 static int build_app(cg_app_t *app, const char *json)
 {
     char      err[256] = { 0 };
@@ -64,6 +70,11 @@ static int build_app(cg_app_t *app, const char *json)
 }
 
 /** @brief 收尾：先放控件（它们会回写节点），再放文档 */
+/**
+ * @brief 收尾：先放控件（它们会回写节点），再放文档
+ * @param app 要释放的应用
+ * @return void 无返回值
+ */
 static void free_app(cg_app_t *app)
 {
     cg_widget_t *w = app->widgets;
@@ -80,6 +91,13 @@ static void free_app(cg_app_t *app)
 static int s_sw_changes;
 
 /** @brief switch 的 change 回调：只记账，用来看绑定有没有越界触发回调 */
+/**
+ * @brief 开关的 change 回调：只记账，用来看绑定有没有越界触发回调
+ * @param self 触发回调的控件
+ * @param ev 事件类型
+ * @param user 注册时传入的用户数据（这里不用）
+ * @return void 无返回值
+ */
 static void on_sw_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)self;
@@ -89,6 +107,10 @@ static void on_sw_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /** @brief bind 字段的解析：写成什么、缺省是什么 */
+/**
+ * @brief bind 字段的解析：写成什么、缺省是什么
+ * @return void 无返回值
+ */
 static void test_bind_parse(void)
 {
     char      err[256];
@@ -131,6 +153,10 @@ static void test_bind_parse(void)
 }
 
 /** @brief 启动时的第一次对齐：目标控件跟上源的初值 */
+/**
+ * @brief 启动时的第一次对齐：目标控件跟上源的初值
+ * @return void 无返回值
+ */
 static void test_bind_apply_all(void)
 {
     cg_app_t app;
@@ -160,6 +186,10 @@ static void test_bind_apply_all(void)
 }
 
 /** @brief 变化传播：API 赋值 与 后端派发两条路都要同步 */
+/**
+ * @brief 变化传播：API 赋值与后端派发两条路都要同步
+ * @return void 无返回值
+ */
 static void test_bind_propagate(void)
 {
     cg_app_t     app;
@@ -225,6 +255,10 @@ static void test_bind_propagate(void)
 }
 
 /** @brief 运行时 API：cg_bind（不用 .cgui 也能绑），顺便盯参数校验 */
+/**
+ * @brief 运行时绑定 API（不用 .cgui 也能绑），顺便盯参数校验
+ * @return void 无返回值
+ */
 static void test_bind_api(void)
 {
     cg_app_t     app;

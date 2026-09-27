@@ -11,6 +11,10 @@
 
 #include <string.h>
 
+/**
+ * @brief 二进制文件读写与大小：含 0x00 不被截断 / 空文件与打不开要分得开 / 参数非法不破坏已有文件
+ * @return void 无返回值
+ */
 static void test_fs_bytes(void)
 {
     char          *dir  = cg_app_dir();

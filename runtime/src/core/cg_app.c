@@ -18,6 +18,11 @@ const cg_backend_t *cg_backend_active = NULL;
 static char s_fatal[1024];
 
 /** @brief 往 s_fatal 追加一段（截断安全） */
+/**
+ * @brief 往致命错误缓冲里追加一段（截断安全）
+ * @param fmt printf 风格格式串，其后是它的参数
+ * @return void 无返回值
+ */
 static void fatal_add(const char *fmt, ...)
 {
     size_t  used = strlen(s_fatal);
@@ -30,6 +35,13 @@ static void fatal_add(const char *fmt, ...)
 }
 
 /** @brief 报一个致命错误：写日志；allow_ui 时弹窗（附日志文件位置） */
+/**
+ * @brief 报一个致命错误：写日志；允许界面时弹窗（并附日志文件位置）
+ * @param allow_ui 非 0 = 允许弹窗；0 = 只写日志（自检模式）
+ * @param title 标题
+ * @param text 正文；NULL 当空串
+ * @return void 无返回值
+ */
 static void fatal_report(int allow_ui, const char *title, const char *text)
 {
     cg_log(CG_LOG_ERROR, "%s：%s", title, text ? text : "");
@@ -87,6 +99,11 @@ const char *cg_app_info(const cg_app_t *app, const char *key)
  */
 
 /** @brief 取路径的文件名部分（兼容 \\ 和 /） */
+/**
+ * @brief 取路径的文件名部分（兼容反斜杠与斜杠）
+ * @param path 路径（UTF-8）
+ * @return const char* 指向 path 内部的文件名；没有分隔符时就是 path 本身
+ */
 static const char *path_base(const char *path)
 {
     const char *s1 = strrchr(path, '\\');
@@ -96,6 +113,13 @@ static const char *path_base(const char *path)
 }
 
 /** @brief 取路径的目录部分（无目录时写 "."；不带末尾分隔符，盘符根 "C:\\" 除外） */
+/**
+ * @brief 取路径的目录部分
+ * @param path 路径
+ * @param out 输出缓冲（写目录后以 NUL 结尾）
+ * @param size out 的容量（字节）
+ * @return void 无返回值（无目录时写 "."；不带末尾分隔符，盘符根除外）
+ */
 static void path_dir(const char *path, char *out, size_t size)
 {
     const char *b = path_base(path);
@@ -116,8 +140,10 @@ static void path_dir(const char *path, char *out, size_t size)
 }
 
 /**
- * @brief 按约定位置找界面文件并读入（内嵌文本 > 显式路径 > exe 旁 > apps/examples）
- * @param desc 启动参数；found 输出实际用到的路径；found_size 容量
+ * @brief 按约定位置找界面文件并读入（内嵌文本 > 显式路径 > exe 旁 > 示例目录）
+ * @param desc 启动参数（内嵌文本 / 显式路径 / 是否自动定位）
+ * @param found 输出实际用到的路径；可为 NULL
+ * @param found_size found 的容量（字节）
  * @return char* JSON 原文（调用方 free）；找不到返回 NULL 并打印试过的位置
  */
 static char *open_cgui_text(const cg_app_desc_t *desc, char *found, size_t found_size)
@@ -192,7 +218,9 @@ static char *open_cgui_text(const cg_app_desc_t *desc, char *found, size_t found
 
 /**
  * @brief 打开应用：读界面文件、解析、构建控件树（不开窗）
- * @param app 应用结构（先清零）；desc 启动参数；allow_ui 预留
+ * @param app 应用结构（进来先清零）
+ * @param desc 启动参数
+ * @param allow_ui 非 0 = 致命错误时允许弹窗
  * @return int 0 成功；2 找不到界面文件；3 解析失败
  */
 static int app_open(cg_app_t *app, const cg_app_desc_t *desc, int allow_ui)
@@ -264,6 +292,11 @@ static int app_open(cg_app_t *app, const cg_app_desc_t *desc, int allow_ui)
 }
 
 /** @brief 关闭应用：清定时器、关后端、断开文档、释放全部控件 */
+/**
+ * @brief 关闭应用：清定时器、关后端、断开文档、释放全部控件
+ * @param app 应用
+ * @return void 无返回值
+ */
 static void app_close(cg_app_t *app)
 {
     cg_timers_clear(app);
@@ -291,7 +324,7 @@ static void app_close(cg_app_t *app)
 /**
  * @brief 建窗口 + 跑消息循环，结束后释放全部资源
  * @param desc 启动参数
- * @return int 进程退出码（0 正常，2/3/4 见各失败点）
+ * @return int 进程退出码（0 正常）
  */
 int cg_app_run(const cg_app_desc_t *desc)
 {
@@ -353,6 +386,14 @@ typedef struct {
 } selftest_stat_t;
 
 /** @brief 递归走控件树，对每个绑了回调的事件做一次合成触发并统计 */
+/**
+ * @brief 递归走控件树，对每个绑了回调的事件做一次合成触发并统计
+ * @param app 所属应用
+ * @param w 当前节点（窗口伪控件或普通控件）
+ * @param st 统计累加器
+ * @param depth 递归深度
+ * @return void 无返回值
+ */
 static void selftest_walk(cg_app_t *app, cg_widget_t *w, selftest_stat_t *st, int depth)
 {
     (void)app;
@@ -399,7 +440,7 @@ static void selftest_walk(cg_app_t *app, cg_widget_t *w, selftest_stat_t *st, in
 /**
  * @brief 不开窗的自检：解析 .cgui、打印控件树、合成触发全部回调
  * @param desc 启动参数（同 cg_app_run）
- * @return int 0 全部通过；5 有未登记/不支持的事件；2/3 同 app_open
+ * @return int 0 全部通过；5 有未登记 / 不支持的事件；2、3 同打开应用
  */
 int cg_app_selftest(const cg_app_desc_t *desc)
 {

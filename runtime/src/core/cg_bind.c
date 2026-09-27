@@ -38,9 +38,13 @@
 
 static int s_bind_depth;
 
-/** @brief 有值语义：bind 时抄 value 的控件。
- *  按控件判而不是按类型名 —— 数值输入框（edit + 调节器）也是值语义，
- *  但它和普通文本 edit 是同一个类型名。 */
+/**
+ * @brief 有值语义：绑定时要抄值的控件
+ * @param w 待判定的控件；NULL 当作不是
+ * @return int 1 = 值语义；0 = 不是
+ * @note 按控件判而不是按类型名 —— 数值输入框（edit + 调节器）也是值语义，
+ *       但它和普通文本 edit 是同一个类型名
+ */
 static int bind_is_value_kind(const cg_widget_t *w)
 {
     static const char *const k[] = {
@@ -55,20 +59,34 @@ static int bind_is_value_kind(const cg_widget_t *w)
 }
 
 /** @brief 勾选语义：bind 时抄 checked 的控件 */
+/**
+ * @brief 勾选语义：绑定时要抄勾选态的控件
+ * @param type 控件类型名；NULL 当作不是
+ * @return int 1 = 勾选语义（复选框 / 单选钮 / 开关）；0 = 不是
+ */
 static int bind_is_check_kind(const char *type)
 {
     return type && (!strcmp(type, "checkbox") || !strcmp(type, "radio") || !strcmp(type, "switch"));
 }
 
 /** @brief 列表类控件的 value 是条目下标：可以超出 min/max，取值时不能夹 */
+/**
+ * @brief 列表类控件的值是不是"条目下标"（可超出量程，取值时不能夹）
+ * @param type 控件类型名；NULL 当作不是
+ * @return int 1 = 列表类（列表框 / 下拉框 / 标签页 / 工具栏）；0 = 不是
+ */
 static int bind_is_list_kind(const char *type)
 {
     return type && (!strcmp(type, "listbox") || !strcmp(type, "combo") ||
                     !strcmp(type, "tabs") || !strcmp(type, "toolbar"));
 }
 
-/** @brief 源是"以文字为主"的控件：抄给文字型目标时抄文字而不是数字。
- *  数值输入框（edit + 调节器）不算 —— 它的文字是从 value 派生的，抄给它等于抄数值。 */
+/**
+ * @brief 源是不是"以文字为主"的控件（抄给文字型目标时抄文字而不是数字）
+ * @param w 待判定的控件；NULL 当作不是
+ * @return int 1 = 文字型；0 = 不是
+ * @note 数值输入框（edit + 调节器）不算 —— 它的文字是从值派生的，抄给它等于抄数值
+ */
 static int bind_is_text_kind(const cg_widget_t *w)
 {
     static const char *const k[] = {
@@ -83,6 +101,12 @@ static int bind_is_text_kind(const cg_widget_t *w)
 }
 
 /** @brief 把目标控件的文字换掉（同时回写文档节点），没变返回 0 */
+/**
+ * @brief 把目标控件的文字换掉（同时回写文档节点），没变返回 0
+ * @param dst 目标控件
+ * @param text 新文字（UTF-8；内部会复制一份）
+ * @return int 1 = 真的改了并已同步；0 = 文字没变，什么都没做
+ */
 static int bind_set_text(cg_widget_t *dst, const char *text)
 {
     if (dst->text && strcmp(dst->text, text) == 0) return 0;
@@ -97,6 +121,12 @@ static int bind_set_text(cg_widget_t *dst, const char *text)
 }
 
 /** @brief 把目标控件的值换掉（同时回写文档节点），没变返回 0 */
+/**
+ * @brief 把目标控件的值换掉（同时回写文档节点），没变返回 0
+ * @param dst 目标控件
+ * @param v 新值
+ * @return int 1 = 真的改了并已同步；0 = 值没变，什么都没做
+ */
 static int bind_set_value(cg_widget_t *dst, int v)
 {
     if (dst->value == v) return 0;
@@ -107,6 +137,12 @@ static int bind_set_value(cg_widget_t *dst, int v)
 }
 
 /** @brief 把目标控件的勾选状态换掉（同时回写文档节点），没变返回 0 */
+/**
+ * @brief 把目标控件的勾选状态换掉（同时回写文档节点），没变返回 0
+ * @param dst 目标控件
+ * @param on 新勾选态；非 0 一律当勾上
+ * @return int 1 = 真的改了并已同步；0 = 状态没变，什么都没做
+ */
 static int bind_set_checked(cg_widget_t *dst, int on)
 {
     on = on ? 1 : 0;
@@ -118,8 +154,9 @@ static int bind_set_checked(cg_widget_t *dst, int on)
 }
 
 /**
- * @brief 把源的值/文字抄到目标
- * @param src 源控件；dst 目标控件（抄什么按 dst 的类型决定）
+ * @brief 把源控件的值 / 文字抄到目标控件
+ * @param src 源控件（值的出处）
+ * @param dst 目标控件（抄什么按它的类型决定）
  * @return int 1 = 目标真的变了；0 = 值本来就一样（也用于打断双向绑定的循环）
  */
 int cg_bind_copy(cg_widget_t *src, cg_widget_t *dst)
@@ -210,7 +247,9 @@ void cg_bind_apply_all(cg_app_t *app)
 
 /**
  * @brief 运行时绑定两个控件（覆盖原来 .cgui 里写的绑定）
- * @param src 源控件；dst 目标控件（跟着 src 走）；two_way 非 0 时也是双向
+ * @param src 源控件（变化的源头）
+ * @param dst 目标控件（跟着 src 走）
+ * @param two_way 非 0 时为双向同步（目标变化也会推回源）
  * @return int 0 成功；-1 参数不对（同一个控件、跨应用、控件没有 id）
  */
 int cg_bind(cg_widget_t *src, cg_widget_t *dst, int two_way)

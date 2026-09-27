@@ -23,10 +23,25 @@
 static int s_fires_a;
 static int s_fires_b;
 
+/**
+ * @brief 计数回调 a：每触发一次自增
+ * @param user 未使用的用户数据
+ * @return void 无返回值
+ */
 static void cb_count_a(void *user) { (void)user; s_fires_a++; }
+/**
+ * @brief 计数回调 b：每触发一次自增
+ * @param user 未使用的用户数据
+ * @return void 无返回值
+ */
 static void cb_count_b(void *user) { (void)user; s_fires_b++; }
 
 /** @brief 标准用法：回调里把自己再挂一次（serialterm 的轮询就是这种写法） */
+/**
+ * @brief 标准用法：回调里把自己再挂一次（串口示例的轮询就是这种写法）
+ * @param user 用户数据，这里当应用令牌用（重挂时原样传回）
+ * @return void 无返回值
+ */
 static void cb_rearm(void *user)
 {
     s_fires_a++;
@@ -37,6 +52,10 @@ static void cb_rearm(void *user)
 /* ------------------------------------------------------------ 套件 */
 
 /** @brief 到点才触发、没到点不触发、kill 了绝不触发 */
+/**
+ * @brief 到点才触发、没到点不触发、注销了绝不触发
+ * @return void 无返回值
+ */
 static void test_timer_basic(void)
 {
     cg_timer_t *t;
@@ -72,6 +91,10 @@ static void test_timer_basic(void)
 }
 
 /** @brief 回调里重挂：本轮绝不能再触发（回归：串口助手一开就未响应的那个死循环） */
+/**
+ * @brief 回调里重挂：本轮绝不能再触发（回归：串口助手一开就未响应的那个死循环）
+ * @return void 无返回值
+ */
 static void test_timer_rearm_same_tick(void)
 {
     s_fires_a = 0;
@@ -96,7 +119,17 @@ static int s_killer_fired;
 static int s_victim_fired;
 static cg_timer_t *g_victim;
 
+/**
+ * @brief 受害者回调：每触发一次自增
+ * @param user 未使用的用户数据
+ * @return void 无返回值
+ */
 static void cb_victim(void *user) { (void)user; s_victim_fired++; }
+/**
+ * @brief 凶手回调：自增计数，并在同轮注销另一颗定时器
+ * @param user 未使用的用户数据
+ * @return void 无返回值
+ */
 static void cb_killer(void *user)
 {
     (void)user;
@@ -104,6 +137,12 @@ static void cb_killer(void *user)
     cg_kill_timer(g_victim);   /* 同轮注销另一颗，它绝不该再触发 */
 }
 
+/**
+ * @brief 同轮注销：一颗定时器的回调里注销另一颗，后者本轮绝不触发
+ * @return void 无返回值
+ * @note 回归：原先先释放再回调，被注销 / 已触发的定时器同轮仍可能被回调，
+ *       回调访问已释放的窗口 / 控件 → 释放后使用
+ */
 static void test_timer_kill_in_tick(void)
 {
     s_killer_fired = 0;
@@ -121,6 +160,10 @@ static void test_timer_kill_in_tick(void)
 }
 
 /** @brief 多应用隔离：tick 只推进自己的，clear 也只清自己的 */
+/**
+ * @brief 多应用隔离：推进只推自己的，清理也只清自己的
+ * @return void 无返回值
+ */
 static void test_timer_two_apps(void)
 {
     s_fires_a = 0;

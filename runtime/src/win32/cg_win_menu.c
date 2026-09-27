@@ -6,6 +6,14 @@
 #include "cg_win_internal.h"
 
 /** 菜单按钮：点击时在按钮下方弹出菜单，选中项直接派发（TPM_RETURNCMD 省掉消息路由） */
+/**
+ * @brief 菜单按钮：点击时在按钮下方弹出菜单，选中项直接派发
+ * @param app 所属应用；用于前置窗口与前后的防重入状态
+ * @param w 菜单 / 菜单按钮控件；提供行表
+ * @param hwnd 触发按钮的窗口；菜单从它的下边缘弹出
+ * @return void 无返回值（菜单为空或建表失败时什么都不做）
+ * @note 用"返回选中命令"的方式取结果，省掉一整套消息路由
+ */
 void cgw_popup_menu_for(cg_app_t *app, cg_widget_t *w, HWND hwnd)
 {
     HMENU hm;
@@ -102,11 +110,12 @@ HMENU cgw_menu_build(const cg_widget_t *w, int as_bar)
 }
 
 /**
- * @brief 动作的启用 / 勾选变了：同步到**菜单项**（控件那一半走 cg_widget_set_enabled）
- * @details 只处理窗口菜单栏那一份：menubutton 的弹出菜单是**每次点击时现场重建**的
- *          （cgw_popup_menu_for），建的时候自然会读到最新状态，不需要同步。
- *          不必判断某个 cmd 到底挂在哪个菜单里 —— EnableMenuItem 对"这个 HMENU 里
- *          没有的命令 id"返回 -1，是空操作，比先查一遍更省事也更不容易漏。
+ * @brief 动作的启用 / 勾选变了：同步到**菜单项**（控件那一半走控件的启用接口）
+ * @param app 所属应用；用它的窗口菜单栏与动作表
+ * @param name 动作名；据此找到挂在菜单栏上的对应项
+ * @return void 无返回值
+ * @note 只处理窗口菜单栏那一份：菜单按钮的弹出菜单是**每次点击时现场重建**的，
+ *       建的时候自然读到最新状态，不需要同步
  */
 void cg_win_action_sync(cg_app_t *app, const char *name)
 {
@@ -135,9 +144,13 @@ void cg_win_action_sync(cg_app_t *app, const char *name)
     DrawMenuBar((HWND)app->hwnd);
 }
 
-/** @brief 窗口菜单栏是哪个控件：**第一个** type=="menu" 的
- *  @details 与建窗时（cgw_win_init 里那段扫描）同一口径 —— 多出来的 menu 在建窗时就报过
- *           "被忽略"，所以这里的"第一个"与当时的"那一个"永远是同一个。 */
+/**
+ * @brief 窗口菜单栏是哪个控件：**第一个**类型为 menu 的
+ * @param app 所属应用；在它的控件链表里找
+ * @return cg_widget_t * 窗口菜单栏控件；没有则 NULL（归 app，勿释放）
+ * @note 与建窗时那段扫描同一口径 —— 多出来的 menu 在建窗时就报过"被忽略"，
+ *       所以这里的"第一个"与当时的"那一个"永远是同一个
+ */
 static cg_widget_t *bar_menu_of(cg_app_t *app)
 {
     for (cg_widget_t *w = app->widgets; w; w = w->next) {
@@ -147,6 +160,11 @@ static cg_widget_t *bar_menu_of(cg_app_t *app)
 }
 
 /** @brief 按客户区尺寸重算窗口大小（补上菜单栏占掉的高度） */
+/**
+ * @brief 按客户区尺寸重算窗口大小（补上菜单栏占掉的高度）
+ * @param app 所属应用；提供文档逻辑尺寸与主窗口
+ * @return void 无返回值（app 或主窗口为空时直接返回）
+ */
 void cgw_menu_fit_client(cg_app_t *app)
 {
     HWND h;
@@ -167,10 +185,11 @@ void cgw_menu_fit_client(cg_app_t *app)
 
 /**
  * @brief 菜单行表变了之后重建窗口菜单栏
- * @details 行表是**唯一的真相**，HMENU 只是一次投影 —— 所以"改完重建"就够了，
- *          不需要维护两套状态（这也是整套运行时菜单 API 能做得这么小的原因）。
- *          勾选与可用由 cgw_menu_build() 每次从行表读出来，不用另外同步。
- *          menubutton 的弹出菜单不归这里管：它每次点击现场重建，改完行表自然生效。
+ * @param w menu 控件；不是窗口菜单栏时直接返回
+ * @return void 无返回值
+ * @note 行表是**唯一的真相**，原生菜单句柄只是一次投影 —— 所以"改完重建"就够了，
+ *       不需要维护两套状态（这也是整套运行时菜单 API 能做得这么小的原因）；
+ *       菜单按钮的弹出菜单不归这里管，它每次点击现场重建
  */
 void cg_win_menu_rebuild(cg_widget_t *w)
 {
@@ -201,6 +220,12 @@ void cg_win_menu_rebuild(cg_widget_t *w)
 }
 
 /** 工具栏按钮：没有图标，用「文字池 + BTNS_SHOWTEXT」做纯文字按钮 */
+/**
+ * @brief 工具栏按钮：没有图标，用「文字池 + 显示文字」做纯文字按钮
+ * @param h 工具栏原生窗口；先清空再按行表重建按钮
+ * @param w toolbar 控件；提供按钮文本并回填按钮 id
+ * @return void 无返回值（无按钮或分配失败时只留下空工具栏）
+ */
 void cgw_build_toolbar(HWND h, cg_widget_t *w)
 {
     wchar_t  *pool;

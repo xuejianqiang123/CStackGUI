@@ -13,6 +13,10 @@
 
 #include <string.h>
 
+/**
+ * @brief 拖放路径清单：填 / 取 / 越界 / 再填 / 清空与副本语义
+ * @return void 无返回值
+ */
 static void test_drop_list(void)
 {
     cg_app_t    app;

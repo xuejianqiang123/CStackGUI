@@ -17,6 +17,11 @@
 #include <string.h>
 
 /** @brief 解析一段 .cgui 文本；失败直接断言失败并返回 NULL */
+/**
+ * @brief 解析一段 .cgui 文本（失败时打一行说明）
+ * @param json 待解析的 .cgui 文本
+ * @return cg_doc_t* 解析出的文档；失败返回 NULL（此时会打一行说明，不计入断言数）
+ */
 static cg_doc_t *parse(const char *json)
 {
     char      err[256] = { 0 };
@@ -27,6 +32,12 @@ static cg_doc_t *parse(const char *json)
 }
 
 /** @brief 取顶层第 idx 个控件（越界返回 NULL） */
+/**
+ * @brief 取顶层第 idx 个控件
+ * @param doc 已解析的文档
+ * @param idx 顶层子控件下标（从 0 开始）
+ * @return cg_node_t* 第 idx 个顶层控件；越界返回 NULL
+ */
 static cg_node_t *kid(cg_doc_t *doc, size_t idx)
 {
     if (!doc || !doc->root || idx >= doc->root->nchildren) return NULL;
@@ -34,6 +45,10 @@ static cg_node_t *kid(cg_doc_t *doc, size_t idx)
 }
 
 /** @brief 样式表 + 三种引用形态 + 合并顺序（内联优先） */
+/**
+ * @brief 样式表 + 三种引用形态 + 合并顺序（内联优先）
+ * @return void 无返回值
+ */
 static void test_style_forms(void)
 {
     cg_doc_t *doc = parse(
@@ -120,6 +135,10 @@ static void test_style_forms(void)
 }
 
 /** @brief 子控件里的引用也要生效（递归解析到整棵树） */
+/**
+ * @brief 子控件里的引用也要生效（递归解析到整棵树）
+ * @return void 无返回值
+ */
 static void test_style_nested(void)
 {
     cg_doc_t *doc = parse(
@@ -147,6 +166,10 @@ static void test_style_nested(void)
 }
 
 /** @brief app.dark 三态与垃圾值 */
+/**
+ * @brief 深色标志三态与垃圾值
+ * @return void 无返回值
+ */
 static void test_dark_flag(void)
 {
     cg_doc_t *d1 = parse("{ \"cgui\": 1, \"app\": { \"dark\": true }, \"widgets\": [] }");
@@ -168,14 +191,15 @@ static void test_dark_flag(void)
     if (d5) cg_doc_free(d5);
 }
 
-/** @brief **值取不到的字段算"没写"**：不许把命名样式里的好值顶掉
- *  @details 契约原先只把 `align` 写成这个口径，font/fg/bg 是"键存在即算写了" ——
- *           那是实现顺手带来的，不是设计。后果很隐蔽：在 `use` 覆盖对象里写错一个色值
- *           （`"fg": "乱码"`）就会盖掉命名样式里的 fg ⇒ 控件变黑，
- *           而"我明明引用了样式"的人根本想不到是这里。
- *           这一条是**与画布域对齐口径**时一起定的（2026-09-27）：
- *           画布对这种键只能丢掉（语法里没有"写了但没有值"的写法），
- *           所以运行时要跟它一致 —— 丢掉 = 没写。 */
+/**
+ * @brief **值取不到的字段算"没写"**：不许把命名样式里的好值顶掉
+ * @return void 无返回值
+ * @note 契约原先只把对齐写成这个口径，字体 / 前景 / 背景是"键存在即算写了" ——
+ *       那是实现顺手带来的，不是设计。后果很隐蔽：在引用覆盖对象里写错一个色值
+ *       就会盖掉命名样式里的前景色 ⇒ 控件变黑，而"我明明引用了样式"的人根本想不到是这里。
+ *       这条是**与画布域对齐口径**时一起定的（2026-09-27）：画布对这种键只能丢掉
+ *       （语法里没有"写了但没有值"的写法），所以运行时要跟它一致 —— 丢掉 = 没写
+ */
 static void test_style_bad_values(void)
 {
     cg_doc_t *doc = parse(
@@ -234,10 +258,12 @@ static void test_style_bad_values(void)
 
 CG_TEST_SUITE("样式：style 的三种形态与合并", test_style_forms);
 CG_TEST_SUITE("样式：嵌套容器里的引用", test_style_nested);
-/** @brief 运行时切深色的两个 API：空指针安全、状态跟着走、没有窗口也不崩
- *  @details 真机观感只能靠截图（见 build\darktest\ 的探针），这里只钉**接口契约**：
- *           传 NULL 不许崩、set 之后 is_dark 要变、`--selftest` 这种没有窗口的场合
- *           调 set 也必须安全（cgw_theme_apply 在没有后端状态时直接返回）。 */
+/**
+ * @brief 运行时切深色的两个 API：空指针安全、状态跟着走、没有窗口也不崩
+ * @return void 无返回值
+ * @note 真机观感只能靠截图（见 build\darktest\ 的探针），这里只钉**接口契约**：
+ *       传 NULL 不许崩、设置之后查询要变、自检这种没有窗口的场合调设置也必须安全
+ */
 static void test_theme_api(void)
 {
     cg_app_t app;                     /* 白盒：栈上一个"没有窗口"的应用（natives = NULL） */

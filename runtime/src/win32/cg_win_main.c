@@ -9,9 +9,10 @@
 
 /**
  * @brief 给窗口伪控件派发窗口级事件
- * @param app 应用
- * @param ev 事件（ready/size/activate/keydown... 见 cg_event_t）
- * @note 和控件通知共用 g_win_in_notify 防重入：回调里再触发窗口消息不会套娃
+ * @param app 所属应用；取其窗口伪控件
+ * @param ev 事件（就绪 / 尺寸 / 激活 / 按键……）
+ * @return void 无返回值
+ * @note 和控件通知共用同一个防重入标志：回调里再触发窗口消息不会套娃
  */
 void cgw_win_emit(cg_app_t *app, cg_event_t ev)
 {
@@ -22,6 +23,11 @@ void cgw_win_emit(cg_app_t *app, cg_event_t ev)
 }
 
 /** @brief 鼠标消息的按键组合 -> 1=Ctrl 2=Shift 4=Alt（对齐「功能键状态」） */
+/**
+ * @brief 鼠标消息的按键组合 -> 功能键状态
+ * @param wp 鼠标消息的附加参数；低字含按键位
+ * @return int 1=Ctrl 2=Shift 4=Alt 的按位组合；0 = 无修饰键
+ */
 static int mods_from_mouse(WPARAM wp)
 {
     int m = 0;
@@ -32,6 +38,10 @@ static int mods_from_mouse(WPARAM wp)
 }
 
 /** @brief 键盘消息的按键组合 -> 1=Ctrl 2=Shift 4=Alt */
+/**
+ * @brief 键盘消息的按键组合 -> 功能键状态
+ * @return int 1=Ctrl 2=Shift 4=Alt 的按位组合；0 = 无修饰键
+ */
 static int mods_from_key(void)
 {
     int m = 0;
@@ -42,6 +52,13 @@ static int mods_from_key(void)
 }
 
 /** @brief 把鼠标消息的客户区坐标与按键状态写进窗口伪控件（回调里读 cg_event_x/y/keys） */
+/**
+ * @brief 把鼠标消息的客户区坐标与按键状态写进窗口伪控件
+ * @param app 所属应用；其窗口伪控件被写入坐标与按键状态
+ * @param wp 鼠标消息的附加参数；低字含按键位
+ * @param lp 鼠标消息的附加参数；低 / 高字为物理像素坐标，内部折回逻辑像素
+ * @return void 无返回值（无伪控件时直接返回）
+ */
 static void fill_mouse(cg_app_t *app, WPARAM wp, LPARAM lp)
 {
     cg_widget_t *w = app ? app->window : NULL;
@@ -55,12 +72,13 @@ static void fill_mouse(cg_app_t *app, WPARAM wp, LPARAM lp)
 }
 
 /**
- * @brief 托盘图标回调：左键单击显示窗口、左键双击、右键弹默认菜单，并派发 tray 事件
- * @param app 应用
- * @param hwnd 主窗口
- * @param lp 鼠标消息（WM_LBUTTONUP 等）
- * @return void
- * @note 业务绑了 tray 事件就能自己接管动作；没绑也有「显示/退出」的默认行为，不会变成孤儿图标
+ * @brief 托盘图标回调：左键单击显示窗口、左键双击、右键弹默认菜单，并派发托盘事件
+ * @param app 所属应用；提供托盘状态与窗口伪控件
+ * @param hwnd 主窗口；用于显示 / 恢复与右键菜单
+ * @param wp 消息的附加参数；本回调未使用
+ * @param lp 托盘消息类型
+ * @return void 无返回值
+ * @note 业务绑了托盘事件就能自己接管动作；没绑也有「显示 / 退出」的默认行为，不会变成孤儿图标
  */
 static void tray_callback(cg_app_t *app, HWND hwnd, WPARAM wp, LPARAM lp)
 {
@@ -120,6 +138,14 @@ static void tray_callback(cg_app_t *app, HWND hwnd, WPARAM wp, LPARAM lp)
 }
 
 /** @brief 主窗口过程：命令/通知分派、自绘、配色、DPI、时钟、窗口事件、关闭流程 */
+/**
+ * @brief 主窗口过程：命令 / 通知分派、自绘、配色、DPI、时钟、窗口事件、关闭流程
+ * @param hwnd 主窗口句柄
+ * @param msg 窗口消息号
+ * @param wp 消息的附加参数；含义随 msg 变化
+ * @param lp 消息的附加参数；含义随 msg 变化
+ * @return LRESULT 已处理的消息返回 0 / 非 0 等；未处理的交给系统默认处理
+ */
 LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     cg_app_t *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);

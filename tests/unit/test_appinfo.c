@@ -27,6 +27,10 @@ static const char *k_win_events_doc =
     "                  \"close\": \"on_close\" } },"
     "  \"widgets\": [] }";
 
+/**
+ * @brief 窗口级事件要落在虚拟根的对应字段上
+ * @return void 无返回值
+ */
 static void test_window_events_parse(void)
 {
     char      err[256] = { 0 };
@@ -68,6 +72,10 @@ static const char *k_info_doc =
     "    \"email\": \"邮箱\", \"homepage\": \"主页\" } },"
     "  \"widgets\": [] }";
 
+/**
+ * @brief 程序配置的 14 个键各自接到对应字段
+ * @return void 无返回值
+ */
 static void test_app_info(void)
 {
     char      err[256] = { 0 };

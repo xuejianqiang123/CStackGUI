@@ -24,6 +24,15 @@ typedef struct {
 } gauge_ctx_t;
 
 /** @brief 超采样绘制：在 s 倍内存位图上调 fn 画形状，再 HALFTONE 缩回目标 DC 的 rc */
+/**
+ * @brief 超采样绘制：在 s 倍内存位图上调 fn 画形状，再按缩放采样缩回目标 DC 的矩形
+ * @param dc 目标 DC（形状最终贴到它上面）
+ * @param rc 目标 DC 上的落点与尺寸
+ * @param fn 形状绘制回调（收到 s 倍大小的内存 DC 与 s 倍矩形）
+ * @param ctx 透传给 fn 的上下文（应用与控件）
+ * @return void 无返回值
+ * @note 放大再缩回是为了拿到抗锯齿：GDI 直接画的粗弧 / 斜线锯齿很明显
+ */
 static void gauge_paint_ss(HDC dc, const RECT *rc, gauge_shape_fn fn, void *ctx)
 {
     int     w  = rc->right - rc->left;
@@ -57,6 +66,14 @@ static void gauge_paint_ss(HDC dc, const RECT *rc, gauge_shape_fn fn, void *ctx)
 #define CG_LED_TIMER 1
 
 /** @brief 状态灯的灯体（圆/方）：在 s 倍内存 DC 上画（圆形轮廓靠缩回获得抗锯齿） */
+/**
+ * @brief 状态灯的灯体（圆 / 方）：在 s 倍内存 DC 上画
+ * @param dc s 倍大小的内存 DC（当前绘制目标）
+ * @param rc s 倍坐标空间里的绘制矩形
+ * @param s 超采样倍数（本文件固定值）
+ * @param vctx 上下文（应用与控件）
+ * @return void 无返回值
+ */
 static void led_body(HDC dc, const RECT *rc, int s, void *vctx)
 {
     gauge_ctx_t *ctx = (gauge_ctx_t *)vctx;
@@ -102,6 +119,15 @@ static void led_body(HDC dc, const RECT *rc, int s, void *vctx)
 }
 
 /** @brief 画状态灯：灯体走超采样，说明文字留在 1x DC 上画（缩回来的字会发虚） */
+/**
+ * @brief 画状态灯：灯体走超采样，说明文字留在 1x DC 上画
+ * @param app 所属应用（背后取色、明暗判定与字体）
+ * @param w 状态灯控件（取值 / 闪烁周期 / 说明文字 / 样式）
+ * @param dc 目标 DC（1x，文字直接画在它上面）
+ * @param rc 客户区矩形
+ * @return void 无返回值
+ * @note 文字不跟着超采样：缩回来的字会发虚
+ */
 static void led_paint(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
 {
     int cw = rc->right - rc->left;
@@ -134,6 +160,14 @@ static void led_paint(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
 }
 
 /** @brief 状态灯窗口过程：只管重画，不处理鼠标（纯显示控件） */
+/**
+ * @brief 状态灯窗口过程：只管重画（闪态自己开时钟驱动），不处理鼠标
+ * @param hwnd 本控件窗口
+ * @param msg 消息号
+ * @param wp 附加参数（随 msg 而定，本过程未使用）
+ * @param lp 附加参数（随 msg 而定，本过程未使用）
+ * @return LRESULT 处理结果，未处理的消息交给 DefWindowProcW
+ */
 static LRESULT CALLBACK LedProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     cg_app_t    *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
@@ -175,6 +209,10 @@ static LRESULT CALLBACK LedProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 }
 
 /** @brief 注册状态灯的自绘窗口类（整进程一次） */
+/**
+ * @brief 注册状态灯的自绘窗口类（整进程一次）
+ * @return void 无返回值
+ */
 void cgw_register_led_class(void)
 {
     static int done = 0;
@@ -210,6 +248,11 @@ static const short k_sin1000[91] = {
 };
 
 /** @brief 度数 -> Q1000 的正弦值（任意角度；表只存 0..90，其余靠象限折叠） */
+/**
+ * @brief 度数 -> 放大 1000 倍的正弦值（任意角度，靠象限折叠）
+ * @param deg 角度（度，可负、可超过 360）
+ * @return int 正弦值乘 1000（-1000 ~ 1000）
+ */
 static int meter_sin1000(int deg)
 {
     int d = deg % 360;
@@ -222,6 +265,15 @@ static int meter_sin1000(int deg)
 }
 
 /** @brief 角度 -> 圆上一点（顺时针、0° = +x 轴；屏幕 y 向下为正，所以 sin 直接相加） */
+/**
+ * @brief 角度 -> 圆上一点（顺时针、0° 指向 +x 轴）
+ * @param cx 圆心 x
+ * @param cy 圆心 y
+ * @param r 半径
+ * @param deg 角度（度，顺时针，0° 指向 +x 轴）
+ * @param p 出参：算出的点（调用方提供存储）
+ * @return void 无返回值
+ */
 static void meter_pt(int cx, int cy, int r, int deg, POINT *p)
 {
     p->x = cx + r * meter_sin1000(90 - deg) / 1000;   /* cos(d) = sin(90-d) */
@@ -229,6 +281,17 @@ static void meter_pt(int cx, int cy, int r, int deg, POINT *p)
 }
 
 /** @brief 用折线近似画一段弧（from 起、扫 sweep 度） */
+/**
+ * @brief 用折线近似画一段弧（from 起、扫 sweep 度）
+ * @param dc 目标 DC（用当前笔色与笔宽）
+ * @param cx 圆心 x
+ * @param cy 圆心 y
+ * @param r 半径
+ * @param from 起始角度（度，顺时针）
+ * @param sweep 扫过的角度（度，正数即顺时针）
+ * @param segs 折线段数（内部夹到 2 ~ 64）
+ * @return void 无返回值
+ */
 static void meter_arc(HDC dc, int cx, int cy, int r, int from, int sweep, int segs)
 {
     POINT pts[65];
@@ -244,6 +307,14 @@ static void meter_arc(HDC dc, int cx, int cy, int r, int from, int sweep, int se
 }
 
 /** @brief 仪表盘的全部形状（弧/刻度/指针/圆帽）：在 s 倍内存 DC 上画 */
+/**
+ * @brief 仪表盘的全部形状（弧 / 刻度 / 指针 / 圆帽）：在 s 倍内存 DC 上画
+ * @param dc s 倍大小的内存 DC（当前绘制目标）
+ * @param rc s 倍坐标空间里的绘制矩形
+ * @param s 超采样倍数（本文件固定值）
+ * @param vctx 上下文（应用与控件）
+ * @return void 无返回值
+ */
 static void meter_body(HDC dc, const RECT *rc, int s, void *vctx)
 {
     gauge_ctx_t *ctx = (gauge_ctx_t *)vctx;
@@ -323,6 +394,14 @@ static void meter_body(HDC dc, const RECT *rc, int s, void *vctx)
 }
 
 /** @brief 画整个仪表盘：形状走超采样，中心数值文字留在 1x DC 上画 */
+/**
+ * @brief 画整个仪表盘：形状走超采样，中心数值文字留在 1x DC 上画
+ * @param app 所属应用（背后取色与字体）
+ * @param w 仪表盘控件（取值 / 单位文字 / 样式）
+ * @param dc 目标 DC（1x，数值文字直接画在它上面）
+ * @param rc 客户区矩形
+ * @return void 无返回值
+ */
 static void meter_paint(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
 {
     int      cw = rc->right - rc->left;
@@ -365,6 +444,14 @@ static void meter_paint(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
 }
 
 /** @brief 仪表盘窗口过程（纯显示：没有鼠标、没有时钟） */
+/**
+ * @brief 仪表盘窗口过程（纯显示：没有鼠标、没有时钟）
+ * @param hwnd 本控件窗口
+ * @param msg 消息号
+ * @param wp 附加参数（随 msg 而定，本过程未使用）
+ * @param lp 附加参数（随 msg 而定，本过程未使用）
+ * @return LRESULT 处理结果，未处理的消息交给 DefWindowProcW
+ */
 static LRESULT CALLBACK MeterProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     cg_app_t    *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
@@ -395,6 +482,10 @@ static LRESULT CALLBACK MeterProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 }
 
 /** @brief 注册仪表盘的自绘窗口类（整进程一次） */
+/**
+ * @brief 注册仪表盘的自绘窗口类（整进程一次）
+ * @return void 无返回值
+ */
 void cgw_register_meter_class(void)
 {
     static int done = 0;

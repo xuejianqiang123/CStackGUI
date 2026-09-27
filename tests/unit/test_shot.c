@@ -14,6 +14,10 @@
 
 #include <string.h>
 
+/**
+ * @brief 截图 API 的参数兜底：NULL / 没有窗口 / 没有原生窗口都返 0 而不崩
+ * @return void 无返回值
+ */
 static void test_shot_contract(void)
 {
     cg_app_t app;                     /* 白盒：栈上一个"没有窗口"的应用（hwnd = NULL） */
@@ -39,6 +43,11 @@ static void test_shot_contract(void)
 }
 
 /** @brief 剪贴板图片的接口契约（真机出图见 build\clipprobe\：剪贴板放一张图 → 存出的 PNG 逐像素一致） */
+/**
+ * @brief 剪贴板图片的接口契约
+ * @return void 无返回值
+ * @note 真机出图见 build\clipprobe\：剪贴板放一张图 -> 存出的 PNG 逐像素一致
+ */
 static void test_clip_image_contract(void)
 {
     cg_file_delete("build/_should_not_exist.png");

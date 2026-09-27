@@ -107,7 +107,7 @@ static int                g_bt_tried;
 static int                g_bt_ready;
 
 /**
- * @brief 把 BLUETOOTH_ADDRESS 的 rgBytes 拼成对外那个 64 位表示（rgBytes[5] 是最高一组）
+ * @brief 把蓝牙地址的原始字节拼成对外那个 64 位表示（最高一组是最后一个字节）
  * @param b 指向 6 字节地址原始字节的数组，小端存放（b[0] 是打印出来最后一组）
  * @return unsigned long long 形如 0xAABBCCDDEEFF 的地址（即 AA:BB:CC:DD:EE:FF）
  */

@@ -8,9 +8,9 @@
 typedef struct { cg_app_t *app; cg_widget_t *w; } image_ctx_t;
 /**
  * @brief 图片一帧适配器：画进内存位图
- * @param mem 内存位图 DC
- * @param rc 绘制区域
- * @param vctx image_ctx_t 上下文（app 与控件）
+ * @param mem 内存位图 DC（双缓冲的离屏 DC）
+ * @param rc 离屏位图矩形（左上角为 0,0）
+ * @param vctx 上下文（应用与控件）
  * @return void 无返回值
  */
 static void image_body(HDC mem, const RECT *rc, void *vctx);
@@ -190,12 +190,11 @@ static void image_body(HDC mem, const RECT *rc, void *vctx)
 /**
  * @brief 画圆环中间那一行百分比文字
  * @param dc 目标 DC
- * @param w 控件
- * @param rc 客户区
+ * @param w 圆环控件（取 value / vmin / vmax 与字体样式）
+ * @param rc 客户区矩形（文字居中画在里面）
  * @return void 无返回值
- * @details 圆环本身（底色 / 轨道 / 进度弧）在 cg_skin.c 的 `cg_skin_draw_ring()` 里
- *          用 GDI+ 抗锯齿画（GDI 的粗弧锯齿非常明显）；文字要用本文件的 `cgw_font_for()`，
- *          所以留在调用方画完圆环之后补。
+ * @note 圆环本身（底色 / 轨道 / 进度弧）在皮肤模块里用 GDI+ 抗锯齿画
+ *       （GDI 的粗弧锯齿非常明显）；文字要用本文件的字体缓存，所以留在调用方画完圆环之后补
  */
 static void draw_ring_text(HDC dc, const cg_widget_t *w, const RECT *rc);  /* 定义在下面 */
 

@@ -24,6 +24,12 @@
  */
 
 /** @brief 与 build\hash-vectors.mjs 里同一个确定性生成器：第 i 字节 = 'a' + (i % 26) */
+/**
+ * @brief 与构建脚本里同一个确定性生成器：第 i 字节 = 'a' + (i % 26)
+ * @param buf 输出缓冲
+ * @param n 要填的字节数
+ * @return void 无返回值
+ */
 static void fill_pattern(char *buf, int n)
 {
     int i;
@@ -32,6 +38,15 @@ static void fill_pattern(char *buf, int n)
 }
 
 /** @brief 断言 cg_hash(文本) 等于期望值 */
+/**
+ * @brief 断言"文本的摘要"等于期望值
+ * @param what 这条断言在说什么
+ * @param data 待算的字节
+ * @param len 字节数
+ * @param algo 算法名
+ * @param want 期望的摘要串
+ * @return void 无返回值
+ */
 static void hash_eq_str(const char *what, const char *data, int len,
                         const char *algo, const char *want)
 {
@@ -42,6 +57,13 @@ static void hash_eq_str(const char *what, const char *data, int len,
 }
 
 /** @brief 断言 cg_hash(模式串(n)) 等于期望值 —— 这些期望值由 Node/OpenSSL 派生 */
+/**
+ * @brief 断言"模式串的摘要"等于期望值 —— 这些期望值由构建脚本用 OpenSSL 派生
+ * @param algo 算法名
+ * @param n 模式串字节数
+ * @param want 期望的摘要串
+ * @return void 无返回值
+ */
 static void hash_eq(const char *algo, int n, const char *want)
 {
     char  name[64];
@@ -56,6 +78,13 @@ static void hash_eq(const char *algo, int n, const char *want)
 }
 
 /** @brief 只问"这个算法名认不认/能不能算出来" */
+/**
+ * @brief 只问"这个算法名认不认 / 能不能算出来"
+ * @param data 待算的字节
+ * @param len 字节数
+ * @param algo 算法名
+ * @return int 1 = 认且算得出；0 = 不认或算不出（NULL）
+ */
 static int hash_ok(const char *data, int len, const char *algo)
 {
     char *h  = cg_hash(data, len, algo);
@@ -66,6 +95,10 @@ static int hash_ok(const char *data, int len, const char *algo)
 }
 
 /** @brief CRC32：公开检验值 + 几条性质 */
+/**
+ * @brief CRC32：公开检验值 + 几条性质
+ * @return void 无返回值
+ */
 static void test_crc32(void)
 {
     cg_test_note("---- CRC32（IEEE 802.3 / zlib 同一套） ----");
@@ -82,6 +115,10 @@ static void test_crc32(void)
 }
 
 /** @brief CRC16/Modbus：公开检验值 + 整帧自校验性质 */
+/**
+ * @brief CRC16/Modbus：公开检验值 + 整帧自校验性质
+ * @return void 无返回值
+ */
 static void test_crc16(void)
 {
     cg_test_note("---- CRC16/Modbus（工控设备帧最常用的那个） ----");
@@ -115,6 +152,10 @@ static void test_crc16(void)
 /* ------------------------------------------------------------ 哈希（摘要） */
 
 /** @brief 公开向量：RFC 1321（MD5）与 FIPS 180-1/2/4（SHA-1/256/512） */
+/**
+ * @brief 公开向量：RFC 1321（MD5）与 FIPS 180-1/2/4（SHA-1/256/512）
+ * @return void 无返回值
+ */
 static void test_hash_public(void)
 {
     cg_test_note("---- RFC 1321：MD5 ----");
@@ -149,9 +190,12 @@ static void test_hash_public(void)
                 "501d289e4900f7e4331b99dec4b5433ac7d329eeb6dd26545e96e55b874be909");
 }
 
-/** @brief 分块边界：长度 64/65/128/129（期望值由 build\hash-vectors.mjs 用 OpenSSL 派生）
- *  @details 补位长度算错是哈希实现最典型的错法，而且在短输入上看不出来：
- *           64 与 128 是"补位正好占满整块 / 要另起一块"的分水岭，65 与 129 是它的另一侧。 */
+/**
+ * @brief 分块边界：长度 64 / 65 / 128 / 129（期望值由构建脚本用 OpenSSL 派生）
+ * @return void 无返回值
+ * @note 补位长度算错是哈希实现最典型的错法，而且在短输入上看不出来：
+ *       64 与 128 是"补位正好占满整块 / 要另起一块"的分水岭，65 与 129 是它的另一侧
+ */
 static void test_hash_block_edges(void)
 {
     cg_test_note("---- 分块边界（常量来自 Node/OpenSSL，不是手算的）----");
@@ -182,6 +226,10 @@ static void test_hash_block_edges(void)
 }
 
 /** @brief 算法名、错误路径，以及"文件分块读"与"一次算"必须同值 */
+/**
+ * @brief 算法名、错误路径，以及"文件分块读"与"一次算"必须同值
+ * @return void 无返回值
+ */
 static void test_hash_edges(void)
 {
     char    *dir  = cg_app_dir();

@@ -19,6 +19,12 @@ static const char *k_doc =
     "\"rect\":{\"x\":0,\"y\":0,\"w\":360,\"h\":240}}]}";
 
 /** @brief 解析文档 + 建控件树；成功返回 1、失败返回 0 */
+/**
+ * @brief 解析文档 + 建控件树
+ * @param app 回填的应用结构
+ * @param json 待解析的 .cgui 文本
+ * @return int 1 = 成功；0 = 解析失败
+ */
 static int build_app(cg_app_t *app, const char *json)
 {
     char      err[256] = { 0 };
@@ -37,6 +43,11 @@ static int build_app(cg_app_t *app, const char *json)
 }
 
 /** @brief 收尾：先放控件（它们会回写节点），再放文档 */
+/**
+ * @brief 收尾：先放控件（它们会回写节点），再放文档
+ * @param app 待释放的应用
+ * @return void 无返回值
+ */
 static void free_app(cg_app_t *app)
 {
     cg_widget_t *w = app->widgets;
@@ -50,6 +61,12 @@ static void free_app(cg_app_t *app)
 }
 
 /** @brief 第 i 行去掉方向标记后的文字（越界返回空串） */
+/**
+ * @brief 第 i 行去掉方向标记后的文字
+ * @param w 终端控件
+ * @param i 行号（从 0 开始）
+ * @return const char* 该行的文字；越界返回空串
+ */
 static const char *line_text(cg_widget_t *w, int i)
 {
     const char *s = (i >= 0 && i < w->nitems && w->items[i]) ? w->items[i] : "";
@@ -59,6 +76,12 @@ static const char *line_text(cg_widget_t *w, int i)
 }
 
 /** @brief 第 i 行的方向标记；返回 0 表示没有标记（不该发生） */
+/**
+ * @brief 第 i 行的方向标记
+ * @param w 终端控件
+ * @param i 行号（从 0 开始）
+ * @return int 方向标记字节；越界或没有标记返回 0（不该发生）
+ */
 static int line_dir(cg_widget_t *w, int i)
 {
     if (i < 0 || i >= w->nitems || !w->items[i]) return 0;
@@ -66,6 +89,10 @@ static int line_dir(cg_widget_t *w, int i)
 }
 
 /** @brief 基本写入：一行一条、方向标记、自动滚到底不算（那是后端的事） */
+/**
+ * @brief 基本写入：一行一条、方向标记（自动滚到底是后端的事）
+ * @return void 无返回值
+ */
 static void test_term_write(void)
 {
     cg_app_t     app;
@@ -94,6 +121,10 @@ static void test_term_write(void)
 }
 
 /** @brief 文本模式：控制字符变点、中文不被搅坏、UTF-8 多字节保留 */
+/**
+ * @brief 文本模式：控制字符变点、中文不被搅坏、多字节序列保留
+ * @return void 无返回值
+ */
 static void test_term_text_mode(void)
 {
     cg_app_t     app;
@@ -131,6 +162,10 @@ static void test_term_text_mode(void)
 }
 
 /** @brief HEX 模式 */
+/**
+ * @brief 十六进制模式：两个一组空格分开
+ * @return void 无返回值
+ */
 static void test_term_hex_mode(void)
 {
     cg_app_t     app;
@@ -158,6 +193,10 @@ static void test_term_hex_mode(void)
 }
 
 /** @brief 时间戳开关（存的是控件的 checked 字段） */
+/**
+ * @brief 时间戳开关（存的是控件的勾选字段）
+ * @return void 无返回值
+ */
 static void test_term_timestamp(void)
 {
     cg_app_t     app;
@@ -184,6 +223,10 @@ static void test_term_timestamp(void)
 }
 
 /** @brief 一段数据里带换行：要切成多行（串口/网络是常态） */
+/**
+ * @brief 一段数据里带换行：要切成多行（串口 / 网络是常态）
+ * @return void 无返回值
+ */
 static void test_term_split_lines(void)
 {
     cg_app_t     app;
@@ -214,6 +257,10 @@ static void test_term_split_lines(void)
 }
 
 /** @brief 行数上限：超了从最老的丢 */
+/**
+ * @brief 行数上限：超了从最老的丢
+ * @return void 无返回值
+ */
 static void test_term_max_lines(void)
 {
     cg_app_t     app;
@@ -247,6 +294,10 @@ static void test_term_max_lines(void)
 }
 
 /** @brief 存文件：不该把方向标记写进去 */
+/**
+ * @brief 存文件：不该把方向标记写进去
+ * @return void 无返回值
+ */
 static void test_term_save(void)
 {
     cg_app_t     app;
@@ -310,11 +361,13 @@ CG_TEST_SUITE("终端：HEX 模式", test_term_hex_mode);
 CG_TEST_SUITE("终端：时间戳", test_term_timestamp);
 CG_TEST_SUITE("终端：按换行切行", test_term_split_lines);
 CG_TEST_SUITE("终端：行数上限与清空", test_term_max_lines);
-/** @brief 到上限后继续写：模型丢最老的行，但"已推送指针"必须跟着回退
- *  @details 后端 sync 是**增量追加**（只推 [term_pushed, nitems) 这段），并且
- *           `term_pushed >= nitems` 时直接 return。所以从头部删行而不回退这个指针，
- *           界面就会"永远不再更新"—— 不崩、不报错，只是日志悄悄停在某个时刻，
- *           比崩了还糟（人会照着它排查问题）。 */
+/**
+ * @brief 到上限后继续写：模型丢最老的行，但"已推送指针"必须跟着回退
+ * @return void 无返回值
+ * @note 后端同步是**增量追加**（只推新行），并且"已推 >= 总行数"时直接返回。
+ *       所以从头部删行而不回退这个指针，界面就会"永远不再更新"—— 不崩、不报错，
+ *       只是日志悄悄停在某个时刻，比崩了还糟（人会照着它排查问题）
+ */
 static void test_term_max_lines_pushed(void)
 {
     cg_app_t app;

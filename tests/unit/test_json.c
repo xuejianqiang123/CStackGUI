@@ -11,6 +11,10 @@
 #include <string.h>
 
 /** @brief 基本类型、嵌套取值、类型不符时的兜底值 */
+/**
+ * @brief 基本类型、嵌套取值、类型不符时的兜底值
+ * @return void 无返回值
+ */
 static void test_json_values(void)
 {
     char      err[128];
@@ -56,6 +60,10 @@ static void test_json_values(void)
 }
 
 /** @brief 转义、\uXXXX、代理对、BOM */
+/**
+ * @brief 转义、Unicode 转义、代理对、字节序标记
+ * @return void 无返回值
+ */
 static void test_json_strings(void)
 {
     char      err[128];
@@ -88,6 +96,10 @@ static void test_json_strings(void)
 }
 
 /** @brief 颜色字面量的各种写法 */
+/**
+ * @brief 颜色字面量的各种写法
+ * @return void 无返回值
+ */
 static void test_json_colors(void)
 {
     char      err[128];
@@ -109,6 +121,10 @@ static void test_json_colors(void)
 }
 
 /** @brief 该报错的输入必须报错，且要写错误信息 */
+/**
+ * @brief 该报错的输入必须报错，且要写错误信息
+ * @return void 无返回值
+ */
 static void test_json_errors(void)
 {
     char err[256];

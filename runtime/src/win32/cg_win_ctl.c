@@ -427,13 +427,15 @@ static unsigned parent_body_rgb(HWND parent, HWND child)
     return rgb;
 }
 
-/** @brief 某个控件"背后"是什么颜色（0xRRGGBB）
- *  @param app 所属应用；hwnd 目标控件（按它的**直接父窗口**判断"背后"是谁）
- *  @return unsigned 0xRRGGBB
- *  @details 主窗口上的控件 -> 窗口底色；分组框 / 容器块 / 卡片 / 图形里的 -> 该面板的
- *           style.bg（没设就顺着父链继续往上看，直到主窗底色）；标签页里的 -> 采样页体真实像素。
- *           无底色标签、以及"清掉自身底色"的自绘按钮/开关/勾选框都用它，
- *           否则它们会把窗口底色画到带底色的面板上，露出一块方块。
+/**
+ * @brief 某个控件"背后"是什么颜色（0xRRGGBB）
+ * @param app 所属应用；取主窗口底色与主题，NULL 时给默认面色
+ * @param hwnd 目标控件窗口；按它的**直接父窗口**判断"背后"是谁
+ * @return unsigned 0xRRGGBB 颜色值
+ * @note 主窗口上的控件 -> 窗口底色；分组框 / 容器块 / 卡片 / 图形里的 -> 该面板的底色
+ *       （没设就顺着父链继续往上看）；标签页里的 -> 采样页体真实像素。
+ *       无底色标签、以及"清掉自身底色"的自绘按钮 / 开关 / 勾选框都用它，
+ *       否则它们会把窗口底色画到带底色的面板上，露出一块方块
  */
 unsigned cg_win_behind_rgb(cg_app_t *app, void *hwnd)
 {

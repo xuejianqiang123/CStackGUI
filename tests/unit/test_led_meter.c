@@ -25,6 +25,12 @@ static const char *k_doc =
     "\"value\":75,\"min\":0,\"max\":100,\"format\":\"half\"}"
     "]}";
 
+/**
+ * @brief 解析文档 + 建控件树
+ * @param app 待初始化的应用
+ * @param json 要解析的 .cgui 文本
+ * @return int 成功返回 1；解析失败返回 0
+ */
 static int build_app(cg_app_t *app, const char *json)
 {
     char      err[256] = { 0 };
@@ -42,6 +48,11 @@ static int build_app(cg_app_t *app, const char *json)
     return 1;
 }
 
+/**
+ * @brief 收尾：先放控件（它们会回写节点），再放文档
+ * @param app 要释放的应用
+ * @return void 无返回值
+ */
 static void free_app(cg_app_t *app)
 {
     cg_widget_t *w = app->widgets;
@@ -55,6 +66,10 @@ static void free_app(cg_app_t *app)
 }
 
 /** @brief 从 .cgui 读进来的字段（形状、周期、文字） */
+/**
+ * @brief 从 .cgui 读进来的字段（形状、周期、文字）
+ * @return void 无返回值
+ */
 static void test_led_parse(void)
 {
     cg_app_t     app;
@@ -92,6 +107,10 @@ static void test_led_parse(void)
 }
 
 /** @brief 闪烁相位：按周期前后半周期翻转（这是最容易错、也最看不出来的地方） */
+/**
+ * @brief 闪烁相位：按周期前后半周期翻转（这是最容易错、也最看不出来的地方）
+ * @return void 无返回值
+ */
 static void test_led_blink(void)
 {
     cg_app_t     app;
@@ -135,6 +154,10 @@ static void test_led_blink(void)
 }
 
 /** @brief 颜色与类型守卫 */
+/**
+ * @brief 颜色设置与类型守卫
+ * @return void 无返回值
+ */
 static void test_led_color_guard(void)
 {
     cg_app_t     app;
@@ -161,6 +184,10 @@ static void test_led_color_guard(void)
 }
 
 /** @brief 表盘角度：值 -> 角度（arc 270° / half 180°，超量程夹取） */
+/**
+ * @brief 表盘角度：值 -> 角度（弧表 270°、半表 180°，超量程夹取）
+ * @return void 无返回值
+ */
 static void test_meter_angle(void)
 {
     cg_app_t     app;
@@ -199,6 +226,10 @@ static void test_meter_angle(void)
 }
 
 /** @brief 表盘取值与类型守卫 */
+/**
+ * @brief 表盘取值与类型守卫
+ * @return void 无返回值
+ */
 static void test_meter_value_guard(void)
 {
     cg_app_t     app;

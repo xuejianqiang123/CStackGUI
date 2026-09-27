@@ -6,12 +6,16 @@
 
 /* ------------------------------------------------------------ 面板窗口 */
 
-/** @brief 画整个组框（group/box）：内区底色 + 压在顶边线上的标题 + 边框
- *  @param app 所属应用；dc 客户区 DC；w 面板控件；rc 客户区矩形
- *  @details 三样都得自己画（**不能用 WS_BORDER**）：交给系统画边框时，系统重绘非客户区
- *           会把标题盖掉，看起来就是"边框线穿过文字"。标题的上下各占一半、中线压在顶边线
- *           上（原生 BS_GROUPBOX 就是这个观感），并且用组框底色把那一小段线擦开。
- *           顶边线以上那一条留空，透出"背后"的颜色（和画布 `top:-8px` 的关系一致）。
+/**
+ * @brief 画整个组框（group / box）：内区底色 + 压在顶边线上的标题 + 边框
+ * @param app 所属应用（DPI 缩放、字体、背后取色）
+ * @param dc 客户区 DC
+ * @param w 面板控件（标题文本 / 样式 / 底色）
+ * @param rc 客户区矩形
+ * @return void 无返回值
+ * @note 三样都得自己画（**不能用系统边框样式**）：交给系统画边框时，系统重绘非客户区
+ *       会把标题盖掉，看起来就是"边框线穿过文字"。标题的上下各占一半、中线压在顶边线上
+ *       （原生组框就是这个观感），故障时用组框底色把那一小段线擦开
  */
 static void panel_draw_group(cg_app_t *app, HDC dc, cg_widget_t *w, const RECT *rc)
 {
@@ -87,6 +91,13 @@ static void panel_draw_group(cg_app_t *app, HDC dc, cg_widget_t *w, const RECT *
 typedef struct { cg_app_t *app; cg_widget_t *w; } panel_ctx_t;
 
 /** @brief group/box 一帧适配器：画进内存位图 */
+/**
+ * @brief group / box 一帧适配器：画进内存位图
+ * @param mem 内存位图 DC（双缓冲的离屏 DC）
+ * @param rc 离屏位图矩形（左上角为 0,0）
+ * @param vctx 上下文（应用与控件）
+ * @return void 无返回值
+ */
 static void panel_group_body(HDC mem, const RECT *rc, void *vctx)
 {
     panel_ctx_t *c = (panel_ctx_t *)vctx;
@@ -94,6 +105,14 @@ static void panel_group_body(HDC mem, const RECT *rc, void *vctx)
 }
 
 /** @brief 画卡片/形状：先铺底（清四角），再圆角/椭圆/矩形描边，卡片带标题 */
+/**
+ * @brief 画卡片 / 形状：先铺底（清四角），再按格式描边，卡片带标题
+ * @param app 所属应用（DPI 缩放、字体、背后取色）
+ * @param dc 目标 DC
+ * @param w card / shape 控件（格式、圆角、样式）
+ * @param rc 客户区矩形
+ * @return void 无返回值
+ */
 static void panel_draw_card_shape(cg_app_t *app, HDC dc, cg_widget_t *w, const RECT *rc)
 {
     unsigned face = GetSysColor(COLOR_BTNFACE);
@@ -162,6 +181,13 @@ static void panel_draw_card_shape(cg_app_t *app, HDC dc, cg_widget_t *w, const R
 }
 
 /** @brief card/shape 一帧适配器：画进内存位图 */
+/**
+ * @brief card / shape 一帧适配器：画进内存位图
+ * @param mem 内存位图 DC（双缓冲的离屏 DC）
+ * @param rc 离屏位图矩形（左上角为 0,0）
+ * @param vctx 上下文（应用与控件）
+ * @return void 无返回值
+ */
 static void panel_card_body(HDC mem, const RECT *rc, void *vctx)
 {
     panel_ctx_t *c = (panel_ctx_t *)vctx;
@@ -169,6 +195,14 @@ static void panel_card_body(HDC mem, const RECT *rc, void *vctx)
 }
 
 /** @brief 面板窗口过程（group/box/card/shape）：通知上浮主窗口 + card/shape 自绘 */
+/**
+ * @brief 面板窗口过程（group / box / card / shape）：通知上浮主窗口 + card / shape 自绘
+ * @param hwnd 本控件窗口
+ * @param msg 消息号
+ * @param wp 附加参数（随 msg 而定，转发给主窗口时原样传递）
+ * @param lp 附加参数（通知消息时是通知头，其余消息原样转发）
+ * @return LRESULT 处理结果，未处理的消息交给 DefWindowProcW
+ */
 LRESULT CALLBACK cgw_PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     cg_app_t *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
@@ -231,6 +265,10 @@ LRESULT CALLBACK cgw_PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 }
 
 /** @brief 注册面板窗口类（能装子控件的自绘底板，整进程一次） */
+/**
+ * @brief 注册面板窗口类（能装子控件的自绘底板，整进程一次）
+ * @return void 无返回值
+ */
 void cgw_register_panel_class(void)
 {
     static int done = 0;
@@ -255,6 +293,13 @@ static int s_split_origin;   /* 按下时鼠标的屏幕坐标（竖条看 x，�
 static int s_split_dragged;  /* 这次拖动真的动过分隔条吗（松手要不要报 release） */
 
 /** @brief 分隔条一帧适配器：画进内存位图（清背后 + 线 + 握点） */
+/**
+ * @brief 分隔条一帧适配器：画进内存位图（清背后 + 线 + 握点）
+ * @param mem 内存位图 DC（双缓冲的离屏 DC）
+ * @param rc 离屏位图矩形（左上角为 0,0）
+ * @param vctx 上下文（应用与控件）
+ * @return void 无返回值
+ */
 static void splitter_body(HDC mem, const RECT *rc, void *vctx)
 {
     panel_ctx_t *c = (panel_ctx_t *)vctx;
@@ -288,6 +333,14 @@ static void splitter_body(HDC mem, const RECT *rc, void *vctx)
 }
 
 /** @brief 分隔条窗口过程：拖动改两侧面板尺寸，松手派发一次 release */
+/**
+ * @brief 分隔条窗口过程：拖动改两侧面板尺寸，松手派发一次 release
+ * @param hwnd 本控件窗口
+ * @param msg 消息号
+ * @param wp 附加参数（随 msg 而定，本过程未使用）
+ * @param lp 附加参数（光标消息时低字是命中码，其余消息未使用）
+ * @return LRESULT 处理结果，未处理的消息交给 DefWindowProcW
+ */
 static LRESULT CALLBACK SplitterProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     cg_app_t    *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
@@ -365,6 +418,10 @@ static LRESULT CALLBACK SplitterProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 }
 
 /** @brief 注册分隔条的自绘窗口类（整进程一次） */
+/**
+ * @brief 注册分隔条的自绘窗口类（整进程一次）
+ * @return void 无返回值
+ */
 void cgw_register_splitter_class(void)
 {
     static int done = 0;

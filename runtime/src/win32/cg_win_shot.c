@@ -33,6 +33,12 @@ static const unsigned char k_png_clsid[16] = {
 };
 
 /** @brief 把一个位图存成 PNG（截图与剪贴板图片共用这一条路）；成功 1，失败 0 */
+/**
+ * @brief 把一个位图存成 PNG（截图与剪贴板图片共用这一条路）
+ * @param bmp 待保存的位图；只读使用，不接管所有权
+ * @param path UTF-8 输出路径（扩展名随意，编码固定 PNG）
+ * @return int 1 = 成功；0 = 参数为空 / GDI+ 没起来 / 转换或写盘失败（都写日志）
+ */
 static int shot_save_png(HBITMAP bmp, const char *path)
 {
     void    *image = NULL;
@@ -59,9 +65,11 @@ static int shot_save_png(HBITMAP bmp, const char *path)
     return ok;
 }
 
-/** @brief 抓一个窗口（或控件）的像素并存成 PNG；成功 1，失败 0
- *  @param hwnd 目标窗口
- *  @param path UTF-8 输出路径（扩展名随意，编码固定 PNG）
+/**
+ * @brief 抓一个窗口（或控件）的像素并存成 PNG
+ * @param hwnd 目标窗口（含非客户区）
+ * @param path UTF-8 输出路径（扩展名随意，编码固定 PNG）
+ * @return int 1 = 成功；0 = 参数为空 / 尺寸非法 / 取 DC 失败 / 存盘失败
  */
 static int shot_capture(HWND hwnd, const char *path)
 {
@@ -107,23 +115,37 @@ done:
 }
 
 /** @brief 把整个窗口存成 PNG（含标题栏）；可用运行时 API 里最常用的那个 */
+/**
+ * @brief 把整个窗口存成 PNG（含标题栏）
+ * @param app 所属应用；取其主窗口
+ * @param path UTF-8 输出路径（扩展名随意，编码固定 PNG）
+ * @return int 1 = 成功；0 = app 或主窗口为空 / 抓图存盘失败
+ */
 int cg_win_screenshot(cg_app_t *app, const char *path)
 {
     if (!app || !app->hwnd) return 0;
     return shot_capture((HWND)app->hwnd, path);
 }
 
-/** @brief 把**一个控件**的原生窗口存成 PNG（给"这个框里到底显示成什么样"取证）。
- *  @note 日期时间这类由两个原生窗口拼成的控件，存的是主窗口那个。 */
+/**
+ * @brief 把**一个控件**的原生窗口存成 PNG（"这个框里到底显示成什么样"取证用）
+ * @param w 目标控件；存它的主原生窗口
+ * @param path UTF-8 输出路径（扩展名随意，编码固定 PNG）
+ * @return int 1 = 成功；0 = 控件无原生窗口 / 抓图存盘失败
+ * @note 日期时间这类由两个原生窗口拼成的控件，存的是主窗口那个
+ */
 int cg_widget_screenshot(cg_widget_t *w, const char *path)
 {
     if (!w || !w->native) return 0;
     return shot_capture((HWND)w->native, path);
 }
 
-/** @brief 位图深度与调色板：算出"像素数据"在 DIB 里从第几字节开始
- *  @details 剪贴板给的是**打包 DIB**（`BITMAPINFOHEADER` + 调色板 + 位），
- *          位偏移要按 `biSize`（可能是 BITMAPV5HEADER）与 `biBitCount` 自己算。 */
+/**
+ * @brief 位图深度与调色板：算出"像素数据"在设备无关位图里从第几字节开始
+ * @param h 位图信息头（可能是 V5 头）；只读，不接管所有权
+ * @return const void * 指向像素数据首字节的指针；指向 h 所在缓冲内部，调用方不得释放
+ * @note 剪贴板给的是**打包形式**（信息头 + 调色板 + 位），位偏移要按头大小与位深自己算
+ */
 static const void *dib_bits(const BITMAPINFOHEADER *h)
 {
     const unsigned char *p = (const unsigned char *)h;

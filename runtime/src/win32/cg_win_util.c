@@ -184,15 +184,10 @@ int cgw_is_editlike(const cg_widget_t *w)
 }
 
 /**
- * @brief 有控制台时把控制台输入/输出代码页切到 UTF-8
- *
- * printf 的中文是 UTF-8 字节（源码与执行字符集都是 UTF-8），控制台默认
- * 代码页（如 GBK）会显示成乱码。带控制台的 debug 版调用后中文正常显示；
- * 无控制台（-mwindows 的 release 版、输出重定向）时 GetConsoleWindow()
- * 返回 NULL，本函数不做任何事。
- *
- * @param void 无参数
+ * @brief 有控制台时把控制台输入 / 输出代码页切到 UTF-8
  * @return void 无返回值
+ * @note printf 的中文是 UTF-8 字节（源码与执行字符集都是 UTF-8），控制台默认代码页
+ *       （如 GBK）会显示成乱码；无控制台（release 版、输出重定向）时是空操作
  */
 void cg_win_console_utf8(void)
 {

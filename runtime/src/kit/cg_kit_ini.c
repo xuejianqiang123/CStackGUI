@@ -15,6 +15,12 @@
  */
 
 /** @brief 取下一行（就地写 NUL，跳过 \r\n）；没有更多返回 NULL */
+/**
+ * @brief 取下一行（就地写 NUL，跳过行尾换行）
+ * @param text 整个文本缓冲（行尾会被就地改成 NUL）；NULL 返回 NULL
+ * @param pos 读写游标：进来是本次起点，出去指向下一行的开头
+ * @return char * 本行首字符（内容不含行尾换行）；已到末尾返回 NULL
+ */
 static char *kit_next_line(char *text, size_t *pos)
 {
     size_t i = *pos;
@@ -32,6 +38,12 @@ static char *kit_next_line(char *text, size_t *pos)
 }
 
 /** @brief 是节头就返回名字起点并写 *len（**不修改 line**）；不是返回 NULL */
+/**
+ * @brief 是节头就返回名字起点并写出长度（**不修改 line**）
+ * @param line 一行文本
+ * @param len 出口：节名长度（方括号内字符数）；可为 NULL
+ * @return const char * 节名起点（指向 line 内部）；不是节头返回 NULL
+ */
 static const char *kit_section_name(const char *line, size_t *len)
 {
     const char *p = line;
@@ -46,6 +58,12 @@ static const char *kit_section_name(const char *line, size_t *len)
 }
 
 /** @brief line 是不是 [section] 这一节（忽略大小写） */
+/**
+ * @brief 判断 line 是不是 [section] 这一节（忽略大小写）
+ * @param line 一行文本
+ * @param section 要比的节名（不带方括号）
+ * @return int 1 是；0 不是
+ */
 static int kit_section_is(const char *line, const char *section)
 {
     size_t      len = 0;
@@ -61,6 +79,13 @@ static int kit_section_is(const char *line, const char *section)
 }
 
 /** @brief 命中 "key = ..." 就返回值指针（忽略键名大小写）；否则 NULL */
+/**
+ * @brief 命中 "key = ..." 就返回值指针（忽略键名大小写）
+ * @param line 一行文本（只读，不改动它）
+ * @param key 键名
+ * @param klen key 的字符数，由调用方算好（省一次求长度）
+ * @return const char * 值起点（已跳过等号后与行尾前的空白）；不是这一项返回 NULL
+ */
 static const char *kit_key_value(char *line, const char *key, size_t klen)
 {
     char *p = line;
@@ -79,6 +104,14 @@ static const char *kit_key_value(char *line, const char *key, size_t klen)
 }
 
 /** @brief 读 INI 的一项；不存在返回 def 的副本 */
+/**
+ * @brief 读 INI 的一项
+ * @param path ini 文件路径（UTF-8）；NULL 直接走回退
+ * @param section 节名（读时忽略大小写）；NULL 直接走回退
+ * @param key 键名（读时忽略大小写）；NULL 直接走回退
+ * @param def 文件 / 节 / 键不存在时的回退内容（副本顶上），可为 NULL
+ * @return char * 堆串（已去掉值尾部的空白），用完 cg_free；取不到时是 def 的副本
+ */
 char *cg_ini_read(const char *path, const char *section, const char *key, const char *def)
 {
     char   *text;
@@ -115,6 +148,14 @@ char *cg_ini_read(const char *path, const char *section, const char *key, const 
 }
 
 /** @brief 往缓冲追加（带上限）；用于拼写出的 INI 文本 */
+/**
+ * @brief 往缓冲追加字符串（带上限，放不下就截断）
+ * @param buf 目标缓冲
+ * @param cap buf 的字节容量（含结尾 NUL）
+ * @param len 读写：当前已写长度，追加后被更新
+ * @param s 要追加的 NUL 结尾字符串
+ * @return void 无返回值（始终保证结尾 NUL）
+ */
 static void kit_append(char *buf, size_t cap, size_t *len, const char *s)
 {
     size_t n = strlen(s);
@@ -126,6 +167,14 @@ static void kit_append(char *buf, size_t cap, size_t *len, const char *s)
 }
 
 /** @brief 写 INI 的一项（保留文件其它内容）；成功返回 0 */
+/**
+ * @brief 写 INI 的一项（保留文件其它内容，只动目标那一行）
+ * @param path ini 文件路径（UTF-8）；文件不存在就当空文件；NULL 直接失败
+ * @param section 节名；节不存在就在文件末尾补一个
+ * @param key 键名；不能含等号，且不超过 512 字符
+ * @param value 值（原样写，不转义）；NULL 直接失败，不超过 1024 字符
+ * @return int 0 成功；-1 参数为空、键 / 节名非法或超长、内存不足或写文件失败
+ */
 int cg_ini_write(const char *path, const char *section, const char *key, const char *value)
 {
     char  *text;

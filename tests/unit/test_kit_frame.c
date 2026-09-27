@@ -53,6 +53,10 @@ static unsigned long feed_chunked(cg_frame_t *f, const unsigned char *data, int 
 }
 
 /** 静默切帧（Modbus RTU 的 t3.5）：边界两侧、逐字节碎包、空档由下一个字节发现 */
+/**
+ * @brief 静默切帧（Modbus RTU 的 t3.5）：边界两侧、逐字节碎包、空档由下一个字节发现
+ * @return void 无返回值
+ */
 static void test_frame_silence(void)
 {
     static unsigned char buf[256];
@@ -99,6 +103,10 @@ static void test_frame_silence(void)
 }
 
 /** 三种"自带边界"的切法：定长 / 分隔符 / 头里带长度（MBAP）*/
+/**
+ * @brief 三种"自带边界"的切法：定长 / 分隔符 / 头里带长度
+ * @return void 无返回值
+ */
 static void test_frame_bounded(void)
 {
     static unsigned char buf[256];
@@ -193,6 +201,10 @@ static void test_frame_bounded(void)
 }
 
 /** 缓冲不越界（金丝雀）+ 噪声不当帧 + 排队上限 + 长期小缓冲不"往后爬" */
+/**
+ * @brief 缓冲不越界（金丝雀）+ 噪声不当帧 + 排队上限 + 长期小缓冲不"往后爬"
+ * @return void 无返回值
+ */
 static void test_frame_guards(void)
 {
     static unsigned char raw[64];
@@ -248,6 +260,10 @@ static void test_frame_guards(void)
 }
 
 /** 20 轮"碎包往返"：从站回的帧碎着来，切出来的帧必须每轮都能被 Modbus 解析器认下 */
+/**
+ * @brief 20 轮"碎包往返"：从站回的帧碎着来，切出来的帧必须每轮都能被解析器认下
+ * @return void 无返回值
+ */
 static void test_frame_rtu_roundtrip(void)
 {
     static unsigned char buf[128];

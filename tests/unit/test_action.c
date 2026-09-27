@@ -18,6 +18,10 @@
 /* ------------------------------------------------------------ 快捷键解析 */
 
 /** @brief 能认的写法：大小写、顺序、重复、空白 */
+/**
+ * @brief 能认的写法：大小写、顺序、重复、空白
+ * @return void 无返回值
+ */
 static void test_accel_parse_ok(void)
 {
     cg_accel_t a;
@@ -59,6 +63,10 @@ static void test_accel_parse_ok(void)
 }
 
 /** @brief 不能认的写法：**尤其是裸字母/数字**（那会抢走输入框的按键） */
+/**
+ * @brief 不能认的写法：**尤其是裸字母 / 数字**（那会抢走输入框的按键）
+ * @return void 无返回值
+ */
 static void test_accel_parse_bad(void)
 {
     cg_accel_t a;
@@ -87,6 +95,10 @@ static void test_accel_parse_bad(void)
 }
 
 /** @brief 规范化显示：修饰键顺序固定、具名键用规范名 */
+/**
+ * @brief 规范化显示：修饰键顺序固定、具名键用规范名
+ * @return void 无返回值
+ */
 static void test_accel_format(void)
 {
     char buf[64];
@@ -137,6 +149,12 @@ static const char *k_doc =
     "}\n";
 
 /** @brief 在文档的动作表里按名字找一个（顺序无关，改测试数据不会连带改断言） */
+/**
+ * @brief 在文档的动作表里按名字找一个（顺序无关，改测试数据不会连带改断言）
+ * @param doc 要查的动作表所在的文档
+ * @param name 想找的动作名
+ * @return const cg_action_t* 命中的动作条目；文档为空或没找到返回 NULL
+ */
 static const cg_action_t *action_by_name(const cg_doc_t *doc, const char *name)
 {
     if (!doc) return NULL;
@@ -147,6 +165,10 @@ static const cg_action_t *action_by_name(const cg_doc_t *doc, const char *name)
 }
 
 /** @brief 动作字段的解析：写成什么、缺省是什么 */
+/**
+ * @brief 动作字段的解析：写成什么、缺省是什么
+ * @return void 无返回值
+ */
 static void test_action_parse(void)
 {
     char      err[256];
@@ -207,6 +229,10 @@ static void test_action_parse(void)
 }
 
 /** @brief 边界：空名、重名、缺 handler、坏 accel、actions 不是对象 */
+/**
+ * @brief 边界：空名、重名、缺 handler、actions 不是对象
+ * @return void 无返回值
+ */
 static void test_action_parse_edge(void)
 {
     char      err[256];
@@ -263,6 +289,13 @@ static int  s_save_calls;
 static int  s_grid_calls;
 
 /** @brief on_save 的动作回调：self 恒为主窗口伪控件 */
+/**
+ * @brief 保存动作的回调：self 恒为主窗口伪控件
+ * @param self 触发回调的控件（动作回调里是主窗口伪控件）
+ * @param ev 事件类型
+ * @param user 注册时传入的用户数据（这里不用）
+ * @return void 无返回值
+ */
 static void on_save(cg_widget_t *self, cg_event_t ev, void *user)
 {
     const char *name;
@@ -276,6 +309,13 @@ static void on_save(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /** @brief on_grid 的动作回调 */
+/**
+ * @brief 表格动作的回调（只记账，看它有没有被误触发）
+ * @param self 触发回调的控件
+ * @param ev 事件类型
+ * @param user 注册时传入的用户数据（这里不用）
+ * @return void 无返回值
+ */
 static void on_grid(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)self; (void)ev; (void)user;
@@ -289,6 +329,12 @@ static const cg_binding_t k_bindings[] = {
 };
 
 /** @brief 解析文档 + 建控件树 + 建动作表；失败返回 -1 */
+/**
+ * @brief 解析文档 + 建控件树 + 建动作表
+ * @param app 待初始化的应用（内嵌文档、控件树与动作表都在这里）
+ * @param json 要解析的 .cgui 文本
+ * @return int 成功返回 0；解析失败返回 -1
+ */
 static int build_app(cg_app_t *app, const char *json)
 {
     char      err[256] = { 0 };
@@ -309,6 +355,11 @@ static int build_app(cg_app_t *app, const char *json)
 }
 
 /** @brief 收尾：动作表自己持有一份字符串，要和控件一起收 */
+/**
+ * @brief 收尾：动作表自己持有一份字符串，要和控件一起收
+ * @param app 要释放的应用
+ * @return void 无返回值
+ */
 static void free_app(cg_app_t *app)
 {
     cg_widget_t *w = app->widgets;
@@ -324,6 +375,10 @@ static void free_app(cg_app_t *app)
 }
 
 /** @brief 动作表构建：accel 归一化、发号、初始状态 */
+/**
+ * @brief 动作表构建：快捷键归一化、发号、初始状态
+ * @return void 无返回值
+ */
 static void test_action_build(void)
 {
     cg_app_t app;
@@ -435,6 +490,10 @@ static const char *k_bad_doc =
     "}\n";
 
 /** @brief 错配置：四类都要记账（自检据此非 0 退出），但界面不能崩、也不能被悄悄改 */
+/**
+ * @brief 错配置：五类都要记账（自检据此非 0 退出），但界面不能崩、也不能被悄悄改
+ * @return void 无返回值
+ */
 static void test_action_bad_refs(void)
 {
     cg_app_t app;

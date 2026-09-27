@@ -40,6 +40,11 @@ static const char *k_doc =
     "]}";
 
 /** @brief 解析文档 + 建控件树（与 test_action.c 同一套夹具口径） */
+/**
+ * @brief 解析文档 + 建控件树（与动作测试同一套夹具口径）
+ * @param app 待初始化的应用
+ * @return int 成功返回 0；解析失败返回 -1
+ */
 static int build_app(cg_app_t *app)
 {
     char      err[256] = { 0 };
@@ -59,6 +64,11 @@ static int build_app(cg_app_t *app)
 }
 
 /** @brief 收尾：控件自持字符串，要和文档一起收 */
+/**
+ * @brief 收尾：控件自持字符串，要和文档一起收
+ * @param app 要释放的应用
+ * @return void 无返回值
+ */
 static void free_app(cg_app_t *app)
 {
     cg_widget_t *w = app->widgets;
@@ -74,6 +84,12 @@ static void free_app(cg_app_t *app)
 }
 
 /** @brief 找某一行的下标（按文字），找不到 -1 —— 断言里读起来比裸下标清楚 */
+/**
+ * @brief 找某一行的下标（按文字），找不到返回 -1 —— 断言里读起来比裸下标清楚
+ * @param w 菜单控件
+ * @param text 要找的行文字
+ * @return int 命中的行下标；找不到返回 -1
+ */
 static int row_of(const cg_widget_t *w, const char *text)
 {
     for (int i = 0; i < w->nmenu; i++) {
@@ -83,6 +99,12 @@ static int row_of(const cg_widget_t *w, const char *text)
 }
 
 /** @brief 某一项挂在谁下面（按文字找父项，回它的文字；顶层回 "(顶层)"） */
+/**
+ * @brief 某一项挂在谁下面（按文字找父项，回它的文字；顶层回 "(顶层)"）
+ * @param w 菜单控件
+ * @param text 要找的行文字
+ * @return const char* 父项的文字；顶层返回 "(顶层)"，没有这一项返回 "(没有这一项)"
+ */
 static const char *parent_text_of(const cg_widget_t *w, const char *text)
 {
     int i = row_of(w, text);
@@ -95,6 +117,10 @@ static const char *parent_text_of(const cg_widget_t *w, const char *text)
 /* ------------------------------------------------------------ 增 */
 
 /** @brief 追加 / 中间插入 / 顶层前插，以及**索引平移** */
+/**
+ * @brief 追加 / 中间插入 / 顶层前插，以及**索引平移**
+ * @return void 无返回值
+ */
 static void test_menu_add(void)
 {
     cg_app_t     app;
@@ -183,6 +209,10 @@ static void test_menu_add(void)
 /* ------------------------------------------------------------ 删与清空 */
 
 /** @brief 删一项（连带子树）/ 清空某个下拉 / 清空整个菜单 */
+/**
+ * @brief 删一项（连带子树）/ 清空某个下拉 / 清空整个菜单
+ * @return void 无返回值
+ */
 static void test_menu_remove_clear(void)
 {
     cg_app_t     app;
@@ -245,6 +275,10 @@ static void test_menu_remove_clear(void)
 /* ------------------------------------------------------------ 改状态与文字 */
 
 /** @brief 启用 / 勾选 / 文字；动作项只读；找不到 id 必须不动界面 */
+/**
+ * @brief 启用 / 勾选 / 文字；动作项只读；找不到 id 必须不动界面
+ * @return void 无返回值
+ */
 static void test_menu_state(void)
 {
     cg_app_t     app;

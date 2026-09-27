@@ -53,10 +53,16 @@ typedef struct {
     COLORREF bg;       /* 补上边距用的底色（白或 style.bg） */
 } sk_edit_sub_t;
 
-/** 沿边框带画一圈圆角线。
- *  half 是路径离窗口边缘的距离，调用方给：**2px 笔给 1**（正好压住 [0,2)），
- *  **1px 笔给 0**（正好压住最外那一个像素 [0,1)）。
- *  另见 rr：1px 笔的右/下两条边要再各往内缩 1px。 */
+/**
+ * @brief 沿边框带画一圈圆角线
+ * @param dc 目标设备上下文；线画在它上面
+ * @param s 输入框子类数据；提供整块尺寸与圆角半径
+ * @param col 线的颜色
+ * @param penw 笔宽（像素）
+ * @param half 路径离窗口边缘的距离（像素）：2px 笔给 1，1px 笔给 0
+ * @return void 无返回值
+ * @note half 要按笔宽给：2px 笔给 1（正好压住 [0,2)）、1px 笔给 0（正好压住最外那一个像素）
+ */
 static void sk_edit_ring(HDC dc, const sk_edit_sub_t *s, COLORREF col, int penw, int half)
 {
     HPEN pn, op;
@@ -76,14 +82,16 @@ static void sk_edit_ring(HDC dc, const sk_edit_sub_t *s, COLORREF col, int penw,
     DeleteObject(pn);
 }
 
-/** 把边框带（上边距 + 左右下）整条填成输入框底色。
- *  **每次重画都先填**：不然细线样式只覆盖了带内的一个像素，上一次聚焦时画的
- *  2px 紫环会残留一条紫边（"点亮一次之后边框痕迹不消失"就是这么来的）。
- *
- *  **右上角那块"垂直居中的上边距"只铺到客户区右边界**：`s->arrow` 那一列是调节器
- *  箭头的地盘，而箭头范围是 [bw, h-bw) —— 上边距带的高度（pad = bw + 居中量）
- *  正好压在箭头的上半截上。我们用的是整窗 DC（GDI 不避让同级窗口），
- *  铺过去就会把"向上箭头"的头顶削掉（用户报的"向上的箭头被遮挡了"）。 */
+/**
+ * @brief 把边框带（上边距 + 左右下）整条填成输入框底色
+ * @param dc 目标设备上下文；用整窗 DC 填充
+ * @param s 输入框子类数据；提供底色、边框宽与箭头占位
+ * @return void 无返回值
+ * @note **每次重画都先填**：不然细线样式只覆盖了带内的一个像素，上一次聚焦时画的
+ *       2px 紫环会残留一条紫边（"点亮一次之后边框痕迹不消失"就是这么来的）。
+ *       右上角那块"垂直居中的上边距"只铺到客户区右边界：那一列是调节器箭头的地盘，
+ *       铺过去会把"向上箭头"的头顶削掉（用户报过的现象）
+ */
 static void sk_edit_fill_edge(HDC dc, const sk_edit_sub_t *s)
 {
     HBRUSH br = CreateSolidBrush(s->bg);
@@ -102,8 +110,13 @@ static void sk_edit_fill_edge(HDC dc, const sk_edit_sub_t *s)
     DeleteObject(br);
 }
 
-/** 3D 边框：整圈先按「下/右」的颜色画圆角线，再用「上/左」的颜色覆盖那两条边。
- *  outset=0 时上/左暗、下/右亮（凹入式）；outset=1 反过来（凸出式）。 */
+/**
+ * @brief 立体边框：整圈先按「下 / 右」的颜色画圆角线，再用「上 / 左」的颜色覆盖那两条边
+ * @param dc 目标设备上下文；线画在它上面
+ * @param s 输入框子类数据；提供边框宽与圆角半径
+ * @param outset 立体方向：0 = 凹入式（上 / 左暗、下 / 右亮），非 0 = 凸出式
+ * @return void 无返回值
+ */
 static void sk_edit_bevel(HDC dc, const sk_edit_sub_t *s, int outset)
 {
     HPEN pn, op;
@@ -123,9 +136,16 @@ static void sk_edit_bevel(HDC dc, const sk_edit_sub_t *s, int outset)
     DeleteObject(pn);
 }
 
-/** 画上边距的底 + 边框。边框样式由 .cgui 的 border 决定，**聚焦时一律换成主题紫** ——
- *  键盘用户必须看得见焦点在哪，这条优先级高于边框样式（无边框也一样）。
- *  边框画在客户区之外（客户区已由 WM_NCCALCSIZE 四边内缩 bw），所以控件怎么重绘都盖不掉它。 */
+/**
+ * @brief 画上边距的底 + 边框
+ * @param hwnd 输入框窗口；用整窗 DC 画
+ * @param s 输入框子类数据；提供边框样式、宽度与圆角
+ * @param focus 是否聚焦：非 0 = 画主题紫环，0 = 按 .cgui 的 border 样式画
+ * @return void 无返回值
+ * @note 边框样式由 .cgui 的 border 决定，**聚焦时一律换成主题紫** —— 键盘用户必须看得见
+ *       焦点在哪，这条优先级高于边框样式（无边框也一样）；边框画在客户区之外
+ *       （客户区已四边内缩），所以控件怎么重绘都盖不掉它
+ */
 static void sk_edit_box(HWND hwnd, const sk_edit_sub_t *s, int focus)
 {
     HDC dc;
@@ -161,12 +181,14 @@ static void sk_edit_box(HWND hwnd, const sk_edit_sub_t *s, int focus)
     ReleaseDC(hwnd, dc);
 }
 
-/** 取当前字体的文字行高（拿不到就是 0）。
- *  **必须先把控件自己的字体（WM_GETFONT）选进 DC 再量**：GetDC 拿来的 DC 里选中的是
- *  系统默认字体（16px 的 System 位图字体），拿它量雅黑 10pt（行高约 19px）会量小，
- *  上边距 pad 就算大了 —— 文字整条往下坠（用户报的"输入框里的字往下沉"）。
- *  这同时也救活了 WM_SETFONT 里"字高变了才重排"的比较：量错的话恒等于同一个值，
- *  换字号永远比不出变化。 */
+/**
+ * @brief 取当前字体的文字行高（拿不到就是 0）
+ * @param hwnd 输入框窗口；用它的控件字体量高度
+ * @return int 文字行高（物理像素）；取 DC 或取字体度量失败返回 0
+ * @note **必须先把控件自己的字体选进 DC 再量**：直接拿 DC 里选中的是系统默认字体
+ *       （16px 的位图字体），拿它量雅黑 10pt（行高约 19px）会量小，上边距就算大了 ——
+ *       文字整条往下坠（用户报过的"输入框里的字往下沉"）
+ */
 static int sk_edit_text_height(HWND hwnd)
 {
     HDC        dc = GetDC(hwnd);
@@ -184,6 +206,12 @@ static int sk_edit_text_height(HWND hwnd)
 }
 
 /** 重算整块尺寸 + 圆角区域；多行输入框顺带把客户区往里缩一点 */
+/**
+ * @brief 重算整块尺寸 + 圆角区域；多行输入框顺带把客户区往里缩一点
+ * @param hwnd 输入框窗口；按它的窗口矩形更新子类数据并重设圆角区域
+ * @param s 输入框子类数据；尺寸被就地更新
+ * @return void 无返回值（尺寸非正时不设区域）
+ */
 static void sk_edit_resize(HWND hwnd, sk_edit_sub_t *s)
 {
     RECT wr;
@@ -202,12 +230,15 @@ static void sk_edit_resize(HWND hwnd, sk_edit_sub_t *s)
     }
 }
 
-/** 把调节器（上下箭头）摆到边框内侧的右边。
- *  **宽度由我们定**（s->arrow），不看控件当前尺寸：up-down 控件建出来是 0x0，
- *  等它自报宽度就是把命交给系统 —— 有的机器上它一直是 0x0，箭头就"消失"了
- *  （旧版用的 `uw <= 0 就 return` 正是这么把箭头留成隐形的）。
- *  **故意不用 UDS_ALIGNRIGHT**：那个样式按 buddy 的"窗口矩形"贴右，会压在自绘边框上、
- *  越过上下圆角。这里按客户区内侧算：右让 bw + arrow、上下各让 bw。 */
+/**
+ * @brief 把调节器（上下箭头）摆到边框内侧的右边
+ * @param hwnd 输入框窗口；箭头按它的窗口矩形定位
+ * @param s 输入框子类数据；提供箭头宽度、边框宽与整块尺寸
+ * @return void 无返回值（无调节器或宽度为 0 时直接返回）
+ * @note **宽度由我们定**：up-down 控件建出来是 0x0，等它自报宽度就是把命交给系统 ——
+ *       有的机器上它一直是 0x0，箭头就"消失"了。也**故意不用系统的靠右对齐样式**：
+ *       那个按伙伴窗口的"窗口矩形"贴右，会压在自绘边框上、越过上下圆角
+ */
 static void sk_edit_spin_fit(HWND hwnd, const sk_edit_sub_t *s)
 {
     RECT er;
@@ -234,6 +265,16 @@ static void sk_edit_spin_fit(HWND hwnd, const sk_edit_sub_t *s)
     SendMessageW(hwnd, EM_SETMARGINS, EC_RIGHTMARGIN, MAKELPARAM(0, 2));
 }
 
+/**
+ * @brief 输入框子类过程：让出边框与上边距、换字体 / 改尺寸时重排、焦点与非客户区重画
+ * @param hwnd 输入框窗口
+ * @param msg 窗口消息号
+ * @param wp 消息的附加参数；含义随 msg 变化
+ * @param lp 消息的附加参数；含义随 msg 变化
+ * @param id 子类 id（本文件固定传 1）
+ * @param data 子类数据：输入框子类数据结构指针；窗口销毁时在此释放
+ * @return LRESULT 交给系统：各分支取原窗口过程的结果或原样透传
+ */
 static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
                                     UINT_PTR id, DWORD_PTR data)
 {
@@ -312,6 +353,11 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     return DefSubclassProc(hwnd, msg, wp, lp);
 }
 
+/**
+ * @brief 建好调节器后把它摆进输入框（记下句柄并按客户区内侧重摆）
+ * @param w edit 控件；无原生窗口或还没挂子类时直接返回
+ * @return void 无返回值
+ */
 void cg_skin_edit_fit_spin(cg_widget_t *w)
 {
     HWND        h;
@@ -371,6 +417,11 @@ void cg_skin_edit_rescale(cg_widget_t *w)
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 }
 
+/**
+ * @brief 给输入框挂皮肤子类：算圆角 / 边框带 / 箭头占位，设边距并强制一次布局
+ * @param w edit 控件；无原生窗口时直接返回
+ * @return void 无返回值（子类数据分配失败时什么也不做）
+ */
 void cg_skin_apply_edit(cg_widget_t *w)
 {
     HWND hw = (HWND)w->native;

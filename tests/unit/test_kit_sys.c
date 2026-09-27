@@ -16,6 +16,10 @@
 #include <string.h>
 
 /** @brief 环境变量：精易那 34 条命令在 C 侧就是这一个函数 */
+/**
+ * @brief 环境变量：那一大堆旧代码里的环境命令在 C 侧就是这一个函数
+ * @return void 无返回值
+ */
 static void test_env(void)
 {
     char *v;
@@ -54,6 +58,10 @@ static void test_env(void)
 }
 
 /** @brief 系统位数与版本串 */
+/**
+ * @brief 系统位数与版本串
+ * @return void 无返回值
+ */
 static void test_sys(void)
 {
     char *v;
@@ -72,6 +80,10 @@ static void test_sys(void)
 }
 
 /** @brief 磁盘容量与进程存在性、本机 IP */
+/**
+ * @brief 磁盘容量与进程存在性
+ * @return void 无返回值
+ */
 static void test_disk_and_process(void)
 {
     unsigned long long free_b = 0, total_b = 0;

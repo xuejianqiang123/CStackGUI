@@ -8,6 +8,12 @@
 /* ------------------------------------------------------------ 画板 */
 
 /** 类型检查：canvas 的绘制命令只能用在 canvas 上 */
+/**
+ * @brief 类型检查：画板的绘制命令只能用在 canvas 上
+ * @param w 待检查控件（类型名必须等于 "canvas" 才通过）
+ * @param who 调用方函数名；仅在失败时用于打印诊断
+ * @return int 1 = 是 canvas 控件，0 = 不是（并向 stderr 打印一行）
+ */
 static int canvas_ok(const cg_widget_t *w, const char *who)
 {
     if (w && w->type && strcmp(w->type, "canvas") == 0) return 1;
@@ -17,6 +23,12 @@ static int canvas_ok(const cg_widget_t *w, const char *who)
 }
 
 /** @brief 给画板追加一条绘制命令并触发重绘（容量不够倍增扩容） */
+/**
+ * @brief 给画板追加一条绘制命令并触发重绘
+ * @param w canvas 控件；命令追加进它的绘制记录
+ * @param op 待追加的绘制命令（按值复制，所有权仍归调用方）
+ * @return void 无返回值（容量不够时倍增扩容，失败则静默丢弃这一条）
+ */
 static void canvas_push(cg_widget_t *w, const cg_canvas_op_t *op)
 {
     if (w->nops >= w->op_cap) {
@@ -72,7 +84,10 @@ void cg_canvas_set_line_width(cg_widget_t *w, int px)
 /**
  * @brief 画一条线段
  * @param w canvas 控件
- * @param x1,y1 起点；x2,y2 终点（控件内坐标，左上角为 0,0）
+ * @param x1 起点横坐标（控件内逻辑像素，左上角为 0,0）
+ * @param y1 起点纵坐标
+ * @param x2 终点横坐标
+ * @param y2 终点纵坐标
  * @return void 无返回值
  */
 void cg_canvas_line(cg_widget_t *w, int x1, int y1, int x2, int y2)
@@ -90,8 +105,11 @@ void cg_canvas_line(cg_widget_t *w, int x1, int y1, int x2, int y2)
 /**
  * @brief 画矩形
  * @param w canvas 控件
- * @param x,y 左上角；wd,ht 宽高
- * @param fill 1 = 实心，0 = 描边
+ * @param x 左上角横坐标（控件内逻辑像素）
+ * @param y 左上角纵坐标
+ * @param wd 宽
+ * @param ht 高
+ * @param fill 填充方式：1 = 实心，0 = 描边
  * @return void 无返回值
  */
 void cg_canvas_rect(cg_widget_t *w, int x, int y, int wd, int ht, int fill)
@@ -110,8 +128,11 @@ void cg_canvas_rect(cg_widget_t *w, int x, int y, int wd, int ht, int fill)
 /**
  * @brief 画椭圆（含圆）
  * @param w canvas 控件
- * @param x,y 外接矩形左上角；wd,ht 外接矩形宽高
- * @param fill 1 = 实心，0 = 描边
+ * @param x 外接矩形左上角横坐标（控件内逻辑像素）
+ * @param y 外接矩形左上角纵坐标
+ * @param wd 外接矩形宽
+ * @param ht 外接矩形高
+ * @param fill 填充方式：1 = 实心，0 = 描边
  * @return void 无返回值
  */
 void cg_canvas_ellipse(cg_widget_t *w, int x, int y, int wd, int ht, int fill)
@@ -130,8 +151,9 @@ void cg_canvas_ellipse(cg_widget_t *w, int x, int y, int wd, int ht, int fill)
 /**
  * @brief 写一行文字（左上角定位，颜色用当前画笔颜色）
  * @param w canvas 控件
- * @param x,y 文字左上角
- * @param text UTF-8 文本
+ * @param x 文字左上角横坐标（控件内逻辑像素）
+ * @param y 文字左上角纵坐标
+ * @param text UTF-8 文本；内部复制一份，调用方保留所有权
  * @return void 无返回值
  */
 void cg_canvas_text(cg_widget_t *w, int x, int y, const char *text)
