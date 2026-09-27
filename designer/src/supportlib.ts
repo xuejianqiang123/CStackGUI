@@ -234,6 +234,15 @@ if (lab) cg_widget_set_text(lab, "已处理");`,
           c("cg_win_set_state", "最小化/最大化", "void cg_win_set_state(cg_app_t *app, const char *cmd)", "cmd 传 \"min\" / \"max\" / \"normal\""),
           c("cg_win_set_topmost", "总在最前", "void cg_win_set_topmost(cg_app_t *app, int on)", "1 置顶，0 取消"),
           c("cg_win_set_icon", "换窗口图标", "void cg_win_set_icon(cg_app_t *app, const char *ico_path)", "传 .ico 路径；NULL 还原自带图标"),
+          c("cg_drop_count", "拖进来几个文件", "int cg_drop_count(cg_app_t *app)",
+            "在 `app.events.drop` 的回调里用；不在回调里调用返回 0。拖放用的是 Windows 的 WM_DROPFILES（不用 OLE 那套），文件拖进窗口就会派发 drop", {
+              ret: "本次拖进来的文件个数",
+              sample: `/* .cgui: { "app": { "events": { "drop": "on_files_drop" } } } */\nvoid on_files_drop(cg_widget_t *self, cg_event_t ev, void *user) {\n    cg_app_t *app = cg_app_of(self);\n    int n = cg_drop_count(app);\n    for (int i = 0; i < n; i++) {\n        char *p = cg_drop_file(app, i);   /* 堆串，用完 cg_free */\n        cg_log(CG_LOG_INFO, "拖进来：%s", p);\n        cg_free(p);\n    }\n}`,
+            }),
+          c("cg_drop_file", "取第 i 个拖入文件的路径", "char *cg_drop_file(cg_app_t *app, int index)",
+            "返回 UTF-8 堆串（用完 cg_free）；越界返回 NULL。**路径只在 drop 回调期间有效**（回调返回后清单就清掉了），要留着就在回调里拷走", {
+              ret: "路径（堆串）；越界 / 不在回调里返回 NULL",
+            }),
           c("cg_win_screenshot", "把整个窗口存成 PNG", "int cg_win_screenshot(cg_app_t *app, const char *path)",
             "工单取证用：走 PrintWindow，所以窗口**被挡住、不在前台**也拿得到正确内容；少数控件不响应时退回抓屏并在日志里说明。GDI+ 起不来的机器返回 0", {
               params: ["path：输出路径（UTF-8，扩展名随意，编码固定 PNG）", "整个窗口，含标题栏"],

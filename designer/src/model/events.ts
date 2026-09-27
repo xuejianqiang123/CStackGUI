@@ -19,6 +19,8 @@ export const CG_EVENTS = [
   "keydown", "keyup", "char", "wheel",
   /* 输入框右侧调节器的点击（只有 edit 支持） */
   "spin",
+  /* 文件被拖进窗口（窗口级；回调里用 cg_drop_count / cg_drop_file 取路径） */
+  "drop",
 ] as const;
 export type CgEvent = (typeof CG_EVENTS)[number];
 
@@ -29,9 +31,11 @@ export const WINDOW_EVENTS: CgEvent[] = [
   "activate", "deactivate", "firstactivate", "idle", "tray", "show", "hide",
   "mousedown", "mouseup", "dblclick", "rdown", "rup", "mousemove",
   "gotfocus", "lostfocus", "keydown", "keyup", "char", "wheel",
+  "drop",
 ];
 
 export const EVENT_LABEL: Record<CgEvent, string> = {
+  drop: "文件拖入（窗口）",
   click: "单击",
   dblclick: "双击",
   change: "内容/值变化",
@@ -82,6 +86,7 @@ export const eventLabel = (type: string, ev: CgEvent): string =>
   EVENT_LABEL_BY_TYPE[type]?.[ev] ?? EVENT_LABEL[ev];
 
 export const EVENT_HINT: Record<CgEvent, string> = {
+  drop: "把文件从资源管理器拖到窗口上（窗口事件）",
   click: "点一下",
   dblclick: "单击后系统双击间隔内再点一次",
   change: "输入框改字、勾选框切换、滑块拖动、日期改值",
