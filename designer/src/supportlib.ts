@@ -778,7 +778,100 @@ cg_widget_set_text(edt, u8);
 cg_free(u8);
 cg_free(raw);`,
           }),
+          c("cg_hex_encode", "字节 → 十六进制文本", "int cg_hex_encode(const void *data, int len, const char *sep, int upper, char *out, int out_size)",
+            "把字节拼成 \"1A 2B\" 这种文本（发给对端或显示用）；sep 是分隔串（NULL 或 \"\" = 不隔），upper 非 0 用大写", {
+              params: ["data / len：字节缓冲与长度", "sep：分隔串，显示常用 \" \"", "upper：非 0 用大写", "out / out_size：需要 len*(2+分隔串长)+1 字节"],
+              ret: "写出的字符数；缓冲放不下返回 -1",
+              sample: `char line[1200];
+int  n = cg_hex_encode(bytes, len, " ", 1, line, (int)sizeof(line));
+if (n > 0) cg_widget_list_add(cg_find(app, "lst_log"), line);`,
+            }),
+          c("cg_hex_decode", "十六进制文本 → 字节", "int cg_hex_decode(const char *text, void *out, int out_size)",
+            "空格/制表/换行/逗号/连字符都当分隔符，大小写都认，\"1A2B\" 这种不写分隔的也算对", {
+              params: ["text：像 \"1A 2B 2C\" 或 \"1A2B2C\"", "out / out_size：输出字节缓冲"],
+              ret: "字节数；非法字符或只剩半个字节返回 -1；放不下返回 -2",
+              sample: `unsigned char bytes[512];
+int n = cg_hex_decode(cg_widget_text(cg_find(app, "edt_send")), bytes, (int)sizeof(bytes));
+if (n < 0) cg_log(CG_LOG_WARN, "HEX 写错了：只允许 0-9 A-F，且数字个数要是偶数");
+else       cg_serial_write(ser, bytes, n);`,
+            }),
+          c("cg_base64_encode", "Base64 编码", "int cg_base64_encode(const void *data, int len, char *out, int out_size)",
+            "RFC 4648，带 '=' 填充；out 需要 ((len+2)/3)*4+1 字节；写不下返回 -1", {
+              sample: `char b64[8192];
+cg_base64_encode(json, (int)strlen(json), b64, (int)sizeof(b64));`,
+            }),
+          c("cg_base64_decode", "Base64 解码", "int cg_base64_decode(const char *text, void *out, int out_size)",
+            "空白与换行忽略；**带不带 '=' 填充都认**（JWT 那类不填充的也能解）；长度不合法返回 -1", {
+              sample: `unsigned char raw[8192];
+int n = cg_base64_decode(body, raw, (int)sizeof(raw));`,
+            }),
+          c("cg_url_encode", "URL 编码", "int cg_url_encode(const char *text, int space_plus, char *out, int out_size)",
+            "不编码 A-Za-z0-9-_.~，其余按**字节**编成 %XX（UTF-8 中文会变成多个 %XX）；space_plus 非 0 时空格编成 '+'", {
+              sample: `char q[1024];
+cg_url_encode("关键词=中文", 0, q, (int)sizeof(q));`,
+            }),
+          c("cg_url_decode", "URL 解码", "int cg_url_decode(const char *text, char *out, int out_size)",
+            "'%XX' 与 '+'（'+' 还原成空格）；'%' 后面不是两位十六进制返回 -1", {
+              sample: `char u8[1024];
+cg_url_decode("%E4%B8%AD%E6%96%87", u8, (int)sizeof(u8));   /* -> 中文 */`,
+            }),
+          c("cg_int_to_base", "整数 → 任意进制文本", "int cg_int_to_base(long long v, int base, char *out, int out_size)",
+            "2..36 进制都行，输出大写（跟数据手册一致）；负数带前导 '-'。工控里看寄存器值常用", {
+              params: ["v：要转换的整数", "base：2..36", "out / out_size：输出缓冲（64 位整数最多 66 字符）"],
+              ret: "写出的字符数；base 非法或放不下返回 -1",
+              sample: `char buf[80];
+cg_int_to_base(255, 16, buf, (int)sizeof(buf));   /* -> "FF" */
+cg_int_to_base(0xFF, 2, buf, (int)sizeof(buf));   /* -> "11111111" */`,
+            }),
+          c("cg_base_to_int", "任意进制文本 → 整数", "int cg_base_to_int(const char *s, int base, long long *out)",
+            "认 '-/+' 与 0x / 0b / 0o 前缀（只在与进制相符时），允许首尾空白；整串必须合法、溢出算失败", {
+              params: ["s：像 \"FF\"、\"0x1A\"、\"0b1010\"", "base：2..36", "out：结果；可传 NULL（只想问合不合法）"],
+              ret: "1 = 成功；0 = 失败（此时 out 不动）",
+              sample: `long long v;
+if (!cg_base_to_int(cg_widget_text(cg_find(app, "edt"), 16, &v))
+    cg_log(CG_LOG_WARN, "不是合法的十六进制数");`,
+            }),
+          c("cg_base_convert", "进制互转", "int cg_base_convert(const char *s, int from_base, int to_base, char *out, int out_size)",
+            "字符串进、字符串出 —— 不想自己在中间接一个 long long 时用它", {
+              sample: `char buf[80];
+cg_base_convert("FF", 16, 2, buf, (int)sizeof(buf));   /* -> "11111111" */`,
+            }),
+          c("cg_to_signed", "按位宽读补码", "long long cg_to_signed(unsigned long long v, int bits)",
+            "报文给你 0x…、协议说的是「N 位有符号」时用它：cg_to_signed(0xFFF6, 12) = -10。位宽不同结论不同（同一个数按 16 位读是 65526）", {
+              sample: `long long t = cg_to_signed(0xFFF6u, 12);   /* 温度就写进报文里的 12 位有符号 */`,
+            }),
+          c("cg_from_signed", "写成指定位宽补码", "unsigned long long cg_from_signed(long long v, int bits)",
+            "反向：拼帧时用 —— 负数不能直接塞进报文，得先写成补码", {
+              sample: `unsigned v = (unsigned)cg_from_signed(-10, 12);   /* -> 0xFF6 */`,
+            }),
           c("cg_free", "释放内存", "void cg_free(void *p)", "上面这些返回的字符串都要用它释放（等价 free）"),
+        ],
+      },
+      {
+        label: "校验（CRC）",
+        cmds: [
+          c("cg_crc32", "CRC32 校验值", "unsigned cg_crc32(const void *data, int len)",
+            "IEEE 802.3 / zlib 同一套（多项式 0xEDB88320，初值全 1，末尾取反）。文本 \"123456789\" 的校验值是 0xCBF43926；空输入返回 0", {
+              params: ["data / len：数据与长度（len <= 0 按空消息算）"],
+              ret: "32 位校验值",
+              sample: `/* 校验文件有没有变过：读完整个文件算一遍 */
+char *buf = cg_file_read(path);
+if (buf) {
+    cg_log(CG_LOG_INFO, "CRC32 = %08X", cg_crc32(buf, (int)strlen(buf)));
+    cg_free(buf);
+}`,
+            }),
+          c("cg_crc16", "CRC16/Modbus 校验值", "unsigned cg_crc16(const void *data, int len)",
+            "工控设备协议帧最常用的那个（多项式 0xA001 反射，初值 0xFFFF，不取反）。文本 \"123456789\" 的校验值是 0x4B37；空输入返回 0xFFFF", {
+              params: ["data / len：数据与长度（len <= 0 按空消息算）"],
+              ret: "16 位校验值（高 16 位是 0）",
+              sample: `/* 发一帧 Modbus RTU：CRC 挂在帧尾，**低字节在前** */
+unsigned char frame[8] = { 0x01, 0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00 };
+unsigned      crc = cg_crc16(frame, 6);
+frame[6] = (unsigned char)(crc & 0xFF);
+frame[7] = (unsigned char)(crc >> 8);
+cg_serial_write(ser, frame, 8);`,
+            }),
         ],
       },
       {
