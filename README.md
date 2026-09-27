@@ -63,6 +63,11 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
 源与目标的类型决定抄什么、双向怎么用，见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md) 第 2.8 节，
 活例子见 `examples\lesson03_values`（拖动滑块，旁边的标签自己跟着变；**那几个回调都不用写**）。
 
+和它同类的是**动作（actions）**：`.cgui` 顶层写一条命令（文字 + 快捷键 + 回调名），菜单项和按钮都用
+`"action": "save"` 引用它 —— **一个回调管住菜单项和按钮，一处启用状态全跟着变**；快捷键走消息循环里的
+加速键表，所以 **Ctrl+S 在输入框里也按得出来**（按键会被输入框吃掉，窗口级事件收不到）。
+见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md) 第 2.8.1 节。
+
 仓库自带三类示例，分工不同：
 
 - `examples\lesson01_basics` ~ `examples\lesson06_window` —— **六课教学示例**：基础与容器 →
@@ -84,6 +89,8 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
 - 菜单是声明式的：能读结果（`cg_menu_last_id()`），但没有运行时增删菜单项的 API。
 - 控件绑定只镜像**值 / 文字 / 勾选**三类语义，**不做格式换算**（不能把 0~100 映射成 0~5、或自动加
   `%` 后缀）；要格式化还是得写回调。颜色选择器的颜色值不参与绑定。
+- 动作（`actions`）v1：工具栏（`toolbar`）的按钮**不支持**引用动作（它的条目模型是纯文字列表）；没有
+  运行时增删菜单项的 API；动作的 `text` 不能在运行时改。
 - 网页浏览控件走系统 WebBrowser（IE 内核），标注为实验性。
 
 **文档地图**（每份只讲一块，别指望一份读全）：
@@ -321,6 +328,7 @@ CStackGUI\
       cg_widget_term.c         终端（日志视图）
       cg_widget_gauge.c        图表 / 状态灯 / 仪表盘
       cg_bind.c                控件绑定：值/文字/勾选自动同步到另一个控件（.cgui 的 bind）
+      cg_action.c              动作层：命名命令（文字/快捷键/回调名）+ 加速键表 + 启用与勾选同步
       cg_app.c                 应用生命周期（定位 .cgui / 打开 / 消息循环）与 --selftest
       cg_log.c                 日志：stderr 镜像 + 日志文件（GUI 版没有控制台时唯一的线索）
       cg_timer.c               一次性定时器

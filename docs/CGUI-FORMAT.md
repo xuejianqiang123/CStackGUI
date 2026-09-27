@@ -116,6 +116,7 @@
 | `format` | 字符串 | 否 | `datepicker` 的细分格式：`date`（缺省）/ `time` / `datetime`；`shape` 的外形：`rect`（缺省）/ `roundrect` / `ellipse`；`splitter` 的方向：`col`（缺省，左右分栏）/ `row`（上下分行）；`terminal` 的显示模式：留空（文本）/ `hex`；`chart` 的图形：`line`（缺省）/ `bar`；`led` 的形状：`round`（缺省，圆）/ `square`（方）；`meter` 的样式：`arc`（缺省，270° 圆弧）/ `half`（半圆 180°）|
 | `hint` | 字符串 | 否 | 鼠标悬停提示（tooltip），**所有控件通用**；不写 / 空 = 无提示 |
 | `bind` | 对象 | 否 | 控件绑定：值/文字/勾选跟着另一个控件走，见 2.8 |
+| `action` | 字符串 | 否 | 动作引用：点这个控件 = 触发同名动作（文字 / 启用 / 勾选都跟随动作），见 2.8.1。**只有支持 `click` 的类型能用** |
 | `period` | 整数 | 否 | `timer` 的触发周期（毫秒）。**不写 = 0 = 不触发**（画布新建时钟时给 1000）；`led` 的闪烁周期（毫秒，仅在状态=闪时有意义；缺省 500，小于 100 兜回缺省）|
 | `port` / `baud` / `bits` / `stop` / `parity` / `auto` | 字符串 / 整数 / 整数 / 整数 / 整数 / 布尔 | 否 | **只有 `serial`（串口组件）用**：端口名（`COM4`，不写 = 没配，运行时 `cg_widget_serial_open(w, port)` 指定）/ 波特率（缺省 9600）/ 数据位 5..8（缺省 8）/ 停止位 1..2（缺省 1）/ 校验 0=无 1=奇 2=偶（缺省 0）/ 自动启动（不写 = 等 `cg_widget_serial_open()` 开）。越界值一律回退缺省 |
 | `multi` / `check` | 布尔 | 否 | `table`：`multi` = 允许整行多选，`check` = 显示行首复选框列（配合 `check` 事件）|
@@ -223,6 +224,7 @@
 | --- | --- |
 | `text` | 菜单项文字。**写 `"-"` 表示一条分隔线**（分隔线不占 id、不可点）|
 | `id` | 菜单项标识。回调里用 `cg_menu_last_id()` 取回，用来判断点的是哪一项 |
+| `action` | 动作名（见 2.8.1）：该项显示 `action.text`、点击触发该动作（**不再走菜单自己的 `click`**），启用/勾选跟随动作 |
 | `checked` | 是否显示勾选标记 |
 | `children` | 有子项就是下拉菜单（本身不可点）|
 
@@ -282,6 +284,89 @@ static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
 /* 滑块拖动时旁边的标签显示数字；第三个参数 1 = 双向 */
 cg_bind(cg_find(app, "sld_level"), cg_find(app, "lab_value"), 0);
 ```
+
+### 2.8.1 `actions` / `action`：动作（命名命令 + 快捷键）
+
+同一件事往往有好几个入口：菜单里一项、工具区一个按钮、再加一个 `Ctrl+S`。逐处绑回调的写法会让
+"同一个命令"散成 N 份回调、启用状态也要改 N 处，迟早不同步。**动作（action）**把它收成一条命名命令
+—— 一条命令 = 文字 + 快捷键 + 一个回调名；菜单项和控件都只**引用**它：
+
+```json
+"actions": {
+  "save": { "text": "保存(&S)", "accel": "Ctrl+S", "handler": "on_save" },
+  "grid": { "text": "显示网格", "handler": "on_grid_toggle", "checked": true }
+}
+```
+
+`actions` 是可选的**顶层字段**（与 `app` / `widgets` 同级）。**不写它 = 没有动作，老 `.cgui` 行为完全不变。**
+
+| 键 | 类型 | 缺省 | 说明 |
+| --- | --- | --- | --- |
+| （对象键）| 字符串 | — | 动作名。**必须非空**（空名条目被直接跳过，不报错 —— 也没有引用它的办法）；重名不报错，**后者覆盖** |
+| `text` | 字符串 | `""` | 引用它的菜单项 / 控件显示的文字 |
+| `accel` | 字符串 | `""` | 快捷键，语法见下。空 = 没有快捷键 |
+| `handler` | 字符串 | `""` | C 侧 `CG_BIND` 的名字。**空 → 该动作被忽略**（启动警告，`--selftest` 报错）|
+| `checked` | 布尔 | `false` | 初始勾选状态（同步给引用它的菜单项）|
+| `enabled` | 布尔 | `true` | 初始启用状态 |
+
+未知键忽略（与其它字段一致）。**两个引用点**：
+
+- **菜单项** —— `menu` / `menubutton` 的 `nodes[]` 里任一项加 `"action": "save"`：该项文字 =
+  `action.text` 非空时用 `action.text`、否则用该项自己的 `text`；点击触发该动作，**不再给菜单控件派发 `click`**
+  （所以**这一项**上 `cg_menu_last_id()` 没意义）；启用/勾选跟随动作；动作项**不写 `id`**。
+  同一根菜单里**动作项与普通项可以混用**：普通项照旧走菜单控件的 `events.click`（`examples\notepad` 就是
+  "文件"菜单四项走动作、编辑/帮助仍走 `on_menu_click` 分发）。引用了**不存在的动作名** → 启动警告 + 自检报错。
+- **控件** —— 节点上加 `"action": "save"`：**只有支持 `click` 的类型能用**（真相是 `cg_doc_kind.c` 里那份
+  `k_kinds[].events`），不支持 click 的类型写了 `action` → 启动警告 + 自检报错。文字上 `action.text` 非空就
+  **盖掉控件自己的 `text`**（`.cgui` 里写的仍在，运行时被盖住）；点击触发该动作，不再走自己的 `click` / `dblclick`
+  （因此**同时绑了 `events.click` 也是警告 + 自检报错** —— 那份 click 永远不会被调用）；启用跟随动作。
+  和绑定一样**引用是名字**：动作改名不会自动更新引用，引用处会变成"不存在的动作"，自检会报出来。
+
+**快捷键语法（`accel`）**：
+
+```
+[Ctrl+][Shift+][Alt+]键
+```
+
+修饰键大小写不敏感、可任意顺序、重复算一次。键的取值：`A`–`Z`、`0`–`9`、`F1`–`F24`、`Esc`、`Enter`、
+`Tab`、`Space`、`Back`（退格）、`Delete`、`Insert`、`Home`、`End`、`PageUp`、`PageDown`、`Left`、`Right`、`Up`、`Down`。
+
+- **不接受无修饰键的单个字母或数字**（裸 `S` 会让用户没法往输入框里打 s）—— 解析失败；裸功能键（`F5`）可以。
+- 解析不了的 `accel`（未知键、或与别的动作重复声明同一个快捷键）会被**忽略并写警告日志**，`--selftest` 报错。
+- 规范化显示时修饰键固定按 `Ctrl+Shift+Alt` 顺序（如 `Ctrl+Shift+S`）；菜单项文字右侧会自动拼上
+  `\tCtrl+Shift+S`（由系统右对齐显示）。
+
+**快捷键为什么能"在输入框里也生效"**：它由**消息循环里的加速键表**处理（`HACCEL` + `TranslateAcceleratorW`），
+在消息进到窗口之前就截住。窗口级 `keydown` 做不到这点 —— 焦点在输入框里时按键被 EDIT 吃掉、不冒泡，窗口根本
+收不到；所以写 `app.events.keydown` 里判 `Ctrl+S` 是没用的，写成动作才有用。
+
+**回调语义**：最终都走 `cg_action_invoke()`，签名与普通事件回调完全一样
+（`void cb(cg_widget_t *self, cg_event_t ev, void *user)`），但有两个固定值：
+
+- `self` 恒为**主窗口伪控件**（`cg_widget_id(self)` 是 `"__window"`）—— 一个动作可能有好几个入口，
+  "从哪个入口点的"不是业务该依赖的信息；要知道是哪个动作被激活，用 `cg_action_name(self)`（一个函数挂多个动作时用）。
+- `ev` 恒为 `CG_EVENT_CLICK`（与"菜单项点击 = click"同一套词汇，**不新增事件枚举**）。
+
+**启用 / 勾选是动作的**：`cg_action_set_enabled()` 会把所有引用它的菜单项与控件一起变灰 / 恢复，
+`cg_action_set_checked()` 会把引用它的菜单项打勾 / 去掉。反过来，你手动 `cg_widget_set_enabled(w, 0)`
+禁用某个按钮**不会**影响动作，还会在下一次动作同步时被覆盖回去 —— 要禁就禁动作。
+
+运行时的动作 API：
+
+```c
+int  cg_action_invoke(cg_app_t *app, const char *name);        /* 1 = 真的调了回调；0 = 无此动作 / 被禁用 / handler 没登记 */
+void cg_action_set_enabled(cg_app_t *app, const char *name, int enabled);   /* 同步到所有引用点 */
+int  cg_action_is_enabled(const cg_app_t *app, const char *name);
+void cg_action_set_checked(cg_app_t *app, const char *name, int checked);   /* 同步到引用它的菜单项 */
+int  cg_action_is_checked(const cg_app_t *app, const char *name);
+const char *cg_action_name(const cg_widget_t *self);           /* 在动作回调里问"是哪个动作"；没有则 NULL */
+int  cg_action_count(const cg_app_t *app);                     /* 动作个数（遍历 / 自检用）*/
+const char *cg_action_at(const cg_app_t *app, int i);          /* 第 i 个动作名，越界返回 NULL */
+const char *cg_action_accel(const cg_app_t *app, const char *name);  /* 规范化后的快捷键（如 "Ctrl+S"）；没有返回 "" */
+```
+
+**v1 明确不做**（有意留的边界）：工具栏（`toolbar`）的按钮**不支持**引用动作（它的条目模型是纯文字 `items`，
+与菜单的 `nodes` 不同，要支持得先换模型）；**没有运行时增删菜单项的 API**；动作的 `text` 不能在运行时改。
 
 ### 2.9 `terminal`：终端 / 日志视图
 
@@ -696,6 +781,16 @@ void cg_widget_set_font(cg_widget_t *w, const char *family, int size_pt, int bol
 /* 控件绑定：dst 一直跟着 src 走（见 2.8）。two_way 非 0 = 双向 */
 int  cg_bind(cg_widget_t *src, cg_widget_t *dst, int two_way);
 
+/* 动作：命名命令，菜单项 / 控件用 .cgui 的 "action" 引用（见 2.8.1）。
+ * 启用 / 勾选会同步到所有引用点；self 恒为主窗口伪控件、ev 恒为 click。 */
+int  cg_action_invoke(cg_app_t *app, const char *name);        /* 1 = 真调了回调；0 = 无此动作 / 被禁用 */
+void cg_action_set_enabled(cg_app_t *app, const char *name, int enabled);
+int  cg_action_is_enabled(const cg_app_t *app, const char *name);
+void cg_action_set_checked(cg_app_t *app, const char *name, int checked);
+int  cg_action_is_checked(const cg_app_t *app, const char *name);
+const char *cg_action_name(const cg_widget_t *self);           /* 在动作回调里问"是哪个动作" */
+const char *cg_action_accel(const cg_app_t *app, const char *name);
+
 /* 列表类控件（listbox / combo / tabs 标签 / statusbar 分段） */
 int  cg_widget_list_add(cg_widget_t *w, const char *item);
 int  cg_widget_list_addf(cg_widget_t *w, const char *fmt, ...);
@@ -872,6 +967,7 @@ void   cg_set_title(cg_app_t *app, const char *title);
 | 非容器带了 `children` | 报控件 id 与类型，返回码 3 |
 | `events` 里的名字没有对应 `CG_BIND` | **只警告不退出**（该事件不触发）；`--selftest` 下算失败，返回码 5 |
 | `events` 里有不认识的键 | 忽略 |
+| `actions` / `action` 有问题（某条动作没写 `handler` 或 handler 没 `CG_BIND`、`action` 引用了不存在的动作名、该类型不支持 `click` 却写了 `action`、既写 `action` 又绑了 `events.click`、`accel` 看不懂或与别的动作重复）| **只警告不退出**：出问题的那个动作（或那条快捷键）被忽略，界面照常打开；`--selftest` 下全部算失败，返回码 5 |
 | 控件 id 重复 | 不报错，但 `cg_find` 命中的是**后建**的那个（运行时按创建顺序倒序查找）；`cg_widget_add` 造重名会直接失败并报错 |
 | `image` 的 `src` 找不到图片 | 只警告，控件显示成虚线占位框（把路径画在中间便于排查） |
 | `button` / `iconbutton` 的 `src` 找不到图片 | 只警告；`button` 照常画纯色按钮、`iconbutton` 画占位框 |
