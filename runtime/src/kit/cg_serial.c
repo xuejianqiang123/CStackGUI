@@ -52,7 +52,11 @@ static char g_open_err[192];
 
 /* ------------------------------------------------------------ 内部助手 */
 
-/** @brief UTF-8 -> UTF-16 堆串（调用方 free）；失败返回 NULL */
+/**
+ * @brief UTF-8 -> UTF-16 堆串
+ * @param s 待转换的 UTF-8 字符串，NULL 直接失败
+ * @return wchar_t * 新分配的宽串，由**调用方 free**；s 为 NULL、转换失败或内存不足返回 NULL
+ */
 static wchar_t *ser_wide(const char *s)
 {
     int      n;
@@ -67,15 +71,25 @@ static wchar_t *ser_wide(const char *s)
     return out;
 }
 
-/** @brief UTF-16 -> UTF-8 写进 out；成功返回 1 */
+/**
+ * @brief UTF-16 -> UTF-8（含结尾 \0）写进调用方缓冲
+ * @param ws 源宽串，NULL 直接失败
+ * @param out 目标缓冲，由调用方提供并保证至少 cap 字节可写
+ * @param cap 目标缓冲容量（字节），必须 > 0
+ * @return int 1 = 转换成功；0 = 参数不合法或转换失败
+ */
 static int ser_u8(const wchar_t *ws, char *out, int cap)
 {
     if (!ws || !out || cap <= 0) return 0;
     return WideCharToMultiByte(CP_UTF8, 0, ws, -1, out, cap, NULL, NULL) > 0;
 }
 
-/** @brief 把几个最常见的 Win32 错误码翻成人话。
- *  不引 FormatMessage：那要再转一次编码，而这几个码覆盖了实际会遇到的大多数。 */
+/**
+ * @brief 把几个最常见的 Win32 错误码翻成人话
+ * @param e GetLastError() 取到的 Win32 错误码
+ * @return const char * 静态字符串，**调用方不要 free**；认不出来的码返回"系统错误"
+ * @note 不引 FormatMessage：那要再转一次编码，而这几个码覆盖了实际会遇到的大多数
+ */
 static const char *ser_why(DWORD e)
 {
     switch (e) {
@@ -91,9 +105,14 @@ static const char *ser_why(DWORD e)
     }
 }
 
-/** @brief 记一条错误：写进链路（没有链路就写全局）+ 写日志。
- *  先在栈上拼好整条消息，再一次性拷进目标缓冲 —— 这样任何时刻那个缓冲都是"以 \0 结尾的
- *  完整旧串或完整新串"，主线程随手读也不会读到半个字符串。 */
+/**
+ * @brief 记一条错误：写进链路（没有链路就写全局）+ 写日志
+ * @param s 目标链路，NULL 表示只写全局 g_open_err（没有链路可挂时用）
+ * @param what 动作的简短中文描述，拼在系统错误码前面
+ * @return void 无返回值
+ * @note 先在栈上拼好整条消息，再一次性拷进目标缓冲 —— 这样任何时刻那个缓冲都是"以 \0 结尾的
+ *       完整旧串或完整新串"，主线程随手读也不会读到半个字符串
+ */
 static void ser_fail(cg_serial_t *s, const char *what)
 {
     DWORD e = GetLastError();
@@ -113,7 +132,11 @@ static void ser_fail(cg_serial_t *s, const char *what)
 
 /* ------------------------------------------------------------ 读线程 */
 
-/** @brief 读线程：把驱动里的字节搬进接收缓冲。**只做这一件事** —— 不碰控件、不碰界面 */
+/**
+ * @brief 读线程：把驱动里的字节搬进接收缓冲，**只做这一件事** —— 不碰控件、不碰界面
+ * @param p cg_serial_from_handle() 传进来的 cg_serial_t *，借用，不负责释放
+ * @return DWORD 恒为 0（CreateThread 的退出码只是形式要求）
+ */
 static DWORD WINAPI ser_thread(LPVOID p)
 {
     cg_serial_t   *s = (cg_serial_t *)p;
@@ -149,7 +172,13 @@ static DWORD WINAPI ser_thread(LPVOID p)
 
 /* ------------------------------------------------------------ 建立与释放 */
 
-/** @brief 内部：拿一个已经打开好的句柄建链路并起读线程 */
+/**
+ * @brief 内部：拿一个已经打开好的句柄建链路并起读线程
+ * @param handle 已打开的串口 / 文件句柄；成功即所有权移交给链路，之后由 cg_serial_close() 关闭
+ * @param name 端口名，只用于日志与错误信息，NULL 记成 "?"
+ * @param rx_cap 接收缓冲容量（字节），<= 0 时用默认值；满了丢最老的
+ * @return cg_serial_t * 新链路，堆内存由 cg_serial_close() 回收；句柄无效 / 内存不足 / 起线程失败返回 NULL，此时句柄仍归调用方
+ */
 cg_serial_t *cg_serial_from_handle(void *handle, const char *name, int rx_cap)
 {
     cg_serial_t *s;
@@ -189,14 +218,27 @@ cg_serial_t *cg_serial_from_handle(void *handle, const char *name, int rx_cap)
     return s;
 }
 
-/** @brief 打开串口（固定 8N1，等价 open_ex(port, baud, 8, 1, 0)） */
+/**
+ * @brief 打开串口（固定 8N1，等价 open_ex(port, baud, 8, 1, 0)）
+ * @param port 端口名如 "COM3"
+ * @param baud 波特率，必须 > 0
+ * @return cg_serial_t * 新链路，由 cg_serial_close() 回收；参数不合法或打不开返回 NULL，原因用 cg_serial_last_error(NULL) 取
+ */
 cg_serial_t *cg_serial_open(const char *port, int baud)
 {
     return cg_serial_open_ex(port, baud, 8, 1, 0);
 }
 
-/** @brief 打开串口（全参数版）：bits 数据位 5..8、stop 停止位 1..2、parity 0=无/1=奇/2=偶。
- *  参数不合法时**干净失败** —— 不合法的值不往驱动送（半开着的端口比打不开更坑人）。 */
+/**
+ * @brief 打开串口（全参数版）：配好 DCB 与超时、建链路并起读线程
+ * @param port 端口名如 "COM3"
+ * @param baud 波特率，必须 > 0
+ * @param bits 数据位，只能是 5..8
+ * @param stop 停止位，只能是 1..2
+ * @param parity 校验位，0=无 1=奇 2=偶
+ * @return cg_serial_t * 新链路，由 cg_serial_close() 回收；参数不合法、打不开端口或起线程失败返回 NULL，原因用 cg_serial_last_error(NULL) 取
+ * @note 参数不合法时**干净失败** —— 不合法的值不往驱动送（半开着的端口比打不开更坑人）
+ */
 cg_serial_t *cg_serial_open_ex(const char *port, int baud, int bits, int stop, int parity)
 {
     HANDLE      h;
@@ -307,14 +349,23 @@ cg_serial_t *cg_serial_open_ex(const char *port, int baud, int bits, int stop, i
  * 到达轮询的起停走 cg_win_restart_serial（与 cg_widget_set_period 调
  * cg_win_restart_timer 同一条先例路线）。 */
 
-/** @brief 取串口组件的链路句柄（未打开/类型不对返回 NULL） */
+/**
+ * @brief 取串口组件的链路句柄
+ * @param w 串口组件
+ * @return cg_serial_t * 借用的链路，**归控件所有、调用方不要关**；未打开或类型不对返回 NULL
+ */
 cg_serial_t *cg_widget_serial(cg_widget_t *w)
 {
     if (!w || !w->type || strcmp(w->type, "serial") != 0) return NULL;
     return (cg_serial_t *)w->native2;
 }
 
-/** @brief 按控件属性打开链路（端口名可省略 = 用控件里配的）；已打开则先关旧的再开 */
+/**
+ * @brief 按控件属性打开链路（端口名可省略 = 用控件里配的）；已打开则先关旧的再开
+ * @param w 串口组件
+ * @param port 端口名，NULL 或空串表示用控件里配的端口；非空时会回写控件与节点
+ * @return int 0 = 成功（链路存进控件，归控件所有，由 cg_widget_serial_close() 关闭）；-1 = 类型不对、没配端口或打开失败
+ */
 int cg_widget_serial_open(cg_widget_t *w, const char *port)
 {
     cg_serial_t *s;
@@ -347,7 +398,11 @@ int cg_widget_serial_open(cg_widget_t *w, const char *port)
     return 0;
 }
 
-/** @brief 关掉串口组件的链路（幂等、NULL 安全） */
+/**
+ * @brief 关掉串口组件的链路（幂等、NULL 安全）
+ * @param w 串口组件
+ * @return void 无返回值
+ */
 void cg_widget_serial_close(cg_widget_t *w)
 {
     if (!w) return;
@@ -375,7 +430,12 @@ static int serial_take_off(cg_widget_t *w)
     return was_open;
 }
 
-/** @brief 改波特率：链路开着就按新参数原样重开，没开就只记住 */
+/**
+ * @brief 改波特率：链路开着就按新参数原样重开，没开就只记住
+ * @param w 串口组件
+ * @param baud 新波特率，必须 > 0；与当前值相同时什么都不做
+ * @return void 无返回值
+ */
 void cg_widget_serial_set_baud(cg_widget_t *w, int baud)
 {
     int was_open;
@@ -389,7 +449,14 @@ void cg_widget_serial_set_baud(cg_widget_t *w, int baud)
     if (was_open) cg_widget_serial_open(w, NULL);
 }
 
-/** @brief 改数据位 / 停止位 / 校验：同上（三样一起给，省得改一次重开一次） */
+/**
+ * @brief 改数据位 / 停止位 / 校验：同上（三样一起给，省得改一次重开一次）
+ * @param w 串口组件
+ * @param bits 数据位，只能是 5..8
+ * @param stop 停止位，只能是 1..2
+ * @param parity 校验位，0=无 1=奇 2=偶
+ * @return void 无返回值
+ */
 void cg_widget_serial_set_format(cg_widget_t *w, int bits, int stop, int parity)
 {
     int was_open;
@@ -416,7 +483,12 @@ void cg_widget_serial_set_format(cg_widget_t *w, int bits, int stop, int parity)
     if (was_open) cg_widget_serial_open(w, NULL);
 }
 
-/** @brief 关掉串口并回收读线程（幂等、NULL 安全） */
+/**
+ * @brief 关掉串口并回收读线程（**NULL 安全，但不是幂等**）
+ * @param s 要关的链路，必须来自 cg_serial_open() / cg_serial_from_handle()；除了 NULL，别的句柄不能重复关
+ * @return void 无返回值
+ * @note 同一个句柄关两次是 use-after-free（实测堆损坏退出），关完请立刻把变量置空
+ */
 void cg_serial_close(cg_serial_t *s)
 {
     if (!s) return;
@@ -437,7 +509,13 @@ void cg_serial_close(cg_serial_t *s)
 
 /* ------------------------------------------------------------ 收发 */
 
-/** @brief 发送数据；返回实际写出字节数，< 0 表示失败 */
+/**
+ * @brief 发送数据（同步写、带写超时，不是写队列）
+ * @param s 链路
+ * @param data 要发的数据，调用方保留所有权，函数只读不释放
+ * @param len 要发的字节数，必须 > 0
+ * @return int 实际写出的字节数（可能小于 len）；-1 = 参数不合法、链路没有句柄或写失败
+ */
 int cg_serial_write(cg_serial_t *s, const void *data, int len)
 {
     DWORD wrote = 0;
@@ -455,7 +533,13 @@ int cg_serial_write(cg_serial_t *s, const void *data, int len)
     return (int)wrote;
 }
 
-/** @brief 从接收缓冲取最多 cap 字节（非阻塞） */
+/**
+ * @brief 从接收缓冲取最多 cap 字节（非阻塞，没数据立刻返回）
+ * @param s 链路
+ * @param buf 目标缓冲，由调用方提供并保证至少 cap 字节可写
+ * @param cap 本次最多取多少字节，必须 > 0
+ * @return int 实际取到的字节数，可能是 0；参数不合法时返回 0
+ */
 int cg_serial_read(cg_serial_t *s, void *buf, int cap)
 {
     int n;
@@ -467,7 +551,11 @@ int cg_serial_read(cg_serial_t *s, void *buf, int cap)
     return n;
 }
 
-/** @brief 接收缓冲里还有多少字节 */
+/**
+ * @brief 取接收缓冲里还有多少字节没被取走
+ * @param s 链路
+ * @return int 未取走的字节数；s 为 NULL 时返回 0
+ */
 int cg_serial_available(const cg_serial_t *s)
 {
     int n;
@@ -479,7 +567,11 @@ int cg_serial_available(const cg_serial_t *s)
     return n;
 }
 
-/** @brief 丢掉接收缓冲里还没取走的数据 */
+/**
+ * @brief 丢掉接收缓冲里还没取走的数据
+ * @param s 链路
+ * @return void 无返回值
+ */
 void cg_serial_flush_rx(cg_serial_t *s)
 {
     if (!s) return;
@@ -488,19 +580,31 @@ void cg_serial_flush_rx(cg_serial_t *s)
     LeaveCriticalSection(&s->lock);
 }
 
-/** @brief 累计收到的字节数 */
+/**
+ * @brief 取链路累计收到的字节数
+ * @param s 链路
+ * @return long long 自打开以来收到的总字节数；s 为 NULL 时返回 0
+ */
 long long cg_serial_rx_bytes(const cg_serial_t *s)
 {
     return s ? s->rx_total : 0;
 }
 
-/** @brief 累计发出的字节数 */
+/**
+ * @brief 取链路累计发出的字节数
+ * @param s 链路
+ * @return long long 自打开以来发出的总字节数；s 为 NULL 时返回 0
+ */
 long long cg_serial_tx_bytes(const cg_serial_t *s)
 {
     return s ? s->tx_total : 0;
 }
 
-/** @brief 最后一次错误的中文描述；s 为 NULL 时给"最近一次打开失败"的原因 */
+/**
+ * @brief 取最后一次错误的中文描述
+ * @param s 链路，NULL 表示问"最近一次打开失败"的原因
+ * @return const char * 常驻缓冲里的字符串，**调用方不要 free**；还没出过错时是空串
+ */
 const char *cg_serial_last_error(const cg_serial_t *s)
 {
     if (!s) return g_open_err;
@@ -509,7 +613,12 @@ const char *cg_serial_last_error(const cg_serial_t *s)
 
 /* ------------------------------------------------------------ 端口枚举 */
 
-/** @brief 枚举本机串口：每行一个端口名（"COM3\nCOM7\n"），返回写入字节数 */
+/**
+ * @brief 枚举本机串口，每行一个端口名（形如 "COM3\nCOM7\n"）
+ * @param buf 输出缓冲，由调用方提供并保证至少 cap 字节可写
+ * @param cap 输出缓冲容量（字节），必须 > 1
+ * @return int 写入的字节数（不含结尾 \0）；参数不合法、本机一个串口都没有，或一行都装不下时返回 0
+ */
 int cg_serial_list(char *buf, int cap)
 {
     HKEY  key;

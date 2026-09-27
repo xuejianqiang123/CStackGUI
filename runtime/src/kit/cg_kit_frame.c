@@ -51,11 +51,12 @@ static int cur_start(const cg_frame_t *f)
     return off;
 }
 
-/** @brief 把当前攒着的 len 字节当作一整帧入队
- *  @param f 切帧状态
- *  @param len 帧长（字节）
- *  @return void
- *  @details 太短（低于 min_len）当噪声丢掉；队列满也丢掉 —— 两种情况都记进 dropped，
+/**
+ * @brief 把当前攒着的 len 字节当作一整帧入队
+ * @param f 切帧状态
+ * @param len 帧长（字节）
+ * @return void 无返回值
+ * @details 太短（低于 min_len）当噪声丢掉；队列满也丢掉 —— 两种情况都记进 dropped，
  *           不静默丢。入队后当前帧长度归零，下一帧从它后面接着攒。
  */
 static void complete(cg_frame_t *f, int len)
@@ -98,6 +99,16 @@ static int need_len(const cg_frame_t *f)
 
 /* ------------------------------------------------------------ 公开 API */
 
+/**
+ * @brief 初始化切帧器
+ * @param f 切帧状态（自己声明一份、别共享）
+ * @param buf 调用方给的攒帧缓冲，够放"最大的一帧"即可（这里不 malloc）
+ * @param buf_size buf 的字节数
+ * @param mode 定界方式，取 CG_FRAME_SILENCE / FIXED / DELIM / LENFIELD
+ * @param arg 按 mode 解释：SILENCE = 静默毫秒 / FIXED = 每帧字节数 / DELIM = 结束字节 /
+ *            LENFIELD = 长度字段的字节偏移（缺省宽 2、大端、帧总长 = 长度值 + 偏移 + 2）
+ * @return int 0 成功；-1 参数不合法（mode 不认识 / 缓冲太小 / arg 越界）
+ */
 int cg_frame_init(cg_frame_t *f, void *buf, int buf_size, int mode, int arg)
 {
     if (!f || !buf || buf_size < 8) return -1;
@@ -140,6 +151,14 @@ int cg_frame_init(cg_frame_t *f, void *buf, int buf_size, int mode, int arg)
     return 0;
 }
 
+/**
+ * @brief 配 LENFIELD 模式的长度字段细节
+ * @param f 切帧状态
+ * @param width 长度字段宽度，1 或 2 字节
+ * @param little_endian 非 0 小端、0 大端
+ * @param add 帧总长 = 长度值 + add；传 > 0 才生效
+ * @return void 无返回值
+ */
 void cg_frame_lenfield(cg_frame_t *f, int width, int little_endian, int add)
 {
     if (!f || (width != 1 && width != 2)) return;
@@ -148,6 +167,13 @@ void cg_frame_lenfield(cg_frame_t *f, int width, int little_endian, int add)
     if (add > 0) f->lf_add = add;
 }
 
+/**
+ * @brief 设帧长的上下界
+ * @param f 切帧状态
+ * @param min_len 少于这么多字节当噪声丢掉；传 > 0 才生效
+ * @param max_len 高于这么多字节整帧丢掉；传 > 0 才生效，且不许超过缓冲大小
+ * @return void 无返回值（丢掉的字节累加进 dropped）
+ */
 void cg_frame_limits(cg_frame_t *f, int min_len, int max_len)
 {
     if (!f) return;
@@ -155,6 +181,14 @@ void cg_frame_limits(cg_frame_t *f, int min_len, int max_len)
     if (max_len > 0 && max_len <= f->cap) f->max_len = max_len;
 }
 
+/**
+ * @brief 喂入刚收到的字节
+ * @param f 切帧状态
+ * @param data 刚收到的字节（可以是半帧、整帧或几帧粘在一起）
+ * @param len 字节数
+ * @param now_ms 当前毫秒时基（传 cg_now_ms()；时间由调用方给，所以它是纯状态机）
+ * @return int 0 已收下；-1 参数非法，或缓冲被没取走的帧占满（先 cg_frame_take）
+ */
 int cg_frame_feed(cg_frame_t *f, const void *data, int len, unsigned long now_ms)
 {
     const unsigned char *p = (const unsigned char *)data;
@@ -204,6 +238,13 @@ int cg_frame_feed(cg_frame_t *f, const void *data, int len, unsigned long now_ms
     return 0;
 }
 
+/**
+ * @brief 取一帧切好的整帧（按到达顺序）
+ * @param f 切帧状态
+ * @param out 输出缓冲
+ * @param cap out 的字节数
+ * @return int > 0 帧长（已写进 out）；0 还没有完整帧；-1 out 放不下（帧仍在队列里）
+ */
 int cg_frame_take(cg_frame_t *f, void *out, int cap)
 {
     int n;
@@ -226,6 +267,12 @@ int cg_frame_take(cg_frame_t *f, void *out, int cap)
     return n;
 }
 
+/**
+ * @brief 推进时间：静默到点就把攒着的收尾
+ * @param f 切帧状态
+ * @param now_ms 当前毫秒时基（传 cg_now_ms()）
+ * @return void 无返回值（没有定时器也能用，但最后一帧要立刻出来就得靠它）
+ */
 void cg_frame_tick(cg_frame_t *f, unsigned long now_ms)
 {
     if (!f || !f->buf) return;
@@ -233,6 +280,11 @@ void cg_frame_tick(cg_frame_t *f, unsigned long now_ms)
     if ((now_ms - f->last_ms) >= f->gap_ms) complete(f, f->len);
 }
 
+/**
+ * @brief 丢掉没攒完的半帧与队列里没取走的帧
+ * @param f 切帧状态
+ * @return void 无返回值（丢字节的统计量不清零；"清空接收"按钮用）
+ */
 void cg_frame_reset(cg_frame_t *f)
 {
     if (!f) return;
@@ -242,11 +294,21 @@ void cg_frame_reset(cg_frame_t *f)
     f->len     = 0;
 }
 
+/**
+ * @brief 取累计丢掉的字节数（噪声 / 超上限 / 队列满）
+ * @param f 切帧状态
+ * @return unsigned long 字节数 —— **丢要丢得看得见**
+ */
 unsigned long cg_frame_dropped(const cg_frame_t *f)
 {
     return f ? f->dropped : 0;
 }
 
+/**
+ * @brief 取累计切出来的整帧数
+ * @param f 切帧状态
+ * @return unsigned long 帧数，含还没取走的
+ */
 unsigned long cg_frame_frames(const cg_frame_t *f)
 {
     return f ? f->frames : 0;

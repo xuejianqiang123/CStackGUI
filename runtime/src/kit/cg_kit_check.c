@@ -45,31 +45,58 @@
 
 /* ================================================================ 位运算与字节序 */
 
-/** @brief 32 位循环左移 */
+/**
+ * @brief 32 位循环左移
+ * @param x 待移位的值
+ * @param n 左移位数（0..31）
+ * @return unsigned 移位后的结果
+ */
 static unsigned rol32(unsigned x, int n) { return (x << n) | (x >> (32 - n)); }
 
-/** @brief 32 位循环右移 */
+/**
+ * @brief 32 位循环右移
+ * @param x 待移位的值
+ * @param n 右移位数（0..31）
+ * @return unsigned 移位后的结果
+ */
 static unsigned rotr32(unsigned x, int n) { return (x >> n) | (x << (32 - n)); }
 
-/** @brief 64 位循环右移 */
+/**
+ * @brief 64 位循环右移
+ * @param x 待移位的值
+ * @param n 右移位数（0..63）
+ * @return unsigned long long 移位后的结果
+ */
 static unsigned long long rotr64(unsigned long long x, int n)
 {
     return (x >> n) | (x << (64 - n));
 }
 
-/** @brief 按**小端**读 32 位（MD5 用） */
+/**
+ * @brief 按**小端**读 32 位（MD5 用）
+ * @param p 源数据首字节（至少 4 字节，不做边界检查）
+ * @return unsigned 读出的 32 位数
+ */
 static unsigned le32(const unsigned char *p)
 {
     return (unsigned)p[0] | ((unsigned)p[1] << 8) | ((unsigned)p[2] << 16) | ((unsigned)p[3] << 24);
 }
 
-/** @brief 按**大端**读 32 位（SHA-1 / SHA-256 用） */
+/**
+ * @brief 按**大端**读 32 位（SHA-1 / SHA-256 用）
+ * @param p 源数据首字节（至少 4 字节，不做边界检查）
+ * @return unsigned 读出的 32 位数
+ */
 static unsigned be32(const unsigned char *p)
 {
     return ((unsigned)p[0] << 24) | ((unsigned)p[1] << 16) | ((unsigned)p[2] << 8) | (unsigned)p[3];
 }
 
-/** @brief 按**大端**读 64 位（SHA-512 用） */
+/**
+ * @brief 按**大端**读 64 位（SHA-512 用）
+ * @param p 源数据首字节（至少 8 字节，不做边界检查）
+ * @return unsigned long long 读出的 64 位数
+ */
 static unsigned long long be64(const unsigned char *p)
 {
     unsigned long long v = 0;
@@ -81,7 +108,13 @@ static unsigned long long be64(const unsigned char *p)
 
 /* ================================================================ CRC */
 
-/** @brief CRC32 裸循环（不含初值与末尾取反），分块累算用：把上一块的返回值喂回来即可 */
+/**
+ * @brief CRC32 裸循环（不含初值与末尾取反），分块累算用：把上一块的返回值喂回来即可
+ * @param crc 上一块的累算值；首块传 0xFFFFFFFF
+ * @param p 数据块首字节
+ * @param n 数据块的字节数
+ * @return unsigned 累算后的值（未取反）
+ */
 static unsigned crc32_raw(unsigned crc, const unsigned char *p, size_t n)
 {
     size_t i;
@@ -94,7 +127,13 @@ static unsigned crc32_raw(unsigned crc, const unsigned char *p, size_t n)
     return crc;
 }
 
-/** @brief CRC16 裸循环（多项式 0xA001 反射，不取反，分块累算用） */
+/**
+ * @brief CRC16 裸循环（多项式 0xA001 反射，不取反，分块累算用）
+ * @param crc 上一块的累算值；首块传 0xFFFF
+ * @param p 数据块首字节
+ * @param n 数据块的字节数
+ * @return unsigned 累算后的值（低 16 位有效，未取反）
+ */
 static unsigned crc16_raw(unsigned crc, const unsigned char *p, size_t n)
 {
     size_t i;
@@ -131,13 +170,26 @@ unsigned cg_crc16(const void *data, int len)
 
 /* ================================================================ 分块读文件 */
 
-/** 每读到一个数据块就回调一次（CRC 与哈希共用这个骨架，免得各写一遍开关文件与出错处理） */
+/**
+ * @brief 每读到一个数据块就回调一次
+ * @param ctx 调用方挂进去的上下文，由分块读文件的原样透传
+ * @param p 数据块首字节
+ * @param n 数据块的字节数
+ * @return void 无返回值
+ * @details CRC 与哈希共用这个骨架，免得各写一遍开关文件与出错处理
+ */
 typedef void (*cg_chunk_fn)(void *ctx, const unsigned char *p, size_t n);
 
-/** @brief 分块读整个文件，逐块交给 sink；成功返回 1。
- *  @details 用 16 KB 栈缓冲循环读，**不把文件整读进内存** —— 固件镜像动辄几十上百 MB。
+/**
+ * @brief 分块读整个文件，逐块交给 sink
+ * @param path 文件路径（UTF-8）
+ * @param sink 每读到一个数据块回调一次
+ * @param ctx 原样透传给 sink 的上下文
+ * @return int 1 读完；0 打不开或中途读出错
+ * @details 用 16 KB 栈缓冲循环读，**不把文件整读进内存** —— 固件镜像动辄几十上百 MB。
  *           读的过程中出错（磁盘错误/半截文件）返回 0：宁可报失败，也不给出一个
- *           "看着像但不完整"的校验值。 */
+ *           "看着像但不完整"的校验值。
+ */
 static int file_chunks(const char *path, cg_chunk_fn sink, void *ctx)
 {
     wchar_t       *wp;
@@ -163,6 +215,13 @@ static int file_chunks(const char *path, cg_chunk_fn sink, void *ctx)
     return ok;
 }
 
+/**
+ * @brief CRC32 的分块回调：把每一块喂进累算
+ * @param ctx 累算值的地址（调用方持有的 unsigned 变量）
+ * @param p 数据块首字节
+ * @param n 数据块的字节数
+ * @return void 无返回值
+ */
 static void crc32_sink(void *ctx, const unsigned char *p, size_t n)
 {
     unsigned *acc = (unsigned *)ctx;
@@ -219,6 +278,12 @@ typedef struct {
     unsigned           used;
 } md5_ctx;
 
+/**
+ * @brief 处理一个 64 字节块，更新 MD5 状态
+ * @param c MD5 上下文（入出参：状态就地累加）
+ * @param p 64 字节块的首字节
+ * @return void 无返回值
+ */
 static void md5_block(md5_ctx *c, const unsigned char *p)
 {
     unsigned w[16], a, b, cc, d, f, tmp;
@@ -240,6 +305,13 @@ static void md5_block(md5_ctx *c, const unsigned char *p)
     c->h[0] += a; c->h[1] += b; c->h[2] += cc; c->h[3] += d;
 }
 
+/**
+ * @brief 喂入任意字节数，攒够 64 字节就压块
+ * @param c MD5 上下文（入出参：长度 / 已用字节 / 缓冲就地更新）
+ * @param p 数据首字节
+ * @param n 字节数
+ * @return void 无返回值
+ */
 static void md5_update(md5_ctx *c, const unsigned char *p, size_t n)
 {
     c->len += (unsigned long long)n;
@@ -258,6 +330,12 @@ static void md5_update(md5_ctx *c, const unsigned char *p, size_t n)
     }
 }
 
+/**
+ * @brief 补位并收尾，产出 16 字节 MD5 摘要
+ * @param c MD5 上下文（入出参：收尾时就地补位）
+ * @param out 摘要出口，调用方提供、至少 16 字节
+ * @return void 无返回值
+ */
 static void md5_final(md5_ctx *c, unsigned char out[16])
 {
     unsigned long long bits = c->len * 8ull;
@@ -295,6 +373,12 @@ typedef struct {
     unsigned           used;
 } sha1_ctx;
 
+/**
+ * @brief 处理一个 64 字节块，更新 SHA-1 状态
+ * @param c SHA-1 上下文（入出参：状态就地累加）
+ * @param p 64 字节块的首字节
+ * @return void 无返回值
+ */
 static void sha1_block(sha1_ctx *c, const unsigned char *p)
 {
     unsigned w[80], a, b, cc, d, e, f, k, t;
@@ -318,6 +402,13 @@ static void sha1_block(sha1_ctx *c, const unsigned char *p)
     c->h[0] += a; c->h[1] += b; c->h[2] += cc; c->h[3] += d; c->h[4] += e;
 }
 
+/**
+ * @brief 喂入任意字节数，攒够 64 字节就压块
+ * @param c SHA-1 上下文（入出参：长度 / 已用字节 / 缓冲就地更新）
+ * @param p 数据首字节
+ * @param n 字节数
+ * @return void 无返回值
+ */
 static void sha1_update(sha1_ctx *c, const unsigned char *p, size_t n)
 {
     c->len += (unsigned long long)n;
@@ -336,6 +427,12 @@ static void sha1_update(sha1_ctx *c, const unsigned char *p, size_t n)
     }
 }
 
+/**
+ * @brief 补位并收尾，产出 20 字节 SHA-1 摘要
+ * @param c SHA-1 上下文（入出参：收尾时就地补位）
+ * @param out 摘要出口，调用方提供、至少 20 字节
+ * @return void 无返回值
+ */
 static void sha1_final(sha1_ctx *c, unsigned char out[20])
 {
     unsigned long long bits = c->len * 8ull;
@@ -391,6 +488,12 @@ typedef struct {
     unsigned           used;
 } sha256_ctx;
 
+/**
+ * @brief 处理一个 64 字节块，更新 SHA-256 状态
+ * @param c SHA-256 上下文（入出参：状态就地累加）
+ * @param p 64 字节块的首字节
+ * @return void 无返回值
+ */
 static void sha256_block(sha256_ctx *c, const unsigned char *p)
 {
     unsigned w[64], a, b, cc, d, e, f, g, h, t1, t2;
@@ -419,6 +522,13 @@ static void sha256_block(sha256_ctx *c, const unsigned char *p)
     c->h[4] += e; c->h[5] += f; c->h[6] += g;  c->h[7] += h;
 }
 
+/**
+ * @brief 喂入任意字节数，攒够 64 字节就压块
+ * @param c SHA-256 上下文（入出参：长度 / 已用字节 / 缓冲就地更新）
+ * @param p 数据首字节
+ * @param n 字节数
+ * @return void 无返回值
+ */
 static void sha256_update(sha256_ctx *c, const unsigned char *p, size_t n)
 {
     c->len += (unsigned long long)n;
@@ -437,6 +547,12 @@ static void sha256_update(sha256_ctx *c, const unsigned char *p, size_t n)
     }
 }
 
+/**
+ * @brief 补位并收尾，产出 32 字节 SHA-256 摘要
+ * @param c SHA-256 上下文（入出参：收尾时就地补位）
+ * @param out 摘要出口，调用方提供、至少 32 字节
+ * @return void 无返回值
+ */
 static void sha256_final(sha256_ctx *c, unsigned char out[32])
 {
     unsigned long long bits = c->len * 8ull;
@@ -518,6 +634,12 @@ typedef struct {
     unsigned           used;
 } sha512_ctx;
 
+/**
+ * @brief 处理一个 128 字节块，更新 SHA-512 状态
+ * @param c SHA-512 上下文（入出参：状态就地累加）
+ * @param p 128 字节块的首字节
+ * @return void 无返回值
+ */
 static void sha512_block(sha512_ctx *c, const unsigned char *p)
 {
     unsigned long long w[80], a, b, cc, d, e, f, g, h, t1, t2;
@@ -547,6 +669,13 @@ static void sha512_block(sha512_ctx *c, const unsigned char *p)
     c->h[4] += e; c->h[5] += f; c->h[6] += g;  c->h[7] += h;
 }
 
+/**
+ * @brief 喂入任意字节数，攒够 128 字节就压块
+ * @param c SHA-512 上下文（入出参：长度 / 已用字节 / 缓冲就地更新）
+ * @param p 数据首字节
+ * @param n 字节数
+ * @return void 无返回值
+ */
 static void sha512_update(sha512_ctx *c, const unsigned char *p, size_t n)
 {
     c->len += (unsigned long long)n;
@@ -565,6 +694,12 @@ static void sha512_update(sha512_ctx *c, const unsigned char *p, size_t n)
     }
 }
 
+/**
+ * @brief 补位并收尾，产出 64 字节 SHA-512 摘要
+ * @param c SHA-512 上下文（入出参：收尾时就地补位）
+ * @param out 摘要出口，调用方提供、至少 64 字节
+ * @return void 无返回值
+ */
 static void sha512_final(sha512_ctx *c, unsigned char out[64])
 {
     unsigned long long bits = c->len * 8ull;
@@ -604,7 +739,11 @@ typedef struct {
     } u;
 } hash_ctx;
 
-/** @brief 算法名 -> 内部编号（大小写不敏感）；不认识返回 0 */
+/**
+ * @brief 算法名 -> 内部编号（大小写不敏感）
+ * @param name 算法名，取值 md5 / sha1 / sha256 / sha512
+ * @return int 内部编号；不认识返回 0
+ */
 static int hash_algo_id(const char *name)
 {
     static const struct { const char *name; int id; } k_tab[] = {
@@ -629,6 +768,12 @@ static const unsigned cg_md5_iv[4] = {
     0x67452301u, 0xefcdab89u, 0x98badcfeu, 0x10325476u,
 };
 
+/**
+ * @brief 按算法名初始化多态哈希上下文并装好初值
+ * @param hc 上下文出口（入出参：就地清零并填初值）
+ * @param algo 算法名，取值同 cg_hash
+ * @return int 1 初始化成功；0 算法名不认识
+ */
 static int hash_begin(hash_ctx *hc, const char *algo)
 {
     int id = hash_algo_id(algo);
@@ -656,6 +801,13 @@ static int hash_begin(hash_ctx *hc, const char *algo)
     return 1;
 }
 
+/**
+ * @brief 按当前算法把一段数据喂进上下文
+ * @param hc 哈希上下文（入出参：按算法分派更新）
+ * @param p 数据首字节
+ * @param n 字节数
+ * @return void 无返回值
+ */
 static void hash_update(hash_ctx *hc, const unsigned char *p, size_t n)
 {
     switch (hc->id) {
@@ -667,7 +819,12 @@ static void hash_update(hash_ctx *hc, const unsigned char *p, size_t n)
     }
 }
 
-/** @brief 收尾，返回摘要字节数（0 = 出错） */
+/**
+ * @brief 收尾，返回摘要字节数
+ * @param hc 哈希上下文（入出参：就地收尾）
+ * @param out 摘要出口，调用方提供，按算法至少 16 / 20 / 32 / 64 字节
+ * @return int 摘要字节数；0 = 出错
+ */
 static int hash_end(hash_ctx *hc, unsigned char *out)
 {
     switch (hc->id) {
@@ -679,12 +836,24 @@ static int hash_end(hash_ctx *hc, unsigned char *out)
     }
 }
 
+/**
+ * @brief 哈希的分块回调：把每一块喂进哈希上下文
+ * @param ctx 哈希上下文的地址（调用方持有的 hash_ctx）
+ * @param p 数据块首字节
+ * @param n 数据块的字节数
+ * @return void 无返回值
+ */
 static void hash_sink(void *ctx, const unsigned char *p, size_t n)
 {
     hash_update((hash_ctx *)ctx, p, n);
 }
 
-/** @brief 摘要 -> 小写十六进制堆串 */
+/**
+ * @brief 摘要 -> 小写十六进制堆串
+ * @param d 摘要字节
+ * @param n 摘要字节数
+ * @return char * 堆串（调用方负责 free）；内存不足返回 NULL
+ */
 static char *digest_hex(const unsigned char *d, int n)
 {
     static const char k_hex[] = "0123456789abcdef";

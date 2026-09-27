@@ -9,13 +9,22 @@
 
 /* ------------------------------------------------------------ 标签页 */
 
-/** @brief 标签页页数；非 tabs 控件返回 0 */
+/**
+ * @brief 取标签页控件的页数
+ * @param w 目标控件
+ * @return int 页数；控件为 NULL 或类型不是 tabs 返回 0
+ */
 int cg_tabs_count(const cg_widget_t *w)
 {
     return (w && w->type && strcmp(w->type, "tabs") == 0) ? w->nitems : 0;
 }
 
-/** @brief 切到第 index 页（子控件按 page 自动显隐）；越界忽略 */
+/**
+ * @brief 切到第 index 页（子控件按 page 自动显隐），越界忽略
+ * @param w tabs 控件；类型不对只记一条错误日志
+ * @param index 目标页号（0 起）
+ * @return void 无返回值
+ */
 void cg_tabs_select(cg_widget_t *w, int index)
 {
     if (!w || !want_type(w, "tabs", "cg_tabs_select")) return;
@@ -27,7 +36,11 @@ void cg_tabs_select(cg_widget_t *w, int index)
     cg_bind_propagate(w);
 }
 
-/** @brief 当前页下标（0 起） */
+/**
+ * @brief 取当前页下标（0 起）
+ * @param w 目标控件
+ * @return int 当前页号；控件为 NULL 返回 0
+ */
 int cg_tabs_selected(const cg_widget_t *w)
 {
     return w ? w->value : 0;

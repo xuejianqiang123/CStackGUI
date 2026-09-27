@@ -55,7 +55,11 @@ static unsigned sum_of(const unsigned char *b, int n, int kind)
     }
 }
 
-/** @brief 校验值占几个字节（0 = 不校验） */
+/**
+ * @brief 校验值占几个字节（0 = 不校验）
+ * @param kind 校验方式，取 CG_SUM_*
+ * @return int 校验值字节数；CG_SUM_NONE 返回 0
+ */
 static int sum_bytes_of(int kind)
 {
     if (kind == CG_SUM_NONE) return 0;
@@ -63,6 +67,13 @@ static int sum_bytes_of(int kind)
     return 1;
 }
 
+/**
+ * @brief 按报文骨架拼一帧（帧头 / 地址 / 功能码 / [长度] / 数据 / 校验 / 帧尾）
+ * @param p 骨架，**先 memset 成 0** 再填要用的字段
+ * @param out 输出缓冲，帧写在这里
+ * @param out_size out 的字节数
+ * @return int 帧长（写进 out）；-1 参数非法或 out 放不下
+ */
 int cg_proto_build(const cg_proto_t *p, void *out, int out_size)
 {
     unsigned char *o = (unsigned char *)out;
@@ -119,6 +130,20 @@ int cg_proto_build(const cg_proto_t *p, void *out, int out_size)
     return n;
 }
 
+/**
+ * @brief 按同一骨架验一帧，并把字段拆出来
+ * @param p 骨架，必须与拼帧时一致
+ * @param frame 收到的整帧
+ * @param len 帧长度
+ * @param out_addr 地址出口，可传 NULL（不想看就不给）
+ * @param out_func 功能码出口，可传 NULL
+ * @param out_data 数据区指针出口（指向 frame 内部，不用释放），可传 NULL
+ * @param out_data_len 数据区长度出口，可传 NULL
+ * @return int 0 通过；-1 帧太短或参数非法；-2 校验不对（线上数据坏了）；
+ *             -3 对不上骨架（帧头 / 地址 / 功能码 / 帧尾 / 长度字节 不一致）
+ * @note 数据长度：`with_len` 时取长度字节（并与实际长度核对），否则由帧长推算
+ *       （所以解析时**不看** `cg_proto_t.data_len`）
+ */
 int cg_proto_parse(const cg_proto_t *p, const void *frame, int len,
                    int *out_addr, int *out_func, const unsigned char **out_data, int *out_data_len)
 {

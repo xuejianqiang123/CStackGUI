@@ -12,7 +12,14 @@
 
 /* ------------------------------------------------------------ 工具 */
 
-/** @brief 写一条带行号的解析错误到 errbuf（可传 NULL 静默） */
+/**
+ * @brief 写一条带行号的解析错误到 errbuf（可传 NULL 静默）
+ * @param errbuf 错误信息输出缓冲，传 NULL 则不写
+ * @param errsz errbuf 可写的字节数
+ * @param msg 错误描述文本
+ * @param line 出错所在行号（从 1 起）
+ * @return void 无返回值
+ */
 static void cj_err(char *errbuf, size_t errsz, const char *msg, size_t line)
 {
     if (errbuf && errsz) {
@@ -34,7 +41,11 @@ typedef struct {
 /** @brief 按首字符分派解析任意 JSON 值；失败返回 NULL */
 static cj_val_t *parse_value(parser_t *ps);
 
-/** @brief 新建一个指定类型的值节点；失败返回 NULL */
+/**
+ * @brief 新建一个指定类型的值节点；失败返回 NULL
+ * @param t 目标类型（CJ_NULL / CJ_BOOL / CJ_NUM / CJ_STR / CJ_ARR / CJ_OBJ 之一）
+ * @return cj_val_t* 零初始化的新节点（所有权归调用方）；失败返回 NULL
+ */
 static cj_val_t *val_new(cj_type_t t)
 {
     cj_val_t *v = (cj_val_t *)calloc(1, sizeof(cj_val_t));
@@ -42,7 +53,11 @@ static cj_val_t *val_new(cj_type_t t)
     return v;
 }
 
-/** @brief 跳过空白（换行要计数，报错时能给出行号） */
+/**
+ * @brief 跳过空白（换行要计数，报错时能给出行号）
+ * @param ps 解析游标
+ * @return void 无返回值
+ */
 static void skip_ws(parser_t *ps)
 {
     while (ps->p < ps->end) {
@@ -53,7 +68,12 @@ static void skip_ws(parser_t *ps)
     }
 }
 
-/** @brief 记录第一次解析错误并返回 0（失败后不再覆盖，方便定位首个错误） */
+/**
+ * @brief 记录第一次解析错误并返回 0（失败后不再覆盖，方便定位首个错误）
+ * @param ps 解析游标
+ * @param msg 错误描述文本
+ * @return int 恒为 0，便于 return fail(...)
+ */
 static int fail(parser_t *ps, const char *msg)
 {
     if (!ps->failed) {
@@ -63,7 +83,14 @@ static int fail(parser_t *ps, const char *msg)
     return 0;
 }
 
-/** @brief 保证动态缓冲装得下 need 个字节（倍增扩容；失败保持原状） */
+/**
+ * @brief 保证动态缓冲装得下 need 个字节（倍增扩容；失败保持原状）
+ * @param buf 动态缓冲指针的地址，扩容后被 realloc 结果更新
+ * @param len 当前已用字节数（不含结尾 '\0'）
+ * @param need 本次还要再追加的字节数
+ * @param cap 缓冲容量指针，扩容后同步更新
+ * @return void 无返回值
+ */
 static void buf_ensure(char **buf, size_t *len, size_t need, size_t *cap)
 {
     if (*len + need + 1 > *cap) {
@@ -77,7 +104,14 @@ static void buf_ensure(char **buf, size_t *len, size_t need, size_t *cap)
     }
 }
 
-/** 原始字节（UTF-8 文本里的一个字节）直接追加 */
+/**
+ * @brief 原始字节（UTF-8 文本里的一个字节）直接追加
+ * @param buf 动态缓冲指针的地址，扩容后被 realloc 结果更新
+ * @param len 当前已用字节数，追加后自增
+ * @param cap 缓冲容量指针
+ * @param b 待追加的单个字节（0x00-0xFF）
+ * @return void 无返回值
+ */
 static void byte_append(char **buf, size_t *len, size_t *cap, unsigned char b)
 {
     buf_ensure(buf, len, 1, cap);
@@ -86,7 +120,14 @@ static void byte_append(char **buf, size_t *len, size_t *cap, unsigned char b)
     (*buf)[*len] = '\0';
 }
 
-/** @brief 把 \uXXXX（含代理对）编成 UTF-8 追加到 buf */
+/**
+ * @brief 把 \uXXXX（含代理对）编成 UTF-8 追加到 buf
+ * @param buf 动态缓冲指针的地址，扩容后被 realloc 结果更新
+ * @param len 当前已用字节数，追加后自增
+ * @param cap 缓冲容量指针
+ * @param cp Unicode 码点（代理对已合成为一个，0x0-0x10FFFF）
+ * @return void 无返回值
+ */
 static void utf8_append(char **buf, size_t *len, size_t *cap, unsigned cp)
 {
     unsigned char out[4];
@@ -115,7 +156,12 @@ static void utf8_append(char **buf, size_t *len, size_t *cap, unsigned cp)
     (*buf)[*len] = '\0';
 }
 
-/** @brief 解析 4 位十六进制；成功写 *out 并返回 1 */
+/**
+ * @brief 解析 4 位十六进制；成功写 *out 并返回 1
+ * @param s 指向 4 个十六进制字符（大小写均可）的只读缓冲
+ * @param out 解析结果输出位置，成功时写入 0x0000-0xFFFF
+ * @return int 四位全部合法返回 1，遇到非法字符返回 0
+ */
 static int hex4(const char *s, unsigned *out)
 {
     unsigned v = 0;
@@ -188,7 +234,11 @@ static char *parse_string_raw(parser_t *ps)
     return buf;
 }
 
-/** 解析后保证返回可用指针（空串返回 ""） */
+/**
+ * @brief 解析后保证返回可用指针（空串返回 ""）
+ * @param ps 解析游标
+ * @return char* 堆串（调用方 free）；解析失败返回 NULL
+ */
 static char *take_string(parser_t *ps)
 {
     char *s = parse_string_raw(ps);
@@ -200,8 +250,14 @@ static char *take_string(parser_t *ps)
     return s;
 }
 
-/** @brief 给数组/对象容器追加一个值（对象还要存 key）；OOM 返回 0 并释放入参，
- *  让调用方把整次解析判失败，而不是"静默丢 item 却返回成功" */
+/**
+ * @brief 给数组/对象容器追加一个值（对象还要存 key）；OOM 返回 0 并释放入参，
+ *  让调用方把整次解析判失败，而不是"静默丢 item 却返回成功"
+ * @param container 目标数组或对象容器
+ * @param key 对象成员键的堆串（接管所有权）；数组传 NULL
+ * @param item 待追加的子值节点（接管所有权）
+ * @return int 成功返回 1；OOM 返回 0 且 key 与 item 已被释放
+ */
 static int push_item(cj_val_t *container, char *key, cj_val_t *item)
 {
     size_t n = container->count;
@@ -226,7 +282,11 @@ static int push_item(cj_val_t *container, char *key, cj_val_t *item)
     return 1;
 }
 
-/** @brief 解析对象（"key": value, ...）；失败返回 NULL */
+/**
+ * @brief 解析对象（"key": value, ...）；失败返回 NULL
+ * @param ps 解析游标
+ * @return cj_val_t* CJ_OBJ 值节点（所有权归调用方）；失败返回 NULL
+ */
 static cj_val_t *parse_object(parser_t *ps)
 {
     cj_val_t *obj = val_new(CJ_OBJ);
@@ -257,7 +317,11 @@ static cj_val_t *parse_object(parser_t *ps)
     }
 }
 
-/** @brief 解析数组（value, ...）；失败返回 NULL */
+/**
+ * @brief 解析数组（value, ...）；失败返回 NULL
+ * @param ps 解析游标
+ * @return cj_val_t* CJ_ARR 值节点（所有权归调用方）；失败返回 NULL
+ */
 static cj_val_t *parse_array(parser_t *ps)
 {
     cj_val_t *arr = val_new(CJ_ARR);
@@ -282,7 +346,11 @@ static cj_val_t *parse_array(parser_t *ps)
     }
 }
 
-/** @brief 解析数字字面量（整型/浮点/指数），strtod 语义 */
+/**
+ * @brief 解析数字字面量（整型 / 浮点 / 指数），strtod 语义
+ * @param ps 解析游标
+ * @return cj_val_t* CJ_NUM 值节点（所有权归调用方）；失败返回 NULL
+ */
 static cj_val_t *parse_number(parser_t *ps)
 {
     char  tmp[64];
@@ -303,7 +371,12 @@ static cj_val_t *parse_number(parser_t *ps)
     return v;
 }
 
-/** @brief 前缀匹配一个字面量（true/false/null），命中则推进游标 */
+/**
+ * @brief 前缀匹配一个字面量（true / false / null），命中则推进游标
+ * @param ps 解析游标
+ * @param word 待匹配的字面量文本（"true" / "false" / "null"）
+ * @return int 命中返回 1 并前进游标；未命中返回 0 且游标不动
+ */
 static int lit(parser_t *ps, const char *word)
 {
     size_t n = strlen(word);
@@ -461,7 +534,11 @@ cj_val_t *cj_parse(const char *text, char *errbuf, size_t errsz)
     return root;
 }
 
-/** @brief 递归释放值节点（含子项与 key） */
+/**
+ * @brief 递归释放值节点（含子项与 key）
+ * @param v 待释放的根节点，可传 NULL
+ * @return void 无返回值
+ */
 void cj_free(cj_val_t *v)
 {
     if (!v) return;
@@ -475,7 +552,12 @@ void cj_free(cj_val_t *v)
     free(v);
 }
 
-/** @brief 取对象的子值；类型不对/键不存在返回 NULL */
+/**
+ * @brief 取对象的子值；类型不对 / 键不存在返回 NULL
+ * @param obj 待查询的容器，须为 CJ_OBJ
+ * @param key 成员键名（以 '\0' 结尾）
+ * @return const cj_val_t* 子值（所有权仍归 obj）；查不到返回 NULL
+ */
 const cj_val_t *cj_get(const cj_val_t *obj, const char *key)
 {
     if (!obj || obj->type != CJ_OBJ) return NULL;
@@ -485,7 +567,12 @@ const cj_val_t *cj_get(const cj_val_t *obj, const char *key)
     return NULL;
 }
 
-/** @brief 取字符串；类型不符返回 def（调用方不用判空） */
+/**
+ * @brief 取字符串；类型不符返回 def（调用方不用判空）
+ * @param v 待读取的值节点，可传 NULL
+ * @param def 类型不符时的回退字符串
+ * @return const char* 只读字符串（所有权归 v，空串返回 ""）；不符返回 def
+ */
 const char *cj_str(const cj_val_t *v, const char *def)
 {
     if (!v) return def;
@@ -493,7 +580,12 @@ const char *cj_str(const cj_val_t *v, const char *def)
     return def;
 }
 
-/** @brief 取数字（BOOL 视为 0/1，字符串尝试 strtod）；类型不符返回 def */
+/**
+ * @brief 取数字（BOOL 视为 0/1，字符串尝试 strtod）；类型不符返回 def
+ * @param v 待读取的值节点，可传 NULL
+ * @param def 类型不符或解析不出数字时的回退值
+ * @return double 数值结果；不符返回 def
+ */
 double cj_num(const cj_val_t *v, double def)
 {
     if (!v) return def;
@@ -506,14 +598,24 @@ double cj_num(const cj_val_t *v, double def)
     return def;
 }
 
-/** @brief 取整数（四舍五入）；类型不符返回 def */
+/**
+ * @brief 取整数（四舍五入）；类型不符返回 def
+ * @param v 待读取的值节点，可传 NULL
+ * @param def 类型不符时的回退值
+ * @return int 四舍五入后的整数；不符返回 def
+ */
 int cj_int(const cj_val_t *v, int def)
 {
     double d = cj_num(v, def);
     return (int)(d < 0 ? d - 0.5 : d + 0.5);
 }
 
-/** @brief 取布尔（还认字符串 "true"/"1"/"false"/"0"）；类型不符返回 def */
+/**
+ * @brief 取布尔（还认字符串 "true" / "1" / "false" / "0"）；类型不符返回 def
+ * @param v 待读取的值节点，可传 NULL
+ * @param def 类型不符时的回退值
+ * @return int 真返回 1，假返回 0；不符返回 def
+ */
 int cj_bool(const cj_val_t *v, int def)
 {
     if (!v) return def;
@@ -527,7 +629,8 @@ int cj_bool(const cj_val_t *v, int def)
 
 /**
  * @brief 从 "#RRGGBB" / "#RGB" / 十进制取颜色，支持 0xAARRGGBB 直传
- * @param v JSON 值；def 类型不符时的默认色
+ * @param v 待读取的值节点，可传 NULL
+ * @param def 类型不符或格式非法时的默认色
  * @return unsigned 0xRRGGBB（8 位写法返回 0xAARRGGBB 原样）；不符返回 def
  */
 unsigned cj_color(const cj_val_t *v, unsigned def)
@@ -579,7 +682,12 @@ size_t cj_count(const cj_val_t *v)
     return (v && (v->type == CJ_ARR || v->type == CJ_OBJ)) ? v->count : 0;
 }
 
-/** @brief 取数组第 i 个元素；越界/类型不对返回 NULL */
+/**
+ * @brief 取数组第 i 个元素；越界 / 类型不对返回 NULL
+ * @param arr 待查询的容器，须为 CJ_ARR
+ * @param i 元素下标（从 0 起）
+ * @return const cj_val_t* 元素（所有权仍归 arr）；越界或类型不对返回 NULL
+ */
 const cj_val_t *cj_at(const cj_val_t *arr, size_t i)
 {
     if (!arr || arr->type != CJ_ARR || i >= arr->count) return NULL;

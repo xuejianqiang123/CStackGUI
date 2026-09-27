@@ -59,7 +59,10 @@ static char g_open_err[192];
 
 /* ------------------------------------------------------------ 内部助手 */
 
-/** @brief 全局 WSA 初始化（整进程一次；WSAStartup 自身是引用计数的，不必 Cleanup） */
+/**
+ * @brief 全局 WSA 初始化（整进程一次；WSAStartup 自身是引用计数的，不必 Cleanup）
+ * @return int 1 = 网络可用；0 = WSAStartup 失败（原因已写日志）
+ */
 static int net_wsa(void)
 {
     static int done = 0;
@@ -73,8 +76,10 @@ static int net_wsa(void)
     return ok;
 }
 
-/** @brief 本机 IPv4 地址（点分十进制）；拿不到返回 NULL。
- *  @details 放在本文件而不是 cg_kit_sys.c，是因为 winsock2.h **必须在 windows.h 之前**
+/**
+ * @brief 本机 IPv4 地址（点分十进制）
+ * @return char * 堆上的地址串（调用方负责 free）；离线 / 只有回环 / 出错返回 NULL
+ * @details 放在本文件而不是 cg_kit_sys.c，是因为 winsock2.h **必须在 windows.h 之前**
  *          包含（见文件头），而 cg_kit_sys.c 走的是 cg_kit_internal.h → windows.h 那条路。
  *          与其为了一个函数给那个文件做头文件手术，不如放在本来就用 winsock 的地方。
  *
@@ -110,7 +115,11 @@ char *cg_local_ip(void)
     return cg_str_format("%s", buf);
 }
 
-/** @brief 把最常见的 Winsock 错误码翻成人话 */
+/**
+ * @brief 把最常见的 Winsock 错误码翻成人话
+ * @param e Winsock 错误码（WSAGetLastError 的返回值）
+ * @return const char * 静态字面量中文描述（不归调用方管）；认不出时给"网络错误"
+ */
 static const char *net_why(int e)
 {
     switch (e) {
@@ -130,7 +139,13 @@ static const char *net_why(int e)
     }
 }
 
-/** @brief 记一条错误（先在栈上拼好整条，再一次性拷进去：主线程随手读也不会读到半个串） */
+/**
+ * @brief 记一条错误（先在栈上拼好整条，再一次性拷进去：主线程随手读也不会读到半个串）
+ * @param n 要记进链路的链路；NULL 表示没有链路可挂，写进全局"最近一次失败"
+ * @param what 动作名（如"连接失败"），拼在原因前面
+ * @param code Winsock 错误码，翻成中文后拼在最后
+ * @return void 无返回值
+ */
 static void net_fail(cg_net_t *n, const char *what, int code)
 {
     char msg[192];
@@ -147,7 +162,12 @@ static void net_fail(cg_net_t *n, const char *what, int code)
     }
 }
 
-/** @brief 填 "ip:port" 到 n->peer（失败就写 "?"） */
+/**
+ * @brief 填 "ip:port" 到链路内部的对端串（失败就写 "?"）
+ * @param n 要写对端串的链路
+ * @param sa 对端地址；NULL 或非 AF_INET 时写成 "?:0"
+ * @return void 无返回值
+ */
 static void net_set_peer(cg_net_t *n, const struct sockaddr *sa)
 {
     char ip[64] = "?";
@@ -163,8 +183,12 @@ static void net_set_peer(cg_net_t *n, const struct sockaddr *sa)
 
 /* ------------------------------------------------------------ 读线程 */
 
-/** @brief 读线程：把 recv 到的字节搬进接收缓冲。**只做这一件事** —— 不碰控件、不碰界面。
- *  对端关闭（recv 返回 0）时把 connected 清掉：这是业务判断"掉线了"的唯一信号。 */
+/**
+ * @brief 读线程：把 recv 到的字节搬进接收缓冲。**只做这一件事** —— 不碰控件、不碰界面
+ * @param p 链路句柄（CreateThread 时传进来的 cg_net_t *）
+ * @return DWORD 恒为 0（线程返回值没人取）
+ * @note 对端关闭（recv 返回 0）时把 connected 清掉：这是业务判断"掉线了"的唯一信号
+ */
 static DWORD WINAPI net_thread(LPVOID p)
 {
     cg_net_t *n = (cg_net_t *)p;
@@ -207,7 +231,13 @@ static DWORD WINAPI net_thread(LPVOID p)
 
 /* ------------------------------------------------------------ 建立与释放 */
 
-/** @brief 内部：拿一个已经连上/接受到的套接字建链路并起读线程 */
+/**
+ * @brief 内部：拿一个已经连上 / 接受到的套接字建链路并起读线程
+ * @param s 已就绪的套接字
+ * @param peer 对端地址，用来记对端串与日志
+ * @param rx_cap 接收缓冲上限（字节）；<= 0 用默认值
+ * @return cg_net_t * 新链路（调用方用 cg_net_close 释放）；失败返回 NULL
+ */
 static cg_net_t *net_from_socket(SOCKET s, const struct sockaddr *peer, int rx_cap)
 {
     cg_net_t *n;
@@ -247,7 +277,12 @@ static cg_net_t *net_from_socket(SOCKET s, const struct sockaddr *peer, int rx_c
     return n;
 }
 
-/** @brief 新建一个链路壳（只用于监听/未连接状态：它没有读线程） */
+/**
+ * @brief 新建一个链路壳（只用于监听 / 未连接状态：它没有读线程）
+ * @param s 套接字（监听套接字或 UDP 套接字）
+ * @param listening 非 0 = 监听句柄（对端串记"（监听中）"）；0 = 记 "?"
+ * @return cg_net_t * 新链路（调用方用 cg_net_close 释放）；失败返回 NULL
+ */
 static cg_net_t *net_alloc_plain(SOCKET s, int listening)
 {
     cg_net_t *n = (cg_net_t *)calloc(1, sizeof(*n));
@@ -260,7 +295,13 @@ static cg_net_t *net_alloc_plain(SOCKET s, int listening)
     return n;
 }
 
-/** @brief 连到一台主机（host 传 NULL 或空串 = 127.0.0.1；timeout_ms <= 0 = 3000ms） */
+/**
+ * @brief 连到一台主机（host 传 NULL 或空串 = 127.0.0.1；timeout_ms <= 0 = 3000ms）
+ * @param host 主机名或点分十进制 IP；NULL / 空串按回环 127.0.0.1 处理
+ * @param port 目标端口（1..65535，越界直接失败）
+ * @param timeout_ms 连接超时毫秒；<= 0 按 3000 算
+ * @return cg_net_t * 已连接链路（调用方用 cg_net_close 释放）；失败返回 NULL，原因见 cg_net_last_error(NULL)
+ */
 cg_net_t *cg_net_connect(const char *host, int port, int timeout_ms)
 {
     struct addrinfo hints;
@@ -351,7 +392,12 @@ cg_net_t *cg_net_connect(const char *host, int port, int timeout_ms)
     return n;
 }
 
-/** @brief 监听一个端口（backlog <= 0 = 4） */
+/**
+ * @brief 监听一个端口（backlog <= 0 = 4）
+ * @param port 本地监听端口（1..65535，越界直接失败）
+ * @param backlog 等待队列长度；<= 0 按 4 算
+ * @return cg_net_t * 监听句柄（不能读写，用 cg_net_accept 收连接；调用方用 cg_net_close 释放）；绑不上返回 NULL
+ */
 cg_net_t *cg_net_listen(int port, int backlog)
 {
     SOCKET            s;
@@ -394,7 +440,12 @@ cg_net_t *cg_net_listen(int port, int backlog)
     return n;
 }
 
-/** @brief 接受一个连接（timeout_ms <= 0 = 不等，立刻返回）；没有连接返回 NULL（**不是错误**） */
+/**
+ * @brief 接受一个连接（timeout_ms <= 0 = 不等，立刻返回）；没有连接返回 NULL（**不是错误**）
+ * @param srv 监听句柄（cg_net_listen 得到的）
+ * @param timeout_ms 等待毫秒；<= 0 = 不等，立刻返回（适合放在时钟里轮询）
+ * @return cg_net_t * 新连接的独立句柄（调用方用 cg_net_close 释放）；没有连接 / srv 不是监听句柄返回 NULL
+ */
 cg_net_t *cg_net_accept(cg_net_t *srv, int timeout_ms)
 {
     struct sockaddr_in sa;
@@ -425,7 +476,12 @@ cg_net_t *cg_net_accept(cg_net_t *srv, int timeout_ms)
     return n;
 }
 
-/** @brief 关掉一条连接/监听（幂等、NULL 安全） */
+/**
+ * @brief 关掉一条连接 / 监听（幂等、NULL 安全）
+ * @param n 连接 / 监听句柄；NULL 时什么都不做
+ * @return void 无返回值
+ * @note 会等读线程退出，所以最坏卡一个收超时周期（约 50ms）
+ */
 void cg_net_close(cg_net_t *n)
 {
     if (!n) return;
@@ -449,7 +505,13 @@ void cg_net_close(cg_net_t *n)
 
 /* ------------------------------------------------------------ 收发 */
 
-/** @brief 发送；返回实际写出字节数，< 0 失败 */
+/**
+ * @brief 发送（同步，带 1 秒超时，不是写队列）
+ * @param n 连接句柄（监听句柄与 UDP 句柄会被拒）
+ * @param data 要发的字节（只读，本函数不接管所有权）
+ * @param len 字节数（须 > 0）
+ * @return int 实际写出的字节数；失败（含参数非法）返回 -1
+ */
 int cg_net_write(cg_net_t *n, const void *data, int len)
 {
     int sent;
@@ -467,7 +529,13 @@ int cg_net_write(cg_net_t *n, const void *data, int len)
     return sent;
 }
 
-/** @brief 从接收缓冲取最多 cap 字节（非阻塞；对端已关闭时也还能把剩下的取完） */
+/**
+ * @brief 从接收缓冲取最多 cap 字节（非阻塞；对端已关闭时也还能把剩下的取完）
+ * @param n 连接句柄（UDP 句柄不适用）
+ * @param buf 输出缓冲（调用方提供）
+ * @param cap buf 的字节数（须 > 0）
+ * @return int 实际取到的字节数，最多 cap；无数据 / 参数非法返回 0
+ */
 int cg_net_read(cg_net_t *n, void *buf, int cap)
 {
     int got;
@@ -479,7 +547,11 @@ int cg_net_read(cg_net_t *n, void *buf, int cap)
     return got;
 }
 
-/** @brief 接收缓冲里还有多少字节没取走 */
+/**
+ * @brief 接收缓冲里还有多少字节没取走
+ * @param n 连接句柄（UDP 句柄恒为 0）
+ * @return int 未读字节数；NULL 返回 0
+ */
 int cg_net_available(const cg_net_t *n)
 {
     int got;
@@ -491,24 +563,47 @@ int cg_net_available(const cg_net_t *n)
     return got;
 }
 
-/** @brief 对端还在吗（对方关闭后变 0；监听句柄与 UDP 句柄恒为 0） */
+/**
+ * @brief 对端还在吗（对方关闭后变 0；监听句柄与 UDP 句柄恒为 0）
+ * @param n 连接句柄
+ * @return int 1 = 对端还在；0 = 已断开 / NULL / 监听或 UDP 句柄
+ * @note 这是判断"掉线"的唯一信号
+ */
 int cg_net_connected(const cg_net_t *n)
 {
     if (!n || n->udp) return 0;
     return n->connected ? 1 : 0;
 }
 
-/** @brief 累计收 / 发字节数 */
+/**
+ * @brief 累计收了多少字节
+ * @param n 连接句柄
+ * @return long long 累计接收字节数，只增不减；NULL 返回 0
+ */
 long long cg_net_rx_bytes(const cg_net_t *n) { return n ? n->rx_total : 0; }
+
+/**
+ * @brief 累计发了多少字节
+ * @param n 连接句柄
+ * @return long long 累计发送字节数，只增不减；NULL 返回 0
+ */
 long long cg_net_tx_bytes(const cg_net_t *n) { return n ? n->tx_total : 0; }
 
-/** @brief 对端 "ip:port"（监听句柄返回"（监听中）"） */
+/**
+ * @brief 对端 "ip:port"（监听句柄返回"（监听中）"）
+ * @param n 连接句柄
+ * @return const char * 指向链路内部缓冲的字符串（别 free，随 cg_net_close 一起失效）；NULL 返回空串
+ */
 const char *cg_net_peer(const cg_net_t *n)
 {
     return n ? n->peer : "";
 }
 
-/** @brief 最后一次错误的中文描述；n 为 NULL 时给"最近一次连接/监听失败"的原因 */
+/**
+ * @brief 取最后一次错误的中文描述
+ * @param n 连接句柄；传 NULL 时读全局"最近一次连接 / 监听失败"的原因
+ * @return const char * 指向内部缓冲的字符串（别 free，下次报错会被覆盖）；没出过错返回空串
+ */
 const char *cg_net_last_error(const cg_net_t *n)
 {
     if (!n) return g_open_err;
@@ -521,7 +616,12 @@ const char *cg_net_last_error(const cg_net_t *n)
  * 所以这里是拉取式：业务在时钟里 cg_net_recvfrom()，一次一个完整数据报。
  */
 
-/** @brief 开一个 UDP 端口（local_port 传 0 = 让系统随便分一个；broadcast != 0 时允许广播） */
+/**
+ * @brief 开一个 UDP 端口（local_port 传 0 = 让系统随便分一个；broadcast != 0 时允许广播）
+ * @param local_port 本地绑定端口（0..65535）；0 = 让系统分配一个
+ * @param broadcast 非 0 = 允许发广播
+ * @return cg_net_t * UDP 句柄（用完 cg_net_close）；失败返回 NULL
+ */
 cg_net_t *cg_net_udp_open(int local_port, int broadcast)
 {
     SOCKET             s;
@@ -570,7 +670,15 @@ cg_net_t *cg_net_udp_open(int local_port, int broadcast)
     return n;
 }
 
-/** @brief 发一个数据报；返回实际发出字节数，< 0 失败 */
+/**
+ * @brief 发一个数据报；返回实际发出字节数，< 0 失败
+ * @param n UDP 句柄（cg_net_udp_open 得到的）
+ * @param host 目标主机（主机名或点分十进制 IP；每次调用解析一次）
+ * @param port 目标端口（1..65535）
+ * @param data 数据报内容（只读，本函数不接管所有权）
+ * @param len 字节数（0 = 空数据报，合法）
+ * @return int 实际发出的字节数；失败（含参数非法）返回 -1
+ */
 int cg_net_sendto(cg_net_t *n, const char *host, int port, const void *data, int len)
 {
     struct addrinfo hints;
@@ -604,7 +712,16 @@ int cg_net_sendto(cg_net_t *n, const char *host, int port, const void *data, int
     return sent;
 }
 
-/** @brief 收一个数据报（非阻塞）；> 0 字节数、= 0 空数据报、= -1 暂时没有（不是错误） */
+/**
+ * @brief 收一个数据报（非阻塞）；> 0 字节数、= 0 空数据报、= -1 暂时没有（不是错误）
+ * @param n UDP 句柄
+ * @param ip_out 收来源 IP 的缓冲（点分十进制）；传 NULL = 不关心来源地址
+ * @param ip_cap ip_out 的字节数
+ * @param port_out 收来源端口的出参；传 NULL = 不关心
+ * @param buf 数据报内容的输出缓冲（调用方提供）
+ * @param cap buf 的字节数（须 > 0）
+ * @return int > 0 = 收到的字节数；0 = 收到的空数据报；-1 = 暂时没有 / 出错 / 参数非法（区分看出没出错看 cg_net_last_error）
+ */
 int cg_net_recvfrom(cg_net_t *n, char *ip_out, int ip_cap, int *port_out, void *buf, int cap)
 {
     struct sockaddr_in from;

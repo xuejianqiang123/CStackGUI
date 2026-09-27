@@ -31,7 +31,12 @@
 
 /* ------------------------------------------------------------ 内部小工具 */
 
-/** @brief 在帧尾追加 RTU 的 CRC16（**低字节在前**，Modbus 规定的顺序）；返回新长度 */
+/**
+ * @brief 在帧尾追加 RTU 的 CRC16（**低字节在前**，Modbus 规定的顺序）
+ * @param f 帧缓冲（已有 n 个字节，末尾得留得下 2 个 CRC 字节）
+ * @param n 当前帧长（字节）
+ * @return int 追加后的新长度（即 n + 2）
+ */
 static int mb_append_crc(unsigned char *f, int n)
 {
     unsigned crc = cg_crc16(f, n);
@@ -41,7 +46,14 @@ static int mb_append_crc(unsigned char *f, int n)
     return n;
 }
 
-/** @brief 写 7 字节 MBAP 头；pdu_len 是不含 unit id 的 PDU 长度（头里的长度字段要 +1） */
+/**
+ * @brief 写 7 字节 MBAP 头；pdu_len 是不含 unit id 的 PDU 长度（头里的长度字段要 +1）
+ * @param f 帧缓冲（至少 7 字节，就地写）
+ * @param tid 事务标识（16 位，大端写进头）
+ * @param unit 从站 / 单元号（8 位）
+ * @param pdu_len PDU 长度，不含 unit id；头里的长度字段写的是它 + 1
+ * @return void 无返回值
+ */
 static void mb_put_mbap(unsigned char *f, int tid, int unit, int pdu_len)
 {
     f[0] = (unsigned char)((tid >> 8) & 0xFF);
@@ -53,13 +65,21 @@ static void mb_put_mbap(unsigned char *f, int tid, int unit, int pdu_len)
     f[6] = (unsigned char)unit;
 }
 
-/** @brief 这个功能码是不是"读类"（01/02 位、03/04 寄存器） */
+/**
+ * @brief 这个功能码是不是"读类"（01/02 位、03/04 寄存器）
+ * @param func 功能码
+ * @return int 1 = 读类；0 = 不是
+ */
 static int mb_is_read_func(int func)
 {
     return func == 1 || func == 2 || func == 3 || func == 4;
 }
 
-/** @brief 这个功能码是不是"写类"（05/06 单个、0F/10 多个） */
+/**
+ * @brief 这个功能码是不是"写类"（05/06 单个、0F/10 多个）
+ * @param func 功能码
+ * @return int 1 = 写类；0 = 不是
+ */
 static int mb_is_write_func(int func)
 {
     return func == 5 || func == 6 || func == 15 || func == 16;
@@ -67,6 +87,18 @@ static int mb_is_write_func(int func)
 
 /* ------------------------------------------------------------ 拼请求帧 */
 
+/**
+ * @brief 拼一个"读类"请求帧（01/02 位、03/04 寄存器），RTU / TCP 两种封装都行
+ * @param tcp 非 0 = 加 7 字节 MBAP 头（TCP）；0 = 以从站地址开头、帧尾附 CRC（RTU）
+ * @param tid 事务标识（仅 TCP 写进 MBAP）
+ * @param slave 从站地址（0..255）
+ * @param func 功能码（1/2/3/4）
+ * @param start 起始地址（0..65535）
+ * @param count 数量（位类 1..2000，寄存器类 1..125）
+ * @param out 输出缓冲（调用方提供，本函数不接管所有权）
+ * @param out_size out 的字节数
+ * @return int 写入 out 的帧长（字节）；参数非法或放不下返回 -1
+ */
 int cg_modbus_build_read(int tcp, int tid, int slave, int func, int start, int count,
                          void *out, int out_size)
 {
@@ -97,6 +129,19 @@ int cg_modbus_build_read(int tcp, int tid, int slave, int func, int start, int c
     return tcp ? n : mb_append_crc(f, n);
 }
 
+/**
+ * @brief 拼一个"写类"请求帧（05/06 单个、0F/10 多个），RTU / TCP 两种封装都行
+ * @param tcp 非 0 = 加 7 字节 MBAP 头（TCP）；0 = 以从站地址开头、帧尾附 CRC（RTU）
+ * @param tid 事务标识（仅 TCP 写进 MBAP）
+ * @param slave 从站地址（0..255）
+ * @param func 功能码（5/6/15/16）
+ * @param start 起始地址（0..65535）
+ * @param vals 要写的值（只读）：05/06 只取第一个；15 按位取非 0 为"合"；16 每个值 2 字节
+ * @param nvalues 值的个数（05/06 必须为 1；15/16 最多 123）
+ * @param out 输出缓冲（调用方提供，本函数不接管所有权）
+ * @param out_size out 的字节数
+ * @return int 写入 out 的帧长（字节）；参数非法或放不下返回 -1
+ */
 int cg_modbus_build_write(int tcp, int tid, int slave, int func, int start,
                           const unsigned short *vals, int nvalues, void *out, int out_size)
 {
@@ -173,6 +218,14 @@ int cg_modbus_build_write(int tcp, int tid, int slave, int func, int start,
 
 /* ------------------------------------------------------------ 解析响应帧 */
 
+/**
+ * @brief 解析一个响应帧（读 / 写 / 异常响应都认），RTU / TCP 两种封装都行
+ * @param tcp 非 0 = 按 TCP（先跳 7 字节 MBAP）；0 = 按 RTU（先验 CRC）
+ * @param frame 收到的整帧字节（只读）
+ * @param len 整帧长度（字节）
+ * @param out 解析结果（调用方提供，进来先清零）
+ * @return int 0 成功；-1 参数非法或帧太短；-2 CRC 不对（仅 RTU）；-3 帧格式 / 功能码不认
+ */
 int cg_modbus_parse(int tcp, const void *frame, int len, cg_modbus_rsp_t *out)
 {
     const unsigned char *f = (const unsigned char *)frame;
