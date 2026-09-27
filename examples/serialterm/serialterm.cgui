@@ -16,6 +16,11 @@
       "author": "CStackGUI"
     }
   },
+  "styles": {
+    "label": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20" },
+    "input": { "font": "Microsoft YaHei UI", "size": 10 },
+    "log":   { "font": "Consolas", "size": 10, "fg": "#1D1B20", "bg": "#FFFFFF" }
+  },
   "widgets": [
     {
       "id": "sb_main",
@@ -28,7 +33,7 @@
       "type": "label",
       "rect": { "x": 12, "y": 14, "w": 36, "h": 24 },
       "text": "端口",
-      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20" }
+      "style": "label"
     },
     {
       "id": "cmb_port",
@@ -42,7 +47,7 @@
       "type": "label",
       "rect": { "x": 244, "y": 14, "w": 52, "h": 24 },
       "text": "波特率",
-      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20" }
+      "style": "label"
     },
     {
       "id": "cmb_baud",
@@ -101,7 +106,7 @@
       "scroll": 2,
       "maxlen": 65535,
       "text": "串口助手就绪。\n先在上面选端口和波特率，再点「打开串口」。\n收到的数据会按字节落到这个编辑框里（和 terminal 控件无关，去哪个控件由你自己决定）。",
-      "style": { "font": "Consolas", "size": 10, "fg": "#1D1B20", "bg": "#FFFFFF" },
+      "style": "log",
       "hint": "接收日志：串口组件 arrive 事件里把收到的字节写进这里（多行编辑框，自动滚到底）"
     },
     {
@@ -125,14 +130,14 @@
       "type": "group",
       "rect": { "x": 8, "y": 524, "w": 904, "h": 72 },
       "text": "发送",
-      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20", "bg": "#F7F2FA" },
+      "style": { "use": "label", "bg": "#F7F2FA" },
       "children": [
         {
           "id": "edt_send",
           "type": "edit",
           "rect": { "x": 12, "y": 32, "w": 660, "h": 30 },
           "text": "",
-          "style": { "font": "Microsoft YaHei UI", "size": 10 },
+          "style": "input",
           "hint": "要发送的内容；勾了 HEX 就写 1A 2B 3C 这种",
           "events": { "submit": "on_send_submit" }
         },

@@ -16,6 +16,10 @@
       "author": "CStackGUI"
     }
   },
+  "styles": {
+    "label": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20" },
+    "input": { "font": "Microsoft YaHei UI", "size": 10 }
+  },
   "widgets": [
     {
       "id": "sb_main",
@@ -28,7 +32,7 @@
       "type": "label",
       "rect": { "x": 12, "y": 14, "w": 36, "h": 24 },
       "text": "角色",
-      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20" }
+      "style": "label"
     },
     {
       "id": "cmb_role",
@@ -44,14 +48,14 @@
       "type": "label",
       "rect": { "x": 192, "y": 14, "w": 36, "h": 24 },
       "text": "地址",
-      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20" }
+      "style": "label"
     },
     {
       "id": "edt_host",
       "type": "edit",
       "rect": { "x": 232, "y": 10, "w": 128, "h": 32 },
       "text": "127.0.0.1",
-      "style": { "font": "Microsoft YaHei UI", "size": 10 },
+      "style": "input",
       "hint": "客户端：要连的远端地址；UDP：要发给谁（填 255.255.255.255 = 广播，只在允许广播的网络上有效，本机自测填 127.0.0.1）；留空按 127.0.0.1。服务端不需要填"
     },
     {
@@ -59,7 +63,7 @@
       "type": "label",
       "rect": { "x": 368, "y": 14, "w": 36, "h": 24 },
       "text": "端口",
-      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20" }
+      "style": "label"
     },
     {
       "id": "spn_port",
@@ -140,14 +144,14 @@
       "type": "group",
       "rect": { "x": 8, "y": 526, "w": 964, "h": 76 },
       "text": "发送",
-      "style": { "font": "Microsoft YaHei UI", "size": 9, "fg": "#1D1B20", "bg": "#F7F2FA" },
+      "style": { "use": "label", "bg": "#F7F2FA" },
       "children": [
         {
           "id": "edt_send",
           "type": "edit",
           "rect": { "x": 12, "y": 34, "w": 700, "h": 30 },
           "text": "",
-          "style": { "font": "Microsoft YaHei UI", "size": 10 },
+          "style": "input",
           "hint": "要发送的内容；勾了 HEX 就写 1A 2B 3C 这种。服务端会同时发给所有连上的客户端；UDP 角色下发给「地址:端口」指定的目的地",
           "events": { "submit": "on_send_submit" }
         },
