@@ -969,9 +969,18 @@ unsigned cg_crc32(const void *data, int len);   /* IEEE 802.3 / zlib；"12345678
 unsigned cg_crc16(const void *data, int len);   /* CRC16/Modbus；"123456789" = 0x4B37，挂帧尾低字节在前 */
 int      cg_crc32_file(const char *path, unsigned *out);   /* 1 = 成功 */
 
-/* 哈希（摘要）：手写实现，零新增链接依赖；返回小写十六进制堆串，用完 cg_free */
+/* 哈希（摘要）：手写实现；返回小写十六进制堆串，用完 cg_free */
 char *cg_hash(const void *data, int len, const char *algo);      /* md5 / sha1 / sha256 / sha512 */
 char *cg_hash_file(const char *path, const char *algo);          /* 分块读，核固件用 */
+
+/* 系统信息：环境变量一个函数就够（精易那 34 条命令在 C 侧就是 cg_env） */
+char *cg_env(const char *name);                    /* 没有返回 NULL；值一律 UTF-8 */
+int   cg_env_int(const char *name, int fallback);  /* 不合法返回 fallback */
+int   cg_sys_is64(void);                           /* 不随进程位数骗人 */
+char *cg_sys_version(void);                        /* "Windows 10 (10.0.19045)" */
+int   cg_disk_space(const char *path, unsigned long long *free_bytes, unsigned long long *total);
+int   cg_process_running(const char *exe_name);    /* 大小写不敏感 */
+char *cg_local_ip(void);                           /* 本机 IPv4；不发包、不查 DNS */
 char *cg_clip_get_text(void);
 int   cg_clip_set_text(const char *text);
 int   cg_shell_open(const char *path_or_url);               /* 默认程序打开文件/网址 */
