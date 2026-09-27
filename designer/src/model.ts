@@ -4,6 +4,7 @@
  *   model/types.ts      文档类型总集（最底层，零运行时依赖）
  *   model/events.ts     事件名总表 + 中文标签 + 每类控件支持的事件
  *   model/kinds.ts      控件类型登记表（默认尺寸 / 容器判定）
+ *   model/style.ts      命名样式（styles{}）与控件 style 三种形态的公共工具
  *   model/textcodec.ts  结构化内容 ↔ 多行文本 的互转
  *   model/factory.ts    造节点与新工程模板
  *   model/tree.ts       控件树的遍历 / 增删 / 命中测试
@@ -25,6 +26,7 @@
 export * from "./model/events.js";
 export * from "./model/types.js";
 export * from "./model/kinds.js";
+export * from "./model/style.js";
 export * from "./model/textcodec.js";
 export * from "./model/factory.js";
 export * from "./model/tree.js";

@@ -46,6 +46,8 @@ contextBridge.exposeInMainWorld("cstackgui", {
        * 结构性的修法（通道名单集中成一份常量、preload 与 menu 共用）记在
        * .codebuddy/plans/refactor-structure.md §5.1。 */
       "menu:programConfig",
+      "menu:actions", /* 此前漏登记：菜单项点了静默失效（2026-09-27 补） */
+      "menu:styles",
     ];
     for (const ch of channels) {
       ipcRenderer.removeAllListeners(ch);

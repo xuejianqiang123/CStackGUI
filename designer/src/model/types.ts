@@ -25,6 +25,17 @@ export type CgStyle = {
   align?: CgAlign;
 };
 
+/** 命名样式引用形态（契约 §2 第三种）：`use` 是引用的样式名，同对象里写了的字段是局部覆盖。
+ *  只出现在**控件**的 style 上；顶层 styles{} 的一条里没有 use（命名样式不再引用别的样式）。 */
+export type CgStyleRef = CgStyle & { use?: string };
+
+/** 控件 style 的三种形态（契约 §2，都要支持且向后兼容）：
+ *   - `{ "size": 11 }`               内联（现状，行为不变）
+ *   - `"log"`                        纯命名引用：整个样式来自 styles.log
+ *   - `{ "use": "log", "size": 11 }` 命名 + 局部覆盖：先取 styles.log，再用写了的字段覆盖
+ *  读写工具在 model/style.ts（coerce 在 parse.ts、clean 在 serialize.ts）。 */
+export type CgStyleValue = CgStyleRef | string;
+
 export type CgRect = { x: number; y: number; w: number; h: number };
 
 /** 动作（actions）：一条命名命令 = 文字 + 快捷键 + 一个回调名。
@@ -87,7 +98,8 @@ export type CgNode = {
    *  **画布不做实时预览**，效果只在运行时生效（见 .codebuddy/plans/grow-layout.md）。 */
   grow?: number;
   text?: string;
-  style?: CgStyle;
+  /** 控件样式：三种形态都收（内联对象 / "命名样式名" / { use: "名字", ...覆盖 }），见 CgStyleValue */
+  style?: CgStyleValue;
   events?: Partial<Record<CgEvent, string>>;
   /** 引用顶层 actions 里的动作名：点击走动作的回调。
    *  **只有支持 click 的类型**能用（看 model/events.ts 的 KIND_EVENTS）；
@@ -240,6 +252,10 @@ export type CgApp = {
   cursor?: string;
   /** 窗口类名，默认 CStackGUIMain */
   class?: string;
+  /** 界面主题（契约 §3）：true = 深色，false/不写 = 浅色，"auto" = 跟随系统应用主题。
+   *  深色只改**缺省值**：控件自己写了 fg/bg（内联或命名样式）就以它为准，深色不覆盖。
+   *  边界见 .codebuddy/plans/named-styles-dark.md §3 的 ❌ 表（系统控件改不动）。 */
+  dark?: boolean | "auto";
   /** 备注（画布记录，运行时不用） */
   note?: string;
   /** 程序配置 -> exe 版本信息 */
@@ -253,5 +269,8 @@ export type CgDoc = {
   app: CgApp;
   /** 命名动作表：动作名 -> 动作（文字 / 快捷键 / 回调）。缺省 = 没有动作，老 .cgui 行为不变 */
   actions?: Record<string, CgAction>;
+  /** 命名样式表（契约 §1）：样式名 -> 样式字段。控件用 style 引用它（见 CgStyleValue）。
+   *  缺省 = 没有命名样式，老 .cgui 行为不变；重名后写覆盖前写（与 actions 一致）。 */
+  styles?: Record<string, CgStyle>;
   widgets: CgNode[];
 };

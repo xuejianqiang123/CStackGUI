@@ -12,6 +12,7 @@ import InfoDialog from "./components/InfoDialog";
 import LayerTree from "./components/LayerTree";
 import NewProjectDialog from "./components/NewProjectDialog";
 import Palette from "./components/Palette";
+import StyleDialog from "./components/StyleDialog";
 import SupportPanel from "./components/SupportPanel";
 import Toolbar from "./components/Toolbar";
 import WindowPanel from "./components/WindowPanel";
@@ -83,6 +84,8 @@ export default function App() {
   const [infoOpen, setInfoOpen] = useState(false);
   /** 「动作」对话框开关（工具栏按钮 / electron 菜单都走这里打开） */
   const [actionsOpen, setActionsOpen] = useState(false);
+  /** 「样式」对话框开关（工具栏按钮打开）：管理顶层 styles{}（命名样式） */
+  const [stylesOpen, setStylesOpen] = useState(false);
   /** 「新建工程」模板选择对话框 */
   const [newOpen, setNewOpen] = useState(false);
 
@@ -370,6 +373,7 @@ export default function App() {
       else if (action === "run") void doRun();
       else if (action === "programConfig") setInfoOpen(true);
       else if (action === "actions") setActionsOpen(true);
+      else if (action === "styles") setStylesOpen(true);
       else if (action === "undo") undo();
       else if (action === "redo") redo();
       else if (action === "duplicate") duplicateSelected();
@@ -527,7 +531,8 @@ export default function App() {
     const callbacks = uniqueCallbackNames(doc);
     const uses = collectCallbacks(doc);
     const actionNames = Object.keys(doc.actions ?? {});
-    return { count, containers, callbacks: callbacks.length, uses, actionNames };
+    const styleNames = Object.keys(doc.styles ?? {});
+    return { count, containers, callbacks: callbacks.length, uses, actionNames, styleNames };
   }, [doc]);
 
   return (
@@ -553,6 +558,7 @@ export default function App() {
         onPublish={() => void doPublish()}
         onOpenInfo={() => setInfoOpen(true)}
         onOpenActions={() => setActionsOpen(true)}
+        onOpenStyles={() => setStylesOpen(true)}
         onZoom={(z) => setZoom(clamp(z, 0.2, 3))}
         onToggleGrid={() => setShowGrid((v) => !v)}
         onToggleSnap={() => setSnapOn((v) => !v)}
@@ -645,7 +651,17 @@ export default function App() {
                     </span>
                   </li>
                   <li>
+                    命名样式 {stats.styleNames.length} 个
+                    {stats.styleNames.length ? `（${stats.styleNames.join("、")}）` : ""}
+                    <span className="muted small">
+                      {stats.styleNames.length
+                        ? " —— 控件用 style 引用它们，改一处全变"
+                        : " —— 工具条「样式」按钮里可以新建"}
+                    </span>
+                  </li>
+                  <li>
                     窗口 {doc.app.width}×{doc.app.height}，底色 {doc.app.bg}
+                    {doc.app.dark === true ? "，深色" : doc.app.dark === "auto" ? "，跟随系统主题" : ""}
                   </li>
                   <li>文件格式 .cgui（JSON，可手改，改完用画布打开即可）</li>
                 </ul>
@@ -781,6 +797,13 @@ rect = { x:${selected.rect.x}, y:${selected.rect.y}, w:${selected.rect.w}, h:${s
         open={actionsOpen}
         doc={doc}
         onClose={() => setActionsOpen(false)}
+        onBeginHistory={onBeginHistory}
+        onApply={onApply}
+      />
+      <StyleDialog
+        open={stylesOpen}
+        doc={doc}
+        onClose={() => setStylesOpen(false)}
         onBeginHistory={onBeginHistory}
         onApply={onApply}
       />

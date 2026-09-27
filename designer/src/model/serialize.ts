@@ -8,6 +8,7 @@
 
 import { WINDOW_EVENTS, type CgEvent } from "./events.js";
 import { KIND_MAP, isNumEdit } from "./kinds.js";
+import { isSafeStyleName } from "./style.js";
 import {
   INFO_KEYS,
   isSafeActionName,
@@ -17,6 +18,8 @@ import {
   type CgInfo,
   type CgNode,
   type CgStyle,
+  type CgStyleRef,
+  type CgStyleValue,
   type CgTreeItem,
 } from "./types.js";
 
@@ -49,6 +52,59 @@ function cleanActions(actions: Record<string, CgAction> | undefined): Record<str
     if (a.checked === true) item.checked = true;
     if (a.enabled === false) item.enabled = false;
     out[name] = item;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** 控件 style：原样保住三种形态（内联 / "名字" / { use, ...覆盖 }），只剔掉空字符串与不合法字段。
+ *  - 字符串形态：空串丢掉（"没有名字" = 没写）；
+ *  - **带 use 的对象**：写了的字段一律保留（含 bold:false / size:0 / align:"left" / radius:0）——
+ *    它们是"覆盖"语义，丢了会被命名样式里的值顶回去（契约 §2 的合并规则）；
+ *  - 不带 use 的内联对象：等于缺省值的字段不写（老口径，保持文件干净、老文件行为不变）。
+ *  注意：这里**不做形态归并**（{ "use": "x" } 不会写成 "x"），否则手写文件的往返会变。 */
+function cleanStyleValue(style: CgStyleValue | undefined): CgStyleValue | undefined {
+  if (style === undefined) return undefined;
+  if (typeof style === "string") {
+    const s = style.trim();
+    return s || undefined;
+  }
+  const use = typeof style.use === "string" ? style.use.trim() : "";
+  const keepDefaults = !!use;
+  const out: CgStyleRef = {};
+  if (use) out.use = use;
+  if (style.font) out.font = style.font;
+  /* "写了就覆盖"（有 use）：任何写了的数字/布尔都要落盘，包括 0、负数、false —— 运行时靠
+   * 字段存在位掩码判（cg_doc.c 的 style_overlay），少了这一条命名样式的值会顶回来。 */
+  if (style.size !== undefined && (style.size > 0 || keepDefaults)) out.size = style.size;
+  if (style.bold === true || (keepDefaults && style.bold === false)) out.bold = style.bold === true;
+  if (style.fg) out.fg = style.fg;
+  if (style.bg) out.bg = style.bg;
+  if (style.align === "center" || style.align === "right" || (keepDefaults && style.align === "left")) {
+    out.align = style.align;
+  }
+  if (style.radius !== undefined && (style.radius > 0 || keepDefaults)) {
+    out.radius = style.radius;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** 顶层命名样式表：非法名丢掉；一个字段都没有的条目**保留**（可能已被控件引用着）；
+ *  字段按"缺省不写"剔（命名样式是打底，缺省值运行时自己兜底，写不写结果一样）。 */
+function cleanStyles(styles: Record<string, CgStyle> | undefined): Record<string, CgStyle> | undefined {
+  if (!styles) return undefined;
+  const out: Record<string, CgStyle> = {};
+  for (const [name, s] of Object.entries(styles)) {
+    const key = name.trim();
+    if (!isSafeStyleName(key)) continue;
+    const item: CgStyle = {};
+    if (s.font) item.font = s.font;
+    if (s.size) item.size = s.size;
+    if (s.bold === true) item.bold = true;
+    if (s.fg) item.fg = s.fg;
+    if (s.bg) item.bg = s.bg;
+    if (s.align && s.align !== "left") item.align = s.align;
+    if (s.radius) item.radius = s.radius;
+    out[key] = item;
   }
   return Object.keys(out).length ? out : undefined;
 }
@@ -123,16 +179,8 @@ function cleanNode(node: CgNode): CgNode {
     out.columns = node.columns.map((c) => (c.w && c.w > 0 ? { title: c.title, w: Math.round(c.w) } : { title: c.title }));
   }
   if (node.rows && node.rows.length) out.rows = node.rows.map((r) => [...r]);
-  const style = node.style ?? {};
-  const kept: CgStyle = {};
-  if (style.font) kept.font = style.font;
-  if (style.size) kept.size = style.size;
-  if (style.bold) kept.bold = true;
-  if (style.fg) kept.fg = style.fg;
-  if (style.bg) kept.bg = style.bg;
-  if (style.align && style.align !== "left") kept.align = style.align;
-  if (style.radius) kept.radius = style.radius;
-  if (Object.keys(kept).length) out.style = kept;
+  const style = cleanStyleValue(node.style);
+  if (style !== undefined) out.style = style;
 
   const flagged = (v: boolean | undefined, d: boolean) => v !== undefined && v !== d;
   if (flagged(node.visible, true)) out.visible = node.visible;
@@ -199,6 +247,9 @@ function cleanDoc(doc: CgDoc): CgDoc {
   if (a.enterTab === true) app.enterTab = true;
   if (a.escClose === false) app.escClose = false;
   if (a.tray === true) app.tray = true;
+  /* 界面主题（契约 §3）：false = 缺省（浅色），不写；老 .cgui 读进来外观完全不变 */
+  if (a.dark === true) app.dark = true;
+  else if (a.dark === "auto") app.dark = "auto";
   if (a.icon) app.icon = a.icon;
   if (a.cursor) app.cursor = a.cursor;
   if (a.class) app.class = a.class;
@@ -222,12 +273,14 @@ function cleanDoc(doc: CgDoc): CgDoc {
     if (Object.keys(ev).length) app.events = ev;
   }
 
-  /* 动作表紧跟在 app 后面：顶层三个东西，读起来是「窗口 → 命令 → 界面」 */
+  /* 动作表、样式表紧跟在 app 后面：顶层四个东西，读起来是「窗口 → 命令 → 样式 → 界面」 */
   const actions = cleanActions(doc.actions);
+  const styles = cleanStyles(doc.styles);
   return {
     cgui: 1,
     app,
     ...(actions ? { actions } : {}),
+    ...(styles ? { styles } : {}),
     widgets: doc.widgets.map(cleanNode),
   };
 }

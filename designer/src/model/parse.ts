@@ -8,6 +8,7 @@
 
 import { CG_EVENTS, WINDOW_EVENTS, type CgEvent } from "./events.js";
 import { KIND_MAP } from "./kinds.js";
+import { STYLE_KEYS, isSafeStyleName } from "./style.js";
 import {
   INFO_KEYS,
   isSafeActionName,
@@ -20,6 +21,8 @@ import {
   type CgNode,
   type CgRect,
   type CgStyle,
+  type CgStyleRef,
+  type CgStyleValue,
   type CgTreeItem,
 } from "./types.js";
 
@@ -126,6 +129,158 @@ function coerceActions(raw: unknown): Record<string, CgAction> | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
+/* ---------------------------------------------------------------- 字段取值
+ * **运行时是权威**：这里是 cg_json.c 的 cj_num / cj_int / cj_bool / cj_color 四套取值函数的
+ * 逐一对齐版。手写 .cgui 里运行时**认**的值，画布不能丢 —— 打开再存就抹掉 = 静默删数据
+ * （`"size": "11"` / `"bold": "true"` / `"fg": 16711680` 运行时都认）。
+ * 写回时按**规范形态**（数字 / 布尔 / "#RRGGBB"）落盘，语义不变即可（不要求字节恒等）。
+ */
+
+/** = cj_num：数字 / 布尔（0|1）/ 字符串按 strtod（前缀数字，含 0x 十六进制） */
+function numOf(v: unknown, def: number): number {
+  if (typeof v === "boolean") return v ? 1 : 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : def;
+  if (typeof v === "string") {
+    const hex = /^\s*([+-]?)0[xX]([0-9a-fA-F]+)/.exec(v);
+    if (hex) {
+      const n = parseInt(hex[2], 16);
+      return hex[1] === "-" ? -n : n;
+    }
+    const d = parseFloat(v); /* strtod：前缀是数字就取，认不出来才是 def */
+    return Number.isNaN(d) ? def : d;
+  }
+  return def;
+}
+
+/** = cj_int：四舍五入（负数也远离零，与 C 的 `(int)(d < 0 ? d - 0.5 : d + 0.5)` 一致） */
+function intOf(v: unknown, def: number): number {
+  const d = numOf(v, def);
+  return d < 0 ? Math.ceil(d - 0.5) : Math.floor(d + 0.5);
+}
+
+/** = cj_bool：布尔 / 数字（0|非 0）/ 字符串 "true" / "1" / "false" / "0" */
+function boolOf(v: unknown, def: boolean): boolean {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return Number.isFinite(v) && v !== 0;
+  if (typeof v === "string") {
+    if (v === "true" || v === "1") return true;
+    if (v === "false" || v === "0") return false;
+  }
+  return def;
+}
+
+/** = cj_color：数字（0xAARRGGBB，含负数的补码低位）/ "#RRGGBB" / "#RGB" / 8 位 "#AARRGGBB"。
+ *  0xFFFFFFFF（CG_COLOR_NONE）与认不出来的都返回 undefined（= 没设色）。
+ *  写回规范形态：低 24 位装得下就写 6 位，否则写 8 位（保住 alpha）。 */
+function colorOf(v: unknown): string | undefined {
+  let n: number;
+  if (typeof v === "boolean") n = v ? 1 : 0;
+  else if (typeof v === "number") n = Number.isFinite(v) ? v >>> 0 : 0xffffffff;
+  else if (typeof v === "string") {
+    const body = v.startsWith("#") ? v.slice(1) : v;
+    if (!/^[0-9a-fA-F]*$/.test(body)) return undefined; /* 非 hex 字符 -> 不符 */
+    if (body.length === 3) {
+      const d = parseInt(body, 16);
+      n = ((((d >> 8) & 0xf) * 0x11) << 16) | ((((d >> 4) & 0xf) * 0x11) << 8) | ((d & 0xf) * 0x11);
+    } else if (body.length === 6) n = parseInt(body, 16) & 0xffffff;
+    else if (body.length === 8) n = parseInt(body, 16) >>> 0;
+    else return undefined;
+  } else return undefined;
+
+  if (n === 0xffffffff) return undefined; /* CG_COLOR_NONE = 没设色 */
+  return n <= 0xffffff
+    ? `#${(n & 0xffffff).toString(16).toUpperCase().padStart(6, "0")}`
+    : `#${(n >>> 0).toString(16).toUpperCase().padStart(8, "0")}`;
+}
+
+/* 样式：命名样式表（styles{}）的一条，或控件 style 的对象形态。契约 §1/§2。
+ *
+ * 读入宽容：值不是对象、名字为空 —— 跳过该条，不报错、不中断加载；字段值按上面那四套
+ * （与运行时同款）取值，认不出来就当缺省（align 只认 left/center/right 三个名字，
+ * 与运行时的字符串比较一致）。
+ *
+ * keepDefaults：**有 use 的覆盖对象**要把"写了"的字段都留下（bold:false / size:0 / align:"left" /
+ * radius:0，甚至认不出来的值取到的 0/false）—— 合并规则是"写了就覆盖"，丢了这些字段会让命名样式
+ * 里的值顶回来（"画布显示的和跑起来不一样"）。
+ * **位掩码口径两边一致**（cg_doc.c 的 style_overlay）：size/bold/radius 键在就置位（垃圾值取
+ * 0/false）；font/fg/bg 取不到值则**不置位**（当没写）—— 所以这里对 font/fg/bg 的垃圾值直接丢键，
+ * 与运行时的结果相同（2026-09-27 两边对齐后定下的口径，别再写成"只要键在就置位"）。
+ * 内联对象（没有 use、没有可覆盖的打底）则按老口径：等于缺省值的字段不写（位掩码没有意义）。 */
+function coerceStyleObject(raw: unknown, keepDefaults: boolean): CgStyle | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const has = (k: string) => Object.prototype.hasOwnProperty.call(o, k);
+  const out: CgStyle = {};
+
+  /* font：运行时用 cj_str（只认字符串；非串得 NULL） */
+  if (has("font")) {
+    const font = typeof o.font === "string" && o.font.trim() ? o.font : undefined;
+    if (font) out.font = font;
+  }
+  if (has("size")) {
+    const n = intOf(o.size, 0);
+    if (n > 0 || keepDefaults) out.size = n;
+  }
+  if (has("bold")) {
+    const b = boolOf(o.bold, false);
+    if (b || keepDefaults) out.bold = b;
+  }
+  if (has("fg")) {
+    const c = colorOf(o.fg);
+    if (c) out.fg = c;
+  }
+  if (has("bg")) {
+    const c = colorOf(o.bg);
+    if (c) out.bg = c;
+  }
+  /* align：运行时只在字符串命中 left/center/right 时才置位（"middle" 当没写） */
+  if (o.align === "center" || o.align === "right" || (keepDefaults && o.align === "left")) {
+    out.align = o.align;
+  }
+  if (has("radius")) {
+    const n = intOf(o.radius, 0);
+    if (n > 0 || keepDefaults) out.radius = n;
+  }
+  return out;
+}
+
+/** 控件 style 的三种形态（契约 §2）：字符串（纯命名引用）/ 带 use 的对象（命名+覆盖）/ 内联对象。
+ *  认不出来的（不是字符串也不是对象）当没写 style。 */
+function coerceStyleValue(raw: unknown): CgStyleValue | undefined {
+  if (typeof raw === "string") {
+    const s = raw.trim();
+    return s || undefined;
+  }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const o = raw as Record<string, unknown>;
+  const use = typeof o.use === "string" && o.use.trim() ? o.use.trim() : "";
+  const fields = coerceStyleObject(o, !!use);
+  if (!use) {
+    return fields && Object.keys(fields).length ? fields : undefined;
+  }
+  const out: CgStyleRef = { use };
+  for (const k of STYLE_KEYS) {
+    const v = fields?.[k];
+    if (v !== undefined) (out as unknown as Record<string, unknown>)[k] = v;
+  }
+  return out;
+}
+
+/** 顶层命名样式表：样式名 -> 样式。空名 / __proto__ 这类非法名直接丢；
+ *  值不是对象也丢；一个字段都没有的 `{}` **保留**（可能已经被控件引用着）。 */
+function coerceStyles(raw: unknown): Record<string, CgStyle> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const out: Record<string, CgStyle> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const name = key.trim();
+    if (!isSafeStyleName(name)) continue;
+    const st = coerceStyleObject(value, false);
+    if (!st) continue;
+    out[name] = st;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 function coerceNode(raw: unknown, index: number): CgNode | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
@@ -146,7 +301,8 @@ function coerceNode(raw: unknown, index: number): CgNode | null {
     rect: coerceRect(rectSource, { x: 0, y: 0, w: info.w, h: info.h }),
   };
   if (typeof o.text === "string") node.text = o.text;
-  if (o.style && typeof o.style === "object") node.style = o.style as CgStyle;
+  const style = coerceStyleValue(o.style);
+  if (style !== undefined) node.style = style;
   if (o.events && typeof o.events === "object") {
     const ev: Partial<Record<CgEvent, string>> = {};
     for (const key of CG_EVENTS) {
@@ -332,6 +488,9 @@ export function parseDoc(text: string): { doc?: CgDoc; error?: string } {
     if (s !== undefined) Object.assign(appOut, { [k]: s });
   }
 
+  /* 界面主题（契约 §3）：true=深色 / false=浅色 / "auto"=跟随系统。别的值当没写（缺省 = 浅色）。 */
+  if (app.dark === true || app.dark === false || app.dark === "auto") appOut.dark = app.dark;
+
   const info = coerceInfo(app.info);
   if (info) appOut.info = info;
   if (winEvents) appOut.events = winEvents;
@@ -343,5 +502,7 @@ export function parseDoc(text: string): { doc?: CgDoc; error?: string } {
   };
   const actions = coerceActions(o.actions);
   if (actions) doc.actions = actions;
+  const styles = coerceStyles(o.styles);
+  if (styles) doc.styles = styles;
   return { doc };
 }

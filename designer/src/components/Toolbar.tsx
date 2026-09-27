@@ -20,6 +20,8 @@ type Props = {
   onOpenInfo: () => void;
   /** 「动作」对话框：管理命名命令（文字 + 快捷键 + 回调名），菜单项/控件引用它 */
   onOpenActions: () => void;
+  /** 「样式」对话框：管理命名样式（字体/颜色字段），控件用 style 引用它 */
+  onOpenStyles: () => void;
   running: boolean;
   onRun: () => void;
   publishing: boolean;
@@ -61,6 +63,12 @@ export default function Toolbar(p: Props) {
         </button>
         <button onClick={p.onOpenActions} title="动作：一条命名命令（文字 + 快捷键 + 回调名），菜单项和控件引用它">
           动作
+        </button>
+        <button
+          onClick={p.onOpenStyles}
+          title="样式：一条命名样式（字体 / 字号 / 颜色 / 圆角），控件用 style 引用它（“style”: “名字” 或 { use: “名字”, ...覆盖 }）"
+        >
+          样式
         </button>
       </div>
 

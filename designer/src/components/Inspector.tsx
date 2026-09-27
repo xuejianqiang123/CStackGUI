@@ -119,7 +119,13 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
       <GeometrySection node={node} patch={patch} />
       <EditSection node={node} patch={patch} />
       <MediaSection node={node} patch={patch} onPickImage={pickImage} />
-      <StyleSection node={node} patch={patch} fontOpen={fontOpen} onToggleFont={() => setFontOpen(!fontOpen)} />
+      <StyleSection
+        doc={doc}
+        node={node}
+        patch={patch}
+        fontOpen={fontOpen}
+        onToggleFont={() => setFontOpen(!fontOpen)}
+      />
       <StateSection node={node} info={info} patch={patch} />
       <TypeSection node={node} patch={patch} />
       <HintSection node={node} patch={patch} />

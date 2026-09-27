@@ -775,6 +775,7 @@ Menu.setApplicationMenu(
         { label: "导出 C 骨架", accelerator: "CmdOrCtrl+E", click: () => send("menu:exportC") },
         { label: "程序配置", click: () => send("menu:programConfig") },
         { label: "动作", click: () => send("menu:actions") },
+        { label: "样式", click: () => send("menu:styles") },
         { type: "separator" },
         { label: "运行（保存并编译启动）", accelerator: "F5", click: () => send("menu:run") },
         { type: "separator" },

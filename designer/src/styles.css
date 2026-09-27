@@ -2345,6 +2345,33 @@ button.icon-pick svg {
   padding: 6px 14px;
 }
 
+/* 「样式」对话框 / 属性面板的样式一栏 */
+/* 名字当场标红：空名字 / 重名（不必等失焦） */
+.input.bad {
+  border-color: var(--error);
+  box-shadow: 0 0 0 2px rgba(179, 38, 30, 0.14);
+}
+/* 「这个值来自命名样式」的小标记（颜色 / 下拉 / 勾选框没法用 placeholder 表达继承） */
+.sty-tag {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--seed-weak);
+  color: #21005d;
+  font-size: 10.5px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+/* 「当前用哪个样式 / 覆盖了哪几个字段」那一行 */
+.sty-note {
+  margin: 2px 0 6px;
+  line-height: 1.6;
+}
+/* 警告框：hint-box 加上这个类才看得出是"要注意"（此前只在 JSX 里用了类名，没有样式） */
+.hint-box.warn-box {
+  border-color: var(--error);
+}
+
 /* 属性面板里的「菜单项动作」：一项一行，缩进用「n 层」文字表示（面板太窄，靠空格缩进看不出来） */
 .act-item {
   margin-bottom: 8px;

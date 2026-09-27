@@ -4,10 +4,14 @@
  * 所以这里刻意用平实的原生风格，而不是网页风格。
  */
 import type { CSSProperties } from "react";
-import { eventLabel, isNumEdit, CG_EVENTS, type CgNode } from "../model";
+import { eventLabel, inlineStyle, isNumEdit, CG_EVENTS, type CgNode } from "../model";
+
+/** 画布预览只吃**内联字段**（字符串形态的命名引用没有内联字段，返回 {}）：
+ *  契约 §4 明确画布不做命名样式/深色的实时预览 —— 那等于把整套自绘皮肤在 Web 侧再实现一遍。 */
+const stOf = (node: CgNode) => inlineStyle(node.style);
 
 const fontOf = (node: CgNode): CSSProperties => {
-  const style = node.style ?? {};
+  const style = stOf(node);
   const px = style.size ? `${style.size}pt` : "12px";
   return {
     fontFamily: style.font ? `"${style.font}", "Microsoft YaHei UI", sans-serif` : '"Microsoft YaHei UI", sans-serif',
@@ -25,7 +29,7 @@ function inner(node: CgNode) {
 
   switch (node.type) {
     case "button": {
-      const st = node.style ?? {};
+      const st = stOf(node);
       const skin: CSSProperties = {};
       if (st.bg) {
         skin.background = st.bg;
@@ -50,7 +54,7 @@ function inner(node: CgNode) {
       /* 运行时 label 读 style.align 设 SS_LEFT/CENTER/RIGHT（cg_win_ctl.c:227-228），
          预览要一致。.ctl-label 是 flex，靠 justifyContent 才真对齐
          （text-align 落在匿名 flex 项上不生效）。 */
-      const al = node.style?.align ?? "left";
+      const al = stOf(node).align ?? "left";
       return (
         <div
           className="ctl-label"
@@ -90,7 +94,7 @@ function inner(node: CgNode) {
           className={`ctl-edit${multi ? " ctl-edit-multi" : ""}${
             node.border ? ` ctl-edit-b${node.border}` : ""
           }`}
-          style={{ textAlign: node.style?.align ?? "left", position: "relative" }}
+          style={{ textAlign: stOf(node).align ?? "left", position: "relative" }}
           title={bits.length ? `输入框：${bits.join(" · ")}` : undefined}
         >
           {node.spin ? (
@@ -453,7 +457,7 @@ function inner(node: CgNode) {
       /* 灯只有三态，画布上直接照着画：0 灭（灰）/ 1 亮（style.fg 或缺省绿）/ 2 闪。
          闪的可视化就用"亮色 + 虚线边框"，不真做动画 —— 编辑时画面一直晃太干扰。 */
       const state = Math.max(0, Math.min(2, Math.round(node.value ?? 0)));
-      const color = state === 0 ? "#CAC4D0" : node.style?.fg || "#1B6E33";
+      const color = state === 0 ? "#CAC4D0" : stOf(node).fg || "#1B6E33";
       const lamp = (
         <span
           className={`led-lamp ${node.format === "square" ? "led-square" : "led-round"}`}
@@ -490,7 +494,7 @@ function inner(node: CgNode) {
       const r = 40;
       const startDeg = half ? 180 : 135;
       const sweepDeg = half ? 180 : 270;
-      const color = node.style?.fg || "#6750A4";
+      const color = stOf(node).fg || "#6750A4";
       /* 角度按"y 轴向下"的屏幕坐标算：0° = 右，90° = 下，所以角度增大 = 顺时针 */
       const pt = (deg: number, radius: number) => {
         const a = (deg * Math.PI) / 180;
@@ -541,9 +545,10 @@ export default function WidgetView({ node, depth, selectedId, onSelect, onPointe
     height: node.rect.h,
     ...fontOf(node),
   };
-  if (node.style?.bg) style.background = node.style.bg;
+  const own = stOf(node);
+  if (own.bg) style.background = own.bg;
   /* 外形框（shape）的圆角由 format 决定，不走通用的 style.radius（见下面的 shape 分支） */
-  if (node.style?.radius && node.type !== "shape") style.borderRadius = node.style.radius;
+  if (own.radius && node.type !== "shape") style.borderRadius = own.radius;
 
   /* 外形框预览对齐运行时的三形态与配色（cgw_PanelProc 的 WM_PAINT，见 cg_win_draw_panel.c）：
      rect=直角 / roundrect=圆角（缺省 8px，可被 style.radius 覆盖）/ ellipse=椭圆（忽略 radius）。
@@ -551,8 +556,8 @@ export default function WidgetView({ node, depth, selectedId, onSelect, onPointe
      这是有意的：画布上"看得见才选得中"，实心填色会把窗口遮死、也没法点中它。 */
   if (node.type === "shape") {
     const fmt = node.format ?? "roundrect";
-    style.borderColor = node.style?.fg ?? "#b4b0bb";
-    if (fmt === "roundrect" && node.style?.radius) style.borderRadius = node.style.radius;
+    style.borderColor = own.fg ?? "#b4b0bb";
+    if (fmt === "roundrect" && own.radius) style.borderRadius = own.radius;
   }
 
   const bound = CG_EVENTS.filter((e) => node.events?.[e]);
