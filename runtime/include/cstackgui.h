@@ -927,6 +927,82 @@ char *cg_utf8_to_gbk(const char *utf8);
 /** GBK -> UTF-8（要把界面里的中文写进老式 ANSI 文件时用） */
 char *cg_gbk_to_utf8(const char *gbk);
 
+/* ---- 编码：十六进制 / Base64 / URL ----
+ * 都是**调用方给缓冲**（与 cg_open_file_dialog / cg_serial_read 同一口径），
+ * 不在这里 malloc —— 业务多是"把结果喂给控件或直接发出去"，少一次分配少一处泄漏面。
+ * 返回值统一是**写出的长度**（不含结尾 '\0'）：参数或内容非法返回 -1；
+ * 解码类缓冲放不下返回 -2（编码类需要的长度能事先算出来，放不下也归 -1）。
+ */
+
+/** 字节 -> 十六进制文本。sep 是每字节之间的分隔串（NULL/"" 不隔，显示常用 " "），
+ *  upper 非 0 用大写。out 需要 len*(2+strlen(sep))+1 字节；返回写入长度 */
+int cg_hex_encode(const void *data, int len, const char *sep, int upper, char *out, int out_size);
+
+/** 十六进制文本 -> 字节。空格 / 制表 / 换行 / 逗号 / 连字符都当分隔符，大小写都认，
+ *  "1A2B" 这种不写分隔的也算对。返回字节数；非法字符或只剩半个字节返回 -1；
+ *  out 放不下返回 -2。（语义与 examples\serialterm、netterm 里那两段手写实现一致） */
+int cg_hex_decode(const char *text, void *out, int out_size);
+
+/** Base64 编码（RFC 4648，带 '=' 填充）。out 需要 ((len+2)/3)*4+1 字节；返回写入长度 */
+int cg_base64_encode(const void *data, int len, char *out, int out_size);
+
+/** Base64 解码。空白与换行忽略；**带不带 '=' 填充都认**（JWT 那类不填充的也能解）。
+ *  长度不合法（不含规填充、尾部有多余位）返回 -1。out 需要 (strlen+3)/4*3 字节 */
+int cg_base64_decode(const char *text, void *out, int out_size);
+
+/** URL 编码（百分号）。不编码 A-Za-z0-9-_.~，其余按**字节**编成 %XX —— 所以 UTF-8 中文
+ *  会变成多个 %XX，这是对的。space_plus 非 0 时空格编成 '+'（表单风格）。
+ *  out 需要 strlen*3+1 字节；返回写入长度 */
+int cg_url_encode(const char *text, int space_plus, char *out, int out_size);
+
+/** URL 解码：'%XX' 与 '+'（'+' 一律还原成空格）。'%' 后面不是两位十六进制返回 -1；
+ *  out 需要 strlen+1 字节 */
+int cg_url_decode(const char *text, char *out, int out_size);
+
+/* ---- 进制转换与补码 ----
+ * 给调试工具用的：寄存器值在十六进制/二进制/十进制之间来回看，是嵌入式与工控的日常
+ * （位段看二进制、报文看十六进制、协议文档写十进制）。输出一律**大写**（与数据手册、
+ * 寄存器表的写法一致）；要小写十六进制用 cg_hex_encode()。
+ */
+
+/** 整数 -> 任意进制文本（2..36）。负数带前导 '-'。返回写入长度；base 非法或放不下返回 -1 */
+int cg_int_to_base(long long v, int base, char *out, int out_size);
+
+/** 任意进制文本 -> 整数（2..36）。认前导 '-'/'+'，也认与进制相符的 0x / 0b / 0o 前缀
+ *  （调试试工具里到处是 `0x1A` 这种写法）；允许首尾空白，但**中间有空白即失败**
+ *  （`"1A 2B"` 是两段，不该被拼成一段）。整串必须合法、溢出也算失败。
+ *  @param s 待解析文本
+ *  @param base 进制 2..36
+ *  @param out 结果；可传 NULL（只想问"合不合法"）
+ *  @return int 1 = 成功；0 = 失败（此时 out 不动） */
+int cg_base_to_int(const char *s, int base, long long *out);
+
+/** 进制互转（字符串进、字符串出）：cg_base_convert("FF", 16, 2) -> "11111111"。
+ *  返回写入长度；源串非法或放不下返回 -1（此时 out 是空串） */
+int cg_base_convert(const char *s, int from_base, int to_base, char *out, int out_size);
+
+/** 把低 bits 位按**补码**解释成有符号数：cg_to_signed(0xFFF6, 12) -> -10。
+ *  工控里天天要用：报文给的是 0x…，协议说的是 12 位有符号。
+ *  bits 取 1..63；给了 64 或越界就直接按 long long 原样返回（不做符号扩展）。 */
+long long cg_to_signed(unsigned long long v, int bits);
+
+/** 反向：把一个有符号数写成 bits 位补码（只保留低 bits 位）：cg_from_signed(-10, 12) -> 0xFF6。
+ *  拼报文时用它 —— 负数不能直接塞进帧里。bits 取 1..63；越界按原样返回。 */
+unsigned long long cg_from_signed(long long v, int bits);
+
+/* ---- 校验（CRC） ----
+ * 逐位计算、没有静态查表 —— 好处是**天然线程安全**、代码短；代价是比查表慢约 8 倍
+ * （实测对协议帧与几 MB 的文件都够快；上百 MB 的大文件不划算，那种场合另说）。
+ */
+
+/** CRC32（IEEE 802.3 / zlib 同一套：多项式 0xEDB88320 反射，初值全 1，末尾取反）。
+ *  文本 "123456789" 的校验值是 0xCBF43926；空输入返回 0 */
+unsigned cg_crc32(const void *data, int len);
+
+/** CRC16/Modbus（多项式 0xA001 反射，初值 0xFFFF，**不**取反）—— 工控设备协议帧最常用的那个。
+ *  文本 "123456789" 的校验值是 0x4B37；空输入返回 0xFFFF。返回值低 16 位有效 */
+unsigned cg_crc16(const void *data, int len);
+
 /* ---- 剪贴板 / 外部程序 / 时间 ---- */
 /** 取剪贴板文本（没有文本返回 NULL；用完 cg_free） */
 char *cg_clip_get_text(void);
