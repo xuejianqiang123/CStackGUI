@@ -1187,10 +1187,11 @@ if (!g_ser) {
 }
 cg_set_timer(app, 50, poll, app);                    /* 连着就用时钟去取数据 */`,
           }),
-          c("cg_serial_close", "关闭串口", "void cg_serial_close(cg_serial_t *s)", "关掉链路并回收读线程；**幂等且 NULL 安全**，没连上时直接调也没事", {
+          c("cg_serial_close", "关闭串口", "void cg_serial_close(cg_serial_t *s)", "关掉链路并回收读线程；**NULL 安全**（没连上时传 NULL 也行）。**但不是「幂等」**：这一调会把句柄释放掉、指针当场失效 —— 同一个句柄关两次就是 use-after-free（2026-09-27 真机实测：进程以 `0xC0000374` 堆损坏退出，崩点可能离得老远）", {
             params: ["s：cg_serial_open 的返回值（可以是 NULL）"],
             ret: "void 无返回值",
-            sample: `/* 断开按钮和窗口 destroy 回调里都调它，不用自己判"到底连没连" */
+            sample: `/* 关完立刻置空 —— 这一行别省。
+   断开按钮和窗口 destroy 回调里都调到同一个句柄时，第二处看到的是 NULL，安全跳过 */
 cg_serial_close(g_ser);
 g_ser = NULL;`,
           }),

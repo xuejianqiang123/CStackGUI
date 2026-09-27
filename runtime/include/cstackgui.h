@@ -727,8 +727,16 @@ cg_serial_t *cg_serial_open(const char *port, int baud);
  *  cg_serial_open() 等价于 open_ex(port, baud, 8, 1, 0)。 */
 cg_serial_t *cg_serial_open_ex(const char *port, int baud, int bits, int stop, int parity);
 
-/** 关掉串口并回收读线程。**幂等、NULL 安全**（没连上时直接调它也没事）。
- *  它会等读线程真的退出再释放缓冲，所以最坏会卡一个读超时周期（约 50ms）。 */
+/** 关掉串口并回收读线程。**NULL 安全**（没连上时传 NULL 也行）。
+ *  它会等读线程真的退出再释放缓冲，所以最坏会卡一个读超时周期（约 50ms）。
+ *  @note **不是"幂等"**（2026-09-27 真机实测更正，原先这行写着"幂等"，是错的）：
+ *        这一调会把句柄结构**释放掉**，指针当场失效 —— **同一个句柄关两次就是 use-after-free**，
+ *        实测表现是进程以 `0xC0000374`（堆损坏）退出，而且崩点离关的地方可能很远。
+ *        正确写法是**关完立刻置空**，这一行别省：
+ *            cg_serial_close(g_ser);
+ *            g_ser = NULL;
+ *        控件形态（serial 组件）没有这个坑：`cg_widget_serial_close()` 内部就把 native2 置空，
+ *        重复调它真的安全（要防呆就用组件形态，或者自己照着上面置空）。 */
 void cg_serial_close(cg_serial_t *s);
 
 /** 发送数据。返回实际写出的字节数，< 0 表示失败（原因见 cg_serial_last_error）。 */
