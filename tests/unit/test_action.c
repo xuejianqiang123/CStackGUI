@@ -128,6 +128,7 @@ static const char *k_doc =
     "    { \"id\": \"mnu_main\", \"type\": \"menu\", \"nodes\": [\n"
     "        { \"text\": \"文件(&F)\", \"children\": [\n"
     "          { \"text\": \"项自己的文字\", \"id\": \"m_save\", \"action\": \"save\" },\n"
+    "          { \"action\": \"save\" },\n"
     "          { \"text\": \"网格项\", \"id\": \"m_grid\", \"action\": \"grid\" },\n"
     "          { \"text\": \"-\" }\n"
     "        ] }\n"
@@ -365,12 +366,17 @@ static void test_action_build(void)
 
         cg_test_ok("菜单控件在", mnu != NULL);
         if (mnu) {
-            cg_test_int("菜单项 4 条（下拉 + 2 项 + 分隔线）", mnu->nmenu, 4);
+            cg_test_int("菜单项 5 条（下拉 + 3 项 + 分隔线）", mnu->nmenu, 5);
             cg_test_str("菜单项文字也被动作覆盖", mnu->menu[1].text, "保存(&S)");
-            cg_test_str("第二条菜单项", mnu->menu[2].text, "显示网格");
-            cg_test_str("分隔线保持原样", mnu->menu[3].text, "-");
+            /* 只写 "action" 一个字都不写 text 的那种项（notepad 与文档推荐的形状）：
+             * 文字必须整段来自动作 —— 回退成空串的话菜单上就是一项空白。 */
+            cg_test_str("只写 action 的项：文字整段来自动作", mnu->menu[2].text, "保存(&S)");
+            cg_test_int("只写 action 的项也有菜单命令 id", mnu->menu[2].cmd != 0, 1);
+            cg_test_str("第三条菜单项", mnu->menu[3].text, "显示网格");
+            cg_test_str("分隔线保持原样", mnu->menu[4].text, "-");
             cg_test_int("可点的项才有菜单命令 id", mnu->menu[1].cmd != 0, 1);
             cg_test_int("下拉项没有命令 id", mnu->menu[0].cmd, 0);
+            cg_test_int("分隔线没有命令 id", mnu->menu[4].cmd, 0);
         }
     }
 
