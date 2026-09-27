@@ -106,6 +106,9 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
   按钮 / 勾选 / 开关这类自绘控件**底色跟着深、填充色不跟**（仍是 M3 浅紫 —— 画在它上面的文字也就不跟着变浅），
   自己写了 `fg`/`bg` 的控件一律保持原样，所以**它让界面暗下来，但不是一套完整的深色皮肤**。
   见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md) 1.1.1。
+- **截图**：`cg_win_screenshot()` / `cg_widget_screenshot()` 把整个窗口或某个控件存成 **PNG** ——
+  走 `PrintWindow`，所以窗口被挡住、不在前台也拿得到正确内容；现场出问题时一键取证贴进工单
+  （见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md) 第 6 节）。
 - 菜单可以在运行时增删改（`cg_menu_add_item` / `remove` / `clear_items` / `set_item_*`），但有两个边界：
   新增的项**不支持引用动作**（要快捷键就在 `.cgui` 里写固定项）；改的是内存里的菜单，**不写回 `.cgui`**。
 - 控件绑定只镜像**值 / 文字 / 勾选**三类语义，**不做格式换算**（不能把 0~100 映射成 0~5、或自动加

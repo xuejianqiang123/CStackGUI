@@ -1112,6 +1112,12 @@ void cg_win_show(cg_app_t *app, int show);
 void cg_win_set_state(cg_app_t *app, const char *cmd);   /* "min" / "max" / "normal" */
 void cg_win_set_topmost(cg_app_t *app, int on);
 void cg_win_set_icon(cg_app_t *app, const char *ico_path);   /* NULL 还原默认 */
+
+/* 截图（工单取证 / 文档配图）：一律存 PNG。
+ * 走 PrintWindow，所以窗口**被挡住或不在前台**也能拿到正确内容；少数控件不响应时退回抓屏，
+ * 并在日志里说明"这张是抓屏来的、可能被遮挡"。GDI+ 起不来的机器返回 0（那种机器 image 控件本来也是占位框）。 */
+int  cg_win_screenshot(cg_app_t *app, const char *path);        /* 整个窗口（含标题栏） */
+int  cg_widget_screenshot(cg_widget_t *w, const char *path);    /* 单个控件（日期时间存主窗口那个） */
 int  cg_app_has_window(const cg_app_t *app);   /* --selftest 不开窗：弹框前先问一句 */
 
 /* 托盘图标（app.tray = true 会自动建；这里可手动控制 / 弹气泡）。
@@ -1224,7 +1230,7 @@ void   cg_set_title(cg_app_t *app, const char *title);
 | 串口 | `cg_serial_` 系列（枚举 / 打开 / 收发 / 关闭） | `COMM.md` |
 | 网口 | `cg_net_` 系列（TCP 客户端与服务端、UDP 数据报） | `COMM.md` |
 | 通用对话框 | `cg_open_file_dialog` / `cg_save_file_dialog` / `cg_choose_color` / `cg_message_box` | 本文 6 节上文 |
-| 窗口 | `cg_win_center` / `cg_win_set_pos` / `cg_win_set_size` / `cg_win_show` / `cg_win_set_topmost` / `cg_win_set_state` / `cg_win_set_icon` / `cg_cancel_close` | 本文第 1 节 |
+| 窗口 | `cg_win_center` / `cg_win_set_pos` / `cg_win_set_size` / `cg_win_show` / `cg_win_set_topmost` / `cg_win_set_state` / `cg_win_set_icon` / `cg_cancel_close` / **`cg_win_screenshot` / `cg_widget_screenshot`**（存 PNG） | 本文第 1 节 |
 | 散项 | `cg_splitter_pos` / `cg_splitter_set`、`cg_browser_navigate`、`cg_widget_hint`、`cg_widget_count`、`cg_widget_set_value_range`、`cg_widget_list_scroll_bottom`、`cg_file_exists` / `cg_file_delete` / `cg_file_copy`、`cg_dir_exists` / `cg_dir_create`、`cg_event_name` / `cg_event_from_name`、`cg_dump_doc` | 头文件 |
 
 ---
