@@ -297,6 +297,7 @@ runtime/
       cg_win_sync.c     控件状态同步与条目重建
       cg_win_layout.c   把 core 算好的 grow 布局落到原生窗口（基准取自第一次 WM_SIZE）
       cg_win_shot.c     截图：窗口 / 单个控件存成 PNG（PrintWindow 优先，抓屏兜底）
+      cg_win_drop.c     文件拖放：WM_DROPFILES -> 路径填进 app 清单 -> 派发窗口级 drop 事件
       cg_win_theme.c    深色模式：底色 / 无底色控件的字色 / RichEdit 底色。
                         注意**清单控件（listbox/table/tree）实测在 Win11 上不跟随深色** ——
                         代码里试过系统未公开的深色开关（uxtheme 序号 135/133/104）也无效，

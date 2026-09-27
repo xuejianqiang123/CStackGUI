@@ -851,6 +851,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `show` / `hide` | 被显示 / 被隐藏 |
 | `mousedown`/`mouseup`/`rdown`/`rup`/`mousemove` | 在窗口客户区按/放左键、按/放右键、移动鼠标 |
 | `dblclick` | 在窗口客户区双击 |
+| `drop` | 文件被拖进窗口（从资源管理器拖过来）。回调里用 `cg_drop_count(app)` / `cg_drop_file(app, i)` 取路径 —— **路径只在本次回调期间有效**，要留着就在回调里拷走 |
 | `gotfocus` / `lostfocus` | 窗口获得 / 失去键盘焦点 |
 | `keydown` / `keyup` | 按下 / 放开按键（`cg_event_key()` 键码、`cg_event_keys()` 功能键）|
 | `char` | 输入了可打印字符（中文输入法也走这里）|
@@ -1118,6 +1119,10 @@ void cg_win_set_icon(cg_app_t *app, const char *ico_path);   /* NULL 还原默�
  * 并在日志里说明"这张是抓屏来的、可能被遮挡"。GDI+ 起不来的机器返回 0（那种机器 image 控件本来也是占位框）。 */
 int  cg_win_screenshot(cg_app_t *app, const char *path);        /* 整个窗口（含标题栏） */
 int  cg_widget_screenshot(cg_widget_t *w, const char *path);    /* 单个控件（日期时间存主窗口那个） */
+
+/* 文件拖放（在 app.events.drop 的回调里用；路径只在回调期间有效） */
+int  cg_drop_count(cg_app_t *app);                 /* 本次拖进来几个文件 */
+char *cg_drop_file(cg_app_t *app, int index);      /* 第 index 个的路径（堆串，用完 cg_free） */
 int  cg_app_has_window(const cg_app_t *app);   /* --selftest 不开窗：弹框前先问一句 */
 
 /* 托盘图标（app.tray = true 会自动建；这里可手动控制 / 弹气泡）。
