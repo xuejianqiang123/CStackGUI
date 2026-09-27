@@ -419,6 +419,7 @@ CStackGUI\
     bat-utf8.ps1               检查/修复仓库 bat 的编码与 ASCII 前导（UTF-8 + CRLF，无 BOM）
     gen-launcher.bat           生成工程级启动脚本（不含 goto/标签，UTF-8 前导 + 版本标记幂等）
     check-support.mjs          画布「支持库」表 vs cstackgui.h 的一致性检查
+    check-comments.mjs         C 函数注释规范门禁（runtime/ tests/ examples/ 的 @brief/@param/@return）
     check-kit.bat              cg_kit 基础能力冒烟测试（编译并运行 kit-test.c）
     kit-test.c                 上面那个测试的源码（文件/配置/编码/剪贴板/注册表）
     format-roundtrip.mjs       .cgui 往返：画布改 -> C 读 -> 再写回
