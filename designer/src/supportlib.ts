@@ -986,7 +986,7 @@ cg_base_convert("FF", 16, 2, buf, (int)sizeof(buf));   /* -> "11111111" */`,
         ],
       },
       {
-        label: "字节流切帧（串口 / TCP）",
+        label: "字节流切帧 / 报文组装（串口 / TCP）",
         cmds: [
           c("cg_frame_init", "建切帧器（四种切法）", "int cg_frame_init(cg_frame_t *f, void *buf, int buf_size, int mode, int arg)",
             "串口和 TCP 给的都是字节流：一次读到半帧、一帧、也可能两帧粘一起。四种定界办法收成一个状态机：CG_FRAME_SILENCE（帧间静默，Modbus RTU 的 t3.5）/ CG_FRAME_FIXED（定长）/ CG_FRAME_DELIM（分隔符，留在帧里）/ CG_FRAME_LENFIELD（头里带长度，MBAP 就是它）。**纯状态机**：时间由调用方给，不碰 I/O", {
@@ -1019,6 +1019,18 @@ cg_base_convert("FF", 16, 2, buf, (int)sizeof(buf));   /* -> "11111111" */`,
             "累计值（含还没取走的）", { ret: "累计帧数" }),
           c("cg_now_ms", "毫秒时基（系统 uptime）", "unsigned long cg_now_ms(void)",
             "切帧、超时判定、去抖都用它。与 cg_time_now()（给人看的格式化时间）不是一回事", { ret: "自系统启动起的毫秒数" }),
+          c("cg_proto_build", "拼一帧私有协议报文", "int cg_proto_build(const cg_proto_t *p, void *out, int out_size)",
+            "通用骨架：**帧头 / 地址 / 功能码 /[数据长度]/ 数据 / 校验 / 帧尾**，哪几段有你自己定。校验五种：CG_SUM_NONE / ADD8 / XOR8 / ADD16 / CRC16_MODBUS（低字节在前＝Modbus 写法）。校验覆盖「校验值之前的全部字节」", {
+              params: ["p：cg_proto_t，**先 memset 成 0** 再填要用的段", "地址 / 功能码传 -1 = 这一帧不写这一段", "帧头 / 数据 / 帧尾长度传 0 = 没有这一段"],
+              ret: "帧长（写进 out）；-1 = 参数非法或 out 放不下",
+              sample: `unsigned char frame[64], data[3] = { 1, 2, 3 };\ncg_proto_t    p;\n\nmemset(&p, 0, sizeof p);\np.head = "\\xAA\\x55"; p.head_len = 2;\np.addr = 0x01; p.func = 0x03;\np.data = data; p.data_len = 3;\np.sum  = CG_SUM_ADD8;          /* 校验 = 帧头+地址+功能码+数据的累加和 */\np.tail = "\\r\\n"; p.tail_len = 2;\n\nint n = cg_proto_build(&p, frame, sizeof frame);   /* AA 55 01 03 01 02 03 09 0D 0A */\ncg_serial_write(ser, frame, n);`,
+            }),
+          c("cg_proto_parse", "按同一骨架验一帧", "int cg_proto_parse(const cg_proto_t *p, const void *frame, int len, int *out_addr, int *out_func, const unsigned char **out_data, int *out_data_len)",
+            "收帧那一侧：核对帧头 / 地址 / 功能码 / 帧尾 / 长度字节，再算一遍校验。**地址不匹配会返回 -3** —— 所以它顺手替你筛掉了\"不是发给这一台的\"帧", {
+              params: ["p：与组帧时同一份骨架（data_len 不参与判断）", "out_*：不想看的那一段传 NULL"],
+              ret: "0 = 通过；**-1** 帧太短/参数非法；**-2 校验不对**（线上数据坏了）；**-3** 对不上骨架（帧头/地址/功能码/帧尾/长度字节 不一致）",
+              sample: `int addr, func, dlen; const unsigned char *data;\nint ret = cg_proto_parse(&p, frame, flen, &addr, &func, &data, &dlen);\nif (ret == -2)      cg_log(CG_LOG_ERROR, "校验不对 —— 线上数据坏了");\nelse if (ret != 0)  cg_log(CG_LOG_ERROR, "这帧对不上骨架（%d）", ret);\nelse { /* addr / func / data[0..dlen) 就是拆出来的字段 */ }`,
+            }),
         ],
       },
       {

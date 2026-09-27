@@ -96,7 +96,8 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
   前两个讲"链路上怎么收怎么发"，第三个讲"要为深色写哪套配色、哪些只能自己写死"。
   `serialterm` 功能上**对标 XCOM**（16 进制显示 / 时间戳 / 自动保存 / 定时发送 / 多条发送 / 文件收发），
   另外用 `cg_frame_*` 做了 XCOM 没有的**按帧显示**（四种定界可选：静默 / 换行符 / 定长 / 长度字段，
-  每帧长度 + CRC16 结论）；
+  每帧长度 + CRC16 结论），并用 `cg_proto_*` 做了**协议组帧面板**（帧头/地址/功能码/数据/校验/帧尾
+  通用骨架 + 实时预览 —— 替掉 XCOM 那个写死厂商私有格式的「协议传输」页签）；
   不抄它的私有 IAP「协议传输」——通用件是 `cg_crc16` + `cg_modbus_*`。
   自测不需要硬件：`serialterm.exe --demo`（灌合成字节，结论打到 stdout）。
 - `examples\modbus\` —— **工控向样板（Modbus/TCP 上位机）**：`cg_modbus_*` 拼请求帧 / 解响应帧，
