@@ -358,6 +358,23 @@ void cg_widget_serial_close(cg_widget_t *w)
     cg_win_restart_serial(w);               /* 停轮询（native2 空时它只 KillTimer） */
 }
 
+/** @brief 参数要变了：先把开着的链路摘下来
+ *  @param w 串口组件
+ *  @return int 1 = 刚才开着（调用方改完属性要用 cg_widget_serial_open(w, NULL) 补回来）
+ *  @note 先摘再改：cg_widget_serial_open() 自己也会关旧的，但那时属性已是新值，
+ *        中途失败会留下"旧链路按新参数"的错觉。这里干脆先停干净。
+ */
+static int serial_take_off(cg_widget_t *w)
+{
+    int was_open = (w->native2 != NULL);
+
+    if (w->native2) {
+        cg_serial_close((cg_serial_t *)w->native2);
+        w->native2 = NULL;
+    }
+    return was_open;
+}
+
 /** @brief 改波特率：链路开着就按新参数原样重开，没开就只记住 */
 void cg_widget_serial_set_baud(cg_widget_t *w, int baud)
 {
@@ -365,13 +382,36 @@ void cg_widget_serial_set_baud(cg_widget_t *w, int baud)
 
     if (!w || baud <= 0 || baud == w->s_baud) return;
 
-    was_open = (w->native2 != NULL);
-    if (w->native2) {                       /* 先停轮询再关链路，重开时一起补回来 */
-        cg_serial_close((cg_serial_t *)w->native2);
-        w->native2 = NULL;
-    }
+    was_open = serial_take_off(w);
     w->s_baud = baud;
     if (w->node) w->node->s_baud = baud;    /* 节点跟着改，dump/自检看到的是新值 */
+
+    if (was_open) cg_widget_serial_open(w, NULL);
+}
+
+/** @brief 改数据位 / 停止位 / 校验：同上（三样一起给，省得改一次重开一次） */
+void cg_widget_serial_set_format(cg_widget_t *w, int bits, int stop, int parity)
+{
+    int was_open;
+
+    if (!w || !w->type || strcmp(w->type, "serial") != 0) return;
+    if (bits < 5 || bits > 8 || stop < 1 || stop > 2 || parity < 0 || parity > 2) {
+        /* 越界就整个忽略：只改一半会造出"7 数据位 + 无校验"这种谁也没要的组合 */
+        cg_log(CG_LOG_WARN, "串口组件 #%s：数据位/停止位/校验不合法（%d/%d/%d），已忽略",
+               w->id ? w->id : "-", bits, stop, parity);
+        return;
+    }
+    if (bits == w->s_bits && stop == w->s_stop && parity == w->s_parity) return;
+
+    was_open = serial_take_off(w);
+    w->s_bits   = bits;
+    w->s_stop   = stop;
+    w->s_parity = parity;
+    if (w->node) {                          /* 节点跟着改，dump/自检看到的是新值 */
+        w->node->s_bits   = bits;
+        w->node->s_stop   = stop;
+        w->node->s_parity = parity;
+    }
 
     if (was_open) cg_widget_serial_open(w, NULL);
 }

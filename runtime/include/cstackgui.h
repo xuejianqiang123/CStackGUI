@@ -706,8 +706,11 @@ void cg_meter_set_range(cg_widget_t *w, int min, int max);
  * 所以要像上面那样用 cg_set_timer 定周期去"取"，而不是指望被"推"。
  * 完整例子见 examples/serialterm。
  *
- * v1 的边界（有意不做，别猜）：只支持 8N1（不收数据位/停止位/校验位/流控）；一个句柄一条线；
- * 不自动重连；cg_serial_write 是同步写（带超时），不是写队列。
+ * **帧格式（数据位/停止位/校验）是真支持的**：`.cgui` 里给 serial 写 `bits` / `stop` / `parity`
+ * （画布属性面板有这三个下拉），或运行期用 `cg_widget_serial_set_format()` 改 —— 底层走的是
+ * `cg_serial_open_ex()`（7E1 这类老设备直接选就行）。**流控仍然没有**（RTS/CTS、XON/XOFF 都没接）。
+ * 其余边界（有意不做，别猜）：一个句柄一条线；不自动重连；`cg_serial_write` 是同步写（带超时），
+ * 不是写队列。
  */
 typedef struct cg_serial_t cg_serial_t;
 
@@ -766,6 +769,12 @@ void cg_widget_serial_close(cg_widget_t *w);
 /** 改串口组件的波特率（界面上的波特率下拉就是给这用的）；
  *  链路开着时按新参数原样重开（关旧的再开新的），没开就只记住等下次打开用。 */
 void cg_widget_serial_set_baud(cg_widget_t *w, int baud);
+
+/** 改数据位 / 停止位 / 校验（bits 5..8、stop 1..2、parity 0=无 1=奇 2=偶）——
+ *  界面上的"数据位/停止位/校验"三个下拉就是给这用的（7E1 这类老设备）。
+ *  链路开着就按新参数**重开**（先摘干净再改，避免"旧链路按新参数"的错觉）；
+ *  任一个越界就整个忽略并记一条警告 —— 只改一半会造出谁也没要的组合。 */
+void cg_widget_serial_set_format(cg_widget_t *w, int bits, int stop, int parity);
 
 /* ------------------------------------------------------------ 网口（cg_net）
  * 与串口（cg_serial）**同一套形状**，因为面对的是同一类问题：网络 I/O 不能做在 UI 线程上
