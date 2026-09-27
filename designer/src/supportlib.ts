@@ -574,6 +574,40 @@ cg_table_add_row(cg_find(cg_app_of(self), "tbl_data"), cells, 2);`,
           }),
           c("cg_menu_last_text", "刚点的菜单项文字", "const char *cg_menu_last_text(const cg_widget_t *w)", "菜单项没写 id 时按文字判断"),
           c("cg_menu_count", "可点项个数", "int cg_menu_count(const cg_widget_t *w)", "不含分隔线与下拉项，调试用"),
+          c("cg_menu_add_item", "加菜单项", "int cg_menu_add_item(cg_widget_t *w, const char *parent_id, int pos, const char *text, const char *id)",
+            "运行时往菜单里加一项。parent_id = 那个下拉自己的 id（顶层传 NULL），pos = -1 追加，text 写 \"-\" 是分隔线。返回新项下标 / 失败 -1", {
+              params: [
+                "w：菜单控件（menu / menubutton）",
+                "parent_id：下拉项的 id；NULL 或 \"\" = 顶层",
+                "pos：插到该下拉第几项之前；-1 = 追加",
+                "text：显示文字；\"-\" = 分隔线",
+                "id：项标识（后续增删改定位用），可空",
+              ],
+              ret: "新项在行表里的下标；失败 -1",
+              sample: `/* 例：「最近打开」下拉里追加一条 */
+cg_menu_add_item(cg_find(app, "mnu"), "m_recent", -1, "D:\\\\data\\\\a.txt", "m_r1");`,
+            }),
+          c("cg_menu_remove_item", "删菜单项", "int cg_menu_remove_item(cg_widget_t *w, const char *id)",
+            "删掉那一项**连同它的子树**；返回删掉的行数 / 失败 -1", {
+              sample: `cg_menu_remove_item(mnu, "m_r1");`,
+            }),
+          c("cg_menu_clear_items", "清空菜单项", "int cg_menu_clear_items(cg_widget_t *w, const char *parent_id)",
+            "清空某个下拉里的项（下拉自身保留）；parent_id 传 NULL = 清空整个菜单", {
+              sample: `cg_menu_clear_items(mnu, "m_recent");   /* 「最近打开」清空 */`,
+            }),
+          c("cg_menu_set_item_text", "改菜单项文字", "void cg_menu_set_item_text(cg_widget_t *w, const char *id, const char *text)",
+            "改某一项的文字（动作项无效：文字归动作管）", {
+              sample: `/* 例：菜单里显示当前端口 */
+cg_menu_set_item_text(cg_find(app, "mnu"), "m_port", "端口: COM7");`,
+            }),
+          c("cg_menu_set_item_enabled", "灰掉/恢复菜单项", "void cg_menu_set_item_enabled(cg_widget_t *w, const char *id, int enabled)",
+            "禁用（灰掉）或恢复某一项；动作项无效（用 cg_action_set_enabled）", {
+              sample: `cg_menu_set_item_enabled(mnu, "m_save", 0);   /* 没有内容可存时灰掉 */`,
+            }),
+          c("cg_menu_set_item_checked", "菜单项打勾", "void cg_menu_set_item_checked(cg_widget_t *w, const char *id, int checked)",
+            "给某一项打勾 / 取消；动作项无效（用 cg_action_set_checked）", {
+              sample: `cg_menu_set_item_checked(mnu, "m_grid", 1);`,
+            }),
         ],
       },
       {
