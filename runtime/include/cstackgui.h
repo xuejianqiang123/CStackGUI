@@ -234,6 +234,16 @@ int cg_theme_set_dark(cg_app_t *app, int on);
 /** 现在是深色吗（`--selftest` 没有窗口也答得出） */
 int cg_theme_is_dark(const cg_app_t *app);
 
+/* ---- 截图（工单取证 / 文档配图） ----
+ * 存成 **PNG**。走 `PrintWindow`，所以窗口**被挡住或不在前台**也能拿到正确内容；
+ * 少数控件不响应时退回抓屏并在日志里说明"这张可能被遮挡"。GDI+ 没起来的机器上返回 0。
+ */
+/** 把整个窗口存成 PNG（含标题栏）。成功 1，失败 0（写日志说明原因） */
+int cg_win_screenshot(cg_app_t *app, const char *path);
+/** 把**一个控件**的原生窗口存成 PNG（"这个框里到底显示成什么样"取证用）；
+ *  日期时间这类两个原生窗口拼的控件，存的是主窗口那个 */
+int cg_widget_screenshot(cg_widget_t *w, const char *path);
+
 /* ------------------------------------------------------------ 托盘
  * .cgui 的 app 里写 tray:true 会自动建托盘图标；也可以运行时代码调用。
  * 托盘被点（左键单击 / 左键双击 / 右键单击）时派发 window 的 tray 事件，

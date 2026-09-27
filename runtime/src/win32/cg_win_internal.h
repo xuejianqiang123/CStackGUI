@@ -123,6 +123,9 @@ __declspec(dllimport) void     WINAPI GdiplusShutdown(ULONG_PTR token);
 __declspec(dllimport) GpStatus WINAPI GdipCreateBitmapFromFile(const WCHAR *filename, void **bitmap);
 __declspec(dllimport) GpStatus WINAPI GdipCreateHBITMAPFromBitmap(void *bitmap, HBITMAP *hbm, DWORD back);
 __declspec(dllimport) GpStatus WINAPI GdipDisposeImage(void *image);
+__declspec(dllimport) GpStatus WINAPI GdipCreateBitmapFromHBITMAP(HBITMAP hbm, void *hpal, void **bitmap);
+__declspec(dllimport) GpStatus WINAPI GdipSaveImageToFile(void *image, const WCHAR *filename,
+                                                        const void *clsid, const void *params);
 
 /* ============================================================ 跨模块接口
  * 下面按「定义在哪个子模块」分组。函数为方便纯代码搬移沿用了拆分前的名字，
