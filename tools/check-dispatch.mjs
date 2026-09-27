@@ -75,6 +75,9 @@ function bodyOf(src, name) {
  *   scope: "func"  →  { file, func, must: [...] }   只在函数体里找
  *   scope: "file"  →  { file, must: [...] }         在整个文件里找
  *   must 里的每个 token 都必须出现；缺任何一个即失败。
+ *   order（可选）   →  [a, b] 表示 a 必须先于 b 出现。用于"必须在 X 之前"这类契约
+ *                     （典型：加速键必须排在 IsDialogMessage 之前，反了就是焦点在输入框里
+ *                      Ctrl+S 按不出来 —— 而不报错、不崩）。
  *   why：这条路径**当年为什么存在**（谁删了就来这里看）
  * ------------------------------------------------------------------ */
 const RULES = [
@@ -166,6 +169,36 @@ const RULES = [
     why: "发布版和源码版的链接库要一致：browser（WebBrowser 控件 = OLE/COM）需要 "
        + "-luuid -lole32 -loleaut32，少了它们在发布包里编带 browser 的工程会 undefined reference。",
   },
+  {
+    scope: "func", file: "runtime/src/core/cg_event.c", func: "cg_dispatch",
+    must: ["CG_EVENT_CLICK && w->action", "cg_action_invoke(w->app, w->action)"],
+    why: "引用了动作（.cgui 的 action）的控件，click 必须在**派发中枢**分流到动作。"
+       + "放在这里，每一条产生 click 的路径（BN_CLICKED、自绘控件在 WM_LBUTTONUP 里的补派发、"
+       + "菜单项的命令映射）都自动走同一条路；改放到某个后端调用点上，就会有控件"
+       + "「画布上设了 action，点它却还是走自己那份 click」。",
+  },
+  {
+    scope: "func", file: "runtime/src/win32/cg_win_window.c", func: "win_run",
+    must: ["TranslateAcceleratorW((HWND)app->hwnd, st->accel, &msg))", "IsDialogMessageW"],
+    order: ["TranslateAcceleratorW", "IsDialogMessageW"],
+    why: "动作的快捷键靠**消息循环里的加速键表**生效（TranslateAccelerator），"
+       + "而且**必须排在 IsDialogMessage 之前**：要处理的正是那些会被焦点控件吃掉、"
+       + "或被 Tab/回车导航截走的按键。顺序反了的表现是「焦点在输入框里 Ctrl+S 没反应」——"
+       + "不报错、不崩，只能靠人发现（窗口级 keydown 事件做不到这件事：EDIT 会吃掉按键）。",
+  },
+  {
+    scope: "func", file: "runtime/src/win32/cg_win_main.c", func: "cgw_MainProc",
+    must: ["WM_SYSCOMMAND", "cg_action_invoke_cmd"],
+    why: "带 ALT 的加速键由 TranslateAccelerator 以 **WM_SYSCOMMAND** 发回来（不是 WM_COMMAND）。"
+       + "少处理这一路，Alt 组合的快捷键永远不生效，而它会被归因成「快捷键坏了」。",
+  },
+  {
+    scope: "func", file: "runtime/src/win32/cg_win_menu.c", func: "cg_win_action_sync",
+    must: ["EnableMenuItem", "CheckMenuItem"],
+    why: "动作的启用/勾选必须**真落到 HMENU 上**（EnableMenuItem / CheckMenuItem）。"
+       + "只改内存里的 enabled 字段、不落到菜单，就是本项目最典型的那类缺陷："
+       + "「按钮灰了、菜单项还是亮的」，而代码看起来完全正确。",
+  },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -220,6 +253,20 @@ for (const r of RULES) {
       console.log(`[fail] ${at} 里找不到「${token}」`);
       console.log(`       这条路径为什么必须在：${r.why}`);
       bad++;
+    }
+  }
+
+  /* 顺序契约：a 必须先于 b 出现。两个 token 都在才判 —— 缺一个的话上面那条已经报了，
+   * 这里不重复刷屏。 */
+  if (r.order && r.order.length >= 2) {
+    const pos = r.order.map((t) => where.indexOf(t));
+    if (pos.every((p) => p >= 0)) {
+      for (let i = 1; i < pos.length; i++) {
+        if (pos[i - 1] < pos[i]) continue;
+        console.log(`[fail] ${at} 里「${r.order[i - 1]}」必须出现在「${r.order[i]}」之前（现在是反的）`);
+        console.log(`       这条路径为什么必须在：${r.why}`);
+        bad++;
+      }
     }
   }
 }

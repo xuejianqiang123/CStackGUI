@@ -138,6 +138,40 @@ walk(doc.widgets, (n) => {
   }
 });
 
+/* 动作（actions）：和 bind 属于同一类"字段丢了不报错、只是功能没了"的东西 ——
+ * 丢了 bind 是两个控件不再同步，丢了 action 是快捷键与菜单项一起失效。
+ * 探针要挂在**支持 click 的控件**上，并且把它自己那份 click 摘掉：
+ * 同时绑 click 与 action 会被运行时判为错配置（自检非 0 退出），那是测试自己造的假故障。 */
+const probeAction = "cgui_roundtrip_action";
+let   actionProbeHostId = "";
+if (knownCallback) {
+  doc.actions = { ...(doc.actions ?? {}) };
+  if (!doc.actions[probeAction]) {
+    doc.actions[probeAction] = {
+      text: "往返探针(&R)",
+      accel: "Ctrl+Shift+R",
+      handler: knownCallback,
+    };
+    touched += 1;
+  }
+  walk(doc.widgets, (n) => {
+    if (actionProbeHostId) return;
+    if (n.type === "button" && !n.action && n.id) actionProbeHostId = n.id;
+  });
+  const host = actionProbeHostId ? findNode(doc, actionProbeHostId) : null;
+  if (host) {
+    host.action = probeAction;
+    if (host.events?.click) {
+      const ev = { ...host.events };
+      delete ev.click;
+      host.events = ev;
+    }
+    touched += 1;
+  }
+} else {
+  console.log("[note] 输入文件里没有任何已绑定的回调名，跳过 action 往返探针");
+}
+
 const written = serializeDoc(doc);
 fs.mkdirSync(path.dirname(output), { recursive: true });
 fs.writeFileSync(output, written, "utf8");
@@ -160,6 +194,32 @@ console.log(`[ok] 画布改动 ${touched} 处，写出 ${output}（${written.len
       lost += 1;
     }
   }
+  /* 动作（actions）也逐字核对：文字 / 快捷键 / handler / 引用点，一个都不能丢。
+   * 丢了 action 的表现是"快捷键与菜单项一起静默失效"，同样是自检发现不了的那类。 */
+  {
+    const wrote = doc.actions?.[probeAction];
+    if (wrote) {
+      const got = back.doc?.actions?.[probeAction];
+      if (!got) {
+        console.error(`[fail] 恒等回写丢了 action：${probeAction}`);
+        lost += 1;
+      } else {
+        for (const k of ["text", "accel", "handler"]) {
+          if ((got[k] ?? "") !== (wrote[k] ?? "")) {
+            console.error(`[fail] action ${probeAction}.${k} 变了：${wrote[k]} -> ${got[k]}`);
+            lost += 1;
+          }
+        }
+      }
+      const hostBack = actionProbeHostId && back.doc ? findNode(back.doc, actionProbeHostId) : null;
+      if (!hostBack || hostBack.action !== probeAction) {
+        console.error(`[fail] 恒等回写丢了控件的 action 引用：${actionProbeHostId} -> ${probeAction}`);
+        lost += 1;
+      }
+      console.log(`[ok] 恒等回写：action "${probeAction}" 与引用点无损`);
+    }
+  }
+
   if (lost) process.exit(1);
   console.log(`[ok] 恒等回写：${expect.size} 处绑定（bind）无损`);
 }
