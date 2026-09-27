@@ -46,7 +46,7 @@
 
 | 键 | 类型 | 缺省 | 语义 |
 | --- | --- | --- | --- |
-| （对象键）| string | — | 动作名。**必须非空**；空名条目被忽略 + 启动 WARN。重名条目不报错，**后者覆盖**（实现注明的行为） |
+| （对象键）| string | — | 动作名。**必须非空**；空名条目**直接跳过、不报错**（画布也没法表示一个没有名字的动作）。重名条目不报错，**后者覆盖**（实现注明的行为） |
 | `text` | string | `""` | 引用它的菜单项/控件显示的文字 |
 | `accel` | string | `""` | 快捷键，语法见下。空 = 无 |
 | `handler` | string | `""` | C 侧 `CG_BIND` 的名字。**空 → 该动作被忽略** + 启动 WARN + `--selftest` 报错 |
@@ -61,7 +61,10 @@
 
 - 该菜单项显示的文字 = `action.text` 非空 ? `action.text` : 该项自己的 `text`
 - 点击该菜单项 → 触发 action（**不再**给菜单控件派发 click）
-- 有 `action` 的项，`id`（`cg_menu_last_id`）不再有意义；同时绑了 `events.click` → 启动 WARN + 自检报错
+- 有 `action` 的项，`id`（`cg_menu_last_id`）不再有意义（所以示例里干脆不写 `id`）
+- 菜单项**本来就写不出自己的事件**（`cg_item_t` 没有 `events` 字段），所以"动作项与普通项混用一根菜单"
+  是正常写法：普通项照旧走菜单控件的 `events.click`（`examples\notepad` 就是这样）
+  引用了**不存在的动作名** → 启动 WARN + 自检报错
 - 启用/勾选跟随 action
 
 **引用点二：控件** —— 节点上加 `"action": "save"`。
@@ -169,3 +172,34 @@ const char *cg_action_accel(const cg_app_t *app, const char *name);
     `TranslateAcceleratorW`）
 13. `tools/format-roundtrip.mjs`：探针加"画布加一个 action + 引用它"，核对往返无损
 14. 门禁全绿 → 分批提交
+
+---
+
+## 本轮完成（2026-09-27）
+
+三个域并行推进（运行时我 own、画布与文档各一个队友），全部按上面的契约落地并分批提交。
+
+**落地结果与契约的差异**（按"文档与代码不一致时按代码改文档"已回改本文件与 `docs/`）：
+
+- 空名动作**不写 WARN**，直接跳过（上面 §1 字段表已改）。
+- "菜单项同时绑 `events.click` → 报警"这条**不存在**：`cg_item_t` 没有 `events` 字段，
+  菜单项本来就写不出自己的事件；运行时只校验"引用的动作名是否存在"。`cg_doc.h` 里那条
+  与实现不符的注释已一并改掉（上面 §2 已改）。
+- `cg_accel_parse` 还多了一条：**裸功能键（F1–F24）允许**，只有裸字母/数字被拒。
+
+**验证到哪一层**（详细输出见各提交信息）：
+
+- `build-all.bat`（10 个示例逐个 `--selftest`）、`tools\run-tests.bat`（71 套件 / 2063 断言 /
+  `--memcheck` 零新增存活块）、`tools\check-format.bat`（往返探针含 action 与引用点、
+  支持库、分层、43 种控件落点、18 条运行时契约）、`designer` 的 `tsc --noEmit` + `vite build` —— 全绿。
+- **真机验证**（快捷键这条链没有任何单测能覆盖，`build\accel-verify.ps1` + `build\acttest\` 一次性探针）：
+  焦点在主窗口按 Ctrl+S / **焦点在输入框里按 Ctrl+S** / Alt+F9（`WM_SYSCOMMAND` 分支）/
+  F10 菜单导航选中菜单项 —— 四条都真的调到了动作回调；未注册的 Ctrl+Q 不触发；
+  `cg_action_set_enabled` 禁用后快捷键与菜单都不再触发、恢复后又能用。
+
+**没验到的**（如实记下）：菜单项在**画面上**显示的文字、以及 `cg_action_set_checked` 的打勾视觉 ——
+只到"core 单测断言行文字 + 真机菜单点击能命中"两层，没有截图级证据（弹出菜单不在 `PrintWindow`
+能截的范围里）。另外 `Ctrl+Shift+S` 在中文输入法下的行为没测。
+
+**v1 边界**（已写进 `cstackgui.h` / CGUI-FORMAT / README）：toolbar 项不支持引用动作
+（它的条目模型是纯文字列表）；没有运行时增删菜单项的 API；动作的 `text` 不能在运行时改。
