@@ -11,7 +11,12 @@
 
 /* ------------------------------------------------------------ 表格 */
 
-/** @brief 表格行数变多时把行级附加数组（勾选/数值/图标）一起补长到 want */
+/**
+ * @brief 表格行数变多时把行级附加数组（勾选/数值/图标）一起补长到 want
+ * @param w table 控件；附加数组挂在控件上，归控件所有
+ * @param want 目标行数；不超过当前容量时不动作，分配失败保持原状
+ * @return void 无返回值
+ */
 void cg_table_rows_grow(cg_widget_t *w, int want)
 {
     if (want > w->row_cap) {
@@ -34,11 +39,12 @@ void cg_table_rows_grow(cg_widget_t *w, int want)
     }
 }
 
-/** @brief 加一列 */
 /**
  * @brief 给表格加一列
- * @param w table 控件；title 列标题；width 列宽（0 = 按控件宽度均分）
- * @return int 列号；失败返回 -1
+ * @param w table 控件；类型不符直接忽略
+ * @param title 列标题，空指针按空串处理；内部复制
+ * @param width 列宽，0 表示按控件宽度均分
+ * @return int 新列号；失败返回 -1
  */
 int cg_table_add_column(cg_widget_t *w, const char *title, int width)
 {
@@ -68,11 +74,12 @@ int cg_table_add_column(cg_widget_t *w, const char *title, int width)
     return old_ncols;
 }
 
-/** @brief 加一行 */
 /**
  * @brief 给表格加一行（不足的列按空串处理）
- * @param w table 控件；cells 列数个字符串；ncells 个数
- * @return int 行号；失败返回 -1
+ * @param w table 控件；还没加列时直接失败
+ * @param cells 单元格文字数组，按列顺序取值
+ * @param ncells cells 的元素个数，少于列数时补空串
+ * @return int 新行号；失败返回 -1
  */
 int cg_table_add_row(cg_widget_t *w, const char *const *cells, int ncells)
 {
@@ -103,7 +110,11 @@ int cg_table_add_row(cg_widget_t *w, const char *const *cells, int ncells)
     return w->nrows - 1;
 }
 
-/** @brief 清空表格全部行（列保留） */
+/**
+ * @brief 清空表格全部行（列保留）
+ * @param w table 控件；类型不符直接忽略
+ * @return void 无返回值
+ */
 void cg_table_clear(cg_widget_t *w)
 {
     if (!w || !want_type(w, "table", "cg_table_clear")) return;
@@ -122,21 +133,34 @@ void cg_table_clear(cg_widget_t *w)
     cg_widget_sync(w);
 }
 
-/** @brief 表格行数；非 table 控件返回 0 */
+/**
+ * @brief 表格行数；非 table 控件返回 0
+ * @param w 控件，可为 NULL
+ * @return int 行数；非 table 控件或 w 为空返回 0
+ */
 int cg_table_row_count(const cg_widget_t *w)
 {
     return (w && w->type && strcmp(w->type, "table") == 0) ? w->nrows : 0;
 }
 
-/** @brief 取某行某列的文字；越界返回 NULL */
+/**
+ * @brief 取某行某列的文字；越界返回 NULL
+ * @param w table 控件，可为 NULL
+ * @param row 行下标，从 0 开始
+ * @param col 列下标，从 0 开始
+ * @return const char * 单元格文字，归控件所有，调用方不要释放；越界返回 NULL
+ */
 const char *cg_table_cell(const cg_widget_t *w, int row, int col)
 {
     if (!w || row < 0 || row >= w->nrows || col < 0 || col >= w->row_cells) return NULL;
     return w->rows[row][col];
 }
 
-/** @brief 当前选中行，没选中返回 -1 */
-/** @brief 当前选中行（最后一次点击的行）；没选中返回 -1 */
+/**
+ * @brief 当前选中行（最后一次点击的行）；没选中返回 -1
+ * @param w table 控件，可为 NULL
+ * @return int 选中行下标；没选中或 w 为空返回 -1
+ */
 int cg_table_selected(const cg_widget_t *w)
 {
     return w ? w->table_sel : -1;

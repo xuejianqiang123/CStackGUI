@@ -24,7 +24,11 @@
 /** 窗口点数上限（一条曲线最多几万个点也够用了） */
 #define CG_CHART_MAX_CAP 4096
 
-/** @brief 每系列窗口点数（夹到合理区间） */
+/**
+ * @brief 每系列窗口点数（夹到合理区间）
+ * @param w 图表控件
+ * @return int 夹取后的窗口点数
+ */
 static int chart_cap(const cg_widget_t *w)
 {
     int c = w->value;
@@ -34,7 +38,11 @@ static int chart_cap(const cg_widget_t *w)
     return c;
 }
 
-/** @brief 系列数：items 为空时按 1 个系列算（单条曲线的 .cgui 不用写 items） */
+/**
+ * @brief 系列数：items 为空时按 1 个系列算（单条曲线的 .cgui 不用写 items）
+ * @param w 图表控件
+ * @return int 系列数
+ */
 static int chart_nseries(const cg_widget_t *w)
 {
     int n = w->nitems > 0 ? w->nitems : 1;
@@ -42,7 +50,11 @@ static int chart_nseries(const cg_widget_t *w)
     return n > CG_CHART_MAX_SERIES ? CG_CHART_MAX_SERIES : n;
 }
 
-/** @brief 点缓冲按需建 / 重建（items 或 value 变了就重建），返回系列数 */
+/**
+ * @brief 点缓冲按需建 / 重建（items 或 value 变了就重建），返回系列数
+ * @param w 图表控件；缓冲建好后挂在控件上，归控件所有
+ * @return int 实际建成的系列数；分配失败返回 0
+ */
 int cg_chart_ensure(cg_widget_t *w)
 {
     int n = chart_nseries(w);
@@ -59,7 +71,13 @@ int cg_chart_ensure(cg_widget_t *w)
     return w->chart_nseries;
 }
 
-/** @brief 往某个系列塞一个点（不刷新，给批量接口用） */
+/**
+ * @brief 往某个系列塞一个点（不刷新，给批量接口用）
+ * @param w 图表控件，要求缓冲已建好
+ * @param series 系列下标，越界按 0 处理
+ * @param value 要写入的点值
+ * @return void 无返回值
+ */
 static void chart_push_raw(cg_widget_t *w, int series, int value)
 {
     int *buf;
@@ -76,7 +94,13 @@ static void chart_push_raw(cg_widget_t *w, int series, int value)
     }
 }
 
-/** @brief 给某个系列追加一个点（满了顶掉最老的） */
+/**
+ * @brief 给某个系列追加一个点（满了顶掉最老的）
+ * @param w 图表控件；类型不符直接忽略
+ * @param series 系列下标，越界按 0 处理
+ * @param value 要写入的点值
+ * @return void 无返回值
+ */
 void cg_chart_push(cg_widget_t *w, int series, int value)
 {
     if (!w || !want_type(w, "chart", "cg_chart_push")) return;
@@ -85,7 +109,13 @@ void cg_chart_push(cg_widget_t *w, int series, int value)
     cg_widget_sync(w);
 }
 
-/** @brief 一次给前 nvalues 个系列各追加一个点（多通道采样最常用的一次调用） */
+/**
+ * @brief 一次给前 nvalues 个系列各追加一个点（多通道采样最常用的一次调用）
+ * @param w 图表控件；类型不符直接忽略
+ * @param values 逐系列的点值数组，取前 nvalues 个
+ * @param nvalues values 的元素个数，超过系列数的部分忽略
+ * @return void 无返回值
+ */
 void cg_chart_push_all(cg_widget_t *w, const int *values, int nvalues)
 {
     int i, n;
@@ -97,7 +127,11 @@ void cg_chart_push_all(cg_widget_t *w, const int *values, int nvalues)
     cg_widget_sync(w);
 }
 
-/** @brief 清空所有点（保留系列与范围） */
+/**
+ * @brief 清空所有点（保留系列与范围）
+ * @param w 图表控件；类型不符直接忽略
+ * @return void 无返回值
+ */
 void cg_chart_clear(cg_widget_t *w)
 {
     if (!w || !want_type(w, "chart", "cg_chart_clear")) return;
@@ -106,7 +140,12 @@ void cg_chart_clear(cg_widget_t *w)
     cg_widget_sync(w);
 }
 
-/** @brief 运行时加一个系列（返回下标；超过上限或内存不足返回 -1） */
+/**
+ * @brief 运行时加一个系列（返回下标；超过上限或内存不足返回 -1）
+ * @param w 图表控件；类型不符直接忽略
+ * @param name 系列名，为空时自动取"系列"；内部复制，调用方不必释放
+ * @return int 新系列下标；超过上限或内存不足返回 -1
+ */
 int cg_chart_add_series(cg_widget_t *w, const char *name)
 {
     char **ni;
@@ -122,13 +161,22 @@ int cg_chart_add_series(cg_widget_t *w, const char *name)
     return w->nitems - 1;
 }
 
-/** @brief 系列数（items 为空时是 1） */
+/**
+ * @brief 系列数（items 为空时是 1）
+ * @param w 图表控件，可为 NULL
+ * @return int 系列数；w 为空返回 0
+ */
 int cg_chart_series_count(const cg_widget_t *w)
 {
     return w ? chart_nseries(w) : 0;
 }
 
-/** @brief 某系列已经填了多少点 */
+/**
+ * @brief 某系列已经填了多少点
+ * @param w 图表控件，可为 NULL
+ * @param series 系列下标，从 0 开始
+ * @return int 已填点数；控件 / 缓冲不存在或下标越界返回 0
+ */
 int cg_chart_filled(const cg_widget_t *w, int series)
 {
     if (!w || !w->chart_fill) return 0;
@@ -136,7 +184,13 @@ int cg_chart_filled(const cg_widget_t *w, int series)
     return w->chart_fill[series];
 }
 
-/** @brief 读回某个点（下标 0 = 最老的点）；越界返回 0 */
+/**
+ * @brief 读回某个点（下标 0 = 最老的点）；越界返回 0
+ * @param w 图表控件，可为 NULL
+ * @param series 系列下标，从 0 开始
+ * @param index 系列内点下标，0 表示最老的点
+ * @return int 点值；控件 / 缓冲不存在或越界返回 0
+ */
 int cg_chart_point(const cg_widget_t *w, int series, int index)
 {
     if (!w || !w->chart_pts || w->chart_cap <= 0) return 0;
@@ -145,7 +199,13 @@ int cg_chart_point(const cg_widget_t *w, int series, int index)
     return w->chart_pts[(size_t)series * (size_t)w->chart_cap + (size_t)index];
 }
 
-/** @brief 设 Y 轴范围（超出的值按边界裁剪后画） */
+/**
+ * @brief 设 Y 轴范围（超出的值按边界裁剪后画）
+ * @param w 图表控件；类型不符直接忽略
+ * @param min Y 轴下界
+ * @param max Y 轴上界，<= min 时纠正成 min+1
+ * @return void 无返回值
+ */
 void cg_chart_set_range(cg_widget_t *w, int min, int max)
 {
     if (!w || !want_type(w, "chart", "cg_chart_set_range")) return;
@@ -169,7 +229,11 @@ void cg_chart_set_range(cg_widget_t *w, int min, int max)
 /** 闪烁周期的缺省值：period 太小（<100ms）兜到这里 —— 再快也看不出在闪，只会看着像暗的 */
 #define CG_LED_DEF_PERIOD 500
 
-/** @brief 状态夹到 0..2 */
+/**
+ * @brief 状态夹到 0..2
+ * @param w 状态灯控件
+ * @return int 夹取后的状态：0 灭 / 1 亮 / 2 闪
+ */
 static int led_state(const cg_widget_t *w)
 {
     if (w->value < 0) return 0;
@@ -177,7 +241,12 @@ static int led_state(const cg_widget_t *w)
     return w->value;
 }
 
-/** @brief 此刻灯亮着吗（状态 = 闪时按 period 前后半周期翻转） */
+/**
+ * @brief 此刻灯亮着吗（状态 = 闪时按 period 前后半周期翻转）
+ * @param w 状态灯控件，可为 NULL
+ * @param now_ms 当前时刻，单位毫秒
+ * @return int 亮返回 1、灭返回 0
+ */
 int cg_led_lit(const cg_widget_t *w, unsigned long now_ms)
 {
     unsigned long p;
@@ -191,7 +260,12 @@ int cg_led_lit(const cg_widget_t *w, unsigned long now_ms)
     return ((now_ms % p) < (p / 2)) ? 1 : 0;        /* 前半周期亮、后半周期灭 */
 }
 
-/** @brief 设状态（0 灭 / 1 亮 / 2 闪；越界夹取） */
+/**
+ * @brief 设状态（0 灭 / 1 亮 / 2 闪；越界夹取）
+ * @param w 状态灯控件；类型不符直接忽略
+ * @param state 目标状态，0 灭 / 1 亮 / 2 闪，越界夹取
+ * @return void 无返回值
+ */
 void cg_led_set(cg_widget_t *w, int state)
 {
     if (!w || !want_type(w, "led", "cg_led_set")) return;
@@ -202,13 +276,22 @@ void cg_led_set(cg_widget_t *w, int state)
     cg_widget_sync(w);
 }
 
-/** @brief 读状态（0 / 1 / 2） */
+/**
+ * @brief 读状态（0 / 1 / 2）
+ * @param w 状态灯控件，可为 NULL
+ * @return int 状态值 0 灭 / 1 亮 / 2 闪；w 为空返回 0
+ */
 int cg_led_state(const cg_widget_t *w)
 {
     return w ? led_state(w) : 0;
 }
 
-/** @brief 亮起的颜色（走既有的颜色通道：自绘控件都从 style.fg 取主色） */
+/**
+ * @brief 亮起的颜色（走既有的颜色通道：自绘控件都从 style.fg 取主色）
+ * @param w 状态灯控件；类型不符直接忽略
+ * @param rgb 亮灯颜色，0xRRGGBB
+ * @return void 无返回值
+ */
 void cg_led_set_color(cg_widget_t *w, unsigned rgb)
 {
     if (!w || !want_type(w, "led", "cg_led_set_color")) return;
@@ -226,7 +309,12 @@ void cg_led_set_color(cg_widget_t *w, unsigned rgb)
 #define CG_METER_HALF_FROM  180      /* half 样式：180° 起（正左）…… */
 #define CG_METER_HALF_SWEEP 180      /* ……顺时针扫 180°（到正右） */
 
-/** @brief 值 -> 表盘角度（度，顺时针、以 +x 轴为 0°）；超量程按边界夹取 */
+/**
+ * @brief 值 -> 表盘角度（度，顺时针、以 +x 轴为 0°）；超量程按边界夹取
+ * @param w 仪表盘控件，可为 NULL；format == "half" 时走半圆量程
+ * @param value 要换算的值，超量程按边界夹取
+ * @return int 表盘角度，单位度；w 为空或量程非法时返回起点角
+ */
 int cg_meter_angle_deg(const cg_widget_t *w, int value)
 {
     int from, sweep, range;
@@ -246,14 +334,25 @@ int cg_meter_angle_deg(const cg_widget_t *w, int value)
     return from + (int)((long long)(value - w->vmin) * sweep / range);
 }
 
-/** @brief 设当前值（夹到量程；既有 set_value 就带夹取与同步） */
+/**
+ * @brief 设当前值（夹到量程；既有 set_value 就带夹取与同步）
+ * @param w 仪表盘控件；类型不符直接忽略
+ * @param value 目标值，超出量程时夹取
+ * @return void 无返回值
+ */
 void cg_meter_set(cg_widget_t *w, int value)
 {
     if (!w || !want_type(w, "meter", "cg_meter_set")) return;
     cg_widget_set_value(w, value);
 }
 
-/** @brief 设量程（max<=min 时纠正成 min+1，免得除零） */
+/**
+ * @brief 设量程（max<=min 时纠正成 min+1，免得除零）
+ * @param w 仪表盘控件；类型不符直接忽略
+ * @param min 量程下界
+ * @param max 量程上界，<= min 时纠正成 min+1
+ * @return void 无返回值
+ */
 void cg_meter_set_range(cg_widget_t *w, int min, int max)
 {
     if (!w || !want_type(w, "meter", "cg_meter_set_range")) return;

@@ -11,7 +11,10 @@
 
 /* ------------------------------------------------------------ 内部助手 */
 
-/** @brief 取文件名部分（兼容 \\ 与 /）；返回 path 内部指针 */
+/** @brief 取文件名部分（兼容 \\ 与 /）；返回 path 内部指针
+ *  @param path 路径；可为 NULL
+ *  @return const char * 文件名部分（指向 path 内部，不用释放）；path 为 NULL 返回 ""
+ */
 static const char *kit_base(const char *path)
 {
     const char *s1;
@@ -26,7 +29,10 @@ static const char *kit_base(const char *path)
 
 /* ------------------------------------------------------------ 内存 */
 
-/** @brief 释放本库返回的堆内存（等价 free） */
+/** @brief 释放本库返回的堆内存（等价 free）
+ *  @param p 堆指针；NULL 安全
+ *  @return void 无返回值
+ */
 void cg_free(void *p)
 {
     free(p);
@@ -34,7 +40,10 @@ void cg_free(void *p)
 
 /* ------------------------------------------------------------ 文件 */
 
-/** @brief 文件是否存在（目录不算） */
+/** @brief 文件是否存在（目录不算）
+ *  @param path 路径（UTF-8）
+ *  @return int 1 存在、0 不存在或路径上是个目录
+ */
 int cg_file_exists(const char *path)
 {
     wchar_t *wp = kit_w(path);
@@ -48,7 +57,10 @@ int cg_file_exists(const char *path)
     return ok;
 }
 
-/** @brief 目录是否存在 */
+/** @brief 目录是否存在
+ *  @param path 路径（UTF-8）
+ *  @return int 1 存在、0 不存在或路径上不是目录
+ */
 int cg_dir_exists(const char *path)
 {
     wchar_t *wp = kit_w(path);
@@ -62,7 +74,10 @@ int cg_dir_exists(const char *path)
     return ok;
 }
 
-/** @brief 读整个文件（去掉 UTF-8 BOM）；失败返回 NULL */
+/** @brief 读整个文件（去掉 UTF-8 BOM）；失败返回 NULL
+ *  @param path 路径（UTF-8）；为 NULL 返回 NULL
+ *  @return char * 堆串（已去 BOM、以 NUL 结尾），用完 cg_free；打不开或读失败返回 NULL
+ */
 char *cg_file_read(const char *path)
 {
     wchar_t *wp;
@@ -98,6 +113,8 @@ char *cg_file_read(const char *path)
 }
 
 /** @brief 读整个**二进制**文件：返回堆缓冲（调用方 cg_free）并把长度写进 *out_len
+ *  @param path 路径（UTF-8）；为 NULL 返回 NULL
+ *  @param out_len 长度出口：写入读到的字节数（0 字节文件写 0）；可传 NULL；失败时不动
  *  @return unsigned char* 内容（0 字节文件也返回非 NULL）；失败 NULL（此时 *out_len 不动）
  *  @note 与 cg_file_read 的分工：那个返回"字符串"（去 BOM、以 NUL 结尾），
  *        **含 0x00 的二进制用它读不全** —— `strlen` 到第一个 0 就截断了。
@@ -138,7 +155,11 @@ unsigned char *cg_file_read_bytes(const char *path, int *out_len)
     return buf;
 }
 
-/** @brief 写文件（覆盖，UTF-8 文本）；成功返回 0 */
+/** @brief 写文件（覆盖，UTF-8 文本）；成功返回 0
+ *  @param path 路径（UTF-8）；为 NULL 返回 -1
+ *  @param text 文本内容；按 strlen 写，须以 NUL 结尾
+ *  @return int 0 成功、-1 失败
+ */
 int cg_file_write(const char *path, const char *text)
 {
     wchar_t *wp;
@@ -158,6 +179,10 @@ int cg_file_write(const char *path, const char *text)
 }
 
 /** @brief 覆盖写**二进制**文件（len 可以为 0 = 建一个空文件）；成功 0，失败 -1
+ *  @param path 路径（UTF-8）；为 NULL 返回 -1
+ *  @param data 要写的字节；len 为 0 时可传 NULL
+ *  @param len 字节数；可以为 0（建一个空文件），负数算失败
+ *  @return int 0 成功、-1 失败
  *  @note 与 cg_file_write 的分工同读那边：那个按 `strlen` 写，**数据里带 0x00 就写不全**。 */
 int cg_file_write_bytes(const char *path, const void *data, int len)
 {
@@ -178,6 +203,8 @@ int cg_file_write_bytes(const char *path, const void *data, int len)
 }
 
 /** @brief 文件大小（字节）；文件不存在 / 调不动 / 给的是目录都返回 -1
+ *  @param path 路径（UTF-8）；为 NULL 返回 -1
+ *  @return long long 字节数；不存在 / 目录 / 调不动返回 -1
  *  @note 想"不读内容先问大小"时用它（大文件，或只想显示大小）。 */
 long long cg_file_size(const char *path)
 {
@@ -196,7 +223,11 @@ long long cg_file_size(const char *path)
     return ((long long)fad.nFileSizeHigh << 32) | (long long)fad.nFileSizeLow;
 }
 
-/** @brief 追加到文件末尾（不存在就新建）；成功返回 0 */
+/** @brief 追加到文件末尾（不存在就新建）；成功返回 0
+ *  @param path 路径（UTF-8）；为 NULL 返回 -1
+ *  @param text 追加的内容；按 strlen 写，须以 NUL 结尾
+ *  @return int 0 成功、-1 失败
+ */
 int cg_file_append(const char *path, const char *text)
 {
     wchar_t *wp;
@@ -216,7 +247,10 @@ int cg_file_append(const char *path, const char *text)
     return ok;
 }
 
-/** @brief 删文件；成功返回 0 */
+/** @brief 删文件；成功返回 0
+ *  @param path 路径（UTF-8）；为 NULL 或转不出宽路径返回 -1
+ *  @return int 0 成功、-1 失败
+ */
 int cg_file_delete(const char *path)
 {
     wchar_t *wp = kit_w(path);
@@ -228,7 +262,11 @@ int cg_file_delete(const char *path)
     return ok;
 }
 
-/** @brief 拷文件（覆盖目标）；成功返回 0 */
+/** @brief 拷文件（覆盖目标）；成功返回 0
+ *  @param from 源路径（UTF-8）
+ *  @param to 目标路径（UTF-8）
+ *  @return int 0 成功、-1 失败（含任一路径转不出宽路径）
+ */
 int cg_file_copy(const char *from, const char *to)
 {
     wchar_t *wf = kit_w(from);
@@ -241,7 +279,10 @@ int cg_file_copy(const char *from, const char *to)
     return ok;
 }
 
-/** @brief 建目录（父目录必须存在）；成功返回 0 */
+/** @brief 建目录（父目录必须存在）；成功返回 0
+ *  @param path 路径（UTF-8）；父目录必须已存在
+ *  @return int 0 成功（目录已经存在也算成功）、-1 失败
+ */
 int cg_dir_create(const char *path)
 {
     wchar_t *wp = kit_w(path);
@@ -254,7 +295,14 @@ int cg_dir_create(const char *path)
     return ok;
 }
 
-/** @brief 枚举目录：index 从 0 起；返回 1 = 拿到名字，0 = 结束/出错 */
+/** @brief 枚举目录：index 从 0 起；返回 1 = 拿到名字，0 = 结束/出错
+ *  @param dir 目录路径（UTF-8）；为 NULL 返回 0
+ *  @param filter 通配符，如 "*.txt"；NULL 或 "" 表示所有条目
+ *  @param index 第几个条目（0 起），跳过 "." 与 ".." 后计数
+ *  @param out 名字的输出缓冲（UTF-8，只有名字、不带目录）；函数只往里写
+ *  @param out_size out 的字节数
+ *  @return int 1 = 拿到一个名字（已写进 out）、0 = 没有了或参数不对
+ */
 int cg_dir_list(const char *dir, const char *filter, int index, char *out, int out_size)
 {
     wchar_t *wd;
@@ -295,7 +343,11 @@ int cg_dir_list(const char *dir, const char *filter, int index, char *out, int o
 
 /* ------------------------------------------------------------ 路径 */
 
-/** @brief 拼路径（a 末尾已有分隔符就不重复加） */
+/** @brief 拼路径（a 末尾已有分隔符就不重复加，补的是 '\\'）
+ *  @param a 前半段；为 NULL 时返回 b 的副本
+ *  @param b 后半段；为 NULL 时返回 a 的副本
+ *  @return char * 堆串，用完 cg_free；失败返回 NULL
+ */
 char *cg_path_join(const char *a, const char *b)
 {
     char   *out;
@@ -315,7 +367,10 @@ char *cg_path_join(const char *a, const char *b)
     return out;
 }
 
-/** @brief 取目录部分（不含末尾分隔符；没有目录返回 "."） */
+/** @brief 取目录部分（不含末尾分隔符；没有目录返回 "."）
+ *  @param path 路径；为 NULL 返回 NULL
+ *  @return char * 堆串，用完 cg_free；失败返回 NULL
+ */
 char *cg_path_dir(const char *path)
 {
     const char *b;
@@ -337,13 +392,19 @@ char *cg_path_dir(const char *path)
     return out;
 }
 
-/** @brief 取文件名部分；返回 path 内部指针，不用释放 */
+/** @brief 取文件名部分；返回 path 内部指针，不用释放
+ *  @param path 路径；可为 NULL
+ *  @return const char * path 内部的指针（不用释放）；path 为 NULL 返回 ""
+ */
 const char *cg_path_name(const char *path)
 {
     return path ? kit_base(path) : "";
 }
 
-/** @brief 取扩展名（含点）；没有返回 ""。返回内部指针 */
+/** @brief 取扩展名（含点）；没有返回 ""。返回内部指针
+ *  @param path 路径；可为 NULL
+ *  @return const char * path 内部的指针（含点，不用释放）；没有扩展名返回 ""
+ */
 const char *cg_path_ext(const char *path)
 {
     const char *base = kit_base(path);
@@ -351,7 +412,9 @@ const char *cg_path_ext(const char *path)
     return (dot && dot != base) ? dot : "";
 }
 
-/** @brief exe 所在目录（堆串） */
+/** @brief exe 所在目录（堆串）
+ *  @return char * 堆串（不含末尾分隔符），用完 cg_free；取不到 exe 路径返回 NULL
+ */
 char *cg_app_dir(void)
 {
     char exe[1024];
@@ -360,7 +423,9 @@ char *cg_app_dir(void)
     return cg_path_dir(exe);
 }
 
-/** @brief 用户数据目录 %LOCALAPPDATA%\<exe名>（自动建；拿不到退回 exe 旁边） */
+/** @brief 用户数据目录 %LOCALAPPDATA%\<exe名>（自动建；拿不到退回 exe 旁边）
+ *  @return char * 堆串（已建好目录），用完 cg_free；连 exe 名都取不到时返回 NULL
+ */
 char *cg_app_data_dir(void)
 {
     wchar_t wbuf[1024];

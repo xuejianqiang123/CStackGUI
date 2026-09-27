@@ -13,7 +13,10 @@
 
 /* ------------------------------------------------------------ 内部助手 */
 
-/** @brief UTF-8 -> UTF-16 堆串（调用方 free）；失败返回 NULL */
+/** @brief UTF-8 -> UTF-16 堆串（调用方 free）；失败返回 NULL
+ *  @param s UTF-8 源串；可为 NULL
+ *  @return wchar_t * 堆宽串（含结尾 NUL），用完 cg_free；s 为 NULL 或转换失败返回 NULL
+ */
 wchar_t *kit_w(const char *s)
 {
     int      n;
@@ -28,7 +31,10 @@ wchar_t *kit_w(const char *s)
     return out;
 }
 
-/** @brief UTF-16 -> UTF-8 堆串（调用方 free）；失败返回 NULL */
+/** @brief UTF-16 -> UTF-8 堆串（调用方 free）；失败返回 NULL
+ *  @param ws UTF-16 源串；可为 NULL
+ *  @return char * 堆串（含结尾 NUL），用完 cg_free；ws 为 NULL 或转换失败返回 NULL
+ */
 char *kit_u8(const wchar_t *ws)
 {
     int   n;
@@ -43,7 +49,10 @@ char *kit_u8(const wchar_t *ws)
     return out;
 }
 
-/** @brief 忽略大小写的字符比较（只处理 ASCII，够用于键名/节名） */
+/** @brief 把一个 ASCII 大写字母转成小写（只处理 A-Z，够用于键名/节名的忽略大小写比较）
+ *  @param c 待转换的字符（ASCII）
+ *  @return char 小写后的字符；不是 A-Z 原样返回
+ */
 char kit_lower(char c)
 {
     return (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c;
@@ -51,7 +60,10 @@ char kit_lower(char c)
 
 /* ------------------------------------------------------------ 文本与编码 */
 
-/** @brief 拼字符串（printf 风格），返回堆内存 */
+/** @brief 拼字符串（printf 风格），返回堆内存
+ *  @param fmt printf 风格格式串；为 NULL 返回 NULL
+ *  @return char * 堆串（按格式化后的长度分配），用完 cg_free；失败返回 NULL
+ */
 char *cg_str_format(const char *fmt, ...)
 {
     va_list ap, ap2;
@@ -70,7 +82,10 @@ char *cg_str_format(const char *fmt, ...)
     return out;
 }
 
-/** @brief 去掉首尾空白，返回堆内存 */
+/** @brief 去掉首尾空白（空格 / 制表 / 回车 / 换行），返回堆内存
+ *  @param s 源串；为 NULL 返回 NULL
+ *  @return char * 堆串（不含首尾空白），用完 cg_free；分配失败返回 NULL
+ */
 char *cg_str_trim(const char *s)
 {
     const char *b;
@@ -91,7 +106,11 @@ char *cg_str_trim(const char *s)
     return out;
 }
 
-/** @brief 比较字符串（忽略英文大小写）：相等返回 1 */
+/** @brief 比较字符串（忽略英文大小写）：相等返回 1
+ *  @param a 串一
+ *  @param b 串二
+ *  @return int 1 相等、0 不等；任一方为 NULL 时按指针比较，只有两个都是 NULL 才返回 1（NULL 与 "" 不等）
+ */
 int cg_str_equal(const char *a, const char *b)
 {
     if (!a || !b) return a == b;
@@ -103,7 +122,12 @@ int cg_str_equal(const char *a, const char *b)
     return *a == *b;
 }
 
-/** @brief 把 src 里所有 from 换成 to，返回堆内存 */
+/** @brief 把 src 里所有 from 换成 to，返回堆内存
+ *  @param src 源串；为 NULL 返回 NULL
+ *  @param from 要被换掉的子串；为 NULL 或空串时不替换，直接返回 src 的副本
+ *  @param to 替换成的子串；为 NULL 视作空串（等于把 from 删掉）
+ *  @return char * 堆串，用完 cg_free；失败返回 NULL
+ */
 char *cg_str_replace(const char *src, const char *from, const char *to)
 {
     size_t      fl, tl, sl, i, cap, len = 0;
@@ -134,7 +158,10 @@ char *cg_str_replace(const char *src, const char *from, const char *to)
     return out;
 }
 
-/** @brief UTF-8 -> GBK */
+/** @brief UTF-8 -> GBK
+ *  @param utf8 UTF-8 源串；为 NULL 返回 NULL
+ *  @return char * 堆串（含结尾 NUL），用完 cg_free；转换失败返回 NULL
+ */
 char *cg_utf8_to_gbk(const char *utf8)
 {
     wchar_t *w;
@@ -152,7 +179,10 @@ char *cg_utf8_to_gbk(const char *utf8)
     return out;
 }
 
-/** @brief GBK -> UTF-8 */
+/** @brief GBK -> UTF-8
+ *  @param gbk GBK 源串；为 NULL 返回 NULL
+ *  @return char * 堆串（含结尾 NUL），用完 cg_free；转换失败返回 NULL
+ */
 char *cg_gbk_to_utf8(const char *gbk)
 {
     wchar_t *w;
@@ -185,7 +215,10 @@ char *cg_gbk_to_utf8(const char *gbk)
 static const char k_b64_tab[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-/** @brief 十六进制字符 -> 值；不是十六进制字符返回 -1 */
+/** @brief 十六进制字符 -> 值；不是十六进制字符返回 -1
+ *  @param c 待判定的字符（'0'-'9' / 'A'-'F' / 'a'-'f'）
+ *  @return int 0..15；不是十六进制字符返回 -1
+ */
 static int kit_hex_val(char c)
 {
     if (c >= '0' && c <= '9') return c - '0';
@@ -194,7 +227,15 @@ static int kit_hex_val(char c)
     return -1;
 }
 
-/** @brief 字节 -> 十六进制文本（sep 为 NULL/"" 时不加分隔） */
+/** @brief 字节 -> 十六进制文本（sep 为 NULL/"" 时不加分隔）
+ *  @param data 源字节；len 为 0 时可传 NULL
+ *  @param len 字节数；负数算参数非法
+ *  @param sep 每字节之间插的分隔串；NULL 或 "" 表示不加分隔
+ *  @param upper 非 0 用大写字母，0 用小写
+ *  @param out 输出缓冲，只往里写、不接管所有权
+ *  @param out_size out 的字节数
+ *  @return int 写入的长度（不含结尾 '\0'）；参数非法或 out 放不下返回 -1
+ */
 int cg_hex_encode(const void *data, int len, const char *sep, int upper, char *out, int out_size)
 {
     const unsigned char *p = (const unsigned char *)data;
@@ -218,7 +259,12 @@ int cg_hex_encode(const void *data, int len, const char *sep, int upper, char *o
     return n;
 }
 
-/** @brief 十六进制文本 -> 字节（分隔符随便写，大小写都认） */
+/** @brief 十六进制文本 -> 字节（分隔符随便写，大小写都认）
+ *  @param text 十六进制文本；空格 / 制表 / 回车 / 换行 / 逗号 / 连字符都当分隔符；为 NULL 视作空串
+ *  @param out 输出缓冲，只往里写、不接管所有权
+ *  @param out_size out 的字节数
+ *  @return int 解出的字节数；非法字符或只剩半个字节返回 -1，out 放不下返回 -2
+ */
 int cg_hex_decode(const char *text, void *out, int out_size)
 {
     unsigned char *o = (unsigned char *)out;
@@ -243,7 +289,13 @@ int cg_hex_decode(const char *text, void *out, int out_size)
     return (hi >= 0) ? -1 : n;   /* 只剩半个字节 = 写错了 */
 }
 
-/** @brief Base64 编码（RFC 4648，带 '=' 填充） */
+/** @brief Base64 编码（RFC 4648，带 '=' 填充）
+ *  @param data 源字节；len 为 0 时可传 NULL
+ *  @param len 字节数；负数算参数非法
+ *  @param out 输出缓冲，只往里写、不接管所有权
+ *  @param out_size out 的字节数
+ *  @return int 写入的长度（不含结尾 '\0'）；参数非法或 out 放不下返回 -1
+ */
 int cg_base64_encode(const void *data, int len, char *out, int out_size)
 {
     const unsigned char *p = (const unsigned char *)data;
@@ -273,7 +325,12 @@ int cg_base64_encode(const void *data, int len, char *out, int out_size)
     return n;
 }
 
-/** @brief Base64 解码（带不带 '=' 填充都认，空白与换行忽略） */
+/** @brief Base64 解码（带不带 '=' 填充都认，空白与换行忽略）
+ *  @param text Base64 文本；为 NULL 返回 -1
+ *  @param out 输出缓冲，只往里写、不接管所有权
+ *  @param out_size out 的字节数
+ *  @return int 解出的字节数；字符非法或长度不合法返回 -1，out 放不下返回 -2
+ */
 int cg_base64_decode(const char *text, void *out, int out_size)
 {
     unsigned char *o = (unsigned char *)out;
@@ -318,7 +375,13 @@ int cg_base64_decode(const char *text, void *out, int out_size)
     return n;
 }
 
-/** @brief URL 编码（百分号；space_plus 非 0 时空格编成 '+'） */
+/** @brief URL 编码（百分号；space_plus 非 0 时空格编成 '+'）
+ *  @param text 源文本（UTF-8）；为 NULL 返回 -1
+ *  @param space_plus 非 0 时空格编成 '+'（表单风格），0 时编成 %20
+ *  @param out 输出缓冲，只往里写、不接管所有权
+ *  @param out_size out 的字节数
+ *  @return int 写入的长度（不含结尾 '\0'）；参数非法或 out 放不下返回 -1
+ */
 int cg_url_encode(const char *text, int space_plus, char *out, int out_size)
 {
     static const char k_hexu[] = "0123456789ABCDEF";
@@ -344,7 +407,12 @@ int cg_url_encode(const char *text, int space_plus, char *out, int out_size)
     return n;
 }
 
-/** @brief URL 解码（'%XX' 与 '+'） */
+/** @brief URL 解码（'%XX' 与 '+'；'+' 一律还原成空格）
+ *  @param text 源文本；为 NULL 返回 -1
+ *  @param out 输出缓冲，只往里写、不接管所有权
+ *  @param out_size out 的字节数
+ *  @return int 写入的长度（不含结尾 '\0'）；'%' 后面不是两位十六进制返回 -1，out 放不下返回 -2
+ */
 int cg_url_decode(const char *text, char *out, int out_size)
 {
     int n = 0;
@@ -382,7 +450,13 @@ int cg_url_decode(const char *text, char *out, int out_size)
  * 输出一律大写（数据手册、寄存器表都这么写）；要小写十六进制用 cg_hex_encode()。
  */
 
-/** @brief 整数 -> 任意进制文本（2..36），负数带前导 '-' */
+/** @brief 整数 -> 任意进制文本（2..36），负数带前导 '-'
+ *  @param v 待转换的整数
+ *  @param base 进制，取 2..36；越界算参数非法
+ *  @param out 输出缓冲，只往里写、不接管所有权
+ *  @param out_size out 的字节数
+ *  @return int 写入的长度（不含结尾 '\0'）；base 非法或 out 放不下返回 -1
+ */
 int cg_int_to_base(long long v, int base, char *out, int out_size)
 {
     static const char   k_digits[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -408,7 +482,12 @@ int cg_int_to_base(long long v, int base, char *out, int out_size)
     return n;
 }
 
-/** @brief 任意进制文本 -> 整数（整串必须合法，溢出算失败） */
+/** @brief 任意进制文本 -> 整数（整串必须合法，溢出算失败）
+ *  @param s 待解析文本；认前导 '+'/'-' 与同进制相符的 0x / 0b / 0o 前缀，允许首尾空白，中间有空白即失败
+ *  @param base 进制，取 2..36；越界算失败
+ *  @param out 结果出口；可传 NULL（只想问"合不合法"）；失败时不动
+ *  @return int 1 成功、0 失败
+ */
 int cg_base_to_int(const char *s, int base, long long *out)
 {
     unsigned long long acc = 0;
@@ -455,7 +534,14 @@ int cg_base_to_int(const char *s, int base, long long *out)
     return 1;
 }
 
-/** @brief 进制互转（字符串进、字符串出） */
+/** @brief 进制互转（字符串进、字符串出）
+ *  @param s 源串（按 from_base 解释）
+ *  @param from_base 源进制，取 2..36
+ *  @param to_base 目标进制，取 2..36
+ *  @param out 输出缓冲，只往里写、不接管所有权；失败时写空串
+ *  @param out_size out 的字节数
+ *  @return int 写入的长度（不含结尾 '\0'）；源串非法 / base 非法 / out 放不下返回 -1
+ */
 int cg_base_convert(const char *s, int from_base, int to_base, char *out, int out_size)
 {
     long long v;
@@ -466,7 +552,11 @@ int cg_base_convert(const char *s, int from_base, int to_base, char *out, int ou
     return cg_int_to_base(v, to_base, out, out_size);
 }
 
-/** @brief 把低 bits 位按补码解释成有符号数 */
+/** @brief 把低 bits 位按补码解释成有符号数
+ *  @param v 原始值（只取低 bits 位）
+ *  @param bits 位宽，取 1..63；<= 0 或 >= 64 时按原值原样返回（不做符号扩展）
+ *  @return long long 带符号的结果
+ */
 long long cg_to_signed(unsigned long long v, int bits)
 {
     unsigned long long mask, sign;
@@ -478,7 +568,11 @@ long long cg_to_signed(unsigned long long v, int bits)
     return (long long)((v & sign) ? (v | ~mask) : v);
 }
 
-/** @brief 把有符号数写成 bits 位补码（只保留低 bits 位） */
+/** @brief 把有符号数写成 bits 位补码（只保留低 bits 位）
+ *  @param v 有符号数
+ *  @param bits 位宽，取 1..63；<= 0 或 >= 64 时按原值原样返回，不截位
+ *  @return unsigned long long bits 位补码（只留低 bits 位）
+ */
 unsigned long long cg_from_signed(long long v, int bits)
 {
     if (bits <= 0 || bits >= 64) return (unsigned long long)v;

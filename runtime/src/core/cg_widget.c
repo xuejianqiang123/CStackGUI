@@ -12,7 +12,11 @@
 
 /* ------------------------------------------------------------ 控件生命周期 */
 
-/** @brief 复制字符串到堆内存（调用方负责 free）；失败返回 NULL */
+/**
+ * @brief 复制字符串到堆内存（调用方负责 free）
+ * @param s 源字符串；为 NULL 时返回 NULL
+ * @return char * 新的堆内存副本，所有权归调用方；分配失败或 s 为 NULL 时返回 NULL
+ */
 char *cg_str_dup(const char *s)
 {
     if (!s) return NULL;
@@ -22,15 +26,21 @@ char *cg_str_dup(const char *s)
     return p;
 }
 
-/** @brief 分配控件 ID（后端建控件时用），从 1001 起递增 */
-/** @brief 分配一个控件 ID（1001 起递增，后端建控件用） */
+/**
+ * @brief 分配一个控件 ID（从 1001 起递增，后端建控件时用）
+ * @param app 所属应用，自增其 next_ctrl_id 计数器
+ * @return int 新的控件 ID，首次为 1001
+ */
 int cg_alloc_ctrl_id(cg_app_t *app)
 {
     return ++app->next_ctrl_id + 1000;
 }
 
-/** @brief 分配菜单命令 ID */
-/** @brief 分配一个菜单命令 ID（0x8000 起，与控件 ID 分开发号）；超限返回 0 */
+/**
+ * @brief 分配一个菜单命令 ID（0x8000 起，与控件 ID 分开发号）
+ * @param app 所属应用，自增其 next_menu_cmd 计数器
+ * @return int 新的菜单命令 ID（0x8000 起）；超过上限返回 0
+ */
 int cg_alloc_menu_cmd(cg_app_t *app)
 {
     if (app->next_menu_cmd == 0) app->next_menu_cmd = 0x8000;
@@ -44,9 +54,15 @@ int cg_alloc_menu_cmd(cg_app_t *app)
 
 /**
  * @brief 新建一个运行时控件（进全局链表，不建原生窗口）
- * @param app 所属应用；type 控件类型名；id 唯一标识
- * @param x,y,w,h 初始矩形；text 初始文字
- * @return cg_widget_t* 控件；失败返回 NULL
+ * @param app 所属应用，控件挂其 widgets 链表
+ * @param type 控件类型名；为 NULL 时按 "label" 处理
+ * @param id 唯一标识
+ * @param x 初始矩形左上角 x（逻辑像素）
+ * @param y 初始矩形左上角 y（逻辑像素）
+ * @param width 初始矩形宽度（逻辑像素）
+ * @param height 初始矩形高度（逻辑像素）
+ * @param text 初始文字；为 NULL 时按空串处理
+ * @return cg_widget_t* 新建控件，所有权归 app 的控件链表；失败返回 NULL
  */
 cg_widget_t *cg_widget_new(cg_app_t *app, const char *type, const char *id,
                            int x, int y, int width, int height, const char *text)
@@ -79,7 +95,11 @@ cg_widget_t *cg_widget_new(cg_app_t *app, const char *type, const char *id,
     return w;
 }
 
-/** @brief 释放控件的全部资源（结构化内容、画板记录、行级数组、文字等） */
+/**
+ * @brief 释放控件的全部资源（结构化内容、画板记录、行级数组、文字等）
+ * @param w 待释放的控件；为 NULL 时直接返回
+ * @return void 无返回值
+ */
 void cg_widget_free(cg_widget_t *w)
 {
     if (!w) return;
@@ -136,7 +156,12 @@ void cg_widget_free(cg_widget_t *w)
     free(w);
 }
 
-/** @brief 给运行时控件挂子控件（尾插，child->parent 回填；分配失败静默丢弃） */
+/**
+ * @brief 给运行时控件挂子控件（尾插，child->parent 回填；分配失败静默丢弃）
+ * @param parent 目标父控件
+ * @param child 待挂入的子控件，其 parent 字段被回填为 parent
+ * @return void 无返回值
+ */
 void cg_widget_attach_child(cg_widget_t *parent, cg_widget_t *child)
 {
     cg_widget_t **nc = (cg_widget_t **)realloc(parent->children, (parent->nchildren + 1) * sizeof(cg_widget_t *));
@@ -146,9 +171,15 @@ void cg_widget_attach_child(cg_widget_t *parent, cg_widget_t *child)
     child->parent = parent;
 }
 
-/** 把文档节点上的事件名解析成函数指针。
- *  顺便校验"这个控件到底支不支持这个事件"——事件是按控件特性分配的，
- *  绑错了这里就要说清楚，否则用户只能对着"点了没反应"猜。 */
+/**
+ * @brief 把文档节点上的事件名解析成函数指针
+ * @details 顺便校验"这个控件到底支不支持这个事件"——事件是按控件特性分配的，
+ *          绑错了这里就要说清楚，否则用户只能对着"点了没反应"猜。
+ * @param app 所属应用，用于解析绑定名
+ * @param w 目标运行时控件，解析结果写入其 handlers
+ * @param n 文档节点，提供各事件位的绑定名
+ * @return void 无返回值
+ */
 static void bind_events(cg_app_t *app, cg_widget_t *w, const cg_node_t *n)
 {
     for (int i = 0; i < CG_EVENT_COUNT; i++) {
@@ -169,7 +200,14 @@ static void bind_events(cg_app_t *app, cg_widget_t *w, const cg_node_t *n)
     }
 }
 
-/** 把文档里的嵌套树节点摊平成运行时用的数组 */
+/**
+ * @brief 把文档里的嵌套树节点摊平成运行时用的数组
+ * @param w 目标控件，行表挂在其行级数组上
+ * @param parent 父节点下标；根节点传 -1
+ * @param text 节点文字；为 NULL 时按空串处理
+ * @param expanded 是否展开
+ * @return int 新行在行表中的下标；分配失败返回 -1
+ */
 int cg_widget_tree_push(cg_widget_t *w, int parent, const char *text, int expanded)
 {
     cg_tree_row_t *nt = (cg_tree_row_t *)realloc(w->tree, ((size_t)w->ntree + 1) * sizeof(cg_tree_row_t));
@@ -184,7 +222,14 @@ int cg_widget_tree_push(cg_widget_t *w, int parent, const char *text, int expand
     return idx;
 }
 
-/** @brief 把文档里的嵌套树节点摊平进运行时行表（递归，父下标先于子） */
+/**
+ * @brief 把文档里的嵌套树节点摊平进运行时行表（递归，父下标先于子）
+ * @param w 目标控件
+ * @param items 文档节点数组
+ * @param n 数组元素个数
+ * @param parent 父节点下标；顶层传 -1
+ * @return void 无返回值
+ */
 static void tree_push_doc(cg_widget_t *w, cg_item_t *const *items, size_t n, int parent)
 {
     for (size_t i = 0; i < n; i++) {
@@ -195,7 +240,15 @@ static void tree_push_doc(cg_widget_t *w, cg_item_t *const *items, size_t n, int
     }
 }
 
-/** 把 .cgui 的嵌套菜单项摊平成运行时的行表（父项一定排在子项前面） */
+/**
+ * @brief 把 .cgui 的嵌套菜单项摊平成运行时的行表（父项一定排在子项前面）
+ * @param app 所属应用，用于给叶子项分配菜单命令 ID
+ * @param w 目标控件，行表挂在其 menu/nmenu 上
+ * @param items 文档菜单项数组
+ * @param n 数组元素个数
+ * @param parent 父项下标；顶层传 -1
+ * @return void 无返回值
+ */
 static void menu_push_doc(cg_app_t *app, cg_widget_t *w, cg_item_t *const *items, size_t n, int parent)
 {
     for (size_t i = 0; i < n; i++) {
@@ -231,7 +284,9 @@ static void menu_push_doc(cg_app_t *app, cg_widget_t *w, cg_item_t *const *items
 
 /**
  * @brief 把文档节点转成运行时控件（拷贝状态/内容/回调，递归建子）
- * @param app 所属应用；parent 挂靠的父控件；n 文档节点
+ * @param app 所属应用
+ * @param parent 挂靠的父控件
+ * @param n 文档节点
  * @return cg_widget_t* 控件；失败返回 NULL
  */
 static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node_t *n)
@@ -350,8 +405,11 @@ static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node
     return w;
 }
 
-/** @brief 由文档树构建运行时控件树（不含原生句柄），失败返回 NULL */
-/** @brief 由文档树构建整棵运行时控件树（窗口伪控件 + 递归），失败返回 NULL */
+/**
+ * @brief 由文档树构建整棵运行时控件树（不含原生句柄；窗口伪控件 + 递归）
+ * @param app 所属应用，控件树建在其 widgets 链表上
+ * @return cg_widget_t* 窗口伪控件；失败返回 NULL
+ */
 cg_widget_t *cg_build_widgets(cg_app_t *app)
 {
     app->window = cg_widget_new(app, "window", "__window", 0, 0,
@@ -374,7 +432,12 @@ cg_widget_t *cg_build_widgets(cg_app_t *app)
 
 /* ------------------------------------------------------------ 查找 */
 
-/** @brief 按 id 在全局链表里找控件；找不到返回 NULL */
+/**
+ * @brief 按 id 在全局链表里找控件
+ * @param app 所属应用
+ * @param id 目标控件的唯一标识
+ * @return cg_widget_t* 命中的控件（不转移所有权）；找不到返回 NULL
+ */
 cg_widget_t *cg_widget_by_id(cg_app_t *app, const char *id)
 {
     if (!app || !id) return NULL;
@@ -384,8 +447,12 @@ cg_widget_t *cg_widget_by_id(cg_app_t *app, const char *id)
     return NULL;
 }
 
-/** @brief 按 Win32 控件 ID 找控件 */
-/** @brief 按 Win32 控件 ID 找控件（WM_COMMAND 反查用）；找不到返回 NULL */
+/**
+ * @brief 按 Win32 控件 ID 找控件（WM_COMMAND 反查用）
+ * @param app 所属应用
+ * @param ctrl_id 后端建控件时分配的原生控件 ID（1001 起）
+ * @return cg_widget_t* 命中的控件（不转移所有权）；找不到返回 NULL
+ */
 cg_widget_t *cg_widget_by_ctrl_id(cg_app_t *app, int ctrl_id)
 {
     if (!app) return NULL;
@@ -395,7 +462,12 @@ cg_widget_t *cg_widget_by_ctrl_id(cg_app_t *app, int ctrl_id)
     return NULL;
 }
 
-/** @brief 按原生窗口句柄反查控件（同时比对 native 与 native2，数值框有两个 HWND）；找不到返回 NULL */
+/**
+ * @brief 按原生窗口句柄反查控件（同时比对 native 与 native2，数值框有两个 HWND）
+ * @param app 所属应用
+ * @param hwnd 待查的原生窗口句柄
+ * @return cg_widget_t* 命中的控件（不转移所有权）；找不到返回 NULL
+ */
 cg_widget_t *cg_widget_by_hwnd(cg_app_t *app, void *hwnd)
 {
     if (!app || !hwnd) return NULL;
@@ -405,10 +477,19 @@ cg_widget_t *cg_widget_by_hwnd(cg_app_t *app, void *hwnd)
     return NULL;
 }
 
-/** @brief 按 id 找控件（cg_widget_by_id 的对外别名） */
+/**
+ * @brief 按 id 找控件（cg_widget_by_id 的对外别名）
+ * @param app 所属应用
+ * @param id 目标控件的唯一标识
+ * @return cg_widget_t* 命中的控件（不转移所有权）；找不到返回 NULL
+ */
 cg_widget_t *cg_find(cg_app_t *app, const char *id) { return cg_widget_by_id(app, id); }
 
-/** 控件个数：不含代表窗口自身的那个伪控件 */
+/**
+ * @brief 统计控件个数（不含代表窗口自身的那个伪控件）
+ * @param app 所属应用
+ * @return int 控件个数；app 为 NULL 返回 0
+ */
 int cg_widget_count(const cg_app_t *app)
 {
     int n = 0;
@@ -423,43 +504,100 @@ int cg_widget_count(const cg_app_t *app)
  * 这些读取函数的完整语义见 cstackgui.h；NULL 控件统一兜底，不会崩。
  */
 
-/** @brief 从控件拿到它所属的应用；NULL 返回 NULL */
+/**
+ * @brief 从控件拿到它所属的应用
+ * @param w 目标控件
+ * @return cg_app_t* 所属应用（不转移所有权）；w 为 NULL 返回 NULL
+ */
 cg_app_t   *cg_app_of(const cg_widget_t *w)      { return w ? w->app : NULL; }
-/** @brief 控件 id；NULL 返回 NULL */
+/**
+ * @brief 控件 id
+ * @param w 目标控件
+ * @return const char * 控件 id 字符串（控件持有，勿释放）；w 为 NULL 返回 NULL
+ */
 const char *cg_widget_id(const cg_widget_t *w)   { return w ? w->id : NULL; }
-/** @brief 控件类型名；NULL 返回 NULL */
+/**
+ * @brief 控件类型名
+ * @param w 目标控件
+ * @return const char * 类型名字符串（控件持有，勿释放）；w 为 NULL 返回 NULL
+ */
 const char *cg_widget_type(const cg_widget_t *w) { return w ? w->type : NULL; }
-/** @brief 控件当前文字；NULL 控件返回 NULL，文字为空返回空串 */
+/**
+ * @brief 控件当前文字
+ * @param w 目标控件
+ * @return const char * 当前文字（控件持有，勿释放）；w 为 NULL 返回 NULL，文字为空返回空串
+ */
 const char *cg_widget_text(const cg_widget_t *w) { return w ? (w->text ? w->text : "") : NULL; }
-/** @brief 控件位置 x（逻辑像素，相对父容器）；NULL 返回 0 */
+/**
+ * @brief 控件位置 x（逻辑像素，相对父容器）
+ * @param w 目标控件
+ * @return int 位置 x；w 为 NULL 返回 0
+ */
 int cg_widget_x(const cg_widget_t *w) { return w ? w->x : 0; }
-/** @brief 控件位置 y；NULL 返回 0 */
+/**
+ * @brief 控件位置 y（逻辑像素，相对父容器）
+ * @param w 目标控件
+ * @return int 位置 y；w 为 NULL 返回 0
+ */
 int cg_widget_y(const cg_widget_t *w) { return w ? w->y : 0; }
-/** @brief 控件宽度；NULL 返回 0 */
+/**
+ * @brief 控件宽度（逻辑像素）
+ * @param w 目标控件
+ * @return int 宽度；w 为 NULL 返回 0
+ */
 int cg_widget_w(const cg_widget_t *w) { return w ? w->w : 0; }
-/** @brief 控件高度；NULL 返回 0 */
+/**
+ * @brief 控件高度（逻辑像素）
+ * @param w 目标控件
+ * @return int 高度；w 为 NULL 返回 0
+ */
 int cg_widget_h(const cg_widget_t *w) { return w ? w->h : 0; }
-/** @brief 是否可见；NULL 返回 0 */
+/**
+ * @brief 是否可见
+ * @param w 目标控件
+ * @return int 可见返回非 0，不可见返回 0；w 为 NULL 返回 0
+ */
 int cg_widget_visible(const cg_widget_t *w) { return w ? w->visible : 0; }
-/** @brief 是否可用；NULL 返回 0 */
+/**
+ * @brief 是否可用
+ * @param w 目标控件
+ * @return int 可用返回非 0，不可用返回 0；w 为 NULL 返回 0
+ */
 int cg_widget_enabled(const cg_widget_t *w) { return w ? w->enabled : 0; }
-/** @brief 是否勾选；NULL 返回 0 */
+/**
+ * @brief 是否勾选
+ * @param w 目标控件
+ * @return int 勾选返回非 0，未勾选返回 0；w 为 NULL 返回 0
+ */
 int cg_widget_checked(const cg_widget_t *w) { return w ? w->checked : 0; }
-/** @brief 是否数值输入框：`edit` + 调节器（spin），且不是多行。
- *  只有这种输入框的 `value` 才是真相（文本由 value 派生）—— 也就是原来独立类型
- *  spinner 的语义。bind 抄 value、cg_widget_set_value 写文本都按它分流。 */
+/**
+ * @brief 是否数值输入框：`edit` + 调节器（spin），且不是多行
+ * @details 只有这种输入框的 `value` 才是真相（文本由 value 派生）—— 也就是原来独立类型
+ *          spinner 的语义。bind 抄 value、cg_widget_set_value 写文本都按它分流。
+ * @param w 目标控件
+ * @return int 是数值输入框返回 1，否则返回 0；w 为 NULL 也返回 0
+ */
 int cg_widget_is_numedit(const cg_widget_t *w)
 {
     if (!w || !w->type || strcmp(w->type, "edit") != 0) return 0;
     return (w->spin != 0 && !w->multiline);
 }
 
-/** @brief 当前值（滑块位置 / 列表选中下标等）；NULL 返回 0 */
+/**
+ * @brief 当前值（滑块位置 / 列表选中下标等）
+ * @param w 目标控件
+ * @return int 当前值；w 为 NULL 返回 0
+ */
 int cg_widget_value(const cg_widget_t *w)   { return w ? w->value : 0; }
 
 /* ------------------------------------------------------------ 公共修改 */
 
-/** @brief 改控件文字（同步到界面与文档节点） */
+/**
+ * @brief 改控件文字（同步到界面与文档节点）
+ * @param w 目标控件
+ * @param text 新文字；为 NULL 时按空串处理
+ * @return void 无返回值
+ */
 void cg_widget_set_text(cg_widget_t *w, const char *text)
 {
     if (!w) return;
@@ -470,7 +608,15 @@ void cg_widget_set_text(cg_widget_t *w, const char *text)
     cg_bind_propagate(w);
 }
 
-/** @brief 一次改位置和尺寸（逻辑像素，相对父容器） */
+/**
+ * @brief 一次改位置和尺寸（逻辑像素，相对父容器）
+ * @param w 目标控件
+ * @param x 新位置 x
+ * @param y 新位置 y
+ * @param ww 新宽度
+ * @param hh 新高度
+ * @return void 无返回值
+ */
 void cg_widget_set_rect(cg_widget_t *w, int x, int y, int ww, int hh)
 {
     if (!w) return;
@@ -479,12 +625,29 @@ void cg_widget_set_rect(cg_widget_t *w, int x, int y, int ww, int hh)
     cg_widget_sync(w);
 }
 
-/** @brief 只改位置 */
+/**
+ * @brief 只改位置
+ * @param w 目标控件
+ * @param x 新位置 x
+ * @param y 新位置 y
+ * @return void 无返回值
+ */
 void cg_widget_set_pos(cg_widget_t *w, int x, int y)  { if (w) cg_widget_set_rect(w, x, y, w->w, w->h); }
-/** @brief 只改尺寸 */
+/**
+ * @brief 只改尺寸
+ * @param w 目标控件
+ * @param ww 新宽度
+ * @param hh 新高度
+ * @return void 无返回值
+ */
 void cg_widget_set_size(cg_widget_t *w, int ww, int hh) { if (w) cg_widget_set_rect(w, w->x, w->y, ww, hh); }
 
-/** @brief 显示 / 隐藏控件 */
+/**
+ * @brief 显示 / 隐藏控件
+ * @param w 目标控件
+ * @param visible 非 0 显示，0 隐藏
+ * @return void 无返回值
+ */
 void cg_widget_set_visible(cg_widget_t *w, int visible)
 {
     if (!w) return;
@@ -493,7 +656,12 @@ void cg_widget_set_visible(cg_widget_t *w, int visible)
     cg_widget_sync(w);
 }
 
-/** @brief 启用 / 禁用控件（禁用后事件不再派发） */
+/**
+ * @brief 启用 / 禁用控件（禁用后事件不再派发）
+ * @param w 目标控件
+ * @param enabled 非 0 启用，0 禁用
+ * @return void 无返回值
+ */
 void cg_widget_set_enabled(cg_widget_t *w, int enabled)
 {
     if (!w) return;
@@ -502,7 +670,12 @@ void cg_widget_set_enabled(cg_widget_t *w, int enabled)
     cg_widget_sync(w);
 }
 
-/** @brief 设置勾选状态（checkbox / radio / switch） */
+/**
+ * @brief 设置勾选状态（checkbox / radio / switch）
+ * @param w 目标控件
+ * @param on 非 0 勾选，0 取消勾选
+ * @return void 无返回值
+ */
 void cg_widget_set_checked(cg_widget_t *w, int on)
 {
     if (!w) return;
@@ -512,7 +685,12 @@ void cg_widget_set_checked(cg_widget_t *w, int on)
     cg_bind_propagate(w);
 }
 
-/** @brief 设置当前值，自动夹到 [vmin, vmax]（"下标即 value"的类型夹到项数范围） */
+/**
+ * @brief 设置当前值，自动夹到 [vmin, vmax]（"下标即 value"的类型夹到项数范围，颜色选择器不夹取）
+ * @param w 目标控件
+ * @param value 新值；listbox/combo/tabs 夹到 0..项数-1，colorpicker 原样保留，其余夹到 [vmin, vmax]
+ * @return void 无返回值
+ */
 void cg_widget_set_value(cg_widget_t *w, int value)
 {
     char vbuf[32];
@@ -555,7 +733,13 @@ void cg_widget_set_value(cg_widget_t *w, int value)
     cg_bind_propagate(w);
 }
 
-/** @brief 设置取值范围；vmax <= vmin 时自动抬到 vmin+1 */
+/**
+ * @brief 设置取值范围；vmax <= vmin 时自动抬到 vmin+1
+ * @param w 目标控件
+ * @param vmin 取值下限
+ * @param vmax 取值上限
+ * @return void 无返回值
+ */
 void cg_widget_set_value_range(cg_widget_t *w, int vmin, int vmax)
 {
     if (!w) return;
@@ -565,7 +749,13 @@ void cg_widget_set_value_range(cg_widget_t *w, int vmin, int vmax)
     cg_widget_sync(w);
 }
 
-/** @brief 设置前景 / 背景色（0xRRGGBB） */
+/**
+ * @brief 设置前景 / 背景色（0xRRGGBB）
+ * @param w 目标控件
+ * @param fg 前景色，0xRRGGBB
+ * @param bg 背景色，0xRRGGBB
+ * @return void 无返回值
+ */
 void cg_widget_set_colors(cg_widget_t *w, unsigned fg, unsigned bg)
 {
     if (!w) return;
@@ -574,7 +764,14 @@ void cg_widget_set_colors(cg_widget_t *w, unsigned fg, unsigned bg)
     cg_widget_sync(w);
 }
 
-/** @brief 设置字体（family 为 NULL 表示回系统 UI 字体） */
+/**
+ * @brief 设置字体（family 为 NULL 表示回系统 UI 字体）
+ * @param w 目标控件
+ * @param family 字体族名；为 NULL 表示回系统 UI 字体
+ * @param size_pt 字号（磅）
+ * @param bold 非 0 加粗，0 常规
+ * @return void 无返回值
+ */
 void cg_widget_set_font(cg_widget_t *w, const char *family, int size_pt, int bold)
 {
     if (!w) return;

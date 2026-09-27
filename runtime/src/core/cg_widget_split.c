@@ -18,14 +18,23 @@
 /** 分隔条的最小边长：拖到这个尺寸就停住，免得把面板拖没了 */
 #define CG_SPLIT_MIN 16
 
-/** @brief 这个兄弟参与分隔条布局吗（菜单栏 / 时钟没有矩形，跳过） */
+/**
+ * @brief 这个兄弟参与分隔条布局吗（菜单栏 / 状态栏 / 时钟没有可拖的矩形，跳过）
+ * @param s 待判断的兄弟控件，可为 NULL
+ * @return int 参与返回 1，跳过返回 0
+ * @note 原注释只列了菜单栏 / 时钟，按实现（同时排除状态栏）补上状态栏
+ */
 static int split_layout_sibling(const cg_widget_t *s)
 {
     return s && strcmp(s->type, "menu") != 0 && strcmp(s->type, "timer") != 0
            && strcmp(s->type, "statusbar") != 0;
 }
 
-/** @brief 分隔条是不是竖的：左右分栏 = 竖条（format 缺省）；format == "row" 才是横条 */
+/**
+ * @brief 分隔条是不是竖的：左右分栏 = 竖条（format 缺省）；format == "row" 才是横条
+ * @param w 分隔条控件
+ * @return int 竖条返回 1，横条返回 0
+ */
 static int split_is_vert(const cg_widget_t *w)
 {
     return !(w->format && strcmp(w->format, "row") == 0);
@@ -91,14 +100,23 @@ int cg_splitter_apply(cg_widget_t *w, int delta)
     return applied;
 }
 
-/** @brief 分隔条当前位置（相对父容器：竖条看 x，横条看 y）；w 为空返回 -1 */
+/**
+ * @brief 分隔条当前位置（相对父容器：竖条看 x，横条看 y）
+ * @param w 分隔条控件，可为 NULL
+ * @return int 相对父容器的位置（像素）；w 为空返回 -1
+ */
 int cg_splitter_pos(const cg_widget_t *w)
 {
     if (!w) return -1;
     return split_is_vert(w) ? w->x : w->y;
 }
 
-/** @brief 把分隔条搬到 pos（相对父容器），两侧面板跟着重排（内部会夹到最小尺寸） */
+/**
+ * @brief 把分隔条搬到 pos（相对父容器），两侧面板跟着重排（内部会夹到最小尺寸）
+ * @param w 分隔条控件；类型不符直接忽略
+ * @param pos 目标位置，相对父容器，单位像素
+ * @return void 无返回值
+ */
 void cg_splitter_set(cg_widget_t *w, int pos)
 {
     int delta;

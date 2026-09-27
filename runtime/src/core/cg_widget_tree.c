@@ -14,7 +14,14 @@
 
 /* ------------------------------------------------------------ 树 */
 
-/** 类型检查：这些 API 只对特定控件有意义，用错了要明确报出来而不是静默无效 */
+/**
+ * @brief 校验控件类型，不匹配时明确报错而不是静默无效
+ * @param w 待校验的控件，可为 NULL
+ * @param type 期望的控件类型名
+ * @param who 调用者名字，仅用于报错
+ * @return int 类型匹配返回 1；否则打印错误并返回 0
+ * @note 类型检查：这些 API 只对特定控件有意义，用错了要明确报出来而不是静默无效
+ */
 int want_type(const cg_widget_t *w, const char *type, const char *who)
 {
     if (w && w->type && strcmp(w->type, type) == 0) return 1;
@@ -23,11 +30,12 @@ int want_type(const cg_widget_t *w, const char *type, const char *who)
     return 0;
 }
 
-/** @brief 加一个树节点 */
 /**
  * @brief 给树加一个节点（运行时追加，父下标必须已存在）
- * @param w tree 控件；parent 父节点下标，-1 加在根上；text 节点文字
- * @return int 节点下标；失败返回 -1
+ * @param w tree 控件；类型不符直接忽略
+ * @param parent 父节点下标，-1 表示加在根上
+ * @param text 节点文字，内部复制
+ * @return int 新节点下标；失败返回 -1
  */
 int cg_tree_add(cg_widget_t *w, int parent, const char *text)
 {
@@ -45,7 +53,13 @@ int cg_tree_add(cg_widget_t *w, int parent, const char *text)
     }
 }
 
-/** @brief cg_tree_add 的 printf 版本 */
+/**
+ * @brief cg_tree_add 的 printf 版本
+ * @param w tree 控件；类型不符直接忽略
+ * @param parent 父节点下标，-1 表示加在根上
+ * @param fmt 节点文字的格式串
+ * @return int 新节点下标；失败返回 -1
+ */
 int cg_tree_addf(cg_widget_t *w, int parent, const char *fmt, ...)
 {
     char    stackbuf[512];
@@ -70,7 +84,11 @@ int cg_tree_addf(cg_widget_t *w, int parent, const char *fmt, ...)
     return rc;
 }
 
-/** @brief 清空树的全部节点（整树重建实现，选中态复位） */
+/**
+ * @brief 清空树的全部节点（整树重建实现，选中态复位）
+ * @param w tree 控件；类型不符直接忽略
+ * @return void 无返回值
+ */
 void cg_tree_clear(cg_widget_t *w)
 {
     if (!w || !want_type(w, "tree", "cg_tree_clear")) return;
@@ -83,34 +101,56 @@ void cg_tree_clear(cg_widget_t *w)
     cg_widget_sync(w);
 }
 
-/** @brief 树节点总数；非 tree 控件返回 0 */
+/**
+ * @brief 树节点总数；非 tree 控件返回 0
+ * @param w 控件，可为 NULL
+ * @return int 节点总数；非 tree 控件或 w 为空返回 0
+ */
 int cg_tree_count(const cg_widget_t *w)
 {
     return (w && w->type && strcmp(w->type, "tree") == 0) ? w->ntree : 0;
 }
 
-/** @brief 取第 item 个节点的文字；越界返回 NULL */
+/**
+ * @brief 取第 item 个节点的文字；越界返回 NULL
+ * @param w tree 控件，可为 NULL
+ * @param item 节点下标，从 0 开始
+ * @return const char * 节点文字，归控件所有，调用方不要释放；越界返回 NULL
+ */
 const char *cg_tree_item_text(const cg_widget_t *w, int item)
 {
     if (!w || item < 0 || item >= w->ntree) return NULL;
     return w->tree[item].text;
 }
 
-/** @brief 当前选中的节点下标，没选中返回 -1 */
-/** @brief 当前选中节点下标；没选中返回 -1 */
+/**
+ * @brief 当前选中节点下标；没选中返回 -1
+ * @param w tree 控件，可为 NULL
+ * @return int 选中节点下标；没选中或 w 为空返回 -1
+ */
 int cg_tree_selected(const cg_widget_t *w)
 {
     return w ? w->tree_sel : -1;
 }
 
-/** @brief 当前选中节点的文字；没选中返回 NULL */
+/**
+ * @brief 当前选中节点的文字；没选中返回 NULL
+ * @param w tree 控件，可为 NULL
+ * @return const char * 选中节点文字，归控件所有，调用方不要释放；没选中或 w 为空返回 NULL
+ */
 const char *cg_tree_selected_text(const cg_widget_t *w)
 {
     if (!w || w->tree_sel < 0 || w->tree_sel >= w->ntree) return NULL;
     return w->tree[w->tree_sel].text;
 }
 
-/** @brief 展开/折叠某个节点（整树重建实现，够用且简单） */
+/**
+ * @brief 展开/折叠某个节点（整树重建实现，够用且简单）
+ * @param w tree 控件，可为 NULL
+ * @param item 节点下标，越界直接忽略
+ * @param expand 非 0 展开、0 折叠
+ * @return void 无返回值
+ */
 void cg_tree_expand(cg_widget_t *w, int item, int expand)
 {
     if (!w || item < 0 || item >= w->ntree) return;
