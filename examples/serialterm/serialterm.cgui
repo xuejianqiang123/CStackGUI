@@ -97,9 +97,61 @@
       "style": { "fg": "#1B6E33" }
     },
     {
+      "id": "lab_bits",
+      "type": "label",
+      "rect": { "x": 12, "y": 52, "w": 48, "h": 24 },
+      "text": "数据位",
+      "style": "label"
+    },
+    {
+      "id": "cmb_bits",
+      "type": "combo",
+      "rect": { "x": 66, "y": 50, "w": 70, "h": 200 },
+      "items": ["8", "7", "6", "5"],
+      "value": 0,
+      "hint": "8 位为主；老设备偶见 7 位（配偶校验就是 7E1）"
+    },
+    {
+      "id": "lab_stop",
+      "type": "label",
+      "rect": { "x": 144, "y": 52, "w": 48, "h": 24 },
+      "text": "停止位",
+      "style": "label"
+    },
+    {
+      "id": "cmb_stop",
+      "type": "combo",
+      "rect": { "x": 198, "y": 50, "w": 60, "h": 200 },
+      "items": ["1", "2"],
+      "value": 0,
+      "hint": "1 位为主；2 位常见于一些仪表"
+    },
+    {
+      "id": "lab_parity",
+      "type": "label",
+      "rect": { "x": 266, "y": 52, "w": 36, "h": 24 },
+      "text": "校验",
+      "style": "label"
+    },
+    {
+      "id": "cmb_parity",
+      "type": "combo",
+      "rect": { "x": 306, "y": 50, "w": 76, "h": 200 },
+      "items": ["无", "奇", "偶"],
+      "value": 0,
+      "hint": "0 无 / 1 奇 / 2 偶 —— 下标就是 cg_widget_serial_set_format 要的值"
+    },
+    {
+      "id": "lab_fmt",
+      "type": "label",
+      "rect": { "x": 396, "y": 52, "w": 580, "h": 24 },
+      "text": "帧格式是「数据位 + 校验 + 停止位」，比如 8N1 / 7E1 —— 板子怎么配就选成一样（框架支持全参数）",
+      "style": "label"
+    },
+    {
       "id": "chk_hexview",
       "type": "checkbox",
-      "rect": { "x": 12, "y": 50, "w": 112, "h": 26 },
+      "rect": { "x": 12, "y": 88, "w": 112, "h": 26 },
       "text": "16 进制显示",
       "hint": "日志里的收发都按十六进制显示（XCOM 的「16进制显示」）",
       "events": { "change": "on_hexview_change" }
@@ -107,7 +159,7 @@
     {
       "id": "chk_stamp",
       "type": "checkbox",
-      "rect": { "x": 130, "y": 50, "w": 96, "h": 26 },
+      "rect": { "x": 130, "y": 88, "w": 96, "h": 26 },
       "text": "时间戳",
       "checked": true,
       "hint": "每行前面加 [时:分:秒]（XCOM 的「时间戳」）",
@@ -116,7 +168,7 @@
     {
       "id": "chk_frame",
       "type": "checkbox",
-      "rect": { "x": 232, "y": 50, "w": 112, "h": 26 },
+      "rect": { "x": 232, "y": 88, "w": 112, "h": 26 },
       "text": "按帧显示",
       "hint": "把字节流按「帧间静默」切成整帧，每帧单独一行并报长度与 CRC —— 这一条 XCOM 没有",
       "events": { "change": "on_frame_change" }
@@ -124,7 +176,7 @@
     {
       "id": "spn_gap",
       "type": "edit",
-      "rect": { "x": 350, "y": 50, "w": 64, "h": 26 },
+      "rect": { "x": 350, "y": 88, "w": 64, "h": 26 },
       "spin": true,
       "min": 1,
       "max": 2000,
@@ -135,14 +187,14 @@
     {
       "id": "lab_gap",
       "type": "label",
-      "rect": { "x": 418, "y": 54, "w": 56, "h": 20 },
+      "rect": { "x": 418, "y": 92, "w": 56, "h": 20 },
       "text": "静默ms",
       "style": "label"
     },
     {
       "id": "chk_autosave",
       "type": "checkbox",
-      "rect": { "x": 484, "y": 50, "w": 112, "h": 26 },
+      "rect": { "x": 484, "y": 88, "w": 112, "h": 26 },
       "text": "自动保存",
       "hint": "收到的字节按十六进制文本追加落盘（XCOM 的「自动保存」）",
       "events": { "change": "on_autosave_change" }
@@ -150,21 +202,21 @@
     {
       "id": "lab_savehint",
       "type": "label",
-      "rect": { "x": 602, "y": 54, "w": 386, "h": 20 },
+      "rect": { "x": 602, "y": 92, "w": 386, "h": 20 },
       "text": "（自动保存落到数据目录的 rx_log.txt：十六进制文本，字节精确、可 grep）",
       "style": "label"
     },
     {
       "id": "term_log",
       "type": "terminal",
-      "rect": { "x": 8, "y": 84, "w": 984, "h": 410 },
+      "rect": { "x": 8, "y": 122, "w": 984, "h": 372 },
       "grow": 1,
       "checked": true,
       "value": 800,
       "items": [
-        "串口助手就绪。选好端口和波特率，点「打开串口」。",
+        "串口助手就绪。选好端口 / 波特率 / 帧格式，点「打开串口」。",
         "收到的数据落到这里（terminal 控件）：RX 绿 / TX 蓝 / -- 灰。",
-        "上面那排开关：16 进制显示、时间戳、按帧显示（带 CRC）、自动保存。"
+        "显示开关：16 进制、时间戳、按帧显示（带 CRC）、自动保存。"
       ],
       "hint": "日志视图：格式（hex / 文本）、时间戳、方向着色、行数上限与存盘全由控件管"
     },
@@ -172,8 +224,11 @@
       "id": "ser_main",
       "type": "serial",
       "port": "COM1",
-      "baud": 9600,
-      "hint": "串口组件（无界面）：画布上是图标，运行时不建窗口；数据到达发 arrive，落到哪个控件由 main.c 的 on_arrive 决定",
+      "baud": 115200,
+      "bits": 8,
+      "stop": 1,
+      "parity": 0,
+      "hint": "串口组件（无界面）：画布上是图标，运行时不建窗口；数据到达发 arrive。帧格式三个字段画布属性面板也能改，运行期改走 cg_widget_serial_set_format",
       "events": { "arrive": "on_arrive" }
     },
     {

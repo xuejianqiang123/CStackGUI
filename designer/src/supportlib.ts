@@ -1262,6 +1262,37 @@ if (cg_serial_write(g_ser, buf, n) < 0) {
     cg_term_write(term, CG_TERM_SYS, cg_serial_last_error(g_ser), -1);
 }`,
           }),
+          c("cg_serial_open_ex", "打开串口（全参数）", "cg_serial_t *cg_serial_open_ex(const char *port, int baud, int bits, int stop, int parity)",
+            "帧格式全参数版：老设备常见的 **7E1 / 8E2 靠它**。参数不合法时干净失败（不合法的值不往驱动送 —— 半开着的端口比打不开更坑人）", {
+              params: ["bits：数据位 5..8", "stop：停止位 1..2", "parity：0 = 无 / 1 = 奇 / 2 = 偶"],
+              ret: "链路句柄（用完 cg_serial_close）；失败 NULL，原因见 cg_serial_last_error(NULL)",
+              sample: `/* 老仪表常见 7E1：7 数据位 + 偶校验 + 1 停止位 */\ncg_serial_t *s = cg_serial_open_ex("COM3", 9600, 7, 1, 2);`,
+            }),
+        ],
+      },
+      {
+        label: "串口组件（serial 控件形态）",
+        cmds: [
+          c("cg_widget_serial", "取组件的链路句柄", "cg_serial_t *cg_widget_serial(cg_widget_t *w)",
+            "无界面控件（.cgui 里 type: \"serial\"）的取句柄写法：**未打开 / 类型不对返回 NULL**，所以 arrive 回调第一件事就是判它 —— 自检模式会合成触发 arrive，那时链路不存在", {
+              ret: "链路句柄（别自己 close，交给 cg_widget_serial_close）；没开返回 NULL",
+              sample: `void on_arrive(cg_widget_t *self, cg_event_t ev, void *user) {\n    cg_serial_t *s = cg_widget_serial(self);\n    if (!s) return;                      /* 自检合成触发：链路不存在 */\n    /* ... 在时钟/回调里 cg_serial_read 取字节 */\n}`,
+            }),
+          c("cg_widget_serial_open", "按控件属性打开", "int cg_widget_serial_open(cg_widget_t *w, const char *port)",
+            "端口 / 波特率 / 数据位 / 停止位 / 校验都从控件属性（.cgui 的 port / baud / bits / stop / parity）取；已打开则先关旧的再开。port 传 NULL 就用 .cgui 里配的那个", {
+              ret: "0 = 成功；-1 = 失败（原因见 cg_serial_last_error(NULL)）",
+              sample: `if (cg_widget_serial_open(cg_find(app, "ser_main"), port) != 0)\n    cg_term_write(term, CG_TERM_SYS, cg_serial_last_error(NULL), -1);`,
+            }),
+          c("cg_widget_serial_close", "关掉组件链路", "void cg_widget_serial_close(cg_widget_t *w)",
+            "幂等、NULL 安全：没打开时调它也没事（app 退出时运行时会自己收，业务不必兜底）", { ret: "无" }),
+          c("cg_widget_serial_set_baud", "改波特率", "void cg_widget_serial_set_baud(cg_widget_t *w, int baud)",
+            "界面上的波特率下拉就是给这用的。链路**开着时按新参数原样重开**（关旧的再开新的），没开就只记住等下次打开用", { ret: "无" }),
+          c("cg_widget_serial_set_format", "改数据位 / 停止位 / 校验", "void cg_widget_serial_set_format(cg_widget_t *w, int bits, int stop, int parity)",
+            "帧格式（**7E1 这类老设备全靠它**）：链路开着就按新参数重开；任一个越界则**整个忽略**并记一条警告 —— 只改一半会造出「7 数据位 + 无校验」这种谁也没要的组合。底层就是 cg_serial_open_ex", {
+              params: ["bits：5..8", "stop：1..2", "parity：0 = 无 / 1 = 奇 / 2 = 偶"],
+              ret: "无（越界时记警告并忽略）",
+              sample: `cg_widget_serial_set_baud(ser, 9600);\ncg_widget_serial_set_format(ser, 7, 1, 2);   /* 7E1 的老仪表 */\nif (cg_widget_serial_open(ser, "COM3") != 0) { /* 看 cg_serial_last_error */ }`,
+            }),
         ],
       },
       {

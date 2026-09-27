@@ -161,6 +161,27 @@ static int combo_find(const cg_widget_t *w, const char *text)
     return -1;
 }
 
+/**
+ * @brief 按配置里的文字恢复一个下拉（找不到 / 没配就保持 .cgui 的初值）
+ * @param app 所属应用
+ * @param id 控件 id
+ * @param key 配置节 [串口] 里的键名
+ * @return void
+ * @note 帧格式那三个下拉也用它：板子换一次就得重选一次的话，谁都烦。
+ */
+static void combo_restore(cg_app_t *app, const char *id, const char *key)
+{
+    char *v;
+
+    if (!s_biz.ini[0]) return;
+    v = cg_ini_read(s_biz.ini, "串口", key, NULL);
+    if (v && *v) {
+        int idx = combo_find(cg_find(app, id), v);
+        if (idx >= 0) cg_widget_set_value(cg_find(app, id), idx);
+    }
+    cg_free(v);
+}
+
 /** 原来这里有一段手写的 hex_parse()，serialterm 与 netterm 里各有一份、逐字相同 ——
  *  典型的"同一事实有两份"。现在它搬进了运行时：**cg_hex_decode()**（cg_kit 的「编码」一组）。
  *  语义一字未改：空格/制表/换行/逗号/连字符都当分隔符、"1A2B" 这种不写分隔的也算对、
@@ -476,14 +497,27 @@ static void agg_tick(void *user)
  */
 static void do_connect(cg_app_t *app)
 {
-    cg_widget_t *ser      = ser_of(app);
-    cg_widget_t *cmb_port = cg_find(app, "cmb_port");
-    cg_widget_t *cmb_baud = cg_find(app, "cmb_baud");
-    const char  *port = cg_widget_list_item(cmb_port, cg_widget_value(cmb_port));
+    cg_widget_t *ser        = ser_of(app);
+    cg_widget_t *cmb_port   = cg_find(app, "cmb_port");
+    cg_widget_t *cmb_baud   = cg_find(app, "cmb_baud");
+    cg_widget_t *cmb_bits   = cg_find(app, "cmb_bits");
+    cg_widget_t *cmb_stop   = cg_find(app, "cmb_stop");
+    cg_widget_t *cmb_parity = cg_find(app, "cmb_parity");
+    const char  *port  = cg_widget_list_item(cmb_port, cg_widget_value(cmb_port));
     const char  *btext = cg_widget_list_item(cmb_baud, cg_widget_value(cmb_baud));
-    int          baud = 0;
+    const char  *bitxt = cg_widget_list_item(cmb_bits, cg_widget_value(cmb_bits));
+    const char  *sttxt = cg_widget_list_item(cmb_stop, cg_widget_value(cmb_stop));
+    const char  *ptext = cg_widget_list_item(cmb_parity, cg_widget_value(cmb_parity));
+    int          baud = 0, bits = 8, stop = 1, parity;
+    char         fmt[16];
 
-    if (btext) sscanf(btext, "%d", &baud);      /* 下拉框里存的是文字，转成数字 */
+    /* 下拉框里存的是文字，逐个转成数字；校验直接取下标（「无/奇/偶」= 0/1/2） */
+    if (btext) sscanf(btext, "%d", &baud);
+    if (bitxt) sscanf(bitxt, "%d", &bits);
+    if (sttxt) sscanf(sttxt, "%d", &stop);
+    parity = cg_widget_value(cmb_parity);
+    if (parity < 0 || parity > 2) parity = 0;
+    snprintf(fmt, sizeof(fmt), "%d%s%d", bits, parity == 1 ? "O" : (parity == 2 ? "E" : "N"), stop);
 
     if (s_biz.n_ports <= 0 || !port || !*port) {
         sys_line(app, "没有可用串口。插上设备后点「刷新」。");
@@ -498,12 +532,14 @@ static void do_connect(cg_app_t *app)
         return;
     }
 
-    /* 波特率是界面上选的，先写进组件再开链路；端口也交给组件记着 */
+    /* 端口、波特率、帧格式都是界面上选的：**先写进组件再开链路**。
+     * 帧格式走 cg_widget_serial_set_format()，底层就是 cg_serial_open_ex() ——
+     * 7E1 这类老设备把三个下拉选成一样就能通（组件形态**支持全参数**）。 */
     cg_widget_serial_set_baud(ser, baud);
+    cg_widget_serial_set_format(ser, bits, stop, parity);
     if (cg_widget_serial_open(ser, port) != 0) {
         /* 打开失败时最要紧的是"为什么"。cg_serial_last_error(NULL) 给的是最近一次
-         * 打开失败的中文原因（端口被占用 / 找不到 / 波特率不支持…），别只报一句"失败了"。
-         * 另：组件形态只有 8N1；要 7E1 那种得用 cg_serial_open_ex()（见头文件）。 */
+         * 打开失败的中文原因（端口被占用 / 找不到 / 参数不支持…），别只报一句"失败了"。 */
         sys_line(app, cg_serial_last_error(NULL));
         cg_status_set(cg_find(app, "sb_main"), 0, "打开失败");
         return;
@@ -513,8 +549,8 @@ static void do_connect(cg_app_t *app)
     set_connected(app, 1);
     refresh_stats(app);
     {
-        char *line = cg_str_format("已连接 %s @ %d（8N1）。数据到达即取：日志 / 按帧 / 自动保存三个去处。",
-                                   port, baud);
+        char *line = cg_str_format("已连接 %s @ %d（%s）。数据到达即取：日志 / 按帧 / 自动保存三个去处。",
+                                   port, baud, fmt);
         if (line) {
             sys_line(app, line);
             cg_free(line);
@@ -523,6 +559,9 @@ static void do_connect(cg_app_t *app)
     if (s_biz.ini[0]) {
         cg_ini_write(s_biz.ini, "串口", "端口", port);
         cg_ini_write(s_biz.ini, "串口", "波特率", btext);
+        cg_ini_write(s_biz.ini, "串口", "数据位", bitxt);
+        cg_ini_write(s_biz.ini, "串口", "停止位", sttxt);
+        cg_ini_write(s_biz.ini, "串口", "校验", ptext);
     }
 }
 
@@ -1317,6 +1356,20 @@ static void run_demo(cg_app_t *app)
     printf("[demo] 一共切出 %d 帧（CRC 不符的那帧就是噪声）\n",
            (int)(cg_frame_frames(&s_biz.fr) - f0));
 
+    /* 帧格式那三个下拉有没有接上（只打印解析结果，不真开串口） */
+    {
+        cg_widget_t *cb = cg_find(app, "cmb_bits");
+        cg_widget_t *cs = cg_find(app, "cmb_stop");
+        cg_widget_t *cp = cg_find(app, "cmb_parity");
+        const char  *bt = cg_widget_list_item(cb, cg_widget_value(cb));
+        const char  *st = cg_widget_list_item(cs, cg_widget_value(cs));
+        const char  *pt = cg_widget_list_item(cp, cg_widget_value(cp));
+
+        printf("[demo] 界面上的帧格式下拉：数据位=%s 停止位=%s 校验=%s"
+               "（打开串口时交给 cg_widget_serial_set_format → cg_serial_open_ex）\n",
+               bt ? bt : "-", st ? st : "-", pt ? pt : "-");
+    }
+
     /* 发送侧：解析（不真发，因为演示模式不开串口） */
     {
         unsigned char out[64];
@@ -1402,6 +1455,10 @@ static void on_ready(cg_app_t *app, void *user)
         cg_free(lastbaud);
         cg_free(split);
     }
+    /* 帧格式三个下拉：记住上次选的（7E1 那种设备只需配一次） */
+    combo_restore(app, "cmb_bits", "数据位");
+    combo_restore(app, "cmb_stop", "停止位");
+    combo_restore(app, "cmb_parity", "校验");
 
     set_connected(app, 0);
     refresh_stats(app);
