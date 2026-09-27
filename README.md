@@ -271,7 +271,7 @@ npm install / npm run dev / npm run build / npm run dist
 | `piv-plan-implementation` → `piv-implement` → `piv-validate` → `piv-review-changes` → `git-commit-style` | 计划 → 实现 → 验证 → 审查 → 提交 的内层循环 | 开发任务的标准流程 |
 | `piv-run-full-loop` | 上面整条链一次跑完 | 提出明确的小功能需求时 |
 
-此外还有 14 个嵌入式审查技能（内存/中断/协议……）会在提交前审查时按改动领域自动调用。
+此外还有一组审查技能（缓冲区 / 内存 / 通信协议 / 错误处理 / 结构体 / C 规范 / 界面观感）会在提交前审查时按改动领域自动调用；完整清单见 `.codebuddy/skills/INDEX.md`。
 
 ### 3.2 推荐的对话方式
 
