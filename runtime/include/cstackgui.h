@@ -1258,6 +1258,81 @@ int cg_process_running(const char *exe_name);
  *        那里已经处理好了）。 */
 char *cg_local_ip(void);
 
+/* ---- 无线状态（WiFi / 蓝牙） ----
+ * IoT 上位机第一步不是发命令，是**先排除"我这边的无线状态不对"**：设备连不上时，
+ * 要能一眼看到本机有没有无线网卡、连的是哪个 SSID、信号多少、目标 AP 在不在列表里、
+ * 蓝牙开着没有、板子在不在已知道设备列表里（这些今天只能去 Windows 设置里翻）。
+ *
+ *   cg_wifi_info_t w;
+ *   for (i = 0; i < cg_wifi_count(); i++)
+ *       if (cg_wifi_info(i, &w) == 0)
+ *           cg_log(CG_LOG_INFO, "%s：%s  信号 %d%%", w.description,
+ *                  w.ssid[0] ? w.ssid : "(未连接)", w.signal);
+ *
+ *   cg_wifi_net_t nets[24]; int found = 0;
+ *   if (cg_wifi_networks(nets, 24, &found) == 0)
+ *       for (i = 0; i < found; i++) cg_log(CG_LOG_INFO, "  %s  %d%%%s",
+ *                                         nets[i].ssid, nets[i].signal, nets[i].connected ? "（当前）" : "");
+ *
+ * **零新增链接依赖**：符号全部在运行期从 `wlanapi.dll` / `BluetoothApis.dll` 取
+ * （实测用工程现有链接参数直接链会 undefined reference ⇒ 那会让所有既有用户项目的
+ * 链接命令都得改）。两个 DLL 都是系统自带，取不到就如实返回"0 个 / -1"，不假装成功；
+ * 原因写进日志（本机没网卡 / WLAN 服务没起 / 系统太老，是三种不同的说法）。
+ * **不持状态**：每次调用自己开关句柄，没有"初始化-清理"那对仪式。
+ */
+#define CG_WIFI_SSID_MAX 33      /* 802.11 的 SSID 上限 32 字节 + 终止符 */
+
+/** 一块无线网卡的状态。没连接时 ssid 为空、signal 为 -1（别的字段照给） */
+typedef struct {
+    char description[256];       /* 网卡描述，如 "Intel(R) Wi-Fi 6 AX201 160MHz" */
+    int  state;                  /* = WLAN_INTERFACE_STATE 原值：0 未就绪 / 1 已连接 / 4 已断开 / 5 正在关联 … */
+    char ssid[CG_WIFI_SSID_MAX]; /* 当前连接的 SSID；没连是空串 */
+    int  signal;                 /* 信号质量 0..100；没连是 -1（不是 0 —— 0 是"信号极差"，两回事）*/
+} cg_wifi_info_t;
+
+/** 周边可见的一个无线网络（同名的多个 BSSID 已经合并，取信号最强的那个） */
+typedef struct {
+    char ssid[CG_WIFI_SSID_MAX];
+    int  signal;                 /* 0..100 */
+    int  secure;                 /* 1 = 要密码/加密 */
+    int  connected;              /* 1 = 当前连的就是它 */
+} cg_wifi_net_t;
+
+/** 有几块无线网卡（0 = 本机没有无线网卡，或 WLAN 服务没起 —— 原因在日志里） */
+int cg_wifi_count(void);
+/** 取第 idx 块网卡的状态：0 = 成功；-1 = 没有这么多块 / wlanapi 取不到 */
+int cg_wifi_info(int idx, cg_wifi_info_t *out);
+/** 周边可见网络列表（同一块网卡；**同名的多个 BSSID 已合并**，取信号最强的）。
+ *  返回 0 = 成功（count 给看到的个数，可能比 cap 大）；-1 = 没有无线网卡或取不到。
+ *  out 放不下的丢掉、但 count 里给的是**实际看到**的个数。
+ *  @note 数据来自系统最近一次扫描的缓存 ⇒ 刚开机/刚连上时可能是空的（本机 2026-09-27 实测如此）。
+ *        **没有"立刻刷新"的接口**：`WlanScan` 在本机实测返回 87（参数无效），已撤掉 ——
+ *        见 runtime/src/kit/cg_kit_wireless.c 文件头。隔几秒再读一次即可，Windows 自己会定期重扫。 */
+int cg_wifi_networks(cg_wifi_net_t *out, int cap, int *count);
+
+/** 本机蓝牙无线电 */
+typedef struct {
+    char name[256];              /* 无线电名字，如 "Intel(R) Wireless Bluetooth(R)" */
+    char address[18];            /* 本机蓝牙地址 "AA:BB:CC:DD:EE:FF" */
+} cg_ble_radio_t;
+
+/** 一个"已知设备"（已配对 / 记得过的；**不做主动搜索** —— 那要几十秒且属于"发现"不是"状态"） */
+typedef struct {
+    char name[248];              /* 设备名（可能为空：没取到名字的设备） */
+    char address[18];            /* 设备地址，与 Windows 设置里显示的一致 */
+    int  connected;              /* 1 = 当前连着 */
+    int  remembered;             /* 1 = 配对过 / 记得过 */
+} cg_ble_device_t;
+
+/** 有几个蓝牙无线电（0 = 没有蓝牙或没开；蓝牙关了也算 0） */
+int cg_ble_radio_count(void);
+/** 取第 idx 个无线电：0 = 成功；-1 = 越界 / 取不到 */
+int cg_ble_radio_info(int idx, cg_ble_radio_t *out);
+/** 有几个已知蓝牙设备（已配对 / 记得过的） */
+int cg_ble_device_count(void);
+/** 取第 idx 个已知设备：0 = 成功；-1 = 越界 / 取不到 */
+int cg_ble_device_info(int idx, cg_ble_device_t *out);
+
 /* ------------------------------------------------------------ 动态扩展 */
 
 /** 运行时用代码追加控件（不进 .cgui）。parent 为 NULL 时挂在窗口上。
