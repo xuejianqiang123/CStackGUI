@@ -438,7 +438,11 @@ int cg_menu_add_item(cg_widget_t *w, const char *parent_id, int pos,
     w->menu[at].id      = (id && *id) ? cg_str_dup(id) : NULL;
     w->menu[at].enabled = 1;
     is_sep = (strcmp(txt, "-") == 0);
-    if (!is_sep) w->menu[at].cmd = cg_alloc_ctrl_id(app);   /* 分隔线没有命令 id */
+    /* 命令 id 走**菜单号段**：菜单命令从 WM_COMMAND 的 LOWORD 回来，必须与控件 id
+     * 分开（否则控件计数器涨到 0x8000 时会与菜单 / 加速键撞号）—— 与静态菜单
+     * （cg_widget.c 的 menu_push_doc）和加速键（cg_action.c）同一个发号器。
+     * 分隔线没有命令 id。 */
+    if (!is_sep) w->menu[at].cmd = cg_alloc_menu_cmd(app);
 
     cg_win_menu_rebuild(w);
     return at;
