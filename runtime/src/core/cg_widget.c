@@ -97,10 +97,13 @@ void cg_widget_free(cg_widget_t *w)
     for (int i = 0; i < w->nmenu; i++) {
         free(w->menu[i].text);
         free(w->menu[i].id);
+        free(w->menu[i].action);
     }
     free(w->menu);
     free(w->menu_last_id);
     free(w->menu_last_text);
+    free(w->action);         /* 动作引用（动作表自己另持一份，这里只是控件的引用名） */
+    free(w->action_last);    /* 窗口伪控件专用：最近激活的动作名 */
     free(w->tool_ids);
     free(w->format);
     free(w->hint);
@@ -205,6 +208,9 @@ static void menu_push_doc(cg_app_t *app, cg_widget_t *w, cg_item_t *const *items
         memset(&w->menu[idx], 0, sizeof(cg_menu_row_t));
         w->menu[idx].text = cg_str_dup(it->text ? it->text : "");
         w->menu[idx].id = it->id ? cg_str_dup(it->id) : NULL;
+        /* 动作引用（.cgui 里菜单项写的 action）：文字/点击/启用/勾选都改由动作说了算，
+         * 具体规则见 cstackgui.h 的「动作（actions）」一节 */
+        w->menu[idx].action = (it->action && *it->action) ? cg_str_dup(it->action) : NULL;
         w->menu[idx].checked = it->checked;
         w->menu[idx].parent = parent;
         w->menu[idx].popup = (it->nchildren > 0);
@@ -249,6 +255,9 @@ static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node
         w->bind_two = n->bind_two;
         if (w->bind_src) app->nbinds++;
     }
+    /* 动作引用：只记名字，校验（动作存在 / 类型支持 click / 没同时绑 click）
+     * 与文字覆盖都在 cg_action_build() 里统一做 —— 那时动作表才建好。 */
+    if (n->action && *n->action) w->action = cg_str_dup(n->action);
     w->multi = n->multi;
     w->check = n->check;
     w->multiline = n->multiline;

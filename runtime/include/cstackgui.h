@@ -387,6 +387,71 @@ const char *cg_menu_last_text(const cg_widget_t *w);
 /** 菜单里有多少个可点的项（不含分隔线和顶级弹出项），调试用 */
 int         cg_menu_count(const cg_widget_t *w);
 
+/* ------------------------------------------------------------ 动作（actions）
+ * **一条命令写一次，挂在多处 UI 上**：文字 + 快捷键 + 一个回调名。
+ * 菜单项和控件用 `.cgui` 的 "action" 字段引用它，于是「一个回调、一处启用状态」
+ * 同时管住所有引用点 —— 不用再给菜单项和按钮各绑一份回调、各改一次灰不灰。
+ *
+ *   { "actions": {
+ *       "save": { "text": "保存(&S)", "accel": "Ctrl+S", "handler": "on_save" },
+ *       "grid": { "text": "显示网格", "handler": "on_grid_toggle", "checked": true }
+ *   } }
+ *   { "id": "mnu_file", "type": "menu", "nodes": [
+ *       { "text": "文件(&F)", "children": [
+ *           { "action": "save" },                       // 文字与快捷键都从 action 来
+ *           { "action": "grid" }
+ *       ]}
+ *   ]}
+ *
+ * 回调签名与事件回调完全一样，但有两个固定值：
+ *   - `self` 恒为**主窗口伪控件**（`cg_widget_id(self)` 是 `"__window"`）——
+ *     因为一个动作可能有三个入口，"从哪个入口点的"不是业务该依赖的信息；
+ *   - `ev` 恒为 `CG_EVENT_CLICK`（与"菜单项点击 = click"是同一套词汇）。
+ *   一个函数挂了多个动作时，用 `cg_action_name(self)` 问是哪一个。
+ *
+ * 快捷键（`accel`）由**消息循环里的加速键表**处理，所以**焦点在输入框里照样生效**
+ * （窗口级 keydown 事件做不到这一点：EDIT 会吃掉按键）。语法：
+ *
+ *   [Ctrl+][Shift+][Alt+]键
+ *   键 = A-Z / 0-9 / F1-F24 / Esc / Enter / Tab / Space / Back(退格) / Delete /
+ *        Insert / Home / End / PageUp / PageDown / Left / Right / Up / Down
+ *
+ * **不接受无修饰键的单个字母或数字**（裸 `S` 会让用户没法往输入框里打 s）；
+ * 裸功能键（`F5`）可以。解析不了的 accel 会被忽略并写警告日志，`--selftest` 报错。
+ *
+ * 启用状态是**动作的**：`cg_action_set_enabled()` 会把所有引用它的菜单项与控件一起
+ * 变灰/恢复。反过来，你手动 `cg_widget_set_enabled(w, 0)` 禁用某个按钮**不会**影响动作，
+ * 但它会在下一次动作同步时被覆盖回动作的状态 —— 要禁就禁动作。
+ *
+ * v1 的边界（有意不做，别猜）：工具栏（toolbar）的按钮**不支持**引用动作（它的条目模型
+ * 是纯文字列表）；没有运行时增删菜单项的 API；动作的 `text` 不能在运行时改。
+ */
+
+/** 触发一个动作：快捷键、菜单项点击、控件点击最终都走到这里。
+ *  @return 1 = 真的调用了回调；0 = 没有这个动作 / 动作被禁用 / handler 没登记 */
+int cg_action_invoke(cg_app_t *app, const char *name);
+
+/** 启用 / 禁用一个动作，并把结果同步到所有引用它的 UI（菜单项灰掉、控件灰掉）。
+ *  动作不存在时是空操作。 */
+void cg_action_set_enabled(cg_app_t *app, const char *name, int enabled);
+/** 动作当前是否启用；动作不存在返回 0。 */
+int  cg_action_is_enabled(const cg_app_t *app, const char *name);
+
+/** 勾选 / 取消勾选一个动作，并同步到所有引用它的**菜单项**（打勾或去掉）。
+ *  动作不存在时是空操作。 */
+void cg_action_set_checked(cg_app_t *app, const char *name, int checked);
+/** 动作当前是否勾选；动作不存在返回 0。 */
+int  cg_action_is_checked(const cg_app_t *app, const char *name);
+
+/** 最近一次被激活的动作名（在动作的回调里用 self 取）；没有则返回 NULL。 */
+const char *cg_action_name(const cg_widget_t *self);
+
+/** 动作个数 / 第 i 个动作名（遍历用，参数越界返回 NULL）；调试与自检用。 */
+int         cg_action_count(const cg_app_t *app);
+const char *cg_action_at(const cg_app_t *app, int i);
+/** 动作的快捷键（规范化后的显示形式，如 "Ctrl+S"）；没有或动作不存在返回 ""。 */
+const char *cg_action_accel(const cg_app_t *app, const char *name);
+
 /* ------------------------------------------------------------ 提示与时钟 */
 
 /** 鼠标悬停提示（tooltip）；text 传空串清除。对所有控件生效。 */

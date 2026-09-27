@@ -54,26 +54,85 @@ HMENU cgw_menu_build(const cg_widget_t *w, int as_bar)
 
     for (int i = 0; i < w->nmenu; i++) {
         const cg_menu_row_t *r = &w->menu[i];
-        HMENU   parent = root;
-        wchar_t *wt = cgw_wc_from_utf8(r->text);
-        DWORD   flags = MF_STRING;
+        HMENU        parent = root;
+        const char  *text = r->text;
+        const char  *accel = NULL;
+        int          act = (r->action && *r->action) ? cg_action_index(w->app, r->action) : -1;
+        int          checked = r->checked;
+        int          enabled = 1;
+        wchar_t     *wt;
+        DWORD        flags = MF_STRING;
 
         if (r->parent >= 0 && r->parent < w->nmenu && subs[r->parent]) parent = subs[r->parent];
 
+        /* 动作项：**勾选与启用是运行期状态，只有后端知道怎么落到 HMENU 上**；
+         * 文字不在这里取 —— 它已经在 cg_action_build() 里归一化进 r->text 了
+         * （静态规则放 core，一条规则只有一份实现；这里只处理"会变的那部分"）。 */
+        if (act >= 0) {
+            const cg_action_row_t *a = &w->app->actions[act];
+            checked = a->checked;
+            enabled = a->enabled;
+            if (a->accel && *a->accel) accel = a->accel;
+        }
+
         if (r->text && strcmp(r->text, "-") == 0) {
             AppendMenuW(parent, MF_SEPARATOR, 0, NULL);
-        } else if (r->popup) {
+            continue;                      /* 分隔线没有文字，别走下面那条分配 wt 的路 */
+        }
+
+        if (r->popup) {
+            wt = cgw_wc_from_utf8(text);
             subs[i] = CreatePopupMenu();
-            if (r->checked) flags |= MF_CHECKED;
+            if (checked) flags |= MF_CHECKED;
             AppendMenuW(parent, flags | MF_POPUP, (UINT_PTR)subs[i], wt ? wt : L"");
         } else {
-            if (r->checked) flags |= MF_CHECKED;
+            /* 快捷键显示：菜单项文字里的 `\t` 会把后半段右对齐显示 —— 于是
+             * "Ctrl+S" 在菜单上就看得见，不用另找地方解释快捷键是什么。 */
+            char buf[256];
+            if (accel) snprintf(buf, sizeof(buf), "%s\t%s", text ? text : "", accel);
+            wt = cgw_wc_from_utf8(accel ? buf : (text ? text : ""));
+            if (checked)  flags |= MF_CHECKED;
+            if (!enabled) flags |= MF_GRAYED;
             AppendMenuW(parent, flags, (UINT_PTR)r->cmd, wt ? wt : L"");
         }
         free(wt);
     }
     free(subs);
     return root;
+}
+
+/**
+ * @brief 动作的启用 / 勾选变了：同步到**菜单项**（控件那一半走 cg_widget_set_enabled）
+ * @details 只处理窗口菜单栏那一份：menubutton 的弹出菜单是**每次点击时现场重建**的
+ *          （cgw_popup_menu_for），建的时候自然会读到最新状态，不需要同步。
+ *          不必判断某个 cmd 到底挂在哪个菜单里 —— EnableMenuItem 对"这个 HMENU 里
+ *          没有的命令 id"返回 -1，是空操作，比先查一遍更省事也更不容易漏。
+ */
+void cg_win_action_sync(cg_app_t *app, const char *name)
+{
+    const cg_action_row_t *a;
+    HMENU  hm;
+    int    act;
+
+    if (!app || !name || !app->hwnd) return;
+    act = cg_action_index(app, name);
+    if (act < 0) return;
+    a  = &app->actions[act];
+    hm = GetMenu((HWND)app->hwnd);
+    if (!hm) return;
+
+    for (cg_widget_t *w = app->widgets; w; w = w->next) {
+        for (int i = 0; i < w->nmenu; i++) {
+            const cg_menu_row_t *r = &w->menu[i];
+            if (!r->action || strcmp(r->action, name) != 0 || r->cmd == 0) continue;
+            EnableMenuItem(hm, (UINT)r->cmd,
+                           MF_BYCOMMAND | (a->enabled ? MF_ENABLED : MF_GRAYED));
+            CheckMenuItem(hm, (UINT)r->cmd,
+                          MF_BYCOMMAND | (a->checked ? MF_CHECKED : MF_UNCHECKED));
+        }
+    }
+    /* 菜单栏不会因为 EnableMenuItem 自己重画，得推它一把 */
+    DrawMenuBar((HWND)app->hwnd);
 }
 
 /** 工具栏按钮：没有图标，用「文字池 + BTNS_SHOWTEXT」做纯文字按钮 */

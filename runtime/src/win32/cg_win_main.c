@@ -132,9 +132,12 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     }
     case WM_COMMAND: {
         if (!app) break;
-        /* lParam 为 0 = 这条命令来自窗口菜单（菜单栏），不是控件 */
+        /* lParam 为 0 = 这条命令来自窗口菜单（菜单栏）或**加速键**，不是控件。
+         * 加速键与菜单项共用号段（都从 WM_COMMAND 回来），所以先问动作表是谁的：
+         * 动作的快捷键命中就激活那条命令，否则按菜单项那条路走。 */
         if (!lp) {
-            cg_dispatch_menu_cmd(app, (int)LOWORD(wp));
+            int cmd = (int)LOWORD(wp);
+            if (!cg_action_invoke_cmd(app, cmd)) cg_dispatch_menu_cmd(app, cmd);
             return 0;
         }
         /* IsDialogMessage 把回车变成 IDOK、Esc 变成 IDCANCEL：
@@ -422,6 +425,13 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         cgw_win_emit(app, CG_EVENT_DESTROY);
         PostQuitMessage(0);
         return 0;
+    case WM_SYSCOMMAND:
+        /* **Alt 组合的加速键会以 WM_SYSCOMMAND 回来**（TranslateAccelerator 的规矩：
+         * 带 ALT 的加速键走系统命令那条路）。所以这里也要问一次动作表 ——
+         * 不问的话 "Alt+X" 配了永远不生效，而这是最容易归因到"快捷键坏了"的那类坑。
+         * 不是我们发的号就原样交给系统（SC_CLOSE 这类系统命令都在其中）。 */
+        if (app && cg_action_invoke_cmd(app, (int)wp)) return 0;
+        break;
     default:
         break;
     }

@@ -162,6 +162,10 @@ typedef struct {
 typedef struct cg_item {
     char             *text;
     char             *id;         /* 菜单项标识，回调里用 cg_menu_last_id 取回 */
+    /** 引用的动作名（.cgui 的 action）；NULL = 这个菜单项不是动作。
+     *  有它时：文字取动作的 text（非空时覆盖本项的 text）、点击触发动作、
+     *  启用与勾选都跟随动作 —— 本项自己的 events.click 会被忽略（自检报错）。 */
+    char             *action;
     int               expanded;   /* 树：初始展开 */
     int               checked;    /* 菜单：勾选标记 */
     struct cg_item  **children;
@@ -209,6 +213,11 @@ typedef struct cg_node {
     char    *bind_src;
     /** 绑定是双向的（源变跟源走，自己也变时也推回源） */
     int      bind_two;
+    /** 引用的动作名（.cgui 的 action）；NULL = 不是动作。
+     *  只在**该类型支持 click** 时有意义：有它时点击交给动作（不再走自己的
+     *  click/dblclick），文字取动作的 text（非空时覆盖本节点的 text），
+     *  启用跟随动作。同时绑了 events.click 会被忽略（自检报错）。 */
+    char    *action;
     /** table：允许多选行 */
     int      multi;
     /** table：显示行首复选框列 */
@@ -266,6 +275,22 @@ typedef struct {
     char *homepage;   /* 主页地址 */
 } cg_info_t;
 
+/** 动作（.cgui 顶层 actions 的一项）：一条**命名命令** = 文字 + 快捷键 + 回调名。
+ *  菜单项与控件用 "action" 字段按名字引用它，于是同一个回调与同一份启用状态
+ *  同时管住所有引用点。用法与坑见 cstackgui.h 的「动作（actions）」一节。
+ *
+ *  与其它结构化字段的一个区别：**actions 是顶层对象**（键就是动作名），不是控件数组。 */
+typedef struct {
+    char *name;    /* actions 对象的键（动作名）；空名的条目会被忽略 */
+    char *text;    /* 引用它的菜单项 / 控件显示的文字；NULL / 空 = 用引用点自己的文字 */
+    char *accel;   /* 快捷键原文（"Ctrl+S"）；NULL / 空 = 没有快捷键 */
+    /** C 侧 CG_BIND 的名字。NULL / 空 = 这个动作没有意义，运行时忽略它并警告
+     *  （--selftest 据此报错）。 */
+    char *handler;
+    int   checked; /* 初始勾选状态（同步给引用它的菜单项） */
+    int   enabled; /* 初始启用状态，缺省 1 */
+} cg_action_t;
+
 /** 窗口属性（.cgui 的 app 节点；缺省值 = 保持 Windows 默认观感，不设就一切照旧） */
 typedef struct {
     char       *title;
@@ -292,6 +317,10 @@ typedef struct {
     char       *note;          /* 备注（画布记录，运行时不用） */
     cg_info_t   info;          /* 程序配置（版本信息） */
     cg_node_t  *root;          /* 虚拟根：children 即顶层控件，无矩形 */
+    /** 顶层 actions：命名命令表（可为空 = 这个界面没有动作）。
+     *  按 .cgui 里的书写顺序存，重复名后者覆盖。 */
+    cg_action_t *actions;
+    size_t       nactions;
 } cg_doc_t;
 
 /** 解析 .cgui 文本。失败返回 NULL 并写错误信息。 */

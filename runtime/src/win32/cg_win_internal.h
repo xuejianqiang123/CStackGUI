@@ -46,6 +46,7 @@ typedef struct {
     int             focused_widget;
     UINT_PTR        timer_id;
     HWND            tooltip;    /* 整窗一个的悬停提示控件 */
+    HACCEL          accel;      /* 动作的加速键表（.cgui 的 actions[].accel）；NULL = 没有 */
     HICON           icon;       /* 我们自己 LoadImage 出来的窗口图标，退出时要 DestroyIcon */
     int             tray_on;    /* 托盘图标已建 */
     int             activated;  /* 首次激活已经发过了 */
@@ -265,5 +266,13 @@ void cgw_build_toolbar(HWND h, cg_widget_t *w);
 
 /** @brief 按顺序初始化：DPI、注册自绘类、建窗口、tooltip、定时器、建控件树 */
 int cgw_win_init(cg_app_t *app);
+
+/** @brief 按动作表建加速键表（HACCEL）。没有带快捷键的动作时是空操作。
+ *  @details 必须在消息循环之前建好（win_run 里用它做 TranslateAccelerator）。
+ *           这是"Ctrl+S 在输入框里也能按"的唯一实现方式 —— 窗口级 keydown 事件
+ *           收不到被 EDIT 吃掉的按键。 */
+void cgw_accel_build(cg_app_t *app);
+/** @brief 销毁加速键表（幂等、NULL 安全） */
+void cgw_accel_destroy(cg_app_t *app);
 
 #endif /* CG_WIN_INTERNAL_H */

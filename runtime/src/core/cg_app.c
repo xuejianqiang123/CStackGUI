@@ -251,6 +251,11 @@ static int app_open(cg_app_t *app, const cg_app_desc_t *desc, int allow_ui)
     /* .cgui 里的控件绑定（bind）先应用一遍：目标控件跟源对齐之后再建原生控件，
      * 所以窗口第一次显示出来时两边就是一致的，不会先闪一个默认值再跳。 */
     cg_bind_apply_all(app);
+    /* 动作层：handler 查表、快捷键解析、引用点校验。
+     * 时机有讲究 —— 必须在**建控件树之后**（校验要读控件的 action 引用），
+     * 而且在**后端 init 之前**：动作的 text 会覆盖控件文字，原生控件建出来时就该带对文字，
+     * 否则先显示 .cgui 里那份、再闪一下变成动作的文字。 */
+    cg_action_build(app);
     app->start_tick = cg_ticks();
 
     if (desc && desc->trace_doc) cg_doc_dump(&app->doc, stdout);
@@ -262,6 +267,7 @@ static int app_open(cg_app_t *app, const cg_app_desc_t *desc, int allow_ui)
 static void app_close(cg_app_t *app)
 {
     cg_timers_clear(app);
+    cg_action_release(app);      /* 动作表自己持有一份字符串，先收掉 */
     free(app->cgui_path);
     free(app->cgui_dir);
     app->cgui_path = NULL;
@@ -419,15 +425,16 @@ int cg_app_selftest(const cg_app_desc_t *desc)
 
     printf("-- 合成事件 --\n");
     if (app.window) selftest_walk(&app, app.window, &st, 0);
-    printf("-- 结果: 控件 %d 个, 触发回调 %d 次, 未登记 %d 个, 事件不支持 %d 个, 绑定出错 %d 个 --\n",
-           st.total, st.fired, st.unresolved, app.unsupported_events, app.bad_binds);
+    printf("-- 结果: 控件 %d 个, 触发回调 %d 次, 未登记 %d 个, 事件不支持 %d 个, 绑定出错 %d 个, 动作出错 %d 个 --\n",
+           st.total, st.fired, st.unresolved, app.unsupported_events, app.bad_binds,
+           app.bad_actions);
 
     {
-        int bad = st.unresolved + app.unsupported_events + app.bad_binds;
+        int bad = st.unresolved + app.unsupported_events + app.bad_binds + app.bad_actions;
         app_close(&app);
         if (bad) {
-            cg_log(CG_LOG_ERROR, "自检失败：未登记回调 %d 个，绑了不支持的事件 %d 个，绑定源不存在 %d 个",
-                   st.unresolved, app.unsupported_events, app.bad_binds);
+            cg_log(CG_LOG_ERROR, "自检失败：未登记回调 %d 个，绑了不支持的事件 %d 个，绑定源不存在 %d 个，动作出错 %d 个",
+                   st.unresolved, app.unsupported_events, app.bad_binds, app.bad_actions);
             cg_log_close();
             return 5;
         }

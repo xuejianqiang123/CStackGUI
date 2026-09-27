@@ -45,6 +45,98 @@ static DWORD style_of_doc(const cg_doc_t *d, DWORD *exstyle)
     return style;
 }
 
+/* ------------------------------------------------------------ 加速键（动作的快捷键） */
+
+/**
+ * @brief 动作的「键 + 修饰键」映射成 Win32 的虚拟键码与 fVirt 标志
+ * @param k 动作的键（core 解析出来的、与平台无关的形式）
+ * @param fVirt 输出：FVIRTKEY | FCONTROL/FSHIFT/FALT
+ * @param vk 输出：虚拟键码
+ * @return int 1 = 认识这个键；0 = 不认识（跳过，不建这条加速键）
+ */
+static int accel_to_win(const cg_accel_t *k, BYTE *fVirt, WORD *vk)
+{
+    WORD v = 0;
+    int  key;
+
+    if (!k) return 0;
+    key = k->key;
+
+    if (key >= CG_ACCEL_A && key < CG_ACCEL_A + 26) {
+        v = (WORD)('A' + (key - CG_ACCEL_A));
+    } else if (key >= CG_ACCEL_0 && key < CG_ACCEL_0 + 10) {
+        v = (WORD)('0' + (key - CG_ACCEL_0));
+    } else if (key >= CG_ACCEL_F1 && key < CG_ACCEL_F1 + 24) {
+        v = (WORD)(VK_F1 + (key - CG_ACCEL_F1));
+    } else {
+        switch (key) {
+        case CG_ACCEL_ESC:      v = VK_ESCAPE; break;
+        case CG_ACCEL_ENTER:    v = VK_RETURN; break;
+        case CG_ACCEL_TAB:      v = VK_TAB;    break;
+        case CG_ACCEL_SPACE:    v = VK_SPACE;  break;
+        case CG_ACCEL_BACK:     v = VK_BACK;   break;
+        case CG_ACCEL_DELETE:   v = VK_DELETE; break;
+        case CG_ACCEL_INSERT:   v = VK_INSERT; break;
+        case CG_ACCEL_HOME:     v = VK_HOME;   break;
+        case CG_ACCEL_END:      v = VK_END;    break;
+        case CG_ACCEL_PAGEUP:   v = VK_PRIOR;  break;
+        case CG_ACCEL_PAGEDOWN: v = VK_NEXT;   break;
+        case CG_ACCEL_LEFT:     v = VK_LEFT;   break;
+        case CG_ACCEL_RIGHT:    v = VK_RIGHT;  break;
+        case CG_ACCEL_UP:       v = VK_UP;     break;
+        case CG_ACCEL_DOWN:     v = VK_DOWN;   break;
+        default: return 0;
+        }
+    }
+    /* FVIRTKEY 必须设：不设的话 key 会被当成字符码，字母/数字键在非英文键盘布局下对不上 */
+    *fVirt = (BYTE)(FVIRTKEY
+                    | ((k->mods & CG_MOD_CTRL)  ? FCONTROL : 0)
+                    | ((k->mods & CG_MOD_SHIFT) ? FSHIFT   : 0)
+                    | ((k->mods & CG_MOD_ALT)   ? FALT     : 0));
+    *vk = v;
+    return 1;
+}
+
+/** @brief 按动作表建加速键表（没有带快捷键的动作时是空操作） */
+void cgw_accel_build(cg_app_t *app)
+{
+    cg_win_state_t *st;
+    ACCEL *arr;
+    int    n = 0;
+
+    if (!app || !(st = (cg_win_state_t *)app->natives) || app->nactions <= 0) return;
+    arr = (ACCEL *)calloc((size_t)app->nactions, sizeof(ACCEL));
+    if (!arr) return;
+
+    for (int i = 0; i < app->nactions; i++) {
+        const cg_action_row_t *a = &app->actions[i];
+        BYTE fVirt;
+        WORD vk;
+
+        if (!a->accel_ok || a->accel_cmd == 0) continue;
+        if (!accel_to_win(&a->key, &fVirt, &vk)) continue;
+        arr[n].fVirt = fVirt;
+        arr[n].key   = vk;
+        arr[n].cmd   = (WORD)a->accel_cmd;
+        n++;
+    }
+    if (n > 0) st->accel = CreateAcceleratorTableW(arr, n);
+    free(arr);
+    if (n > 0 && !st->accel) {
+        fprintf(stderr, "[cstackgui] 加速键表没建起来，动作的快捷键不会生效\n");
+    }
+}
+
+/** @brief 销毁加速键表（幂等、NULL 安全） */
+void cgw_accel_destroy(cg_app_t *app)
+{
+    cg_win_state_t *st = app ? (cg_win_state_t *)app->natives : NULL;
+    if (st && st->accel) {
+        DestroyAcceleratorTable(st->accel);
+        st->accel = NULL;
+    }
+}
+
 /* ------------------------------------------------------------ 后端入口 */
 
 /** @brief 后端初始化：DPI、公共控件、类注册、主窗口、tooltip、定时器、按树序建控件 */
@@ -299,6 +391,10 @@ int cgw_win_init(cg_app_t *app)
         }
     }
 
+    /* 加速键表：动作的快捷键靠它生效（消息循环里 TranslateAccelerator 用）。
+     * 建在这里是因为它必须在消息循环之前就绪，且不依赖任何原生控件。 */
+    cgw_accel_build(app);
+
     /* 按树序建原生控件：必须父先于子。
      * 注意不能遍历 app->widgets —— 那是按创建顺序倒插的链表，子控件会排在父前面，
      * 子控件的父 HWND 还是 NULL，CreateWindowEx 会失败（整个分组框里的控件全丢）。 */
@@ -328,6 +424,7 @@ int cgw_win_init(cg_app_t *app)
 static int win_run(cg_app_t *app)
 {
     MSG msg;
+    cg_win_state_t *st = (cg_win_state_t *)app->natives;
 
     /* 用 PeekMessage + WaitMessage 而不是 GetMessage：
      * 队列空的时候正好是「空闲」事件的时机 —— 处理完就睡，不空转烧 CPU。 */
@@ -335,6 +432,13 @@ static int win_run(cg_app_t *app)
         if (app->quit) break;
         if (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
             if (msg.message == WM_QUIT) break;
+            /* 加速键（动作的快捷键）**必须排在 IsDialogMessage 之前**：
+             * 它要处理的正是那些会被焦点控件吃掉、或被 Tab/回车导航截走的按键。
+             * 它在**消息循环**这一层，与焦点在谁身上无关 —— 所以焦点在输入框里
+             * Ctrl+S 照样生效（窗口级 keydown 事件做不到这点：EDIT 会吃掉按键）。 */
+            if (st && st->accel && TranslateAcceleratorW((HWND)app->hwnd, st->accel, &msg)) {
+                continue;
+            }
             if (!IsDialogMessageW((HWND)app->hwnd, &msg)) {
                 TranslateMessage(&msg);
                 DispatchMessageW(&msg);
@@ -353,6 +457,7 @@ static void win_shutdown(cg_app_t *app)
     cg_win_state_t *st = (cg_win_state_t *)app->natives;
     if (!st) return;
     cg_tray_remove(app);   /* 托盘图标不主动摘，会一直留在通知区里 */
+    cgw_accel_destroy(app);   /* 加速键表不是窗口对象，关窗不会替我们收 */
     if (st->timer_id) KillTimer((HWND)app->hwnd, CG_TIMER_ID);
     for (cg_widget_t *w = app->widgets; w; w = w->next) {
         if (cgw_is_t(w, "timer")) KillTimer((HWND)app->hwnd, (UINT_PTR)w->ctrl_id);

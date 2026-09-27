@@ -182,6 +182,14 @@ int cg_dispatch(cg_widget_t *w, cg_event_t ev)
     if (!w || !w->app) return 0;
     if (!w->enabled && ev != CG_EVENT_CLOSE) return 0;
 
+    /* 引用了动作的控件：click 交给动作。**放在最前面**是为了让每一条产生 click 的路径
+     * （BN_CLICKED、自绘控件在 WM_LBUTTONUP 里的补派发、菜单项…）都自动走同一条路 ——
+     * 否则得在十几个后端调用点各加一次判断，漏一个就是"画布上设了却没反应"。
+     * 自己绑的那份 click 永远不会被调用（build 时已经警告过，这里不重复报）。 */
+    if (ev == CG_EVENT_CLICK && w->action && *w->action) {
+        return cg_action_invoke(w->app, w->action);
+    }
+
     /* 控件状态（值/文字/勾选）是后端在派发前刚写好的，这里先把绑定同步做掉：
      * 回调里看到的界面就已经是一致的，不用自己去刷关联控件。
      * 注意绑定同步本身不派发事件，所以不会和下面的回调互相触发。 */
@@ -247,6 +255,11 @@ int cg_dispatch_menu_cmd(cg_app_t *app, int cmd)
             free(w->menu_last_text);
             w->menu_last_id = w->menu[i].id ? cg_str_dup(w->menu[i].id) : NULL;
             w->menu_last_text = cg_str_dup(w->menu[i].text ? w->menu[i].text : "");
+            /* 动作项：点它就是激活那条命令（不再给菜单控件派发 click，
+             * 否则菜单项绑的 click 与动作会各走一遍，两个回调都响） */
+            if (w->menu[i].action && *w->menu[i].action) {
+                return cg_action_invoke(app, w->menu[i].action);
+            }
             cg_dispatch(w, CG_EVENT_CLICK);
             return 1;
         }

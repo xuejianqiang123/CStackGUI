@@ -180,6 +180,8 @@ static cg_item_t **parse_tree_items(const cj_val_t *arr, size_t *count)
         if (o && o->type == CJ_OBJ) {
             it->text = dup_str(cj_str(cj_get(o, "text"), ""));
             it->id = dup_or_null(cj_str(cj_get(o, "id"), NULL));
+            /* 菜单项引用动作（树节点读它也无害：tree 不会去看这个字段） */
+            it->action = dup_or_null(cj_str(cj_get(o, "action"), NULL));
             it->expanded = cj_bool(cj_get(o, "expanded"), 0);
             it->checked = cj_bool(cj_get(o, "checked"), 0);
             it->children = parse_tree_items(cj_get(o, "children"), &it->nchildren);
@@ -205,6 +207,7 @@ static void tree_items_free(cg_item_t **items, size_t n)
         tree_items_free(items[i]->children, items[i]->nchildren);
         free(items[i]->text);
         free(items[i]->id);
+        free(items[i]->action);
         free(items[i]);
     }
     free(items);
@@ -315,6 +318,7 @@ static void node_free(cg_node_t *n)
     free(n->hint);
     free(n->sport);
     free(n->bind_src);
+    free(n->action);
     free(n);
 }
 
@@ -471,6 +475,11 @@ static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
          * 这样老文件里留空的 text 不会被写成一个会和 value 漂移的副本。 */
     }
 
+    /* 引用动作：顶层 actions 里的名字。这里只记名字，校验（动作是否存在、该类型
+     * 支不支持 click、有没有同时绑 click）在运行时构建时做 —— 解析层不该知道
+     * "哪些类型支持 click"（那是 k_kinds 的事，进来一次就查一次反而更贵）。 */
+    n->action = dup_or_null(cj_str(cj_get(o, "action"), NULL));
+
     /* 控件绑定：bind { "src": "源控件id", "two": true }
      * 只认对象写法；src 空串等于没绑（画布没选源时就是这么写的） */
     v = cj_get(o, "bind");
@@ -595,6 +604,45 @@ cg_doc_t *cg_doc_parse(const char *json, char *err, size_t errsz)
         doc->info.homepage = dup_str(cj_str(cj_get(in, "homepage"), NULL));
     }
 
+    /* 顶层 actions：命名动作表。**键就是动作名**（不是数组，所以顺序由书写顺序定）。
+     * 两个宽容处，都写在文档里：空名的条目直接跳过（没有引用它的办法）；
+     * 重名的后者覆盖（画布不会写出来，只有手写 .cgui 才可能）。
+     * 缺 handler 的动作**不在这里报错**：它是 UI 便利设施，不该让整份界面打不开 ——
+     * 运行时构建时警告，--selftest 报错（与"绑了不支持的事件"同一套兜底）。 */
+    v = cj_get(root, "actions");
+    if (v && v->type == CJ_OBJ && v->count > 0) {
+        doc->actions = (cg_action_t *)calloc(v->count, sizeof(cg_action_t));
+        if (doc->actions) {
+            for (size_t i = 0; i < v->count; i++) {
+                const cj_val_t *o = v->items[i];
+                const char *name = (v->keys && v->keys[i]) ? v->keys[i] : NULL;
+                cg_action_t *a;
+                size_t j;
+
+                if (!name || !*name) continue;
+
+                for (j = 0; j < doc->nactions; j++) {
+                    if (doc->actions[j].name && strcmp(doc->actions[j].name, name) == 0) break;
+                }
+                if (j < doc->nactions) {
+                    a = &doc->actions[j];          /* 重名：后者覆盖，名字保留 */
+                    free(a->text);
+                    free(a->accel);
+                    free(a->handler);
+                    a->text = a->accel = a->handler = NULL;
+                } else {
+                    a = &doc->actions[doc->nactions++];
+                    a->name = dup_str(name);
+                }
+                a->text    = dup_or_null(cj_str(cj_get(o, "text"), NULL));
+                a->accel   = dup_or_null(cj_str(cj_get(o, "accel"), NULL));
+                a->handler = dup_or_null(cj_str(cj_get(o, "handler"), NULL));
+                a->checked = cj_bool(cj_get(o, "checked"), 0);
+                a->enabled = cj_bool(cj_get(o, "enabled"), 1);
+            }
+        }
+    }
+
     doc->root = (cg_node_t *)calloc(1, sizeof(cg_node_t));
     if (!doc->root) {
         cj_free(root);
@@ -659,6 +707,15 @@ void cg_doc_release(cg_doc_t *doc)
     free(doc->info.company);  free(doc->info.copyright); free(doc->info.address);
     free(doc->info.postcode); free(doc->info.phone);    free(doc->info.fax);
     free(doc->info.email);    free(doc->info.homepage);
+    if (doc->actions) {
+        for (size_t i = 0; i < doc->nactions; i++) {
+            free(doc->actions[i].name);
+            free(doc->actions[i].text);
+            free(doc->actions[i].accel);
+            free(doc->actions[i].handler);
+        }
+        free(doc->actions);
+    }
     node_free(doc->root);
     memset(doc, 0, sizeof(*doc));
 }
@@ -704,6 +761,7 @@ static void dump_node(const cg_node_t *n, FILE *out, int depth)
                 n->sport, n->s_baud, n->s_bits, n->s_stop, n->s_parity,
                 n->s_auto ? " auto" : "");
     if (n->bind_src) fprintf(out, " bind=%s%s", n->bind_src, n->bind_two ? "+two" : "");
+    if (n->action) fprintf(out, " action=%s", n->action);
     if (n->multi) fputs(" multi", out);
     if (n->check) fputs(" check", out);
     if (n->multiline) fputs(" multiline", out);
@@ -758,6 +816,20 @@ void cg_doc_dump(const cg_doc_t *doc, FILE *out)
     if (doc->info.product) fprintf(out, " product=\"%s\"", doc->info.product);
     if (doc->info.version) fprintf(out, " version=%s", doc->info.version);
     fputc('\n', out);
+    /* 动作表：菜单项的 action 引用只在行表里（dump 不展开 menus），
+     * 所以这里把动作本身列全，排查"名字拼错"时一眼能对上。 */
+    if (doc->nactions) {
+        fprintf(out, "actions %lu:\n", (unsigned long)doc->nactions);
+        for (size_t i = 0; i < doc->nactions; i++) {
+            const cg_action_t *a = &doc->actions[i];
+            fprintf(out, "  %s text=\"%s\" handler=%s", a->name ? a->name : "-",
+                    a->text ? a->text : "", a->handler ? a->handler : "-");
+            if (a->accel) fprintf(out, " accel=%s", a->accel);
+            if (a->checked) fputs(" checked", out);
+            if (!a->enabled) fputs(" disabled", out);
+            fputc('\n', out);
+        }
+    }
     if (doc->root) {
         for (size_t i = 0; i < doc->root->nchildren; i++) dump_node(doc->root->children[i], out, 1);
     }

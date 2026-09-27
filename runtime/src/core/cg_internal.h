@@ -43,10 +43,79 @@ typedef struct {
     int   cmd;
     char *text;
     char *id;       /* .cgui 里写的菜单项标识 */
+    /** 引用的动作名（.cgui 里菜单项的 action）；NULL = 不是动作项。
+     *  有它时：文字取动作的 text（非空时覆盖 text）、点击触发动作、
+     *  启用与勾选跟随动作。 */
+    char *action;
     int   checked;
     int   parent;   /* 父项下标，-1 = 顶层 */
     int   popup;    /* 1 = 有子项，是个下拉 */
 } cg_menu_row_t;
+
+/* ------------------------------------------------------------ 快捷键（accel）
+ * 解析放在 core（纯逻辑、能脱窗单测），**结果与平台无关** —— 这里只有「哪个键 +
+ * 什么修饰键」，映射成 Win32 的虚拟键码是后端的事（core 不许 include windows.h，
+ * check-layers.mjs 会拦）。
+ */
+
+#define CG_MOD_CTRL   1u
+#define CG_MOD_SHIFT  2u
+#define CG_MOD_ALT    4u
+
+/** 键：三组"基址 + 偏移" + 一批具名键。放在一个 int 里，后端 switch 映射。 */
+typedef enum {
+    CG_ACCEL_NONE = 0,
+    CG_ACCEL_A    = 1,     /* +0..25 = A..Z */
+    CG_ACCEL_0    = 100,   /* +0..9  = 0..9 */
+    CG_ACCEL_F1   = 200,   /* +0..23 = F1..F24 */
+    CG_ACCEL_ESC  = 300,
+    CG_ACCEL_ENTER,
+    CG_ACCEL_TAB,
+    CG_ACCEL_SPACE,
+    CG_ACCEL_BACK,      /* 退格 */
+    CG_ACCEL_DELETE,
+    CG_ACCEL_INSERT,
+    CG_ACCEL_HOME,
+    CG_ACCEL_END,
+    CG_ACCEL_PAGEUP,
+    CG_ACCEL_PAGEDOWN,
+    CG_ACCEL_LEFT,
+    CG_ACCEL_RIGHT,
+    CG_ACCEL_UP,
+    CG_ACCEL_DOWN
+} cg_accel_key_t;
+
+typedef struct {
+    int      key;    /* cg_accel_key_t（A/0/F1 是基址 + 偏移，见上） */
+    unsigned mods;   /* CG_MOD_* 的按位或 */
+} cg_accel_t;
+
+/** 解析快捷键文本：[Ctrl+][Shift+][Alt+]键（修饰键大小写不敏感、可任意顺序、重复算一次）。
+ *  接受的键：A-Z / 0-9 / F1-F24 / Esc / Enter / Tab / Space / Back / Delete / Insert /
+ *  Home / End / PageUp / PageDown / Left / Right / Up / Down。
+ *  **不接受无修饰键的单个字母或数字**（裸 S 会让用户没法往输入框里打 s）。
+ *  @return 1 = 解析成功并写出 out；0 = 语法/键名/组合不合法 */
+int cg_accel_parse(const char *accel, cg_accel_t *out);
+
+/** 规范化显示形式（修饰键顺序固定 Ctrl+Shift+Alt，如 "Ctrl+Shift+S"）。
+ *  @return 1 = 成功；0 = 解析不了（buf 写成空串） */
+int cg_accel_format(const char *accel, char *buf, size_t cap);
+
+/** 运行时的动作（.cgui 顶层 actions 的一项 + 运行期状态）。
+ *  字符串都是**自己持有一份**（不指向文档，避免文档生命周期耦合）；
+ *  accel 存规范化后的显示形式，没有快捷键时是空串。 */
+typedef struct {
+    char       *name;
+    char       *text;
+    char       *accel;     /* 规范化后的 "Ctrl+S"；"" = 无快捷键 */
+    char       *handler;
+    cg_event_fn fn;        /* 启动时解析好的回调；NULL = C 侧没登记（已记进 unresolved） */
+    int         enabled;
+    int         checked;
+    int         accel_ok;  /* accel 解析成功（false 且 accel 非空 = 启动时警告 + 自检报错） */
+    cg_accel_t  key;
+    int         accel_cmd; /* 加速键表的命令 id；0 = 没有快捷键 */
+} cg_action_row_t;
 
 /** 运行时控件：.cgui 节点 + 原生句柄 + 回调 + 状态 */
 struct cg_widget {
@@ -117,6 +186,13 @@ struct cg_widget {
     /* 控件绑定（cg_bind.c）：以谁为源；bind_two 时自己的变化也推回源 */
     char        *bind_src;
     int          bind_two;
+
+    /* 动作引用（.cgui 的 action）：点击交给它，文字与启用跟随它。
+     * NULL = 不是动作控件。运行时自己持有一份名字（动态控件没有文档节点）。 */
+    char        *action;
+    /** **窗口伪控件专用**：最近一次被激活的动作名（cg_action_name(self) 读它）。
+     *  与 menu_last_id 同一套路：回调签名固定，参数只能这样带出去。 */
+    char        *action_last;
 
     /* 表格增强：多选 / 勾选列 / 行数值 / 行图标 */
     int          multi;
@@ -194,6 +270,12 @@ struct cg_app {
     int          nbinds;
     /** bind.src 指向了不存在的控件：启动时警告，自检据此报错 */
     int          bad_binds;
+    /** 动作表（.cgui 顶层 actions；cg_action_build() 建，收尾时 cg_action_release()） */
+    cg_action_row_t *actions;
+    int          nactions;
+    /** 动作相关的三类问题计数：引用了不存在的动作名 / 该类型不支持 click 却写了
+     *  action / 有 action 又同时绑了 events.click。启动时警告，自检据此报错 */
+    int          bad_actions;
     /** close 回调里调 cg_cancel_close() 会把这里置 1，窗口就不关了 */
     int          close_cancel;
 
@@ -218,6 +300,23 @@ int cg_dispatch(cg_widget_t *w, cg_event_t ev);
 /** 菜单项被点中：记下是哪一项，再给对应控件派发 click。返回 1 表示处理了。
  *  menu 走 WM_COMMAND（lParam 为 0），menubutton 走 TrackPopupMenu 的返回值。 */
 int cg_dispatch_menu_cmd(cg_app_t *app, int cmd);
+
+/* -------------------------------------------------- 动作（core/cg_action.c）
+ * 命名命令：文字 + 快捷键 + 回调名；菜单项与控件按名字引用它，
+ * 于是同一个回调与同一份启用状态同时管住所有引用点。
+ * 用法与语义见 cstackgui.h 的「动作（actions）」一节。 */
+
+/** 按 .cgui 的 actions 建运行时动作表：查 handler、解析 accel、发加速键命令 id，
+ *  并校验所有引用点（动作名存在 / 该类型支持 click / 没同时绑 click）。
+ *  启动时调一次（在控件树建好之后 —— 校验要读控件的 action 引用）。 */
+void cg_action_build(cg_app_t *app);
+/** 释放动作表（收尾时调；幂等、NULL 安全）。 */
+void cg_action_release(cg_app_t *app);
+/** 按名字找动作下标；找不到返回 -1。 */
+int  cg_action_index(const cg_app_t *app, const char *name);
+/** 按**加速键的命令 id** 触发动作（TranslateAccelerator 发回来的 WM_COMMAND / WM_SYSCOMMAND）。
+ *  @return 1 = 命中了某个动作的快捷键并已处理；0 = 不是（调用方按菜单命令那条路走） */
+int  cg_action_invoke_cmd(cg_app_t *app, int cmd);
 
 /** 按 id 找到运行时控件；找不到返回 NULL */
 cg_widget_t *cg_widget_by_id(cg_app_t *app, const char *id);
@@ -302,6 +401,11 @@ int cg_exe_path(char *buf, size_t size);
  * hint / period 改完要动 tooltip 和 SetTimer，那些句柄只有后端知道。 */
 void cg_win_set_hint(cg_widget_t *w);
 void cg_win_restart_timer(cg_widget_t *w);
+/** 动作的启用/勾选变了：把结果同步到后端的**菜单项**（菜单项灰掉/打勾、
+ *  带动作的菜单项文字也在这里刷新）。控件那一半不走这里 —— cg_action_set_enabled
+ *  直接调 cg_widget_set_enabled，它自己的契约要求把两个 HWND 都覆盖。
+ *  无窗口时是空操作（自检/单测里就这么跑）。 */
+void cg_win_action_sync(cg_app_t *app, const char *name);
 /** 串口组件的到达轮询定时器（打开才转；同 timer 复用 ctrl_id 做 Win32 定时器 id） */
 void cg_win_restart_serial(cg_widget_t *w);
 
