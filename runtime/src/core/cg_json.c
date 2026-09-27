@@ -38,7 +38,11 @@ typedef struct {
     int         failed;
 } parser_t;
 
-/** @brief 按首字符分派解析任意 JSON 值；失败返回 NULL */
+/**
+ * @brief 按首字符分派解析任意 JSON 值；失败返回 NULL
+ * @param ps 解析游标
+ * @return cj_val_t* 新值节点（所有权归调用方）；失败返回 NULL
+ */
 static cj_val_t *parse_value(parser_t *ps);
 
 /**
@@ -387,7 +391,11 @@ static int lit(parser_t *ps, const char *word)
     return 0;
 }
 
-/** @brief 按首字符分派解析任意 JSON 值；失败返回 NULL */
+/**
+ * @brief 按首字符分派解析任意 JSON 值；失败返回 NULL
+ * @param ps 解析游标
+ * @return cj_val_t* 新值节点（所有权归调用方）；失败返回 NULL
+ */
 static cj_val_t *parse_value(parser_t *ps)
 {
     skip_ws(ps);
@@ -427,11 +435,27 @@ static cj_val_t *parse_value(parser_t *ps)
 
 /* ------------------------------------------------------------ 序列化（把解析后的对象重新变成字符串） */
 
+/**
+ * @brief 把 C 字符串整体逐字节追加到动态缓冲
+ * @param buf 动态缓冲指针的地址，扩容后被 realloc 结果更新
+ * @param len 当前已用字节数，追加后自增
+ * @param cap 缓冲容量指针
+ * @param s 以 '\0' 结尾的源字符串（不接管所有权）
+ * @return void 无返回值
+ */
 static void raw_append(char **buf, size_t *len, size_t *cap, const char *s)
 {
     while (*s) byte_append(buf, len, cap, (unsigned char)*s++);
 }
 
+/**
+ * @brief 把字符串值按 JSON 转义规则写进动态缓冲（含两端引号）
+ * @param v CJ_STR 值节点；str 为空按空串处理
+ * @param buf 动态缓冲指针的地址，扩容后被 realloc 结果更新
+ * @param len 当前已用字节数，追加后自增
+ * @param cap 缓冲容量指针
+ * @return void 无返回值
+ */
 static void emit_str(const cj_val_t *v, char **buf, size_t *len, size_t *cap)
 {
     static const char hexd[] = "0123456789abcdef";
@@ -455,6 +479,14 @@ static void emit_str(const cj_val_t *v, char **buf, size_t *len, size_t *cap)
     byte_append(buf, len, cap, '"');
 }
 
+/**
+ * @brief 按类型递归序列化一个值（v 为 NULL 时输出 null）
+ * @param v 待序列化的值节点，可传 NULL
+ * @param buf 动态缓冲指针的地址，扩容后被 realloc 结果更新
+ * @param len 当前已用字节数，追加后自增
+ * @param cap 缓冲容量指针
+ * @return void 无返回值
+ */
 static void emit_value(const cj_val_t *v, char **buf, size_t *len, size_t *cap)
 {
     char tmp[32];
@@ -490,6 +522,11 @@ static void emit_value(const cj_val_t *v, char **buf, size_t *len, size_t *cap)
     }
 }
 
+/**
+ * @brief 把值回序列化成紧凑 JSON 文本（无空白）
+ * @param v 待序列化的值节点，可传 NULL（输出 "null"）
+ * @return char * malloc 串，调用方 free；失败返回 NULL
+ */
 char *cj_print_unformatted(const cj_val_t *v)
 {
     char *buf = NULL; size_t len = 0, cap = 0;
