@@ -19,7 +19,7 @@ int cg_test_checks = 0;
 int cg_test_fails = 0;
 int cg_test_quiet = 0;
 
-#define CG_TEST_MAX_SUITES 64
+#define CG_TEST_MAX_SUITES 256
 
 typedef struct {
     const char *name;
@@ -29,6 +29,8 @@ typedef struct {
 static cg_test_suite_t s_suites[CG_TEST_MAX_SUITES];
 static int             s_suite_count = 0;
 static int             s_suite_fails = 0;
+/** 因为超出上限被丢掉的套件数（>0 就是**测试没跑**，必须让整轮失败） */
+static int             s_suite_dropped = 0;
 
 #ifdef CG_TEST_MEMCHECK
 /** 出现过"释放比分配多"就说明有没被拦到的分配源，泄漏判定不可信 */
@@ -42,7 +44,16 @@ static int s_mem_unreliable = 0;
  */
 void cg_test_register(const char *name, cg_test_fn fn)
 {
-    if (s_suite_count >= CG_TEST_MAX_SUITES) return;   /* 装不下就丢，不崩 */
+    /* **装不下必须说出来**。2026-09-27 撞过一次：新加的 7 个套件正好卡在原来的 64 上限上，
+     * 被静默丢掉，而报告仍是"64 个套件，0 处失败 / ALL PASS" —— 新增的测试根本没跑，
+     * 却看起来一切正常。这是测试框架最不该有的失效方式（"没跑"伪装成"通过"），
+     * 所以这里既报 stderr，也计入总数让**整轮失败**。 */
+    if (s_suite_count >= CG_TEST_MAX_SUITES) {
+        s_suite_dropped++;
+        fprintf(stderr, "[cstackgui 单测] 套件数超过上限 %d，被丢弃：%s\n",
+                CG_TEST_MAX_SUITES, name ? name : "?");
+        return;
+    }
     s_suites[s_suite_count].name = name;
     s_suites[s_suite_count].fn = fn;
     s_suite_count++;
@@ -239,6 +250,13 @@ int main(int argc, char **argv)
         printf("[memcheck] 注意：出现过「释放比分配多」，说明有未拦截的分配源，本次泄漏判定不完全可信\n");
     }
 #endif
+    /* 有套件被丢 = 有测试**根本没跑**：那是失败，不是通过（见 cg_test_register 的注释） */
+    if (s_suite_dropped > 0) {
+        printf("[fail] 有 %d 个套件因为超出上限 %d 没跑 —— 把 CG_TEST_MAX_SUITES 调大\n",
+               s_suite_dropped, CG_TEST_MAX_SUITES);
+        printf("== 单测 FAILED ==\n");
+        return 1;
+    }
     if (cg_test_fails > 0) {
         printf("== 单测 FAILED ==\n");
         return 1;
