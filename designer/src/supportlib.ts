@@ -908,6 +908,29 @@ cg_base_convert("FF", 16, 2, buf, (int)sizeof(buf));   /* -> "11111111" */`,
         ],
       },
       {
+        label: "协议（Modbus）",
+        cmds: [
+          c("cg_modbus_build_read", "拼读请求帧（Modbus）", "int cg_modbus_build_read(int tcp, int tid, int slave, int func, int start, int count, void *out, int out_size)",
+            "线圈 01 / 离散输入 02 / 保持寄存器 03 / 输入寄存器 04。**纯函数**：不碰串口网口、不持状态。tcp 传 CG_MODBUS_RTU(0) / CG_MODBUS_TCP(1)；RTU 会自动挂 CRC16（低字节在前），TCP 会带 MBAP 头（tid 是事务号，RTU 时忽略）。返回帧长度，参数非法或 out 放不下返回 -1", {
+              params: ["tcp / tid：封装方式与事务号", "slave：从站 0..255；start：起始地址 0..65535", "count：位类 1..2000、寄存器类 1..125（规范上限）"],
+              ret: "写入 out 的帧长度（RTU 8 / TCP 12）；-1 = 参数非法或放不下",
+              sample: `unsigned char frame[8];\nint n = cg_modbus_build_read(CG_MODBUS_RTU, 0, 0x01, 0x03, 0x0000, 10, frame, sizeof frame);\n/* n = 8，frame = 01 03 00 00 00 0A C5 CD */\ncg_serial_write(ser, frame, n);`,
+            }),
+          c("cg_modbus_build_write", "拼写请求帧（Modbus）", "int cg_modbus_build_write(int tcp, int tid, int slave, int func, int start, const unsigned short *vals, int nvalues, void *out, int out_size)",
+            "单线圈 05 / 单寄存器 06 / 多线圈 0F / 多寄存器 10。05/06 时 nvalues 必须为 1；0F/10 时 ≤ 123 个。**05 收 1/0 也认**（替你换成线上的 FF00/0000）。返回帧长度，参数非法返回 -1", {
+              params: ["vals：要写的值（05/0F 里 1 = 合、0 = 断）", "nvalues：个数"],
+              ret: "帧长度；-1 = 参数非法",
+              sample: `unsigned short vals[2] = { 0x0102, 0x0304 };\nunsigned char  frame[16];\nint n = cg_modbus_build_write(CG_MODBUS_RTU, 0, 0x01, 0x10, 0x0001, vals, 2, frame, sizeof frame);\n/* 01 10 00 01 00 02 04 01 02 03 04 + CRC */`,
+            }),
+          c("cg_modbus_parse", "解响应帧（Modbus）", "int cg_modbus_parse(int tcp, const void *frame, int len, cg_modbus_rsp_t *out)",
+            "读响应 / 写响应 / 异常响应都认，结果填进 cg_modbus_rsp_t（slave / func / exception / addr / nvalues / values）。**异常响应会替你剥掉 0x80**：out->func 给的是原功能码、out->exception 是异常码。RTU 会先校验 CRC", {
+              params: ["tcp：CG_MODBUS_RTU / CG_MODBUS_TCP", "out：cg_modbus_rsp_t（值最多 CG_MODBUS_MAX_VALUES = 125 个）"],
+              ret: "0 = 成功；-1 = 帧太短/参数非法；**-2 = CRC 不对**（线上数据坏了）；-3 = 格式不对（协议标识 / 长度 / 功能码 / 字节数对不上）",
+              sample: `cg_modbus_rsp_t r;\nint ret = cg_modbus_parse(CG_MODBUS_RTU, buf, n, &r);\nif (ret == -2)      cg_log(CG_LOG_ERROR, "帧 CRC 不对，线上数据坏了");\nelse if (ret != 0)  cg_log(CG_LOG_ERROR, "响应格式不对（%d）", ret);\nelse if (r.exception) cg_log(CG_LOG_ERROR, "从站报异常码 %d", r.exception);\nelse for (int i = 0; i < r.nvalues; i++) cg_log(CG_LOG_INFO, "寄存器 %d = %u", i, r.values[i]);`,
+            }),
+        ],
+      },
+      {
         label: "校验（CRC / 哈希）",
         cmds: [
           c("cg_crc32", "CRC32 校验值", "unsigned cg_crc32(const void *data, int len)",

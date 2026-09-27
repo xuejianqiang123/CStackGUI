@@ -328,6 +328,9 @@ runtime/
       cg_kit_bytes.c    字节操作：反转 / 切片 / 查找 / 按字节序读写 u16·u32（拼帧拆帧的基元）
       cg_kit_check.c    校验：CRC32（IEEE 802.3）/ CRC16-Modbus（逐位算不建表 ⇒ 线程安全）、
                         MD5 / SHA-1 / SHA-256 / SHA-512（手写，零新增链接依赖；含分块文件摘要）
+      cg_kit_modbus.c   Modbus 帧编解码（RTU / TCP）：拼读·写请求、解响应与异常帧
+                        （RTU 自动挂 CRC 并校验，异常响应替你剥 0x80）。
+                        **纯函数、不持状态、不碰 I/O** —— 连接 / 超时 / 重试仍归业务
       cg_kit_sys.c      剪贴板 / 外部程序 / 时间 / 注册表 /
                         系统信息（cg_env 环境变量、系统版本与位数、磁盘剩余、进程在不在）
       cg_kit_internal.h kit 层内部头：跨文件共用的三个助手（kit_w / kit_u8 / kit_lower）

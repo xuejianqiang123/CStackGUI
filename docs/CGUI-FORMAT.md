@@ -1208,6 +1208,14 @@ unsigned cg_crc32(const void *data, int len);   /* IEEE 802.3 / zlib；"12345678
 unsigned cg_crc16(const void *data, int len);   /* CRC16/Modbus；"123456789" = 0x4B37，挂帧尾低字节在前 */
 int      cg_crc32_file(const char *path, unsigned *out);   /* 1 = 成功 */
 
+/* Modbus 帧编解码（纯函数：不持状态、不碰 I/O；RTU 自动挂 CRC 并校验，TCP 带 MBAP 头） */
+int cg_modbus_build_read (int tcp, int tid, int slave, int func, int start, int count,
+                          void *out, int out_size);          /* 01/02/03/04；返回帧长，-1 = 参数非法 */
+int cg_modbus_build_write(int tcp, int tid, int slave, int func, int start,
+                          const unsigned short *vals, int nvalues, void *out, int out_size);
+int cg_modbus_parse(int tcp, const void *frame, int len, cg_modbus_rsp_t *out);
+                          /* 0 = 成功；-1 帧太短；-2 CRC 不对（线上坏了）；-3 格式不对。异常响应已替你剥 0x80 */
+
 /* 哈希（摘要）：手写实现；返回小写十六进制堆串，用完 cg_free */
 char *cg_hash(const void *data, int len, const char *algo);      /* md5 / sha1 / sha256 / sha512 */
 char *cg_hash_file(const char *path, const char *algo);          /* 分块读，核固件用 */
