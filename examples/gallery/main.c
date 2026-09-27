@@ -574,10 +574,11 @@ static void on_add_node(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_add_row
+ * @brief 往表格末尾追加一行（姓名 / 年龄 / 城市）并刷新状态栏
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
  */
 static void on_add_row(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -602,10 +603,11 @@ static void on_add_row(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_tab_change
- * @param self 触发事件的控件
+ * @brief 页内标签页切换时把当前页号与总页数写到状态栏
+ * @param self 该标签页控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_tab_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -616,10 +618,11 @@ static void on_tab_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_pages_change
- * @param self 触发事件的控件
+ * @brief 顶层标签页切换时把当前页号写到状态栏
+ * @param self 该标签页控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_pages_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -630,10 +633,11 @@ static void on_pages_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_table_select
- * @param self 触发事件的控件
+ * @brief 表格选中某行时把该行前两列写到状态栏
+ * @param self 表格控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_table_select(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -649,10 +653,11 @@ static void on_table_select(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_p1_click
+ * @brief 读取第一页输入框内容并写到状态栏，空则显示"（空）"
  * @param self 触发事件的控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_p1_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -665,10 +670,11 @@ static void on_p1_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_p1_change
- * @param self 触发事件的控件
+ * @brief 第一页输入框内容变化时把新内容写到状态栏
+ * @param self 该输入框控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_p1_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -679,10 +685,11 @@ static void on_p1_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_p2_check
- * @param self 触发事件的控件
+ * @brief 第二页复选框变化时把勾选 / 取消写到状态栏
+ * @param self 该复选框控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_p2_check(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -693,10 +700,11 @@ static void on_p2_check(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_tree_expand
- * @param self 触发事件的控件
+ * @brief 树节点展开时把节点文字与节点序号写到状态栏
+ * @param self 该树控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_tree_expand(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -710,10 +718,11 @@ static void on_tree_expand(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_tree_collapse
- * @param self 触发事件的控件
+ * @brief 树节点折叠时把节点文字写到状态栏
+ * @param self 该树控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_tree_collapse(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -725,10 +734,11 @@ static void on_tree_collapse(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_link_click
- * @param self 触发事件的控件
+ * @brief 链接文字被点击时把链接文字写到状态栏
+ * @param self 该链接控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_link_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -740,10 +750,11 @@ static void on_link_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_icon_click
- * @param self 触发事件的控件
+ * @brief 图标按钮被点击时把图标资源路径写到状态栏
+ * @param self 该图标按钮控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_icon_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -754,10 +765,11 @@ static void on_icon_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_cal_select
- * @param self 触发事件的控件
+ * @brief 月历选中日期后同步到日期控件，并把选中值写到状态栏
+ * @param self 该月历控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_cal_select(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -774,10 +786,12 @@ static void on_cal_select(cg_widget_t *self, cg_event_t ev, void *user)
 /* 窗口关闭前：有没保存的内容就拦一次。
  * 窗口自身也是个"控件"（id 是 __window），所以回调签名和别的事件一样。 */
 /**
- * @brief on_close
- * @param self 触发事件的控件
+ * @brief 窗口关闭前拦一次：富文本有未保存改动时取消本次关闭
+ * @param self 窗口控件
  * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 挂在控件上的业务数据
+ * @return void 无返回值
+ * @note 第一次关闭被拦下并提示，再点一次才真正退出
  */
 static void on_close(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -801,10 +815,12 @@ static void on_close(cg_widget_t *self, cg_event_t ev, void *user)
 
 /* 时钟：每秒把计数写回页内状态标签 */
 /**
- * @brief on_tick
- * @param self 触发事件的控件
- * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @brief 时钟每秒把累计秒数写回页内状态标签
+ * @param self 时钟控件
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
+ * @note 自检等无窗口场景不刷新界面
  */
 static void on_tick(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -818,10 +834,12 @@ static void on_tick(cg_widget_t *self, cg_event_t ev, void *user)
 
 /* 通用对话框：自检（无窗口）时什么都不做，避免弹窗卡住 CI */
 /**
- * @brief on_pick_file
+ * @brief 弹打开文件对话框，把所选路径写到页内状态标签
  * @param self 触发事件的控件
- * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
+ * @note 自检（无窗口）时什么都不做，避免弹窗卡住 CI
  */
 static void on_pick_file(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -838,10 +856,12 @@ static void on_pick_file(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_pick_save
+ * @brief 弹保存文件对话框，把所选路径写到页内状态标签
  * @param self 触发事件的控件
- * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
+ * @note 自检（无窗口）时什么都不做，避免弹窗卡住 CI
  */
 static void on_pick_save(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -857,10 +877,12 @@ static void on_pick_save(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_show_msg
+ * @brief 弹一个运行时消息框
  * @param self 触发事件的控件
- * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
+ * @note 自检（无窗口）时什么都不做，避免弹窗卡住 CI
  */
 static void on_show_msg(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -871,10 +893,12 @@ static void on_show_msg(cg_widget_t *self, cg_event_t ev, void *user)
 
 /* 颜色选择：value 就是 0xRRGGBB */
 /**
- * @brief on_color_change
- * @param self 触发事件的控件
- * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @brief 颜色选择变化时把 0xRRGGBB 拆成分量写到页内状态标签
+ * @param self 该颜色选择控件
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
+ * @note 控件的 value 就是 0xRRGGBB
  */
 static void on_color_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -884,10 +908,12 @@ static void on_color_change(cg_widget_t *self, cg_event_t ev, void *user)
 
 /* 表格：勾选 / 多选 / 行数值 */
 /**
- * @brief on_table_check
- * @param self 触发事件的控件
- * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @brief 表格某行勾选变化时把行号、勾选值与行数值写到页内状态标签
+ * @param self 该表格控件
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
+ * @note 没有选中行时按第 0 行处理
  */
 static void on_table_check(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -899,10 +925,12 @@ static void on_table_check(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_lab_table_select
- * @param self 触发事件的控件
- * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @brief 表格多选变化时把所有选中行第一列拼成串写到页内状态标签
+ * @param self 该表格控件
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
+ * @note 拼接缓冲固定 128 字节，超长会自动截断
  */
 static void on_lab_table_select(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -920,10 +948,11 @@ static void on_lab_table_select(cg_widget_t *self, cg_event_t ev, void *user)
 
 /* 画板：点一下画一个圆 */
 /**
- * @brief on_canvas_click
- * @param self 触发事件的控件
- * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @brief 画板被点击时画一个圆与一段说明文字
+ * @param self 该画板控件
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_canvas_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -934,10 +963,11 @@ static void on_canvas_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_rate_change
- * @param self 触发事件的控件
- * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @brief 评分变化时把当前分值与满分 5 写到页内状态标签
+ * @param self 该评分控件
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_rate_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -946,10 +976,11 @@ static void on_rate_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_page_change
- * @param self 触发事件的控件
- * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @brief 分页控件翻页时把页号（从 1 起）写到页内状态标签
+ * @param self 该分页控件
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_page_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -958,10 +989,11 @@ static void on_page_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_tag_click
- * @param self 触发事件的控件
- * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @brief 标签片被点击时往页内状态标签打一条提示
+ * @param self 该标签片控件
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_tag_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -970,10 +1002,11 @@ static void on_tag_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_switch_change
- * @param self 触发事件的控件
- * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @brief 卡片开关变化时把开 / 关状态写到页内状态标签
+ * @param self 该开关控件
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_switch_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -983,10 +1016,11 @@ static void on_switch_change(cg_widget_t *self, cg_event_t ev, void *user)
 
 /* 焦点事件：失焦时校验输入框 */
 /**
- * @brief on_focus
- * @param self 触发事件的控件
- * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @brief 输入框获得焦点时往页内状态标签打一条提示
+ * @param self 该输入框控件
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_focus(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -995,10 +1029,11 @@ static void on_focus(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_blur
- * @param self 触发事件的控件
- * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @brief 输入框失焦时把当前内容写到页内状态标签，空则显示"（空）"
+ * @param self 该输入框控件
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_blur(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -1008,10 +1043,11 @@ static void on_blur(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief on_submit
- * @param self 触发事件的控件
- * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @brief 提交时把输入框内容写到页内状态标签
+ * @param self 该输入框控件
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void on_submit(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -1024,7 +1060,8 @@ static void on_submit(cg_widget_t *self, cg_event_t ev, void *user)
 /**
  * @brief 页 0「基础闭环」的初始状态：挂业务数据、摆滑块初值、写启动日志
  * @param app 所属应用
- * @param biz 业务状态结构
+ * @param biz 业务状态结构，非空，等级字段在此被置为 40
+ * @return void 无返回值
  */
 static void hello_ready(cg_app_t *app, biz_t *biz)
 {
@@ -1046,9 +1083,10 @@ static void hello_ready(cg_app_t *app, biz_t *biz)
 }
 
 /**
- * @brief 页 1「控件陈列」的初始状态：挂业务数据、联动圆环、给树/表格补内容
+ * @brief 页 1「控件陈列」的初始状态：挂业务数据、联动圆环、给树 / 表格补内容
  * @param app 所属应用
- * @param biz 业务状态结构
+ * @param biz 业务状态结构，可为 NULL；非空时把开关置开、数量置 5
+ * @return void 无返回值
  */
 static void gallery_ready(cg_app_t *app, biz_t *biz)
 {
@@ -1095,7 +1133,8 @@ static void gallery_ready(cg_app_t *app, biz_t *biz)
 /**
  * @brief 页 2「新特性」的初始状态：给画板打底稿、给表格挂行数值与初始勾选
  * @param app 所属应用
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 就绪钩子的业务数据（本回调不用）
+ * @return void 无返回值
  */
 static void lab_ready(cg_app_t *app, void *user)
 {
@@ -1126,7 +1165,8 @@ static void lab_ready(cg_app_t *app, void *user)
 /**
  * @brief 界面就绪钩子：依次调三页的初始化
  * @param app 所属应用
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+ * @param user 就绪钩子的业务数据，作为三页共用的业务状态
+ * @return void 无返回值
  */
 static void on_ready(cg_app_t *app, void *user)
 {
@@ -1200,10 +1240,10 @@ static const cg_binding_t k_bindings[] = {
 /* ------------------------------------------------------------ 入口 */
 
 /**
- * @brief 程序入口：组装 cg_app_desc_t，按命令行参数走自检或正常运行
- * @param argc argc
- * @param argv argv
- * @return 进程退出码（0 正常）
+ * @brief 程序入口：组装应用描述，按命令行参数走自检或正常运行
+ * @param argc 命令行参数个数，大于 1 时才会解析开关
+ * @param argv 命令行参数数组，argv[1] 可为 --selftest、--trace 或 .cgui 路径
+ * @return int 进程退出码，0 表示正常结束
  */
 int main(int argc, char **argv)
 {

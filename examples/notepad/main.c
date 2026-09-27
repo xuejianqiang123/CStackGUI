@@ -35,6 +35,11 @@ typedef struct {
 static biz_t s_biz;
 
 /** @brief 把字符串当十进制整数读（不引 stdlib.h，业务代码只用 cg_ 与标准 C 字符串） */
+/**
+ * @brief 把字符串当十进制整数读（不引 stdlib.h，业务代码只用框架接口与标准 C 字符串）
+ * @param s 待解析的字符串，可有前导空白，读到第一个非数字就停；传 NULL 按空串处理
+ * @return int 解析出的十进制值，一个数字都没有时是 0
+ */
 static int to_int(const char *s)
 {
     int v = 0;
@@ -45,6 +50,11 @@ static int to_int(const char *s)
 }
 
 /** @brief 这段字节是不是合法 UTF-8（拿来判断"老 GBK 文件"） */
+/**
+ * @brief 这段字节是不是合法 UTF-8（拿来判断"老 GBK 文件"）
+ * @param s 待检查的字节串，以 '\0' 结尾，所有权不转移
+ * @return int 非 0 = 整串都是合法 UTF-8，0 = 出现非法序列（调用方按 GBK 处理）
+ */
 static int looks_like_utf8(const char *s)
 {
     const unsigned char *p = (const unsigned char *)s;
@@ -65,6 +75,13 @@ static int looks_like_utf8(const char *s)
 }
 
 /** @brief 统计字数（按 UTF-8 字符）与行数 */
+/**
+ * @brief 统计字数（按 UTF-8 字符）与行数
+ * @param t 要统计的文本，传 NULL 按空串处理
+ * @param chars 出参：写入字数，续字节不算一个字
+ * @param lines 出参：写入行数，空文本算 1 行
+ * @return void 无返回值
+ */
 static void count_text(const char *t, int *chars, int *lines)
 {
     const unsigned char *p = (const unsigned char *)(t ? t : "");
@@ -79,6 +96,11 @@ static void count_text(const char *t, int *chars, int *lines)
 }
 
 /** @brief 刷新标题与状态栏（任何改动之后都要调一次） */
+/**
+ * @brief 刷新标题与状态栏（任何改动之后都要调一次）
+ * @param app 应用
+ * @return void 无返回值
+ */
 static void refresh(cg_app_t *app)
 {
     cg_widget_t *sb = cg_find(app, "sb_main");
@@ -102,6 +124,12 @@ static void refresh(cg_app_t *app)
 }
 
 /** @brief 把内容写进文件 + 记住它（新建/打开/保存共用） */
+/**
+ * @brief 把编辑框内容写进文件并记住当前路径（保存 / 另存为共用）
+ * @param app 应用
+ * @param path 目标文件路径，写成功后它同时成为"当前文件"
+ * @return void 无返回值
+ */
 static void save_to(cg_app_t *app, const char *path)
 {
     cg_widget_t *edt = cg_find(app, "edt_body");
@@ -120,6 +148,12 @@ static void save_to(cg_app_t *app, const char *path)
 }
 
 /** @brief 读文件进编辑框（UTF-8 直接显示；看着像 GBK 就转一下） */
+/**
+ * @brief 读文件进编辑框（UTF-8 直接显示；看着像 GBK 就转一下）
+ * @param app 应用
+ * @param path 要读的文件路径，读成功后它成为"当前文件"
+ * @return void 无返回值
+ */
 static void open_path(cg_app_t *app, const char *path)
 {
     cg_widget_t *edt = cg_find(app, "edt_body");
@@ -148,6 +182,10 @@ static void open_path(cg_app_t *app, const char *path)
 }
 
 /** @brief 把窗口尺寸写进配置（只在真有尺寸、有配置文件时才写） */
+/**
+ * @brief 把窗口尺寸写进配置（只在真有尺寸、有配置文件时才写）
+ * @return void 无返回值
+ */
 static void save_win_size(void)
 {
     char *sw, *sh;
@@ -164,6 +202,13 @@ static void save_win_size(void)
 }
 
 /** @brief 问路径后保存（没有当前路径时才弹「另存为」） */
+/**
+ * @brief 问路径后保存：有当前路径就直接写盘，否则弹「另存为」
+ * @param app 应用
+ * @param self 通用对话框的 parent（主窗口伪控件）
+ * @param force_dialog 非 0 = 必弹「另存为」（另存为动作）；0 = 有当前路径就直接写
+ * @return void 无返回值
+ */
 static void save_ask(cg_app_t *app, cg_widget_t *self, int force_dialog)
 {
     char  path[1024];
@@ -182,6 +227,12 @@ static void save_ask(cg_app_t *app, cg_widget_t *self, int force_dialog)
 /* ------------------------------------------------------------ 事件回调 */
 
 /** @brief 启动钩子：恢复上次的文件与窗口大小（这些只在这里能做） */
+/**
+ * @brief 启动钩子：恢复上次的文件与窗口大小（这些只在这里能做）
+ * @param app 应用
+ * @param user 未使用
+ * @return void 无返回值
+ */
 static void on_ready(cg_app_t *app, void *user)
 {
     char *dir;
@@ -217,11 +268,12 @@ static void on_ready(cg_app_t *app, void *user)
 
 /**
  * @brief 菜单点击：分发「文件」菜单以外的菜单项
- * @details 「文件」菜单的新建/打开/保存/另存为已改成动作（actions），点击走动作回调，
- *          不在这里 —— 见下面的「动作回调」一节。
- * @param self 菜单控件（menu / menubutton 通用）
+ * @param self 菜单控件（菜单栏 / 菜单按钮通用）
  * @param ev 事件（总是 click）
  * @param user 未使用
+ * @return void 无返回值
+ * @details 「文件」菜单的新建 / 打开 / 保存 / 另存为已改成动作，点击走动作回调，
+ *          不在这里 —— 见下面的「动作回调」一节
  */
 static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -268,8 +320,9 @@ static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
 /**
  * @brief 内容变了：记脏标记 + 刷新字数
  * @param self 编辑框
- * @param ev change
+ * @param ev 事件（change）
  * @param user 未使用
+ * @return void 无返回值
  */
 static void on_body_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -282,8 +335,9 @@ static void on_body_change(cg_widget_t *self, cg_event_t ev, void *user)
 /**
  * @brief 窗口尺寸变了：先记在内存里（别在拖动中反复写盘）
  * @param self 窗口伪控件
- * @param ev size
+ * @param ev 事件（size）
  * @param user 未使用
+ * @return void 无返回值
  */
 static void on_window_size(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -296,8 +350,9 @@ static void on_window_size(cg_widget_t *self, cg_event_t ev, void *user)
 /**
  * @brief 关闭前：有未保存内容就拦一次，顺便把窗口尺寸存进配置
  * @param self 窗口伪控件
- * @param ev close
+ * @param ev 事件（close）
  * @param user 未使用
+ * @return void 无返回值
  */
 static void on_close(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -324,6 +379,7 @@ static void on_close(cg_widget_t *self, cg_event_t ev, void *user)
  * @param self 主窗口伪控件
  * @param ev 恒为 click
  * @param user 未使用
+ * @return void 无返回值
  */
 static void on_file_new(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -347,6 +403,7 @@ static void on_file_new(cg_widget_t *self, cg_event_t ev, void *user)
  * @param self 主窗口伪控件（可直接当通用对话框的 parent）
  * @param ev 恒为 click
  * @param user 未使用
+ * @return void 无返回值
  */
 static void on_file_open(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -363,11 +420,12 @@ static void on_file_open(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief 动作 save / save_as：**同一个 handler**，靠 cg_action_name() 区分是哪个动作
- * @details 保存 = 有当前路径就直接写盘；另存为 = 强制弹路径对话框。
+ * @brief 动作 save / save_as：**同一个 handler**，靠"最近激活的动作名"区分是哪个动作
  * @param self 主窗口伪控件
  * @param ev 恒为 click
  * @param user 未使用
+ * @return void 无返回值
+ * @details 保存 = 有当前路径就直接写盘；另存为 = 强制弹路径对话框
  */
 static void on_file_save(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -393,6 +451,12 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND_END
 };
 
+/**
+ * @brief 入口：登记绑定与 .cgui 路径后交给运行时
+ * @param argc 命令行参数个数
+ * @param argv 命令行参数数组：argv[1] 是 .cgui 路径，写 "--selftest" 则跑自检
+ * @return int 进程退出码：运行 / 自检的返回值，0 = 正常
+ */
 int main(int argc, char **argv)
 {
     cg_app_desc_t desc;

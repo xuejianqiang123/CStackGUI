@@ -71,9 +71,10 @@ static char s_sel[96];
 /**
  * @brief 往日志区写一行
  * @param app 应用
- * @param dir 方向：CG_TERM_RX 数据进来（绿）/ CG_TERM_TX 你的操作（蓝）/ CG_TERM_SYS 程序说明（灰）
+ * @param dir 方向：CG_TERM_RX 数据进来 / CG_TERM_TX 你的操作 / CG_TERM_SYS 程序说明
  * @param fmt printf 风格文字
- * @note 行首的 [时:分:秒] 是 terminal 自己按 .cgui 的 checked 加的，业务不用管时间戳。
+ * @return void 无返回值
+ * @note 行首的 [时:分:秒] 是终端控件按 .cgui 的 checked 自己加的，业务不用管时间戳
  */
 static void term_line(cg_app_t *app, int dir, const char *fmt, ...)
 {
@@ -91,6 +92,7 @@ static void term_line(cg_app_t *app, int dir, const char *fmt, ...)
 /**
  * @brief 把"数据规模 / 当前选中 / 心跳"三段刷到状态栏（本课唯一的结果出口）
  * @param app 应用
+ * @return void 无返回值
  */
 static void refresh_status(cg_app_t *app)
 {
@@ -107,6 +109,7 @@ static void refresh_status(cg_app_t *app)
 /**
  * @brief 记下"当前选中了什么"，状态栏第二段显示它
  * @param fmt printf 风格文字
+ * @return void 无返回值
  */
 static void note_sel(const char *fmt, ...)
 {
@@ -120,6 +123,13 @@ static void note_sel(const char *fmt, ...)
 /* ------------------------------------------------------------ tabs：装页面的容器 */
 
 /** @brief 切页签：四页分别是列表框 / 树 / 表格 / 图表，子控件按 .cgui 的 "page" 自动显隐 */
+/**
+ * @brief 切页签：四页分别是列表框 / 树 / 表格 / 图表，子控件按 .cgui 的 page 自动显隐
+ * @param self 标签页控件
+ * @param ev 事件类型（select）
+ * @param user 未使用
+ * @return void 无返回值
+ */
 static void on_tab_data_select(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t   *app  = cg_app_of(self);
@@ -136,6 +146,13 @@ static void on_tab_data_select(cg_widget_t *self, cg_event_t ev, void *user)
 /* ------------------------------------------------------------ 列表框 */
 
 /** @brief 选中项变了：cg_widget_value() = 选中第几项（0 起），没选中是 -1 */
+/**
+ * @brief 选中项变了：控件 value = 选中第几项（0 起），没选中是 -1
+ * @param self 列表框控件
+ * @param ev 事件类型（select）
+ * @param user 未使用
+ * @return void 无返回值
+ */
 static void on_lst_items_select(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t   *app  = cg_app_of(self);
@@ -150,6 +167,13 @@ static void on_lst_items_select(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /** @brief 「加一条」：cg_widget_list_addf() 直接带格式化，省掉 snprintf 再 add 一步 */
+/**
+ * @brief 「加一条」：带格式化的追加接口直接拼串，省掉先 snprintf 再 add 一步
+ * @param self 被点的按钮
+ * @param ev 事件类型（click）
+ * @param user 未使用
+ * @return void 无返回值
+ */
 static void on_btn_list_add_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app = cg_app_of(self);
@@ -164,6 +188,13 @@ static void on_btn_list_add_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /** @brief 「清空」：个数要先记下来，清完再问就是 0 了 */
+/**
+ * @brief 「清空」：个数要先记下来，清完再问就是 0 了
+ * @param self 被点的按钮
+ * @param ev 事件类型（click）
+ * @param user 未使用
+ * @return void 无返回值
+ */
 static void on_btn_list_clear_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app = cg_app_of(self);
@@ -181,6 +212,13 @@ static void on_btn_list_clear_click(cg_widget_t *self, cg_event_t ev, void *user
 /* ------------------------------------------------------------ 树 */
 
 /** @brief 树上选中了某个节点：cg_tree_selected() = 节点下标，文字用 cg_tree_selected_text() */
+/**
+ * @brief 树上选中了某个节点：取选中下标，文字用取选中节点文字的接口
+ * @param self 树控件
+ * @param ev 事件类型（select）
+ * @param user 未使用
+ * @return void 无返回值
+ */
 static void on_tre_dir_select(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t   *app  = cg_app_of(self);
@@ -196,6 +234,13 @@ static void on_tre_dir_select(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /** @brief 节点被展开：运行时会把"被操作的节点"设成当前选中，所以这里问得到是哪一个 */
+/**
+ * @brief 节点被展开：运行时会把"被操作的节点"设成当前选中，所以这里问得到是哪一个
+ * @param self 树控件
+ * @param ev 事件类型（expand）
+ * @param user 未使用
+ * @return void 无返回值
+ */
 static void on_tre_dir_expand(cg_widget_t *self, cg_event_t ev, void *user)
 {
     const char *text = cg_tree_selected_text(self);
@@ -207,6 +252,13 @@ static void on_tre_dir_expand(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /** @brief 节点被折叠：展开与折叠是两个事件，写成两个回调对照着看更清楚 */
+/**
+ * @brief 节点被折叠：展开与折叠是两个事件，写成两个回调对照着看更清楚
+ * @param self 树控件
+ * @param ev 事件类型（collapse）
+ * @param user 未使用
+ * @return void 无返回值
+ */
 static void on_tre_dir_collapse(cg_widget_t *self, cg_event_t ev, void *user)
 {
     const char *text = cg_tree_selected_text(self);
@@ -218,6 +270,13 @@ static void on_tre_dir_collapse(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /** @brief 「加节点」：parent 传当前选中节点，没选中时 cg_tree_selected() 正好是 -1 = 加在根上 */
+/**
+ * @brief 「加节点」：父节点传当前选中节点，没选中时取到的正好是 -1 = 加在根上
+ * @param self 被点的按钮
+ * @param ev 事件类型（click）
+ * @param user 未使用
+ * @return void 无返回值
+ */
 static void on_btn_tree_add_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app    = cg_app_of(self);
@@ -233,6 +292,13 @@ static void on_btn_tree_add_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /** @brief 「全展开」：cg_tree_expand(树, 节点下标, 1)，节点下标从 0 数到 count-1 */
+/**
+ * @brief 「全展开」：逐个节点调展开接口，节点下标从 0 数到个数减一
+ * @param self 被点的按钮
+ * @param ev 事件类型（click）
+ * @param user 未使用
+ * @return void 无返回值
+ */
 static void on_btn_tree_all_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app = cg_app_of(self);
@@ -250,6 +316,13 @@ static void on_btn_tree_all_click(cg_widget_t *self, cg_event_t ev, void *user)
 /* ------------------------------------------------------------ 表格 */
 
 /** @brief 表格选中行变了：cg_table_selected() = 行号，单元格用 cg_table_cell(row, col) */
+/**
+ * @brief 表格选中行变了：取选中行号，单元格用取单元格的接口
+ * @param self 表格控件
+ * @param ev 事件类型（select）
+ * @param user 未使用
+ * @return void 无返回值
+ */
 static void on_tbl_data_select(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t   *app  = cg_app_of(self);
@@ -274,6 +347,13 @@ static void on_tbl_data_select(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /** @brief 勾选列的行状态变了（.cgui 里 table 要开 check） */
+/**
+ * @brief 勾选列的行状态变了（.cgui 里 table 要开 check）
+ * @param self 表格控件
+ * @param ev 事件类型（check）
+ * @param user 未使用
+ * @return void 无返回值
+ */
 static void on_tbl_data_check(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t *app = cg_app_of(self);
@@ -295,6 +375,13 @@ static void on_tbl_data_check(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /** @brief 「加一行」：cells 的顺序 = 列的顺序，不足的列运行时按空串补齐 */
+/**
+ * @brief 「加一行」：单元格数组的顺序 = 列的顺序，不足的列运行时按空串补齐
+ * @param self 被点的按钮
+ * @param ev 事件类型（click）
+ * @param user 未使用
+ * @return void 无返回值
+ */
 static void on_btn_row_add_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app = cg_app_of(self);
@@ -314,6 +401,13 @@ static void on_btn_row_add_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /** @brief 「清空」表格：cg_table_clear() 只清行，列头还在 */
+/**
+ * @brief 「清空」表格：只清行，列头还在
+ * @param self 被点的按钮
+ * @param ev 事件类型（click）
+ * @param user 未使用
+ * @return void 无返回值
+ */
 static void on_btn_row_clear_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app = cg_app_of(self);
@@ -333,9 +427,10 @@ static void on_btn_row_clear_click(cg_widget_t *self, cg_event_t ev, void *user)
 /**
  * @brief 分隔条松手（拖完才发一次 release，拖动中不发，免得刷屏）
  * @param self 分隔条
- * @param ev release
+ * @param ev 事件类型（release）
  * @param user 未使用
- * @note 真实程序会在这里把位置记进 INI，下次启动用 cg_splitter_set() 恢复。
+ * @return void 无返回值
+ * @note 真实程序会在这里把位置记进 INI，下次启动用设置接口恢复
  */
 static void on_sp_main_release(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -348,6 +443,13 @@ static void on_sp_main_release(cg_widget_t *self, cg_event_t ev, void *user)
 /* ------------------------------------------------------------ 日志区（terminal） */
 
 /** @brief 「清空日志」：cg_term_clear() 清屏，然后自己再写一行"清完了" */
+/**
+ * @brief 「清空日志」：先清屏，然后自己再写一行"清完了"
+ * @param self 被点的按钮
+ * @param ev 事件类型（click）
+ * @param user 未使用
+ * @return void 无返回值
+ */
 static void on_btn_log_clear_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app  = cg_app_of(self);
@@ -361,12 +463,13 @@ static void on_btn_log_clear_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief 「保存日志」：cg_term_save() 存成 UTF-8 + CRLF 的文本文件
+ * @brief 「保存日志」：存成 UTF-8 + CRLF 的文本文件
  * @param self 被点的按钮
- * @param ev click
+ * @param ev 事件类型（click）
  * @param user 未使用
- * @note 弹框前先问 cg_app_has_window()：--selftest 不开窗，弹框会把 CI 卡住；
- *       所以自检时改写用户数据目录，保证这条路径也被跑到。
+ * @return void 无返回值
+ * @note 弹框前先问有没有窗口：--selftest 不开窗，弹框会把 CI 卡住；
+ *       所以自检时改写用户数据目录，保证这条路径也被跑到
  */
 static void on_btn_log_save_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -403,12 +506,12 @@ static void on_btn_log_save_click(cg_widget_t *self, cg_event_t ev, void *user)
 /**
  * @brief 「导出」（本课的禁用态示范）
  * @param self 按钮
- * @param ev click
+ * @param ev 事件类型（click）
  * @param user 未使用
- * @note .cgui 里写了 "enabled": false —— 皮肤（runtime/src/skin/cg_skin.c）按 ODS_DISABLED 把它画成
- *       灰底灰字（fill 0xECECEE / text 0x9A9A9E），点不动，这个回调一次也不会来。
- *       但它**照样要登记**在 k_bindings 里：--selftest 会合成事件并检查"有没登记"，
- *       没登记就报"未登记 1 个"并以非 0 退出。
+ * @return void 无返回值
+ * @note .cgui 里写了 "enabled": false —— 皮肤按禁用态把它画成灰底灰字，点不动，这个回调一次也不会来。
+ *       但它**照样要登记**在绑定表里：--selftest 会合成事件并检查"有没登记"，
+ *       没登记就报"未登记 1 个"并以非 0 退出
  */
 static void on_btn_export_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -421,9 +524,10 @@ static void on_btn_export_click(cg_widget_t *self, cg_event_t ev, void *user)
 
 /**
  * @brief 时钟每拍（.cgui 里 period: 1000）：这就是"数据自己会刷新"
- * @param self 时钟控件（timer 没有窗口，但回调的 self 就是它）
- * @param ev tick
+ * @param self 时钟控件（时钟没有窗口，但回调的 self 就是它）
+ * @param ev 事件类型（tick）
  * @param user 未使用
+ * @return void 无返回值
  */
 static void on_tmr_beat_tick(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -453,8 +557,9 @@ static void on_tmr_beat_tick(cg_widget_t *self, cg_event_t ev, void *user)
 /**
  * @brief 界面建好：先给两个图表灌一段历史数据，再写两行开场白
  * @param app 应用
- * @param user desc.ready_user，本课没用
- * @note 图表刚建好是空的；value/items 改了会重建点缓冲（已有点会丢），所以先摆好参数再 push。
+ * @param user 就绪钩子的业务数据，本课没用
+ * @return void 无返回值
+ * @note 图表刚建好是空的；value / items 改了会重建点缓冲（已有点会丢），所以先摆好参数再灌数据
  */
 static void on_ready(cg_app_t *app, void *user)
 {
@@ -496,6 +601,12 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND_END
 };
 
+/**
+ * @brief 入口：登记绑定与 .cgui 路径后交给运行时
+ * @param argc 命令行参数个数
+ * @param argv 命令行参数数组：argv[1] 是 .cgui 路径，写 "--selftest" 则跑自检
+ * @return int 进程退出码：运行 / 自检的返回值，0 = 正常
+ */
 int main(int argc, char **argv)
 {
     cg_app_desc_t desc;
