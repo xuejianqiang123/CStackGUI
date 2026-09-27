@@ -698,6 +698,12 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 "app": { "title": "...", "events": { "ready": "on_ready", "close": "on_close", "tray": "on_tray" } }
 ```
 
+> **注意 `ready` 的时机**（2026-09-27 实测）：`app.events.ready` 比「窗口第一次收到 `WM_SIZE`」**更早** ——
+> 在它里面调 `cg_win_set_size()` / `cg_win_set_pos()` **不生效**（随后创建流程会把尺寸定回去）。
+> 要在启动时恢复上次的窗口尺寸，用 `cg_app_desc_t.on_ready` **钩子**（`desc.on_ready = 函数`）：
+> 它在第一次 `WM_SIZE` **之后**才触发，在那里改窗口尺寸是生效的（`examples\serialterm` 用的就是这个钩子）。
+> 两种写法都跑过：同一份探针里先打出 `ready`、再打出第一次 `size`，钩子的输出夹在它们之后 —— 顺序就是证据。
+
 窗口支持的事件（对齐「启动窗口」的事件表）：
 
 | 事件 | 什么时候发 |
