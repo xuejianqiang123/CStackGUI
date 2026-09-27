@@ -242,7 +242,25 @@ static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 ```
 
-菜单项在运行时是**只读**的：v1 没有「运行时增删菜单项」的 API（`cg_menu_count()` 只用来查个数）。
+菜单项在 `.cgui` 里是**声明式**的；运行时也可以改（`cg_menu_*` 一组），定位一律用项 id，顶层用 `NULL`：
+
+| 调用 | 作用 |
+| --- | --- |
+| `cg_menu_add_item(w, parent_id, pos, text, id)` | 往某个下拉里加一项（`parent_id` = 那个下拉**自己的 id**）；传 `NULL` = 加在顶层。`pos = -1` 或越界 = 追加。`text = "-"` = 分隔线。返回新项下标 / 失败 `-1` |
+| `cg_menu_remove_item(w, id)` | 删掉那一项**连同它的子树**；返回删掉的行数 / 失败 `-1` |
+| `cg_menu_clear_items(w, parent_id)` | 清空某个下拉里的项（**下拉自身保留**）；`parent_id` 传 `NULL` = 清空整个菜单 |
+| `cg_menu_set_item_text` / `_enabled` / `_checked` `(w, id, …)` | 改那一项的文字 / 可用 / 勾选 |
+
+三条要知道的边界：
+
+1. **往某个下拉里加项，那个下拉必须先在 `.cgui` 里有 id** —— 菜单项 DSL 写成 `文件 | menu_file` 即可
+   （顶层加项用 `NULL`，不需要 id）；
+2. 运行时新增的项**不支持引用动作**：要快捷键就在 `.cgui` 里写固定项，动态项用 `cg_menu_last_id()` 分发；
+3. 改的是**内存里的菜单，不写回 `.cgui`**（重开界面回到文件里那份）—— `.cgui` 是设计期产物，
+   运行时状态（当前端口、最近打开的文件表）本来也不该写进去。
+
+对**动作项**调 `set_item_text / _enabled / _checked` **不生效**（那三项归动作管，用 `cg_action_set_*`），
+只记一条 WARN。`menubutton` 的弹出菜单每次点击现场重建，所以上面这些改完**天然就是最新的**，不需要额外动作。
 
 ### 2.8 `bind`：控件绑定
 
@@ -859,6 +877,16 @@ void cg_canvas_text(cg_widget_t *w, int x, int y, const char *text);
 const char *cg_menu_last_id(const cg_widget_t *w);
 const char *cg_menu_last_text(const cg_widget_t *w);
 int         cg_menu_count(const cg_widget_t *w);   /* 可点项个数，不含分隔线与下拉项 */
+
+/* 菜单：运行时增删改（见 2.7）。定位一律用项 id，顶层用 NULL。
+ * 新增的项不支持引用动作；改的是内存里的菜单，不写回 .cgui。 */
+int  cg_menu_add_item(cg_widget_t *w, const char *parent_id, int pos,
+                      const char *text, const char *id);   /* 返回新项下标；失败 -1 */
+int  cg_menu_remove_item(cg_widget_t *w, const char *id);  /* 返回删掉的行数（含子树） */
+int  cg_menu_clear_items(cg_widget_t *w, const char *parent_id);
+void cg_menu_set_item_text(cg_widget_t *w, const char *id, const char *text);
+void cg_menu_set_item_enabled(cg_widget_t *w, const char *id, int enabled);
+void cg_menu_set_item_checked(cg_widget_t *w, const char *id, int checked);
 
 /* 日期时间 / 月历 / 富文本 / 工具栏 都不需要专门 API：
  * 值就是 cg_widget_text()，工具栏选中项就是 cg_widget_value() */
