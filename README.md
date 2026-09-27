@@ -94,6 +94,10 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
 - `examples\serialterm\` / `examples\netterm\` / `examples\darkterm\` —— **接上真实链路与主题三个**：
   串口助手、网络调试助手，以及**深色主题示例**（`app.dark` + 命名样式 + 一个**运行时切换主题**的按钮）。
   前两个讲"链路上怎么收怎么发"，第三个讲"要为深色写哪套配色、哪些只能自己写死"。
+  `serialterm` 功能上**对标 XCOM**（16 进制显示 / 时间戳 / 自动保存 / 定时发送 / 多条发送 / 文件收发），
+  另外用 `cg_frame_*` 做了 XCOM 没有的**按帧显示**（每帧长度 + CRC16 结论）；
+  不抄它的私有 IAP「协议传输」——通用件是 `cg_crc16` + `cg_modbus_*`。
+  自测不需要硬件：`serialterm.exe --demo`（灌合成字节，结论打到 stdout）。
 - `examples\modbus\` —— **工控向样板（Modbus/TCP 上位机）**：`cg_modbus_*` 拼请求帧 / 解响应帧，
   `cg_net_*` 收发，切帧交给 **`cg_frame_*`**（长度字段模式；串口上的 Modbus/RTU 换成
   `CG_FRAME_SILENCE` 即可），异常响应翻成人话，等回应超时报一句 —— 顺带带了 `mock-slave.mjs`
@@ -389,7 +393,7 @@ CStackGUI\
     教学使用说明.md             六课路线图 + 每课详解 + 通用知识（学这套示例先读它）
     gallery\                   控件陈列室·三合一（gallery.cgui / main.c / assets\ / 产物）
     notepad\                   真实小工具范例：记事本（菜单/文件/配置/cg_kit 全套）
-    serialterm\                串口助手（串口组件 + 终端/编辑框日志 + 分隔条 + HEX 发送）
+    serialterm\                串口助手（对标 XCOM：终端日志 + hex/时间戳/按帧 + 定时/多条发送 + 文件收发）
     netterm\                   网络调试助手（TCP/UDP + 终端日志 + 角色切换）
     darkterm\                  深色主题示例（app.dark + 命名样式 + 运行时切换主题）
     modbus\                    Modbus/TCP 上位机（cg_modbus_* 拼帧解帧 + cg_frame_* 切帧 + mock-slave.mjs 模拟从站）
