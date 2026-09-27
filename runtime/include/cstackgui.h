@@ -350,9 +350,20 @@ void cg_win_set_icon(cg_app_t *app, const char *ico_path);
  * **不跟随**的是系统经典控件（标签页 / 下拉列表 / 月历 / 日期选择 / 状态栏 / 工具栏 /
  * 滚动条箭头）：它们的主题由系统内部绘制，没有公开接口能改 —— 要一致只能全部重画。
  */
-/** 运行时切换：on=1 深色、0 浅色。返回 1 = 成功 */
+/**
+ * @brief 运行时切换深色 / 浅色
+ * @param app 应用
+ * @param on 1 深色、0 浅色
+ * @return int 1 成功、0 失败
+ * @note 只改**默认色**：控件自己写了 fg/bg 的一律以自己为准
+ */
 int cg_theme_set_dark(cg_app_t *app, int on);
-/** 现在是深色吗（`--selftest` 没有窗口也答得出） */
+/**
+ * @brief 现在是不是深色
+ * @param app 应用
+ * @return int 1 深色、0 浅色
+ * @note `--selftest` 没有窗口也答得出
+ */
 int cg_theme_is_dark(const cg_app_t *app);
 
 /* ---- 截图（工单取证 / 文档配图） ----
@@ -926,9 +937,24 @@ const char *cg_widget_image(const cg_widget_t *w);
  *
  * 菜单项在 .cgui 里写 id；没写 id 的项只能用 cg_menu_last_text() 按文字判断。
  */
+/**
+ * @brief 取最近点中的那个菜单项的 id
+ * @param w menu / menubutton 控件
+ * @return const char* 控件内部的字符串，别 free；项没写 id 或还没点过返回 NULL
+ */
 const char *cg_menu_last_id(const cg_widget_t *w);
+/**
+ * @brief 取最近点中的那个菜单项的文字
+ * @param w menu / menubutton 控件
+ * @return const char* 控件内部的字符串，别 free；还没点过返回 NULL
+ * @note 没写 id 的项只能按文字判断
+ */
 const char *cg_menu_last_text(const cg_widget_t *w);
-/** 菜单里有多少个可点的项（不含分隔线和顶级弹出项），调试用 */
+/**
+ * @brief 数菜单里有多少个可点的项
+ * @param w menu / menubutton 控件
+ * @return int 项数，不含分隔线与顶级弹出项；调试用
+ */
 int         cg_menu_count(const cg_widget_t *w);
 
 /* ---- 运行时改菜单（v1：纯菜单项）
@@ -944,12 +970,54 @@ int         cg_menu_count(const cg_widget_t *w);
  *
  * 逐字语义（pos / "-" 分隔线 / 返回值 / 索引平移）见 docs/CGUI-FORMAT.md 第 2.7 节。
  */
+/**
+ * @brief 往菜单里插一项
+ * @param w menu / menubutton 控件
+ * @param parent_id 父项 id；NULL 或 "" 表示插在顶层
+ * @param pos 插在父项的第几个位置（0 起）；越界按末尾算
+ * @param text 项文字；写 "-" 就是分隔线
+ * @param id 项标识（回调里用 cg_menu_last_id 认它）；可传 NULL
+ * @return int 新项在行表里的下标；失败返回 -1
+ */
 int  cg_menu_add_item(cg_widget_t *w, const char *parent_id, int pos,
-                      const char *text, const char *id);   /* 返回新项在行表里的下标；失败 -1 */
-int  cg_menu_remove_item(cg_widget_t *w, const char *id);  /* 返回删掉的行数（含子树）；失败 -1 */
-int  cg_menu_clear_items(cg_widget_t *w, const char *parent_id); /* 同上；下拉项自身保留 */
+                      const char *text, const char *id);
+/**
+ * @brief 按 id 删掉一个菜单项（连同它的整棵子树）
+ * @param w menu / menubutton 控件
+ * @param id 要删的项 id
+ * @return int 删掉的行数（含子树）；失败返回 -1
+ */
+int  cg_menu_remove_item(cg_widget_t *w, const char *id);
+/**
+ * @brief 清空某个下拉里的全部项（下拉项自身保留）
+ * @param w menu / menubutton 控件
+ * @param parent_id 下拉项的 id；NULL 或 "" 表示顶层
+ * @return int 删掉的行数（含子树）；失败返回 -1
+ */
+int  cg_menu_clear_items(cg_widget_t *w, const char *parent_id);
+/**
+ * @brief 改某个菜单项的文字
+ * @param w menu / menubutton 控件
+ * @param id 项 id
+ * @param text 新文字，函数内部拷贝
+ * @return void 无返回值（对**动作项**不生效，只记一条 WARN）
+ */
 void cg_menu_set_item_text(cg_widget_t *w, const char *id, const char *text);
+/**
+ * @brief 灰掉 / 恢复某个菜单项
+ * @param w menu / menubutton 控件
+ * @param id 项 id
+ * @param enabled 1 可用、0 灰掉
+ * @return void 无返回值（对**动作项**不生效 —— 那归动作管，只记一条 WARN）
+ */
 void cg_menu_set_item_enabled(cg_widget_t *w, const char *id, int enabled);
+/**
+ * @brief 给某个菜单项打勾 / 去掉勾
+ * @param w menu / menubutton 控件
+ * @param id 项 id
+ * @param checked 1 打勾、0 去掉
+ * @return void 无返回值（对**动作项**不生效 —— 那归动作管，只记一条 WARN）
+ */
 void cg_menu_set_item_checked(cg_widget_t *w, const char *id, int checked);
 
 /* ------------------------------------------------------------ 动作（actions）
@@ -1776,18 +1844,68 @@ void cg_message_box(cg_widget_t *parent, const char *text, const char *title, in
  * canvas 控件上用代码绘制。坐标系是控件内左上角 (0,0)，
  * x 向右 y 向下；控件重绘（被盖住再露出来、改大小）时按记录重画。
  */
+/**
+ * @brief 清掉画板上的全部图形（连带绘制记录）
+ * @param w canvas 控件
+ * @return void 无返回值
+ */
 void cg_canvas_clear(cg_widget_t *w);
-/** 后续图形的颜色与线宽（0xRRGGBB） */
+/**
+ * @brief 定下后续图形的颜色
+ * @param w canvas 控件
+ * @param rgb 0xRRGGBB，或 CG_RGB(r,g,b)
+ * @return void 无返回值（对之后画的图形生效，已画的不动）
+ */
 void cg_canvas_set_color(cg_widget_t *w, unsigned rgb);
+/**
+ * @brief 定下后续图形的线宽
+ * @param w canvas 控件
+ * @param px 线宽（逻辑像素）
+ * @return void 无返回值（对之后画的图形生效）
+ */
 void cg_canvas_set_line_width(cg_widget_t *w, int px);
+/**
+ * @brief 画一条直线（用当前颜色与线宽）
+ * @param w canvas 控件
+ * @param x1 起点 x；y1 起点 y；x2 终点 x；y2 终点 y（控件内坐标，逻辑像素）
+ * @return void 无返回值
+ */
 void cg_canvas_line(cg_widget_t *w, int x1, int y1, int x2, int y2);
-/** fill=0 描边，1 实心 */
+/**
+ * @brief 画一个矩形
+ * @param w canvas 控件
+ * @param x 左上角 x；y 左上角 y
+ * @param wd 宽；ht 高
+ * @param fill 0 只描边、非 0 实心
+ * @return void 无返回值
+ */
 void cg_canvas_rect(cg_widget_t *w, int x, int y, int wd, int ht, int fill);
+/**
+ * @brief 画一个椭圆（矩形内切）
+ * @param w canvas 控件
+ * @param x 外接矩形左上角 x；y 外接矩形左上角 y
+ * @param wd 外接矩形宽；ht 外接矩形高
+ * @param fill 0 只描边、非 0 实心
+ * @return void 无返回值
+ */
 void cg_canvas_ellipse(cg_widget_t *w, int x, int y, int wd, int ht, int fill);
+/**
+ * @brief 在画板上写一段文字
+ * @param w canvas 控件
+ * @param x 文字左上角 x；y 文字左上角 y
+ * @param text UTF-8 文字，函数内部拷贝
+ * @return void 无返回值
+ */
 void cg_canvas_text(cg_widget_t *w, int x, int y, const char *text);
 
 /* ------------------------------------------------------------ 网页浏览 */
-/** 让 browser 控件打开一个地址（http/https/本地文件路径均可）；实验性功能 */
+/**
+ * @brief 让 browser 控件打开一个地址
+ * @param w browser 控件
+ * @param url 网址或本地文件路径（http / https / file 均可）
+ * @return void 无返回值
+ * @note 实验性功能（宿主是系统的 WebBrowser 控件）
+ */
 void cg_browser_navigate(cg_widget_t *w, const char *url);
 
 /* ------------------------------------------------------------ 日志
@@ -1799,9 +1917,18 @@ void cg_browser_navigate(cg_widget_t *w, const char *url);
 #define CG_LOG_WARN  1
 #define CG_LOG_ERROR 2
 
-/** 写一条日志（printf 风格）。始终镜像到 stderr，并追加到日志文件。 */
+/**
+ * @brief 写一条日志（printf 风格）
+ * @param level 等级，CG_LOG_INFO / CG_LOG_WARN / CG_LOG_ERROR
+ * @param fmt printf 风格格式串
+ * @return void 无返回值（始终镜像到 stderr，并追加到日志文件）
+ */
 void cg_log(int level, const char *fmt, ...);
-/** 只记 >= level 的条目（默认 CG_LOG_INFO）。 */
+/**
+ * @brief 设日志文件的过滤等级
+ * @param level 只记 >= 它的条目
+ * @return void 无返回值（默认 CG_LOG_INFO）
+ */
 void cg_log_set_level(int level);
 
 /* ------------------------------------------------------------ 基础能力（cg_kit）
@@ -1810,42 +1937,106 @@ void cg_log_set_level(int level);
  * 这样业务代码不必 include windows.h / stdlib.h，仍然只认本头文件。
  */
 
-/** 释放上面这些函数返回的堆内存（等价 free()，省得业务代码去 include stdlib.h） */
+/**
+ * @brief 释放上面这些函数返回的堆内存（等价 free()）
+ * @param p 堆指针；NULL 安全
+ * @return void 无返回值
+ * @note 省得业务代码去 include stdlib.h
+ */
 void cg_free(void *p);
 
 /* ---- 文件 ---- */
-/** 文件是否存在（目录不算） */
+/**
+ * @brief 文件是否存在（目录不算）
+ * @param path 路径（UTF-8）
+ * @return int 1 存在、0 不存在或路径上是个目录
+ */
 int   cg_file_exists(const char *path);
-/** 读整个文件成字符串（去掉 UTF-8 BOM；二进制文件也是原样返回）；失败 NULL
- *  @warning **含 0x00 的二进制不要用它读** —— 它返回的是字符串，`strlen` 会在第一个 0
- *           处截断。固件/镜像/抓包请用下面的 cg_file_read_bytes。 */
+/**
+ * @brief 读整个文件成字符串（去掉 UTF-8 BOM）
+ * @param path 路径（UTF-8）
+ * @return char * 堆串，用完 cg_free；失败返回 NULL
+ * @warning **含 0x00 的二进制不要用它读** —— 它返回的是字符串，`strlen` 会在第一个 0
+ *          处截断。固件/镜像/抓包请用下面的 cg_file_read_bytes
+ */
 char *cg_file_read(const char *path);
 
-/** 读整个**二进制**文件：返回堆缓冲（用完 cg_free）并把长度写进 *out_len（可传 NULL）。
- *  @return unsigned char* 内容 —— **0 字节文件也返回非 NULL**（靠这个区分"空文件"与"打不开"）；
- *          失败返回 NULL 且 *out_len 不动。**不去 BOM**：二进制一个字节都不许动。
- *  @note 长度出口是 int，超过 2GB 的文件会报失败（记一条日志）。 */
+/**
+ * @brief 读整个**二进制**文件
+ * @param path 路径（UTF-8）
+ * @param out_len 长度出口，可传 NULL；失败时不动
+ * @return unsigned char * 堆缓冲，用完 cg_free —— **0 字节文件也返回非 NULL**
+ *         （靠这个区分"空文件"与"打不开"）；失败返回 NULL
+ * @note **不去 BOM**：二进制一个字节都不许动
+ * @note 长度出口是 int，超过 2GB 的文件会报失败（记一条日志）
+ */
 unsigned char *cg_file_read_bytes(const char *path, int *out_len);
 
-/** 覆盖写**二进制**文件（len 可以为 0 = 建一个空文件）；成功返回 0 */
+/**
+ * @brief 覆盖写**二进制**文件
+ * @param path 路径（UTF-8）
+ * @param data 要写的字节
+ * @param len 字节数；可以为 0（建一个空文件）
+ * @return int 0 成功、非 0 失败
+ */
 int cg_file_write_bytes(const char *path, const void *data, int len);
 
-/** 文件大小（字节）；不存在 / 目录 / 调不动返回 -1。想"不读内容先问大小"时用它 */
+/**
+ * @brief 取文件大小
+ * @param path 路径（UTF-8）
+ * @return long long 字节数；不存在 / 目录 / 调不动返回 -1
+ * @note 想"不读内容先问大小"时用它
+ */
 long long cg_file_size(const char *path);
-/** 覆盖写文件（UTF-8 文本）；成功返回 0 */
+/**
+ * @brief 覆盖写文件（UTF-8 文本）
+ * @param path 路径（UTF-8）
+ * @param text 文本内容，函数内部写盘
+ * @return int 0 成功、非 0 失败
+ */
 int   cg_file_write(const char *path, const char *text);
-/** 追加到文件末尾（文件不存在就新建）；成功返回 0 */
+/**
+ * @brief 追加到文件末尾（文件不存在就新建）
+ * @param path 路径（UTF-8）
+ * @param text 追加的内容
+ * @return int 0 成功、非 0 失败
+ */
 int   cg_file_append(const char *path, const char *text);
-/** 删文件；成功返回 0 */
+/**
+ * @brief 删文件
+ * @param path 路径（UTF-8）
+ * @return int 0 成功、非 0 失败
+ */
 int   cg_file_delete(const char *path);
-/** 拷文件（覆盖已存在的）；成功返回 0 */
+/**
+ * @brief 拷文件（覆盖已存在的目标）
+ * @param from 源路径（UTF-8）
+ * @param to 目标路径（UTF-8）
+ * @return int 0 成功、非 0 失败
+ */
 int   cg_file_copy(const char *from, const char *to);
-/** 目录是否存在 */
+/**
+ * @brief 目录是否存在
+ * @param path 路径（UTF-8）
+ * @return int 1 存在、0 不存在
+ */
 int   cg_dir_exists(const char *path);
-/** 建目录（父目录必须已存在）；成功返回 0 */
+/**
+ * @brief 建目录
+ * @param path 路径（UTF-8）；父目录必须已存在
+ * @return int 0 成功、非 0 失败
+ */
 int   cg_dir_create(const char *path);
-/** 枚举目录：index 从 0 递增，返回 1 = 拿到一个名字（写进 out），0 = 没有了。
- *  filter 传 NULL 或 "*" 表示所有文件；不返回 "." 与 ".." */
+/**
+ * @brief 枚举目录内容（一次一个名字，配 index 从 0 递增着调）
+ * @param dir 目录路径（UTF-8）
+ * @param filter 通配符，如 "*.txt"；传 NULL 或 "*" 表示所有文件
+ * @param index 第几个条目，0 起
+ * @param out 名字的输出缓冲
+ * @param out_size out 的字节数
+ * @return int 1 = 拿到一个名字（写进 out）、0 = 没有了
+ * @note 不返回 "." 与 ".."
+ */
 int   cg_dir_list(const char *dir, const char *filter, int index, char *out, int out_size);
 
 /* ---- 路径 ---- */
@@ -1964,16 +2155,37 @@ char *cg_gbk_to_utf8(const char *gbk);
  * 解码类缓冲放不下返回 -2（编码类需要的长度能事先算出来，放不下也归 -1）。
  */
 
-/** 字节 -> 十六进制文本。sep 是每字节之间的分隔串（NULL/"" 不隔，显示常用 " "），
- *  upper 非 0 用大写。out 需要 len*(2+strlen(sep))+1 字节；返回写入长度 */
+/**
+ * @brief 字节 -> 十六进制文本
+ * @param data 源字节
+ * @param len 字节数
+ * @param sep 每字节之间的分隔串；NULL 或 "" 表示不隔（显示常用 " "）
+ * @param upper 非 0 用大写字母
+ * @param out 输出缓冲，需要 len * (2 + strlen(sep)) + 1 字节
+ * @param out_size out 的字节数
+ * @return int 写入的长度（不含结尾 0）；参数非法或放不下返回 -1
+ */
 int cg_hex_encode(const void *data, int len, const char *sep, int upper, char *out, int out_size);
 
-/** 十六进制文本 -> 字节。空格 / 制表 / 换行 / 逗号 / 连字符都当分隔符，大小写都认，
- *  "1A2B" 这种不写分隔的也算对。返回字节数；非法字符或只剩半个字节返回 -1；
- *  out 放不下返回 -2。（语义与 examples\serialterm、netterm 里那两段手写实现一致） */
+/**
+ * @brief 十六进制文本 -> 字节
+ * @param text 十六进制文本；空格 / 制表 / 换行 / 逗号 / 连字符都当分隔符，大小写都认，
+ *             "1A2B" 这种不写分隔的也算对
+ * @param out 输出缓冲
+ * @param out_size out 的字节数
+ * @return int 解出的字节数；非法字符或只剩半个字节返回 -1，out 放不下返回 -2
+ * @note 语义与 examples\serialterm、netterm 里那两段手写实现一致
+ */
 int cg_hex_decode(const char *text, void *out, int out_size);
 
-/** Base64 编码（RFC 4648，带 '=' 填充）。out 需要 ((len+2)/3)*4+1 字节；返回写入长度 */
+/**
+ * @brief Base64 编码（RFC 4648，带 '=' 填充）
+ * @param data 源字节
+ * @param len 字节数
+ * @param out 输出缓冲，需要 ((len + 2) / 3) * 4 + 1 字节
+ * @param out_size out 的字节数
+ * @return int 写入的长度（不含结尾 0）；参数非法或放不下返回 -1
+ */
 int cg_base64_encode(const void *data, int len, char *out, int out_size);
 
 /* ---- 字节操作（拼帧 / 拆帧的基元）
@@ -1986,47 +2198,109 @@ int cg_base64_encode(const void *data, int len, char *out, int out_size);
  * 字节序参数统一：`big_endian` 非 0 = 大端（网络序 / Modbus 的寄存器序），0 = 小端。
  */
 
-/** 原地反转字节序（精易的"字节集_反转"）。len ≤ 1 或 data 为 NULL 时什么都不做 */
+/**
+ * @brief 原地反转字节序（精易的"字节集_反转"）
+ * @param data 目标缓冲（会被就地改写）
+ * @param len 字节数；len <= 1 或 data 为 NULL 时什么都不做
+ * @return void 无返回值
+ */
 void cg_bytes_reverse(void *data, int len);
 
-/** 取一段（"取左边 / 取右边 / 取中间"）：从 from 起取 count 个字节。
- *  @param count **传 -1 = 取到底**（最常见的那一种）
- *  @param from 起点，0 起；越界（<0 或 >= len）返回 -1，什么都不写
- *  @return int 写出的字节数；from 非法 -1、out 放不下 -2、out 为 NULL 或 out_size<=0 -1
- *  @note count 超出剩余长度时**按剩余算**（不报错）—— 这正是"取右边"想要的语义 */
+/**
+ * @brief 取一段字节（"取左边 / 取右边 / 取中间"）：从 from 起取 count 个
+ * @param data 源数据
+ * @param len 源长度
+ * @param from 起点，0 起；越界（< 0 或 >= len）返回 -1，什么都不写
+ * @param count 取多少个；**传 -1 = 取到底**（最常见的那一种）
+ * @param out 输出缓冲
+ * @param out_size out 的字节数
+ * @return int 写出的字节数；from 非法 -1、out 放不下 -2、out 为 NULL 或 out_size <= 0 -1
+ * @note count 超出剩余长度时**按剩余算**（不报错）—— 这正是"取右边"想要的语义
+ */
 int cg_bytes_slice(const void *data, int len, int from, int count, void *out, int out_size);
 
-/** 在 data 里找 needle 第一次出现的位置（从 from 开始找）。
- *  @return int 下标（0 起）；没找到 / 参数非法 / needle 为空返回 -1 */
+/**
+ * @brief 在数据里找子串第一次出现的位置
+ * @param data 源数据
+ * @param len 源长度
+ * @param needle 要找的子串
+ * @param nlen 子串长度
+ * @param from 从哪个下标开始找，0 起
+ * @return int 下标（0 起）；没找到 / 参数非法 / needle 为空返回 -1
+ */
 int cg_bytes_find(const void *data, int len, const void *needle, int nlen, int from);
 
-/** 从 offset 读一个 16 位无符号整数（按 big_endian 定字节序）。
- *  @return int 0..65535；**越界或参数非法返回 -1**（16 位值不可能到 -1，所以能这么用） */
+/**
+ * @brief 从 offset 读一个 16 位无符号整数
+ * @param data 源数据
+ * @param len 源长度
+ * @param offset 起始下标，0 起
+ * @param big_endian 非 0 大端（网络序 / Modbus 寄存器序）、0 小端
+ * @return int 0..65535；**越界或参数非法返回 -1**（16 位值不可能到 -1，所以能这么用）
+ */
 int cg_bytes_get_u16(const void *data, int len, int offset, int big_endian);
 
-/** 从 offset 读一个 32 位无符号整数；越界或参数非法返回 -1。
- *  **用 long long 而不是 int**：`unsigned` 的 `0xFFFFFFFF` 转成 int 正好是 -1，
- *  那样"错误"与一个合法值撞车、调用方没法分辨。 */
+/**
+ * @brief 从 offset 读一个 32 位无符号整数
+ * @param data 源数据
+ * @param len 源长度
+ * @param offset 起始下标，0 起
+ * @param big_endian 非 0 大端、0 小端
+ * @return long long 0..4294967295；越界或参数非法返回 -1
+ * @note 返回值用 long long 而不是 int：`unsigned` 的 0xFFFFFFFF 转成 int 正好是 -1，
+ *       那样"错误"会与一个合法值撞车、调用方没法分辨
+ */
 long long cg_bytes_get_u32(const void *data, int len, int offset, int big_endian);
 
-/** 把 16 位整数写进 out 的 offset 处（按 big_endian 定字节序）。
- *  @return int 1 = 成功；0 = 越界 / 参数非法（什么都不写） */
+/**
+ * @brief 把 16 位整数写进 out 的 offset 处
+ * @param out 目标缓冲
+ * @param out_size out 的字节数
+ * @param offset 起始下标，0 起
+ * @param v 要写的值（只取低 16 位）
+ * @param big_endian 非 0 大端、0 小端
+ * @return int 1 成功；0 越界 / 参数非法（什么都不写）
+ */
 int cg_bytes_put_u16(void *out, int out_size, int offset, unsigned v, int big_endian);
 
-/** 把 32 位整数写进 out 的 offset 处；返回 1/0（同 cg_bytes_put_u16） */
+/**
+ * @brief 把 32 位整数写进 out 的 offset 处
+ * @param out 目标缓冲
+ * @param out_size out 的字节数
+ * @param offset 起始下标，0 起
+ * @param v 要写的值
+ * @param big_endian 非 0 大端、0 小端
+ * @return int 1 成功；0 越界 / 参数非法（什么都不写）
+ */
 int cg_bytes_put_u32(void *out, int out_size, int offset, unsigned v, int big_endian);
 
-/** Base64 解码。空白与换行忽略；**带不带 '=' 填充都认**（JWT 那类不填充的也能解）。
- *  长度不合法（不含规填充、尾部有多余位）返回 -1。out 需要 (strlen+3)/4*3 字节 */
+/**
+ * @brief Base64 解码
+ * @param text Base64 文本；空白与换行忽略，**带不带 '=' 填充都认**（JWT 那类不填充的也能解）
+ * @param out 输出缓冲，需要 (strlen + 3) / 4 * 3 字节
+ * @param out_size out 的字节数
+ * @return int 解出的字节数；长度不合法（不含规填充、尾部有多余位）返回 -1，放不下返回 -2
+ */
 int cg_base64_decode(const char *text, void *out, int out_size);
 
-/** URL 编码（百分号）。不编码 A-Za-z0-9-_.~，其余按**字节**编成 %XX —— 所以 UTF-8 中文
- *  会变成多个 %XX，这是对的。space_plus 非 0 时空格编成 '+'（表单风格）。
- *  out 需要 strlen*3+1 字节；返回写入长度 */
+/**
+ * @brief URL 编码（百分号）
+ * @param text 源文本
+ * @param space_plus 非 0 时空格编成 '+'（表单风格）
+ * @param out 输出缓冲，需要 strlen * 3 + 1 字节
+ * @param out_size out 的字节数
+ * @return int 写入的长度（不含结尾 0）；参数非法或放不下返回 -1
+ * @note 不编码 A-Za-z0-9-_.~，其余按**字节**编成 %XX —— 所以 UTF-8 中文会变成多个 %XX，这是对的
+ */
 int cg_url_encode(const char *text, int space_plus, char *out, int out_size);
 
-/** URL 解码：'%XX' 与 '+'（'+' 一律还原成空格）。'%' 后面不是两位十六进制返回 -1；
- *  out 需要 strlen+1 字节 */
+/**
+ * @brief URL 解码（'%XX' 与 '+'，'+' 一律还原成空格）
+ * @param text 源文本
+ * @param out 输出缓冲，需要 strlen + 1 字节
+ * @param out_size out 的字节数
+ * @return int 写入的长度（不含结尾 0）；'%' 后面不是两位十六进制返回 -1，放不下返回 -2
+ */
 int cg_url_decode(const char *text, char *out, int out_size);
 
 /* ---- 进制转换与补码 ----
@@ -2035,29 +2309,58 @@ int cg_url_decode(const char *text, char *out, int out_size);
  * 寄存器表的写法一致）；要小写十六进制用 cg_hex_encode()。
  */
 
-/** 整数 -> 任意进制文本（2..36）。负数带前导 '-'。返回写入长度；base 非法或放不下返回 -1 */
+/**
+ * @brief 整数 -> 任意进制文本
+ * @param v 待转换的整数
+ * @param base 进制 2..36
+ * @param out 输出缓冲
+ * @param out_size out 的字节数
+ * @return int 写入的长度（不含结尾 0）；base 非法或放不下返回 -1
+ * @note 负数带前导 '-'；输出一律大写
+ */
 int cg_int_to_base(long long v, int base, char *out, int out_size);
 
-/** 任意进制文本 -> 整数（2..36）。认前导 '-'/'+'，也认与进制相符的 0x / 0b / 0o 前缀
- *  （调试试工具里到处是 `0x1A` 这种写法）；允许首尾空白，但**中间有空白即失败**
- *  （`"1A 2B"` 是两段，不该被拼成一段）。整串必须合法、溢出也算失败。
- *  @param s 待解析文本
- *  @param base 进制 2..36
- *  @param out 结果；可传 NULL（只想问"合不合法"）
- *  @return int 1 = 成功；0 = 失败（此时 out 不动） */
+/**
+ * @brief 任意进制文本 -> 整数
+ * @param s 待解析文本
+ * @param base 进制 2..36
+ * @param out 结果出口；可传 NULL（只想问"合不合法"）
+ * @return int 1 成功、0 失败（此时 out 不动）
+ * @note 认前导 '-'/'+'，也认与进制相符的 0x / 0b / 0o 前缀（调试工具里到处是 `0x1A`）；
+ *       允许首尾空白，但**中间有空白即失败**（`"1A 2B"` 是两段，不该被拼成一段）；
+ *       整串必须合法、溢出也算失败
+ */
 int cg_base_to_int(const char *s, int base, long long *out);
 
-/** 进制互转（字符串进、字符串出）：cg_base_convert("FF", 16, 2) -> "11111111"。
- *  返回写入长度；源串非法或放不下返回 -1（此时 out 是空串） */
+/**
+ * @brief 进制互转（字符串进、字符串出）
+ * @param s 源串
+ * @param from_base 源进制 2..36
+ * @param to_base 目标进制 2..36
+ * @param out 输出缓冲
+ * @param out_size out 的字节数
+ * @return int 写入的长度（不含结尾 0）；源串非法或放不下返回 -1（此时 out 是空串）
+ * @note 例：cg_base_convert("FF", 16, 2) -> "11111111"
+ */
 int cg_base_convert(const char *s, int from_base, int to_base, char *out, int out_size);
 
-/** 把低 bits 位按**补码**解释成有符号数：cg_to_signed(0xFFF6, 12) -> -10。
- *  工控里天天要用：报文给的是 0x…，协议说的是 12 位有符号。
- *  bits 取 1..63；给了 64 或越界就直接按 long long 原样返回（不做符号扩展）。 */
+/**
+ * @brief 把低 bits 位按**补码**解释成有符号数
+ * @param v 原始值（只取低 bits 位）
+ * @param bits 位宽，取 1..63；给了 64 或越界就直接按 long long 原样返回（不做符号扩展）
+ * @return long long 带符号的结果
+ * @note 工控里天天要用：报文给的是 0x…，协议说的是 12 位有符号；
+ *       例：cg_to_signed(0xFFF6, 12) -> -10
+ */
 long long cg_to_signed(unsigned long long v, int bits);
 
-/** 反向：把一个有符号数写成 bits 位补码（只保留低 bits 位）：cg_from_signed(-10, 12) -> 0xFF6。
- *  拼报文时用它 —— 负数不能直接塞进帧里。bits 取 1..63；越界按原样返回。 */
+/**
+ * @brief 反向：把一个有符号数写成 bits 位补码（只保留低 bits 位）
+ * @param v 有符号数
+ * @param bits 位宽，取 1..63；越界按原样返回
+ * @return unsigned long long bits 位补码
+ * @note 拼报文时用它 —— 负数不能直接塞进帧里；例：cg_from_signed(-10, 12) -> 0xFF6
+ */
 unsigned long long cg_from_signed(long long v, int bits);
 
 /* ---- 校验（CRC） ----
@@ -2065,18 +2368,31 @@ unsigned long long cg_from_signed(long long v, int bits);
  * （实测对协议帧与几 MB 的文件都够快；上百 MB 的大文件不划算，那种场合另说）。
  */
 
-/** CRC32（IEEE 802.3 / zlib 同一套：多项式 0xEDB88320 反射，初值全 1，末尾取反）。
- *  文本 "123456789" 的校验值是 0xCBF43926；空输入返回 0 */
+/**
+ * @brief 算 CRC32（IEEE 802.3 / zlib 同一套）
+ * @param data 数据
+ * @param len 字节数
+ * @return unsigned 校验值；空输入返回 0
+ * @note 多项式 0xEDB88320 反射、初值全 1、末尾取反；文本 "123456789" 的校验值是 0xCBF43926
+ */
 unsigned cg_crc32(const void *data, int len);
 
-/** CRC16/Modbus（多项式 0xA001 反射，初值 0xFFFF，**不**取反）—— 工控设备协议帧最常用的那个。
- *  文本 "123456789" 的校验值是 0x4B37；空输入返回 0xFFFF。返回值低 16 位有效 */
+/**
+ * @brief 算 CRC16/Modbus（工控设备协议帧最常用的那个）
+ * @param data 数据
+ * @param len 字节数
+ * @return unsigned 校验值（低 16 位有效）；空输入返回 0xFFFF
+ * @note 多项式 0xA001 反射、初值 0xFFFF、**不**取反；文本 "123456789" 的校验值是 0x4B37
+ */
 unsigned cg_crc16(const void *data, int len);
 
-/** 算整个文件的 CRC32（**分块读，不把文件整读进内存** —— 固件镜像动辄几十上百 MB）。
- *  @param path 文件路径（UTF-8）
- *  @param out 校验值出口；成功才写入
- *  @return int 1 = 成功；0 = 打不开或中途读出错（宁可报失败，也不给一个"看着像但不完整"的值） */
+/**
+ * @brief 算整个文件的 CRC32（分块读，不把文件整读进内存 —— 固件镜像动辄几十上百 MB）
+ * @param path 文件路径（UTF-8）
+ * @param out 校验值出口；成功才写入
+ * @return int 1 成功；0 打不开或中途读出错
+ * @note 宁可报失败，也不给一个"看着像但不完整"的值
+ */
 int cg_crc32_file(const char *path, unsigned *out);
 
 /* ---- Modbus 帧编解码（RTU / TCP） ----
