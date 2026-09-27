@@ -27,8 +27,11 @@
  * @param app 应用
  * @param children 子控件数组（窗口客户区就是 app->window->children）
  * @param n 子控件个数
- * @param base_w 该容器的基准宽（设计尺寸）；base_h 同理
- * @param now_w 该容器现在的宽；now_h 同理
+ * @param base_w 该容器的基准宽（设计尺寸）
+ * @param base_h 该容器的基准高（设计尺寸）
+ * @param now_w 该容器现在的宽
+ * @param now_h 该容器现在的高
+ * @return void 无返回值
  */
 static void layout_container(cg_app_t *app, cg_widget_t **children, size_t n,
                              int base_w, int base_h, int now_w, int now_h)
@@ -94,7 +97,14 @@ static void layout_container(cg_app_t *app, cg_widget_t **children, size_t n,
     free(boxes);
 }
 
-/** @brief 按 .cgui 的 grow 重排窗口里的控件（WM_SIZE 里调；尺寸是**逻辑**像素） */
+/**
+ * @brief 按 .cgui 的 grow 重排窗口里的控件
+ * @param app 应用（无窗口或后端没初始化时是空操作）
+ * @param now_w 客户区现在的宽（**逻辑**像素）
+ * @param now_h 客户区现在的高（**逻辑**像素）
+ * @return void 无返回值
+ * @note WM_SIZE 里调，**在派发 size 事件之前**；第一次调用只记基准（设计尺寸）
+ */
 void cgw_layout_apply(cg_app_t *app, int now_w, int now_h)
 {
     cg_win_state_t *st = app ? (cg_win_state_t *)app->natives : NULL;
@@ -110,7 +120,11 @@ void cgw_layout_apply(cg_app_t *app, int now_w, int now_h)
                      st->layout_base_w, st->layout_base_h, now_w, now_h);
 }
 
-/** @brief 丢掉布局基准，让下一个 WM_SIZE 重新取（DPI 变化后调） */
+/**
+ * @brief 丢掉布局基准，让下一个 WM_SIZE 重新取
+ * @param app 应用
+ * @return void 无返回值（DPI 变化后调，免得 grow 控件吃一遍显示器缩放）
+ */
 void cgw_layout_reset(cg_app_t *app)
 {
     cg_win_state_t *st = app ? (cg_win_state_t *)app->natives : NULL;

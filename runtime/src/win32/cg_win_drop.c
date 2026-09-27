@@ -15,7 +15,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-/** @brief 处理一次 WM_DROPFILES；hdrop 的所有权不在这里（调用方负责 DragFinish） */
+/**
+ * @brief 处理一次 WM_DROPFILES：取路径 -> 填清单 -> 派发 drop 事件 -> 清清单
+ * @param app 目标应用；为 NULL 时直接返回
+ * @param hdrop 消息带进来的 HDROP；**所有权归系统**，调用方负责 DragFinish，本函数只读
+ * @return void 无返回值（清单只在 drop 回调期间有效，回调返回后立刻清掉）
+ */
 void cgw_win_drop(cg_app_t *app, HDROP hdrop)
 {
     UINT   n, i, taken = 0;
