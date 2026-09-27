@@ -902,6 +902,53 @@ cg_free(fw);`,
         ],
       },
       {
+        label: "系统信息",
+        cmds: [
+          c("cg_env", "读环境变量", "char *cg_env(const char *name)",
+            "返回 UTF-8 值（记得 cg_free）；没有这个变量返回 NULL，名字大小写不敏感。计算机名 = COMPUTERNAME、用户名 = USERNAME、临时目录 = TEMP、系统目录 = SystemRoot", {
+              ret: "环境变量值；没有 / 名字为空返回 NULL",
+              sample: `char *host = cg_env("COMPUTERNAME");
+cg_log(CG_LOG_INFO, "本机 %s", host ? host : "?");
+cg_free(host);`,
+            }),
+          c("cg_env_int", "读环境变量当整数", "int cg_env_int(const char *name, int fallback)",
+            "没有 / 值不是合法整数 / 溢出都返回 fallback —— 不会像 atoi 那样把非数字静默当成 0", {
+              ret: "解析出来的整数；不合法返回 fallback",
+              sample: `int n = cg_env_int("NUMBER_OF_PROCESSORS", 1);   /* 开几个工作线程 */`,
+            }),
+          c("cg_sys_is64", "是不是 64 位 Windows", "int cg_sys_is64(void)",
+            "**不随本进程的位数骗人**：32 位程序跑在 64 位系统上照样返回 1（环境变量 PROCESSOR_ARCHITECTURE 给的是进程视角，做不到这点）", {
+              ret: "1 = 64 位 Windows；0 = 不是",
+            }),
+          c("cg_sys_version", "操作系统可读名", "char *cg_sys_version(void)",
+            "形如 \"Windows 10 (10.0.19045)\"（Win11 也报 10.0，按 build 号分）。日志头 / 工单信息用", {
+              ret: "版本串（记得 cg_free）；失败 NULL",
+            }),
+          c("cg_disk_space", "磁盘剩余 / 总容量", "int cg_disk_space(const char *path, unsigned long long *free_bytes, unsigned long long *total_bytes)",
+            "path 可以是盘符或盘上任意路径；两个出口都能传 NULL（只问其中一个）。剩余量是**当前用户可用**的那个", {
+              ret: "1 = 成功；0 = 路径不存在或调不动（出口不动）",
+              sample: `unsigned long long f = 0, t = 0;
+char *dir = cg_app_dir();
+if (cg_disk_space(dir, &f, NULL) && f < 64ULL * 1024 * 1024)
+    cg_log(CG_LOG_WARN, "日志盘只剩 %llu MB 了", f / 1024 / 1024);
+cg_free(dir);`,
+            }),
+          c("cg_process_running", "某个进程在不在跑", "int cg_process_running(const char *exe_name)",
+            "按可执行文件名查，大小写不敏感。现场排查「设备厂商的服务 / 驱动起没起」用得上", {
+              ret: "1 = 在跑；0 = 不在（或参数为空）",
+              sample: `if (!cg_process_running("DeviceSrv.exe"))
+    cg_status_set(sb, 0, "设备服务没起");`,
+            }),
+          c("cg_local_ip", "本机 IPv4 地址", "char *cg_local_ip(void)",
+            "挑一条默认路由再问本地端地址 —— **不发任何包、不需要 DNS**（离线工控机也能用）。多网卡时给的是默认出口那张，未必是连设备那张", {
+              ret: "点分十进制串（记得 cg_free）；拿不到 NULL",
+              sample: `char *ip = cg_local_ip();
+cg_status_set(sb, 0, ip ? ip : "本机 IP 未知");
+cg_free(ip);`,
+            }),
+        ],
+      },
+      {
         label: "剪贴板与系统",
         cmds: [
           c("cg_clip_get_text", "读剪贴板", "char *cg_clip_get_text(void)", "剪贴板里的文字；没有返回 NULL（堆串要 cg_free）"),
