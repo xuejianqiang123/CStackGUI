@@ -96,6 +96,8 @@ static biz_t s_biz;
 
 /** --demo / CG_SERIALTERM_DEMO=1：不开真串口，灌合成数据并把结论打到 stdout（给 CI 用） */
 static int s_demo;
+/** --demo=COM4 / CG_SERIALTERM_DEMO=COM4：**真开这个口**，走一遍"界面选参数 → 打开 → 发 → 收" */
+static char s_demo_port[64];
 
 /* ------------------------------------------------------------ 小工具 */
 
@@ -1307,6 +1309,76 @@ static void on_destroy(cg_widget_t *self, cg_event_t ev, void *user)
 
 /* ------------------------------------------------------------ 演示模式（--demo） */
 
+/** 真链路演示的收尾汇总（定义在下面，这里先声明：real_demo 挂定时器要用） */
+static void demo_report(void *user);
+
+/**
+ * @brief 真链路演示（--demo=COM4）：把界面下拉设成 7E1，走**用户点「打开串口」那条路**，发一帧，2 秒后汇总
+ * @param app 所属应用
+ * @return void
+ * @note 为什么把格式设成 7E1 而不是默认的 8N1：这条链上"最容易写错又被忽略"的就是帧格式 ——
+ *       7E1 走通了，说明下拉开的值真的经 `cg_widget_serial_set_format()` 送到了驱动
+ *       （串口日志里会出现「已打开（115200 7E1）」）。TX/RXD 短接的话，这里还能看到回环收到的字节。
+ */
+static void real_demo(cg_app_t *app)
+{
+    cg_widget_t *cmb_port = cg_find(app, "cmb_port");
+    int          i, idx = -1;
+
+    printf("[demo] 真链路：目标 %s（下拉设成 7E1，再走「打开串口」那条路）\n", s_demo_port);
+    for (i = 0; i < cg_widget_list_count(cmb_port); i++) {
+        const char *it = cg_widget_list_item(cmb_port, i);
+
+        if (it && cg_str_equal(it, s_demo_port)) {
+            idx = i;
+            break;
+        }
+    }
+    if (idx < 0) {
+        cg_widget_list_add(cmb_port, s_demo_port);          /* 枚举里没有也认：直接塞进去试 */
+        idx = cg_widget_list_count(cmb_port) - 1;
+    }
+    cg_widget_set_value(cmb_port, idx);
+    cg_widget_set_value(cg_find(app, "cmb_bits"), 1);       /* "7" */
+    cg_widget_set_value(cg_find(app, "cmb_stop"), 0);       /* "1" */
+    cg_widget_set_value(cg_find(app, "cmb_parity"), 2);     /* "偶" */
+    cg_widget_set_checked(cg_find(app, "chk_autosave"), 1); /* 收到的字节落盘，好读回来核对 */
+    s_biz.autosave_on = 1;
+
+    do_connect(app);                                        /* ← 用户点「打开串口」走的就是它 */
+    printf("[demo] 打开结果：%s\n", is_connected(app) ? "已连接" : "没连上（原因见上面那行 -- ）");
+    if (is_connected(app)) {
+        cg_widget_set_checked(cg_find(app, "chk_hex"), 1);
+        cg_widget_set_text(cg_find(app, "edt_send"), "01 03 00 6B 00 03 74 17");
+        send_single(app);
+        printf("[demo] 已发出 8 字节，TX 累计 %lld\n", s_biz.tx_total);
+    }
+    printf("[demo] 自动保存文件：%s\n", s_biz.autosave_path);
+    fflush(stdout);
+    cg_set_timer(app, 2000, demo_report, app);              /* 2 秒后汇总（收字节要靠消息循环跑起来） */
+}
+
+/**
+ * @brief 真链路演示的收尾汇总：RX 收了多少、切了几帧、自动保存文件建了没有
+ * @param user 挂进去的 cg_app_t
+ * @return void
+ */
+static void demo_report(void *user)
+{
+    cg_app_t *app = (cg_app_t *)user;
+    static int round;
+
+    round++;
+    printf("[demo] 第 %d 次汇总（%d 秒）：RX %lld 字节 / 切帧 %lu 个 / 自动保存 %s\n",
+           round, round * 2, s_biz.rx_total, (unsigned long)cg_frame_frames(&s_biz.fr),
+           cg_file_exists(s_biz.autosave_path) ? "文件已生成" : "还没生成（没收到字节就不会建）");
+    if (s_biz.rx_total == 0 && round == 1) {
+        printf("[demo] 这一秒还没有字节：对端没发 / TXD 与 RXD 没短接都很正常 —— 再看两轮\n");
+    }
+    fflush(stdout);
+    if (round < 3) cg_set_timer(app, 2000, demo_report, app);   /* 多报两轮：慢启动的板子 3 秒后才吐数据 */
+}
+
 /**
  * @brief 不开真串口，把几批合成字节灌进**同一条接收管线**，并把结论打到 stdout
  * @param app 所属应用
@@ -1328,6 +1400,11 @@ static void run_demo(cg_app_t *app)
     framer_reset(app);
     f0 = cg_frame_frames(&s_biz.fr);
     d0 = cg_frame_dropped(&s_biz.fr);
+
+    if (s_demo_port[0]) {                       /* 给了真口：只做真链路那一段 */
+        real_demo(app);
+        return;
+    }
 
     printf("[demo] 喂 8 字节的 Modbus/RTU 帧，碎成 3+3+2（每块隔 1ms，小于静默间隔）\n");
     intake(app, k_req, 3, t);
@@ -1511,14 +1588,26 @@ int main(int argc, char **argv)
 
     /* 演示模式：命令行给 --demo，或者设环境变量 CG_SERIALTERM_DEMO=1。
      * 两种都认的理由同 examples/modbus：tools\shot.ps1（截图 / CI 用）只传 .cgui 路径，
-     * 没法再塞一个开关，而环境变量会被子进程继承。 */
+     * 没法再塞一个开关，而环境变量会被子进程继承。
+     * **后面跟端口名就是真链路模式**（`--demo=COM4` / `CG_SERIALTERM_DEMO=COM4`）：
+     * 不灌合成数据，真开那个口跑一遍"选参数 → 打开 → 发 → 收"，给真机验证与现场自检用。 */
     for (i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--demo") == 0) s_demo = 1;
+        if (strcmp(argv[i], "--demo") == 0) {
+            s_demo = 1;
+        } else if (strncmp(argv[i], "--demo=", 7) == 0) {
+            s_demo = 1;
+            snprintf(s_demo_port, sizeof(s_demo_port), "%s", argv[i] + 7);
+        }
     }
     {
         const char *env = getenv("CG_SERIALTERM_DEMO");
 
-        if (env && *env && strcmp(env, "0") != 0) s_demo = 1;
+        if (env && *env && strcmp(env, "0") != 0) {
+            s_demo = 1;
+            if (strcmp(env, "1") != 0) {        /* 值不是 1/0 就是端口名 */
+                snprintf(s_demo_port, sizeof(s_demo_port), "%s", env);
+            }
+        }
     }
 
     desc.bindings = k_bindings;
