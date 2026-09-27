@@ -1,12 +1,19 @@
 /**
  * @file    cg_kit_sys.c
- * @brief   kit 系统能力：剪贴板、外部程序（打开/启动）、当前时间、HKCU 注册表
+ * @brief   kit 系统能力：剪贴板、外部程序（打开/启动）、当前时间、HKCU 注册表、系统信息
  * @details 从 cg_kit.c 按子系统纯搬移拆出（公共 API 未变）；跨文件复用的字符助手
  *          声明见 cg_kit_internal.h。
+ *
+ *          末尾"系统信息"那一段（2026-09-27 加）是"从精易模块 系统_ 一族学功能"的产物：
+ *          那一族 254 条里，头 34 条就是"每个环境变量一个命令"
+ *          （系统_COMPUTERNAME / 系统_TEMP / 系统_WINDIR …）—— 易语言没有 getenv 的产物，
+ *          在 C 侧首先是**一个** cg_env()。哪些不抄、以及"不引入新链接库"这条约束的来由
+ *          （含一次被实验推翻的判断），见 .codebuddy/plans/kit-sysinfo.md。
  */
 #include "cg_kit_internal.h"
 
 #include <shellapi.h>       /* ShellExecuteW */
+#include <tlhelp32.h>       /* CreateToolhelp32Snapshot / PROCESSENTRY32W（查进程在不在） */
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -176,4 +183,183 @@ int cg_reg_write(const char *subkey, const char *name, const char *value)
     free(wname);
     free(wval);
     return ok;
+}
+
+/* ------------------------------------------------------------ 系统信息
+ *
+ * 来历与取舍见 .codebuddy/plans/kit-sysinfo.md。要点：精易 `系统_` 那 254 条里
+ * 头 34 条是"每个环境变量一个命令"，在 C 侧是**一个** cg_env()；
+ * 而"取 MAC 地址"要 iphlpapi（实测确实没在链接表里），按"不引入新链接库"的约束不做。
+ */
+
+/** @brief 读环境变量（UTF-8）；没有这个变量返回 NULL */
+char *cg_env(const char *name)
+{
+    wchar_t *wn;
+    wchar_t *buf;
+    DWORD    need, got;
+    char    *out;
+
+    if (!name || !*name) return NULL;
+    wn = kit_w(name);
+    if (!wn) return NULL;
+
+    need = GetEnvironmentVariableW(wn, NULL, 0);
+    if (need == 0) {
+        /* 要区分"没有这个变量"和"有这个变量但值是空的"—— 后者也该给一个空串，
+         * 否则调用方会把"设了但是空"当成"没设"。 */
+        DWORD err = GetLastError();
+
+        free(wn);
+        return (err == ERROR_ENVVAR_NOT_FOUND) ? NULL : cg_str_dup("");
+    }
+    buf = (wchar_t *)malloc((size_t)need * sizeof(wchar_t));
+    if (!buf) {
+        free(wn);
+        return NULL;
+    }
+    got = GetEnvironmentVariableW(wn, buf, need);
+    free(wn);
+    if (got == 0 || got >= need) {          /* 期间被人改长了：当失败，别返回半截 */
+        free(buf);
+        return NULL;
+    }
+    out = kit_u8(buf);
+    free(buf);
+    return out;
+}
+
+/** @brief 读环境变量当整数；没有 / 不合法 / 溢出都返回 fallback */
+int cg_env_int(const char *name, int fallback)
+{
+    char     *v = cg_env(name);
+    long long n;
+
+    if (!v) return fallback;
+    /* 复用进制片做的解析：整串必须合法、溢出算失败。atoi 会把 "abc" 静默当成 0，
+     * 那种"错得看不出来"的结果比 fallback 更糟。 */
+    if (!cg_base_to_int(v, 10, &n) || n < -2147483647LL - 1 || n > 2147483647LL) {
+        cg_free(v);
+        return fallback;
+    }
+    cg_free(v);
+    return (int)n;
+}
+
+#ifndef PROCESSOR_ARCHITECTURE_ARM64
+#define PROCESSOR_ARCHITECTURE_ARM64 12     /* 老 MinGW 头文件里没这个宏 */
+#endif
+
+/** @brief 1 = 这台机器是 64 位 Windows */
+int cg_sys_is64(void)
+{
+    SYSTEM_INFO si;
+
+    memset(&si, 0, sizeof(si));
+    /* GetNativeSystemInfo 给的是"这台机器"的架构，不受 WOW64 影响；
+     * IsWow64Process 那套是在问"我是不是被 WOW64 套着"，两回事。 */
+    GetNativeSystemInfo(&si);
+    return (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64 ||
+            si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_IA64 ||
+            si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_ARM64) ? 1 : 0;
+}
+
+/** RTL_OSVERSIONINFOW 的布局（自己声明，免得为了一个结构体去依赖 ddk 头） */
+typedef struct {
+    ULONG dwOSVersionInfoSize;
+    ULONG dwMajorVersion;
+    ULONG dwMinorVersion;
+    ULONG dwBuildNumber;
+    ULONG dwPlatformId;
+    WCHAR szCSDVersion[128];
+} cg_osver_t;
+
+/** @brief 操作系统可读名，形如 "Windows 10 (10.0.19045)"；失败返回 NULL */
+char *cg_sys_version(void)
+{
+    typedef LONG (WINAPI *rtl_get_version_fn)(cg_osver_t *);
+    HMODULE            ntdll;
+    rtl_get_version_fn fn;
+    cg_osver_t         vi;
+    const char        *name = "Windows";
+
+    /* 走 ntdll 的 RtlGetVersion：GetVersionEx 会被 exe 清单里的兼容性声明骗
+     * （本工程没有那条声明，但别人复制这段代码时多半有）。
+     * GetProcAddress 取，不为此新增链接库。 */
+    ntdll = GetModuleHandleW(L"ntdll.dll");
+    if (!ntdll) return NULL;
+    fn = (rtl_get_version_fn)(void *)GetProcAddress(ntdll, "RtlGetVersion");
+    if (!fn) return NULL;
+
+    memset(&vi, 0, sizeof(vi));
+    vi.dwOSVersionInfoSize = (ULONG)sizeof(vi);
+    if (fn(&vi) != 0) return NULL;
+
+    if (vi.dwMajorVersion == 6) {
+        if (vi.dwMinorVersion == 1)      name = "Windows 7";
+        else if (vi.dwMinorVersion == 2) name = "Windows 8";
+        else if (vi.dwMinorVersion == 3) name = "Windows 8.1";
+        else                             name = "Windows Vista";
+    } else if (vi.dwMajorVersion == 10) {
+        /* Win11 也报 10.0，靠 build 号分：22000 起算 11 */
+        name = (vi.dwBuildNumber >= 22000) ? "Windows 11" : "Windows 10";
+    }
+    return cg_str_format("%s (%lu.%lu.%lu)", name,
+                         (unsigned long)vi.dwMajorVersion,
+                         (unsigned long)vi.dwMinorVersion,
+                         (unsigned long)vi.dwBuildNumber);
+}
+
+/** @brief 取路径所在磁盘的剩余 / 总容量（字节）；成功返回 1 */
+int cg_disk_space(const char *path, unsigned long long *free_bytes, unsigned long long *total_bytes)
+{
+    wchar_t        *wp;
+    ULARGE_INTEGER  avail, total;
+    BOOL            ok;
+
+    if (!path || !*path) return 0;
+    wp = kit_w(path);
+    if (!wp) return 0;
+    memset(&avail, 0, sizeof(avail));
+    memset(&total, 0, sizeof(total));
+    /* 第一个出口是"当前用户可用的字节数" —— 写日志前问"还写得下吗"就该用它 */
+    ok = GetDiskFreeSpaceExW(wp, &avail, &total, NULL);
+    free(wp);
+    if (!ok) return 0;
+    if (free_bytes)  *free_bytes  = (unsigned long long)avail.QuadPart;
+    if (total_bytes) *total_bytes = (unsigned long long)total.QuadPart;
+    return 1;
+}
+
+/** @brief 按可执行文件名查进程是否在跑（大小写不敏感）；返回 1 / 0 */
+int cg_process_running(const char *exe_name)
+{
+    HANDLE         snap;
+    PROCESSENTRY32W pe;
+    wchar_t       *wn;
+    int            found = 0;
+
+    if (!exe_name || !*exe_name) return 0;
+    wn = kit_w(exe_name);
+    if (!wn) return 0;
+
+    snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) {
+        free(wn);
+        return 0;
+    }
+    memset(&pe, 0, sizeof(pe));
+    pe.dwSize = sizeof(pe);
+    if (Process32FirstW(snap, &pe)) {
+        do {
+            /* lstrcmpiW 在 kernel32 里，不用引 wchar.h 的 _wcsicmp */
+            if (lstrcmpiW(pe.szExeFile, wn) == 0) {
+                found = 1;
+                break;
+            }
+        } while (Process32NextW(snap, &pe));
+    }
+    CloseHandle(snap);
+    free(wn);
+    return found;
 }

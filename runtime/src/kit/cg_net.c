@@ -73,6 +73,43 @@ static int net_wsa(void)
     return ok;
 }
 
+/** @brief 本机 IPv4 地址（点分十进制）；拿不到返回 NULL。
+ *  @details 放在本文件而不是 cg_kit_sys.c，是因为 winsock2.h **必须在 windows.h 之前**
+ *          包含（见文件头），而 cg_kit_sys.c 走的是 cg_kit_internal.h → windows.h 那条路。
+ *          与其为了一个函数给那个文件做头文件手术，不如放在本来就用 winsock 的地方。
+ *
+ *          拿法：开一个 UDP socket、connect 到一个公网地址（**不发任何包**，只是让系统
+ *          挑一条默认路由），再 getsockname 问本地端地址。这样**不需要 DNS** ——
+ *          gethostbyname(gethostname()) 那套在没解析器的离线工控机上是会失败的。
+ */
+char *cg_local_ip(void)
+{
+    SOCKET             s;
+    struct sockaddr_in to, me;
+    int                len = (int)sizeof(me);
+    char               buf[64];
+
+    if (!net_wsa()) return NULL;
+    s = socket(AF_INET, SOCK_DGRAM, 0);
+    if (s == INVALID_SOCKET) return NULL;
+
+    memset(&to, 0, sizeof(to));
+    to.sin_family      = AF_INET;
+    to.sin_port        = htons(53);
+    to.sin_addr.s_addr = inet_addr("8.8.8.8");
+    if (connect(s, (struct sockaddr *)&to, (int)sizeof(to)) != 0 ||
+        getsockname(s, (struct sockaddr *)&me, &len) != 0 ||
+        !inet_ntop(AF_INET, &me.sin_addr, buf, (size_t)sizeof(buf))) {
+        closesocket(s);
+        return NULL;
+    }
+    closesocket(s);
+
+    /* 完全离线时也可能挑到回环 —— 那不是"本机在网上的地址"，如实报失败 */
+    if (strcmp(buf, "127.0.0.1") == 0) return NULL;
+    return cg_str_format("%s", buf);
+}
+
 /** @brief 把最常见的 Winsock 错误码翻成人话 */
 static const char *net_why(int e)
 {

@@ -1011,9 +1011,10 @@ int cg_crc32_file(const char *path, unsigned *out);
 
 /* ---- 哈希（摘要） ----
  * MD5 / SHA-1 / SHA-256 / SHA-512，**手写实现**，不调系统的 CryptoAPI。
- * 理由不是"省依赖"：用 advapi32 就得让**所有既有用户项目的链接命令**补 -ladvapi32
- * （否则 undefined reference to CryptAcquireContextW），而链接命令是别人看得见的东西；
- * 附带还躲开了 FIPS 策略下 MD5 被系统拒绝、以及平台强绑定两个坑。
+ * 理由有两条（原先写的"会改掉用户的链接命令"是错的，已按实验更正 —— advapi32 本来就能
+ * 解析，见 runtime/src/kit/cg_kit_check.c 文件头）：
+ *   1. **FIPS 策略下 CryptoAPI 会拒绝 CALG_MD5**，而"核对固件 MD5"是本功能的高频用法；
+ *   2. 结果不依赖客户机器上的 crypto 配置，同一个文件在哪台机器上算出来都一样。
  * 正确性靠公开向量（RFC 1321 / FIPS 180-1,2,4）+ 由 Node/OpenSSL 独立派生的检验值双重钉死。
  */
 
@@ -1042,6 +1043,60 @@ char *cg_reg_read(const char *subkey, const char *name, const char *def);
 /** 写注册表字符串值（没有就新建）；成功返回 0。
  *  subkey 如 "Software\\Microsoft\\Windows\\CurrentVersion\\Run" 可做开机自启 */
 int   cg_reg_write(const char *subkey, const char *name, const char *value);
+
+/* ---- 系统信息 ----
+ * 来历：精易 `系统_` 一族有 254 条，其中**头 34 条就是"每个环境变量一个命令"**
+ * （系统_COMPUTERNAME / 系统_TEMP / 系统_WINDIR / 系统_USERNAME …）—— 那是易语言没有
+ * getenv 的产物。C 里有，所以这一族在 C 侧首先是**一个** cg_env()：
+ *   计算机名 = cg_env("COMPUTERNAME")、用户名 = cg_env("USERNAME")、
+ *   临时目录 = cg_env("TEMP")、系统目录 = cg_env("SystemRoot")、CPU 个数 = cg_env_int("NUMBER_OF_PROCESSORS", 1)
+ *
+ * 明确**不抄**的三类（理由与决定写进 .codebuddy/plans/kit-sysinfo.md，免得以后照抄回来）：
+ *   1. 恶意软件相邻的：取宽带用户名密码、修改主页、设置 IE 代理、屏蔽任务管理器、
+ *      用户名密码验证、遍历右键菜单并执行 —— 这工程的立身之本是给人做正规工具；
+ *   2. 破坏性的：关机 / 强制重启 / 强制注销 / 修改开机密码 / 卸载组件 / 清空系统临时目录；
+ *   3. C 里已有等价物的（34 个环境变量命令、取 DOS 路径 = cg_env("COMSPEC")）。
+ * 另有一条硬约束：**不为了这些功能引入新的链接库**（MAC 地址要 iphlpapi、哈希要 advapi32 ——
+ * 都会改掉用户看得见的链接命令，所以那两件都不做）。
+ */
+
+/** 读环境变量（UTF-8，值可以是很长的字符串）。没有这个变量返回 NULL。
+ *  @note 走 GetEnvironmentVariableW + 内部 UTF-8 转换，**不用 getenv()** ——
+ *        CRT 的窄接口给的是 ANSI/MBCS，中文用户名或路径（`C:\Users\张三`）会变成乱码，
+ *        而本工程内部一律 UTF-8。名字大小写不敏感（Windows 环境变量本就如此）。 */
+char *cg_env(const char *name);
+
+/** 读环境变量当整数。没有这个变量 / 值不是合法整数（或溢出）返回 fallback。
+ *  例：cg_env_int("NUMBER_OF_PROCESSORS", 1) */
+int cg_env_int(const char *name, int fallback);
+
+/** 1 = 这台机器是 64 位 Windows。**不随本进程的位数骗人**：32 位程序跑在 64 位系统上照样返回 1。
+ *  环境变量 PROCESSOR_ARCHITECTURE 做不到这一点 —— 它给的是进程视角。 */
+int cg_sys_is64(void);
+
+/** 操作系统可读名，形如 "Windows 10 (10.0.19045)"；失败返回 NULL。日志头 / 工单信息用。
+ *  @note 走 ntdll 的 RtlGetVersion（GetProcAddress 取，不新增链接库）：
+ *        GetVersionEx 会被 exe 清单里的兼容性声明骗，本工程没有那条声明，
+ *        但别人复制这段代码时多半有。 */
+char *cg_sys_version(void);
+
+/** 取路径所在磁盘的剩余 / 总容量（字节）。两个出口都可以传 NULL（只问其中一个）。
+ *  @param path 盘符或盘上任意路径（`"C:\\"` 或 cg_app_dir() 都行）
+ *  @return int 1 = 成功；0 = 路径不存在或调不动（此时两个出口都不动）。
+ *  @note 剩余量给的是**当前用户可用**的那个（写日志前问"还写得下吗"才准）。 */
+int cg_disk_space(const char *path, unsigned long long *free_bytes, unsigned long long *total_bytes);
+
+/** 按可执行文件名查进程是否在跑（大小写不敏感，如 "explorer.exe"）。返回 1 / 0。
+ *  现场排查"设备厂商的服务 / 驱动在不在"用得上。 */
+int cg_process_running(const char *exe_name);
+
+/** 本机 IPv4 地址（点分十进制，如 "192.168.1.20"）；拿不到返回 NULL。
+ *  @note 拿到的是**系统默认出口网卡**的地址：内部挑一条默认路由再问本地端地址，
+ *        **不发任何数据包**、也不需要 DNS（离线工控机上也能用）。多网卡时未必是
+ *        "连设备的那张"—— 要枚举网卡得用 iphlpapi 的 GetAdaptersInfo，那会改掉用户的
+ *        链接命令，所以不做。实现在 cg_net.c（winsock2.h 必须在 windows.h 之前，
+ *        那里已经处理好了）。 */
+char *cg_local_ip(void);
 
 /* ------------------------------------------------------------ 动态扩展 */
 
