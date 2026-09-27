@@ -1,0 +1,244 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "深色终端（app.dark 示例）",
+    "width": 940,
+    "height": 604,
+    "dark": true,
+    "info": {
+      "product": "CStackGUI 深色主题示例",
+      "desc": "深色示例：app.dark 默认深色 + 顶层命名样式表 + cg_theme_set_dark 运行时切换",
+      "version": "1.0.0.0",
+      "author": "CStackGUI"
+    }
+  },
+  "styles": {
+    "title":   { "font": "Microsoft YaHei UI", "size": 13, "bold": true },
+    "sub":     { "font": "Microsoft YaHei UI", "size": 9 },
+    "panel":   { "font": "Microsoft YaHei UI", "size": 10, "fg": "#E8E2F0", "bg": "#1A191F" },
+    "oncard":  { "font": "Microsoft YaHei UI", "size": 10, "fg": "#CFC7DB" },
+    "log":     { "font": "Consolas", "size": 10, "fg": "#CDE8C6", "bg": "#0E1116" },
+    "input":   { "font": "Microsoft YaHei UI", "size": 10, "fg": "#E8E2F0", "bg": "#26242C" },
+    "primary": { "bg": "#7C5CD6", "radius": 8 },
+    "ghost":   { "bg": "#2E2B36", "fg": "#E8E2F0", "radius": 8 },
+    "chip":    { "font": "Microsoft YaHei UI", "size": 9, "fg": "#0E1116", "bg": "#A6E3A1" }
+  },
+  "widgets": [
+    {
+      "id": "lab_title",
+      "type": "label",
+      "rect": { "x": 14, "y": 12, "w": 400, "h": 26 },
+      "text": "深色终端 · app.dark 示例",
+      "style": "title",
+      "hint": "title 这套命名样式故意不写颜色 —— 文字色跟着主题走（深色下浅字、浅色下深字），这就是「深色只改默认值」"
+    },
+    {
+      "id": "lab_mode",
+      "type": "label",
+      "rect": { "x": 14, "y": 40, "w": 600, "h": 20 },
+      "text": "当前：深色（app.dark: true）",
+      "style": "sub",
+      "hint": "运行时切换后由 main.c 的 sync_theme_ui() 改这里的文字"
+    },
+    {
+      "id": "badge_dark",
+      "type": "badge",
+      "rect": { "x": 636, "y": 22, "w": 80, "h": 26 },
+      "text": "app.dark",
+      "style": "chip",
+      "hint": "自绘控件：bg / fg 自己写了就按自己的来（浅底深字），深色主题不会覆盖它"
+    },
+    {
+      "id": "btn_theme",
+      "type": "button",
+      "rect": { "x": 728, "y": 16, "w": 198, "h": 36 },
+      "text": "切换到浅色主题",
+      "style": "primary",
+      "hint": "运行时切换主题：cg_theme_set_dark(app, !cg_theme_is_dark(app))，立即重画",
+      "events": { "click": "on_theme_click" }
+    },
+    {
+      "id": "grp_log",
+      "type": "group",
+      "rect": { "x": 14, "y": 72, "w": 632, "h": 444 },
+      "text": "日志视图",
+      "style": { "use": "panel", "bg": "#121117" },
+      "hint": "「命名 + 局部覆盖」形态：先取 styles.panel，再用这里写了的字段盖上去。写死的深色底在任何主题下都保持深色",
+      "children": [
+        {
+          "id": "edt_log",
+          "type": "edit",
+          "rect": { "x": 12, "y": 36, "w": 608, "h": 396 },
+          "multiline": true,
+          "scroll": 2,
+          "input": 1,
+          "maxlen": 65535,
+          "style": "log",
+          "text": "-- 日志视图就绪。\n-- 深底浅字来自 styles.log（fg / bg 都写死）。",
+          "hint": "只读多行输入框：fg / bg 都写在 styles.log 里（不写的话深色下会自动变深底浅字，写了就完全由你说了算）"
+        }
+      ]
+    },
+    {
+      "id": "grp_stat",
+      "type": "group",
+      "rect": { "x": 660, "y": 72, "w": 266, "h": 214 },
+      "text": "运行状态",
+      "style": "panel",
+      "hint": "纯命名引用形态：「style」直接写样式名，整份取用 styles.panel（深底 + 浅字）",
+      "children": [
+        {
+          "id": "led_conn",
+          "type": "led",
+          "rect": { "x": 16, "y": 34, "w": 16, "h": 16 },
+          "value": 1,
+          "style": { "fg": "#7BD88F" },
+          "hint": "状态灯：亮的颜色 = style.fg。这里故意不带文字 —— 状态灯的文字色在皮肤里写死为深色，深底上会看不清，要文字就另配一个 label"
+        },
+        {
+          "id": "lab_conn",
+          "type": "label",
+          "rect": { "x": 40, "y": 32, "w": 210, "h": 20 },
+          "text": "链路已连接",
+          "style": "oncard"
+        },
+        {
+          "id": "lab_p1",
+          "type": "label",
+          "rect": { "x": 16, "y": 66, "w": 210, "h": 18 },
+          "text": "缓冲区占用 62%",
+          "style": "oncard"
+        },
+        {
+          "id": "prg_buf",
+          "type": "progress",
+          "rect": { "x": 16, "y": 86, "w": 234, "h": 14 },
+          "min": 0,
+          "max": 100,
+          "value": 62,
+          "style": { "fg": "#8AB4F8" },
+          "hint": "进度条：填充色 = style.fg；槽是皮肤里写死的浅色（不跟随深色，这是已知边界）"
+        },
+        {
+          "id": "lab_p2",
+          "type": "label",
+          "rect": { "x": 16, "y": 112, "w": 210, "h": 18 },
+          "text": "重传率 2.3%",
+          "style": "oncard"
+        },
+        {
+          "id": "ring_rt",
+          "type": "progressring",
+          "rect": { "x": 16, "y": 134, "w": 62, "h": 62 },
+          "min": 0,
+          "max": 100,
+          "value": 23,
+          "style": { "fg": "#FFB4A2" },
+          "hint": "圆环进度：轨道用的是「背后色」，所以它跟随深色（和 progress 的槽正好相反）"
+        },
+        {
+          "id": "lab_ring",
+          "type": "label",
+          "rect": { "x": 90, "y": 156, "w": 160, "h": 20 },
+          "text": "圆环：轨道跟随深色",
+          "style": "oncard"
+        }
+      ]
+    },
+    {
+      "id": "grp_opt",
+      "type": "group",
+      "rect": { "x": 660, "y": 298, "w": 266, "h": 218 },
+      "text": "选项",
+      "style": "panel",
+      "children": [
+        {
+          "id": "sw_scroll",
+          "type": "switch",
+          "rect": { "x": 16, "y": 34, "w": 234, "h": 30 },
+          "text": "自动滚动到底",
+          "checked": true,
+          "hint": "开关：胶囊轨道是 M3 紫（皮肤写死），标签文字跟着主题变浅",
+          "events": { "change": "on_scroll_change" }
+        },
+        {
+          "id": "btn_clear",
+          "type": "button",
+          "rect": { "x": 16, "y": 76, "w": 108, "h": 32 },
+          "text": "清空日志",
+          "style": "ghost",
+          "events": { "click": "on_clear_click" }
+        },
+        {
+          "id": "btn_fill",
+          "type": "button",
+          "rect": { "x": 132, "y": 76, "w": 118, "h": 32 },
+          "text": "追加几行",
+          "style": "ghost",
+          "events": { "click": "on_fill_click" }
+        },
+        {
+          "id": "badge_self",
+          "type": "badge",
+          "rect": { "x": 16, "y": 122, "w": 104, "h": 24 },
+          "text": "自绘徽章",
+          "style": "chip"
+        },
+        {
+          "id": "lab_badge",
+          "type": "label",
+          "rect": { "x": 128, "y": 122, "w": 126, "h": 24 },
+          "text": "bg/fg 自己写",
+          "style": "oncard"
+        },
+        {
+          "id": "lab_tip",
+          "type": "label",
+          "rect": { "x": 16, "y": 156, "w": 238, "h": 42 },
+          "text": "轨道 M3 紫由皮肤写死",
+          "style": { "use": "oncard", "size": 9 },
+          "hint": "第三种引用形态：命名 + 局部覆盖（oncard 的浅字 + 这里改小的字号）"
+        }
+      ]
+    },
+    {
+      "id": "edt_cmd",
+      "type": "edit",
+      "rect": { "x": 14, "y": 518, "w": 600, "h": 34 },
+      "text": "AT+VERSION",
+      "style": "input",
+      "hint": "输入框：颜色写死了（深底浅字），所以浅色主题下它仍是一条深色输入框；想让它跟着主题就别写 fg/bg",
+      "events": { "submit": "on_cmd_submit" }
+    },
+    {
+      "id": "btn_send",
+      "type": "button",
+      "rect": { "x": 622, "y": 517, "w": 96, "h": 36 },
+      "text": "发送",
+      "style": "primary",
+      "events": { "click": "on_send_click" }
+    },
+    {
+      "id": "btn_save",
+      "type": "button",
+      "rect": { "x": 726, "y": 517, "w": 120, "h": 36 },
+      "text": "保存日志",
+      "style": "ghost",
+      "events": { "click": "on_save_log_click" }
+    },
+    {
+      "id": "lab_foot1",
+      "type": "label",
+      "rect": { "x": 14, "y": 558, "w": 912, "h": 18 },
+      "text": "深色只改默认值：没写颜色的文字与面板底色跟着主题走；本示例的深色面板 / 按钮 / 输入框写死了颜色，浅色下也保持原样。",
+      "style": "sub"
+    },
+    {
+      "id": "lab_foot2",
+      "type": "label",
+      "rect": { "x": 14, "y": 578, "w": 912, "h": 18 },
+      "text": "terminal 的行色是为浅底写的深绿 / 深蓝 / 灰，深底下看不清，所以日志视图改用自己写了颜色的多行 edit。",
+      "style": "sub"
+    }
+  ]
+}
