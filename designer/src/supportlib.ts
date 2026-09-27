@@ -918,8 +918,11 @@ cg_base_convert("FF", 16, 2, buf, (int)sizeof(buf));   /* -> "11111111" */`,
               ret: "0 = 成功；-1 = 越界 / wlanapi 取不到",
               sample: `cg_wifi_info_t w;\nfor (int i = 0; i < cg_wifi_count(); i++)\n    if (cg_wifi_info(i, &w) == 0)\n        cg_log(CG_LOG_INFO, "%s：%s  信号 %d%%", w.description,\n               w.ssid[0] ? w.ssid : "(未连接)", w.signal);`,
             }),
+          c("cg_wifi_scan", "让系统扫一次无线（异步）", "int cg_wifi_scan(void)",
+            "**不等待**：几秒后结果自己出现在 cg_wifi_networks() 里。要立刻刷新周边 AP 列表就先调它。返回 0 = 已提交；-1 = 没网卡 / 系统不支持（见下方 cg_wifi_networks 的说明）",
+            { ret: "0 = 已提交；-1 = 取不到" }),
           c("cg_wifi_networks", "周边可见网络列表", "int cg_wifi_networks(cg_wifi_net_t *out, int cap, int *count)",
-            "同名的多个 BSSID 已合并（取信号最强的）。数据来自系统最近一次扫描的缓存 ⇒ 刚开机可能是空的，隔几秒再读一次", {
+            "同名的多个 BSSID 已合并（取信号最强的）。数据来自系统**最近一次扫描的结果** ⇒ 想立刻刷新就先调 cg_wifi_scan()（几秒后再读）；不调也行，Windows 自己会定期重扫", {
               params: ["out / cap：数组与容量", "count：出口，给**实际看到**的个数（可能比 cap 大）"],
               ret: "0 = 成功；-1 = 没有无线网卡或取不到",
               sample: `cg_wifi_net_t nets[24]; int n = 0;\nif (cg_wifi_networks(nets, 24, &n) == 0)\n    for (int i = 0; i < n; i++)\n        cg_log(CG_LOG_INFO, "  %s  %d%%%s", nets[i].ssid, nets[i].signal,\n               nets[i].connected ? "（当前）" : "");`,

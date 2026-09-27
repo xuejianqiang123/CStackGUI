@@ -1,94 +1,54 @@
-# 已解决：memcheck 下间歇性崩溃 —— 根因是我的 `WlanCloseHandle` 反复开关
+# 已解决：memcheck 下"套件数印成 62"——根因是两处 typedef 漏参数造成的野写
 
-> **2026-09-27 已修好**，根因与最初判断**完全相反**，过程值得留着。
+> 2026-09-27。**结论与前面所有推测都不同**，过程留着，因为它是这个仓库里最贵的一课。
 
-## 结论（修法）
+## 根因（一句话）
 
-`runtime/src/kit/cg_kit_wireless.c` 原来**每次调用都 `WlanOpenHandle` + `WlanCloseHandle`**。
-实测反复开关会让 `WlanCloseHandle` **间歇性崩在 rpcrt4**，gdb 抓到的栈：
+`runtime/src/kit/cg_kit_wireless.c` 里两个**运行期取来的函数指针 typedef 漏了参数**：
 
-```
-Thread 1 received signal SIGSEGV
-#0  RPCRT4!NDRCContextBinding
-#1  RpcSsDestroyClientContext
-#2  wlanapi!WlanCloseHandle
-#3  cg_wifi_networks ()
-#4  test_wifi () at tests/unit/test_kit_wireless.c:74
-```
+```c
+/* ✗ 原来：4 个参数 */
+typedef DWORD (WINAPI *p_wlan_avail_t)(HANDLE, const GUID *, DWORD, PWLAN_AVAILABLE_NETWORK_LIST *);
 
-改成**进程内开一次、复用**（`wlan_handle()`）后：gdb 三轮 `exited normally`、直接连跑 **6 次退出码全 0**。
-
-## 为什么前后错过了三次（都被"证据不足"骗了）
-
-1. 看日志尾部在 led/meter 那里，就当成"led 套件的问题"；
-2. 把我的测试文件移开跑了一次绿的，就判"不是我引入的"；
-3. 又怀疑"输出被缓冲吃掉了"，而框架的 main **本来就设了 `_IONBF`**。
-
-三条都是同一个毛病：**崩点随机漂移，而日志尾部只是"最后打印的"，不等于崩点**。
-真正的转折是**上 gdb 拿调用栈**（一次就中）—— 位置漂移的崩溃不要靠读日志猜。
-
-## 遗留：汇总行的套件数偶尔印错 —— 特征像**内存被写坏**，不是计数逻辑错
-
-**新证据（2026-09-27 追加）**：给它加了一行**无关的局部变量**（诊断用 `int n0 = s_suite_count;`）
-之后，同一份测试**连跑 5 次全部印对** `114 个套件（注册 114 个）`、DEBUG 行一次不出现；
-撤掉那行诊断、用之前的二进制，同样的跑法就印 `62 个套件`。
-
-⇒ **值随无关改动变化** = 典型的 **UB / 内存被写坏**特征（若只是计数逻辑错，加不加那行都不会变）。
-而且它**间歇**：同一二进制时对时错。
-
-**下一步（留给后来者，这是个真问题）**：用 gdb 的**写断点**抓是谁改的：
-
-```
-gdb --batch -ex "set pagination off" -ex "watch -l s_suite_count" -ex run -ex "bt 15" cgu-tests.exe
+/* ✓ 官方声明（MinGW 的 wlanapi.h）是 5 个，第 4 个是 PVOID pReserved */
+DWORD WINAPI WlanGetAvailableNetworkList(HANDLE, const GUID *, DWORD, PVOID pReserved,
+                                         PWLAN_AVAILABLE_NETWORK_LIST **);
 ```
 
-（或 watch `main` 里的 `ran`。）谁写谁就在栈上 —— 那多半是某个测试**越界写**，
-而 memcheck 只数堆块、抓不到越界，所以一直没被这套门禁发现。
+x64 上多出来的那个参数**从栈上取**。于是我传的 4 个参数全错位：列表指针被写进 `pReserved`
+槽（我传的是 `&alist`，无害），而真正的出口参数 `ppAvailableNetworkList` 拿到的是
+**栈上的垃圾地址** —— wlanapi 往那儿写 8 字节 ⇒ **野写**。同文件 `WlanQueryInterface`
+也漏了第 7 个（`PWLAN_OPCODE_VALUE_TYPE`），同一个病。
 
-在此之前，汇总行**把两个数一起印、不一致就 `[warn]`**，保证这种不一致不会再无声通过。
+## 它造成的全部症状（这才是值钱的部分）
 
-## 原始描述：汇总行的套件数在 memcheck 构建下印错（功能不受影响）
-
-`--memcheck` 构建里汇总行印 `62 个套件（注册 114 个）`。已核实**功能是全量跑的**：
-`这一套跑完没有新增存活堆块` 出现 **114 次**（每个套件一条）、断言数 2826 = 非 memcheck 全量 2712 + 114。
-非 memcheck 构建印的是正确的 114。差异八成来自那段"热身跑"，根因未查。
-已在汇总行**把两个数一起印**并在不一致时 `[warn]`，免得以后这种不一致继续藏着。
-
-## 原始记录（现象，供对照）
-
-## 现象
-
-`tools\run-tests.bat --memcheck` 有时会失败：日志最后停在这三行之后，**没有 `[FAIL]` 行**，
-直接是 `[fail] unit tests failed`：
-
-```
-[cstackgui] cg_meter_set: 需要 meter 控件，实际给的是 listbox
-[cstackgui] cg_led_set: 需要 led 控件，实际给的是 listbox
-[cstackgui] cg_led_set_color: 需要 led 控件，实际给的是 listbox
-```
-
-⇒ 像是**进程在中止**（不是断言失败）。测试框架 main 里本来就设了 `setvbuf(stdout, NULL, _IONBF, 0)`
-（"卡死/被杀也能看到最后进度"），所以**日志尾部是可信的真实最后输出**，不存在"被缓冲区吃掉"。
-
-## 证据（2026-09-27 实测）
-
-| 跑法 | 结果 |
+| 症状 | 真相 |
 | --- | --- |
-| `--memcheck --grep=led` | **失败**（那一跑里无线套件根本没参与 ⇒ 与 cg_kit_wireless.c 无关） |
-| `--memcheck --grep=meter` | 通过 |
-| `--grep=led`（**不带** memcheck）连跑两次 | **都通过** ⇒ 与 memcheck 的 `--wrap malloc/free` 相关 |
-| 全量 `--memcheck` | 失败 3 次、通过 2 次 ⇒ **间歇性** |
+| `--memcheck` 汇总印 `62 个套件`（注册 114） | 野写落到别的函数的栈槽上；-O1 恰好打坏计数的低字节 |
+| -O1 印 62、-O0 正常、**-O2 直接崩在第 53 个套件** | 布局一变就换受害者；-O2 打在 wlanapi 内部状态上 |
+| 早先"`WlanCloseHandle` 崩在 rpcrt4" | **也是受害者**：wlanapi 内部状态被写坏后，后续调用才崩。当时归因成"反复开关句柄"，改成缓存句柄 —— 那是**缓解**，不是根因（缓存本身无害，留着；注释里的因果已更正） |
+| 周边网络列表**永远是空的** | `alist` 根本没被写进来。我还把它解释成"系统扫描缓存是空的" ✗ —— **空结果被解释掉**，正是最该追的那类 |
+| `-fstack-protector-all` 没爆 | 野写目标是任意地址，不是本帧的缓冲区 |
 
-## 下一步怎么查（留个入口）
+## 抓到它的方法（可复用）
 
-1. 先看清是哪个套件、哪一行：`tools\run-tests.bat --memcheck --grep=状态灯`，
-   必要时在 `tests/unit/test_led_meter.c` 的守卫套件里临时加点打印；
-2. 重点看 `状态灯：颜色与类型守卫` / `仪表盘：设值与类型守卫` —— 那三行消息正是它们打出来的，
-   而它们测的正是"给错类型时不许崩"；
-3. 怀疑方向：memcheck 的 `--wrap free` 遇到"不是它记的指针"（或重复释放）时会直接中止 ——
-   这类守卫路径上如果有 `cg_free` 一个非常量/未分配指针的分支，memcheck 下就会炸、正常跑却没事。
-4. 修完请顺带确认：`--memcheck --grep=led` 连跑 5 次都过。
+1. **先量清楚"假的是哪个数"**：`RUN行=114`、每套件断言=114、断言总数自洽 ⇒ 判定"套件都跑了、只有印出来的数不对"，把范围从"测试漏跑"缩到"某个值被写坏"；
+2. **逐优化级别对照**（`-O0 / -O1 / -O2`，同一份源码）：-O0 对、-O1 错、-O2 崩 ⇒ **典型的野写/UB 指纹**（不是逻辑错，也不是编译器单独的问题）；
+3. **gdb 拿调用栈**：`WlanGetAvailableNetworkList` → `cg_wifi_networks` → 我的测试行 ⇒ 直接指向那个 API；
+4. **拿官方头文件逐个参数核对 typedef**（不是凭记忆）—— 一读就看见少了 `PVOID pReserved`。
 
-## 与本次改动的关系
+## 教训（已进记忆）
 
-**无**（见上表第二行）。本次只新增 `cg_kit_wireless.c` 与它的测试，未触碰 led/meter 的任何代码。
+- **运行期取符号（`GetProcAddress`）+ 自制 typedef，必须逐个参数对官方声明。** 少一个参数在 x64
+  上不是"少传一个"这么轻，而是**把后面所有参数挤错位、并把栈上垃圾当指针用**。本仓库为了
+  "零新增链接依赖"大量用这个手法，所以这条是长期风险点。
+- **"空结果"要当症状追，别当结论解释掉。** "列表为空"我当时解释成"系统缓存没数据"，其实
+  API 根本没被正确调用。
+- **位置漂移的怪事，先按优化级别二分，再上 gdb。** 这一天先后误判成"崩溃""缓冲吃掉了断言"
+  "栈被越界写""编译器 -O1 有问题"，全错；真正的转折是"-O0/-O1/-O2 对照" + 一次 gdb 调用栈。
+
+## 验证（修后）
+
+- `tools\run-tests.bat --memcheck`：**114 个套件（注册 114 个），2858 条断言，0 处失败**，`warn` 不再出现；
+- 同源码 `-O0 / -O1 / -O2` 三版全部 114 / 全通过（修前：-O1 印 62、-O2 崩）；
+- **周边网络从"永远 0 个"变成 16 个**（`count=16`，SSID 与信号都在合法范围）——功能证据，不只是数字对了。
