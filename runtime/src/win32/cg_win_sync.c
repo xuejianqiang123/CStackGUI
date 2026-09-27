@@ -19,10 +19,15 @@
  * 用 RichEdit 而不是 ownerdraw 列表框的理由：选择复制与自动滚动是白捡的，
  * 而"把日志复制出来贴给别人"恰恰是这类控件最常被做的事。
  */
-/** @brief 行色：浅底一套、深底一套
- *  @details 原来那三个色（深绿 / 深蓝 / 中灰）是**为浅底挑的**，落在深色 RichEdit 上
- *           对比度只有 2.6–3.2:1（深色示例 2026-09-27 实测报回来的），RX/TX 基本看不清。
- *           深色那套是同一色相提亮后的值，对比度成倍上来。 */
+/**
+ * @brief 行色：浅底一套、深底一套
+ * @param app 应用对象（读 app->dark 判断用哪套色）
+ * @param kind 行方向标记 CG_TERM_RX / CG_TERM_TX，其它值按 SYS 取色
+ * @return COLORREF 该行在原生控件里应使用的文字颜色
+ * @details 原来那三个色（深绿 / 深蓝 / 中灰）是**为浅底挑的**，落在深色 RichEdit 上
+ *          对比度只有 2.6–3.2:1（深色示例 2026-09-27 实测报回来的），RX/TX 基本看不清。
+ *          深色那套是同一色相提亮后的值，对比度成倍上来。
+ */
 static COLORREF term_col(const cg_app_t *app, int kind)
 {
     int dark = (app && app->dark);
@@ -35,6 +40,13 @@ static COLORREF term_col(const cg_app_t *app, int kind)
 }
 
 /** @brief 把一行文字（带颜色）追加到 RichEdit 末尾 */
+/**
+ * @brief 把一行文字（带颜色）追加到 RichEdit 末尾
+ * @param h 目标 RichEdit
+ * @param text 行文本（UTF-8，可为 NULL）
+ * @param col 该行文字颜色
+ * @return void 无返回值
+ */
 static void term_push_line(HWND h, const char *text, COLORREF col)
 {
     wchar_t     *wt = cgw_wc_from_utf8(text ? text : "");
@@ -85,6 +97,12 @@ static void term_push_line(HWND h, const char *text, COLORREF col)
 }
 
 /** @brief terminal 的行 -> 原生控件（增量追加；裁剪或清空后整体重灌） */
+/**
+ * @brief terminal 的行 -> 原生控件（增量追加；裁剪或清空后整体重灌）
+ * @param h 终端 RichEdit
+ * @param w terminal 控件（读它的行表与已推进行数）
+ * @return void 无返回值
+ */
 static void sync_terminal(HWND h, cg_widget_t *w)
 {
     int i;
@@ -125,6 +143,11 @@ static void sync_terminal(HWND h, cg_widget_t *w)
 }
 
 /** @brief 多行编辑框滚到最底部：把插入点移到末尾再 EM_SCROLLCARET */
+/**
+ * @brief 多行编辑框滚到最底部：把插入点移到末尾再 EM_SCROLLCARET
+ * @param w edit 控件（非 edit 或无原生窗口时为空操作）
+ * @return void 无返回值
+ */
 void cg_edit_scroll_end(cg_widget_t *w)
 {
     HWND h;
@@ -138,6 +161,11 @@ void cg_edit_scroll_end(cg_widget_t *w)
 }
 
 /** 标签页当前显示第几页时，某个子控件该不该出现 */
+/**
+ * @brief 标签页当前显示第几页时，某个子控件该不该出现
+ * @param w 子控件（看其 parent 是否为 tabs 以及它自己的 page）
+ * @return int 1 = 应显示；0 = 该页不是当前页
+ */
 static int page_visible(const cg_widget_t *w)
 {
     const cg_widget_t *p = w->parent;
@@ -146,6 +174,11 @@ static int page_visible(const cg_widget_t *w)
 }
 
 /** 按 page / visible 规则应用单个控件的显隐（sync_widget_body 与切页共用） */
+/**
+ * @brief 按 page / visible 规则应用单个控件的显隐（与切页共用）
+ * @param w 目标控件（数值框有两个原生窗口时同进同退）
+ * @return void 无返回值
+ */
 static void apply_visible(cg_widget_t *w)
 {
     HWND h = (HWND)w->native;
@@ -159,9 +192,13 @@ static void apply_visible(cg_widget_t *w)
     }
 }
 
-/** 切页后把 tabs 的所有后代按新的 value 重刷显隐。
- *  只 sync tabs 本身是不够的——page 显隐是每个子控件各自的事，
- *  嵌套 tabs 的内层页也按各自的 value 决定，逐个套规则即可。 */
+/**
+ * @brief 切页后把 tabs 的所有后代按新的 value 重刷显隐
+ * @param tabs 标签页控件（从应用控件表里筛出它的后代）
+ * @return void 无返回值
+ * @note 只 sync tabs 本身是不够的——page 显隐是每个子控件各自的事，
+ *       嵌套 tabs 的内层页也按各自的 value 决定，逐个套规则即可。
+ */
 void cgw_sync_tabs_pages(cg_widget_t *tabs)
 {
     cg_app_t *app = tabs->app;
@@ -178,6 +215,12 @@ void cgw_sync_tabs_pages(cg_widget_t *tabs)
 }
 
 /** 重建树：逻辑下标 -> HTREEITEM 的映射存在 w->item_map 里 */
+/**
+ * @brief 重建树：逻辑下标 -> 节点句柄的映射存在控件里
+ * @param h 目标 TreeView
+ * @param w tree 控件（读行表，写映射表）
+ * @return void 无返回值
+ */
 static void build_tree(HWND h, cg_widget_t *w)
 {
     if (w->item_map) { free(w->item_map); w->item_map = NULL; }
@@ -222,8 +265,11 @@ static void build_tree(HWND h, cg_widget_t *w)
 /** @brief 表格行图标：把图片缩到 imagelist 的格子尺寸再放进去，返回下标，失败 -1 */
 /**
  * @brief 把图片缩到 imagelist 格子尺寸后加进去（表格行图标用）
- * @param w 所属控件（解析图片相对路径用）；il 目标列表；path 图片路径；cell 格子边长
- * @return int 图片下标；失败返回 -1
+ * @param w 所属控件（解析图片相对路径用）
+ * @param il 目标 imagelist（由调用方持有并负责释放）
+ * @param path 图片文件路径
+ * @param cell 格子边长（像素，小于 4 直接失败）
+ * @return int 图片在列表中的下标；失败返回 -1
  */
 int cgw_imagelist_add_file(cg_widget_t *w, HIMAGELIST il, const char *path, int cell)
 {
@@ -263,6 +309,12 @@ int cgw_imagelist_add_file(cg_widget_t *w, HIMAGELIST il, const char *path, int 
 }
 
 /** 惰性建表格的 imagelist（行图标用），建好就挂到 LVSIL_SMALL 上 */
+/**
+ * @brief 惰性建表格的 imagelist（行图标用），建好就挂到小图标位上
+ * @param h 目标 ListView
+ * @param w table 控件（列表缓存挂在控件上，由控件持有）
+ * @return HIMAGELIST 图标列表，所有权归控件，关窗时统一销毁
+ */
 HIMAGELIST cgw_table_imagelist(HWND h, cg_widget_t *w)
 {
     int cell = cgw_scale_px(w->app, 16);
@@ -275,6 +327,12 @@ HIMAGELIST cgw_table_imagelist(HWND h, cg_widget_t *w)
 }
 
 /** 重建表格：列 + 行 */
+/**
+ * @brief 重建表格：列 + 行
+ * @param h 目标 ListView
+ * @param w table 控件（读列、行、行数值 / 图标 / 勾选等）
+ * @return void 无返回值
+ */
 static void build_table(HWND h, cg_widget_t *w)
 {
     RECT rc;
@@ -371,6 +429,12 @@ static void build_table(HWND h, cg_widget_t *w)
 }
 
 /** 重建标签页标签 + 按当前页决定子控件显隐 */
+/**
+ * @brief 重建标签页标签 + 按当前页决定子控件显隐
+ * @param h 目标 Tab
+ * @param w tabs 控件（读条目与当前值）
+ * @return void 无返回值
+ */
 static void build_tabs(HWND h, cg_widget_t *w)
 {
     SendMessageW(h, WM_SETREDRAW, FALSE, 0);
@@ -395,6 +459,12 @@ static void build_tabs(HWND h, cg_widget_t *w)
 }
 
 /** 状态栏：按段数均分，最后一段吃掉余量 */
+/**
+ * @brief 状态栏：按段数均分，最后一段吃掉余量
+ * @param h 目标状态栏
+ * @param w statusbar 控件（读条目，段数上限 32）
+ * @return void 无返回值
+ */
 static void build_status(HWND h, cg_widget_t *w)
 {
     RECT rc;
@@ -418,6 +488,11 @@ static void build_status(HWND h, cg_widget_t *w)
 }
 
 /** 图片 / 图标按钮 / 按钮（背景图）：按需加载，换图时释放旧位图 */
+/**
+ * @brief 图片 / 图标按钮 / 按钮（背景图）：按需加载，换图时释放旧位图
+ * @param w 控件（比对源路径与已加载的位图，按需重载并记失败标记）
+ * @return void 无返回值
+ */
 static void sync_bitmap(cg_widget_t *w)
 {
     const char *want = w->src ? w->src : "";
@@ -443,6 +518,17 @@ static void sync_bitmap(cg_widget_t *w)
 }
 
 /** browser 只在创建时认一次地址，换地址就整个重建（省掉一套 COM 调用） */
+/**
+ * @brief browser 只在创建时认一次地址，换地址就整个重建（省掉一套 COM 调用）
+ * @param w browser 控件（销毁旧窗口后按新地址重建，并补挂子类 / tooltip / 显隐 / 可点）
+ * @return void 无返回值
+ * @note 重建出来的是**新窗口句柄**：建窗只能带 WS_VISIBLE，所以"该不该显示 / 该不该可点"
+ *       必须在这里重新落一遍。否则 visible:false、在非当前标签页里、或 enabled:false 的
+ *       浏览器，一旦导航触发重建就会自己冒出来、还变得可点 —— 因为这条路径是提前 return 的，
+ *       走不到同步流程末尾那两句显隐 / 启用（2026-09-23 排查发现）。
+ *       焦点子类与 tooltip 也得重新挂：原来的那一份挂在旧窗口上，旧窗销毁后就没了，
+ *       不补回来刷新后点击 / 悬停就失灵（和建窗流程对称）。
+ */
 static void browser_recreate(cg_widget_t *w)
 {
     cg_app_t *app = w->app;
@@ -484,10 +570,13 @@ static void browser_recreate(cg_widget_t *w)
     }
 }
 
-/** @brief 原生控件当前文本是否已经是 wt
- *  @return int 1 = 一致（调用方就别再 SetWindowText 了）
- *  @details EDIT 收到 WM_SETTEXT 会把选区/光标清回 0，所以"内容没变还写一遍"这种
- *           冗余同步必须避免：`EN_CHANGE` 里 pull 文本再 sync 就会踩到它。
+/**
+ * @brief 原生控件当前文本是否已经是期望值
+ * @param h 待比对的原生控件
+ * @param wt 期望文本（NULL 视为一致）
+ * @return int 1 = 一致（调用方就别再 SetWindowText 了）；0 = 不一致
+ * @details EDIT 收到 WM_SETTEXT 会把选区 / 光标清回 0，所以"内容没变还写一遍"这种
+ *          冗余同步必须避免：EN_CHANGE 里拉文本再同步就会踩到它。
  */
 int cgw_hwnd_text_is(HWND h, const wchar_t *wt)
 {
@@ -507,6 +596,11 @@ int cgw_hwnd_text_is(HWND h, const wchar_t *wt)
 }
 
 /** @brief 把控件逻辑状态同步到原生控件（位置/文字/字体/条目/值/显隐），不做防重入 */
+/**
+ * @brief 把控件逻辑状态同步到原生控件（位置 / 文字 / 字体 / 条目 / 值 / 显隐），不做防重入
+ * @param w 控件（无原生句柄或应用时直接返回）
+ * @return void 无返回值
+ */
 static void sync_widget_body(cg_widget_t *w)
 {
     HWND h = (HWND)w->native;
@@ -718,8 +812,13 @@ static void sync_widget_body(cg_widget_t *w)
     InvalidateRect(h, NULL, TRUE);
 }
 
-/** 外面统一包一层防重入：同步会触发原生通知（EN_CHANGE 等），
- *  不能让它们再跑回回调里，否则「回调改控件」会自己套自己。 */
+/**
+ * @brief 外面统一包一层防重入再同步控件状态
+ * @param w 控件
+ * @return void 无返回值
+ * @note 同步会触发原生通知（EN_CHANGE 等），不能让它们再跑回回调里，
+ *       否则「回调改控件」会自己套自己。
+ */
 void cgw_sync_widget(cg_widget_t *w)
 {
     int saved = g_win_in_notify;

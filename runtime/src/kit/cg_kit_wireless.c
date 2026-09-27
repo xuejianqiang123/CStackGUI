@@ -106,11 +106,19 @@ static int                g_wlan_tried;      /* 0 = 还没试过 */
 static int                g_bt_tried;
 static int                g_bt_ready;
 
-/* 定义在文件末尾的 BLE 基元区；这里前置声明是因为蓝牙那两个 info 函数要用它换算地址
- * （踩过一次：不加前置声明，编译器给"implicit declaration"、链接时才炸） */
+/**
+ * @brief 把 BLUETOOTH_ADDRESS 的 rgBytes 拼成对外那个 64 位表示（rgBytes[5] 是最高一组）
+ * @param b 指向 6 字节地址原始字节的数组，小端存放（b[0] 是打印出来最后一组）
+ * @return unsigned long long 形如 0xAABBCCDDEEFF 的地址（即 AA:BB:CC:DD:EE:FF）
+ */
 static unsigned long long addr_of_bytes(const unsigned char *b);
 
 /** @brief 取 WLAN 那批符号（进程内一次）；取不到返回 0 */
+/**
+ * @brief 取 WLAN 那批符号（进程内一次）
+ * @return int 1 必需符号齐备（可选的 WlanScan 看 g_wlan_scan）；0 打不开 wlanapi.dll 或缺符号
+ * @note 试过就记住：第二次起只回报结果，不再 LoadLibrary，也不再刷日志
+ */
 static int wlan_ready(void)
 {
     HMODULE m;
@@ -143,14 +151,17 @@ static HANDLE g_wlan;                 /* 进程内复用的 WLAN 客户端句柄
 static DWORD  g_wlan_ver;
 static int    g_wlan_open_failed;     /* 开过一次失败就别每次再试（也别刷日志） */
 
-/** @brief 取（必要时建）WLAN 客户端句柄；返回 NULL = 这块用不了
- *  @note 句柄按进程开一次、复用。**但别把这里当成哪个崩溃的解药**（更正一次归因）：
+/**
+ * @brief 取（必要时建）WLAN 客户端句柄
+ * @return HANDLE 进程内复用的客户端句柄；NULL 表示这块用不了（符号缺或开过一次失败）
+ * @note 句柄按进程开一次、复用。**但别把这里当成哪个崩溃的解药**（更正一次归因）：
  *        2026-09-27 曾出现 `WlanCloseHandle` 崩在 `RPCRT4!NDRCContextBinding` 的调用栈，
  *        当时判断是"反复开关句柄"引起的，于是改成缓存 —— 后来查明那次崩溃的真正来源是
  *        **本文件两处 typedef 漏参数造成的野写**（见 `p_wlan_avail_t` / `p_wlan_query_t` 的注释），
  *        wlanapi 的内部状态被写坏了，才在后续调用里崩。缓存句柄本身没问题（一个够用、
  *        少一次开关），所以留着；但**因果要说对**：不是它在修 bug。
- *        代价：这一个句柄到进程结束才由系统回收。 */
+ *        代价：这一个句柄到进程结束才由系统回收。
+ */
 static HANDLE wlan_handle(void)
 {
     if (!wlan_ready()) return NULL;
@@ -165,8 +176,12 @@ static HANDLE wlan_handle(void)
     return g_wlan;
 }
 
-/** @brief 取蓝牙那批符号；取不到返回 0
- *  @note 实测这些符号在 **BluetoothApis.dll**（不在 bthprops.cpl —— 那个只有无线电与设备枚举） */
+/**
+ * @brief 取蓝牙那批符号（进程内一次）
+ * @return int 1 无线电那 4 个必需符号齐备；0 打不开 DLL 或缺必需符号（设备枚举符号可以是 NULL）
+ * @note 实测这些符号在 **BluetoothApis.dll**（不在 bthprops.cpl —— 那个只有无线电与设备枚举）
+ * @note 与 WLAN 一样只试一次：失败后不再重复 LoadLibrary，也不重复刷日志
+ */
 static int bt_ready(void)
 {
     HMODULE m;
@@ -195,9 +210,14 @@ static int bt_ready(void)
     return 1;
 }
 
-/** @brief 把宽字符串拷进 UTF-8 缓冲（截断也保证 NUL 结尾；空指针当空串）
- *  @param src_cap 源数组的**容量**（以 wchar_t 计）。**必须给**，见下。
- *  @details 不能用 `WideCharToMultiByte(..., -1, ...)` —— 那个要求**调用方保证源串有终止符**，
+/**
+ * @brief 把宽字符串拷进 UTF-8 缓冲（截断也保证 NUL 结尾；空指针当空串）
+ * @param src 源宽字符串；NULL 或源容量为 0 时按空串处理
+ * @param src_cap 源数组的**容量**（以 wchar_t 计）。**必须给**，见下。
+ * @param dst UTF-8 出口缓冲；NULL 或 size ≤ 0 时什么都不做
+ * @param size dst 的字节容量（含结尾 NUL，内部只写 size-1 个字符）
+ * @return void 无返回值
+ * @details 不能用 `WideCharToMultiByte(..., -1, ...)` —— 那个要求**调用方保证源串有终止符**，
  *           而这里拷的都是系统填进固定数组里的东西（`BLUETOOTH_DEVICE_INFO.szName`、
  *           `WLAN_INTERFACE_INFO.strInterfaceDescription`、蓝牙无线电名字），**没有保证**。
  *           真越界读过一次：全量 memcheck 跑到蓝牙那套就崩，单独跑却是好的 ——
@@ -219,6 +239,10 @@ static void copy_w(const wchar_t *src, int src_cap, char *dst, int size)
 
 /* ------------------------------------------------------------ WiFi */
 
+/**
+ * @brief 数本机有几块无线网卡
+ * @return int 无线网卡个数；0 = 本机没有无线网卡或 WLAN 服务没起（原因在日志里）
+ */
 int cg_wifi_count(void)
 {
     PWLAN_INTERFACE_INFO_LIST list = NULL;
@@ -234,6 +258,14 @@ int cg_wifi_count(void)
     return n;
 }
 
+/**
+ * @brief 取第 idx 块无线网卡的状态
+ * @param idx 网卡序号，0 起
+ * @param out 状态出口；失败时只被清空并把 signal 置 -1，成功才填 description / state / ssid / signal
+ * @return int 0 成功；-1 out 为空、序号越界或 wlanapi 取不到
+ * @note 只问第 idx 块网卡：description 是网卡的 UTF-8 描述、state 是 WLAN 接口状态码、
+ *       ssid 是当前连接（没连上是空串）、signal 是信号质量 0~100（没连上是 -1）
+ */
 int cg_wifi_info(int idx, cg_wifi_info_t *out)
 {
     PWLAN_INTERFACE_INFO_LIST list = NULL;
@@ -281,6 +313,12 @@ int cg_wifi_info(int idx, cg_wifi_info_t *out)
     return ret;
 }
 
+/**
+ * @brief 让第一块无线网卡发起一次扫描
+ * @return int 0 扫描请求已提交；-1 没有 WlanScan 符号、没有可用句柄或本机没有无线网卡
+ * @note 结果是**异步**的：几秒后再调 cg_wifi_networks() 才看得到新列表
+ * @note 只见 5（ERROR_ACCESS_DENIED）就是"位置权限"：Win10 起扫描要它，去「设置 > 隐私 > 位置」打开
+ */
 int cg_wifi_scan(void)
 {
     PWLAN_INTERFACE_INFO_LIST ilist = NULL;
@@ -306,6 +344,15 @@ int cg_wifi_scan(void)
     return ret;
 }
 
+/**
+ * @brief 取周边 AP 列表（去重、只列有名字的），写进调用方给的缓冲
+ * @param out 出口数组，调用方提供，一条网络一项
+ * @param cap out 放得下多少条
+ * @param count 出口：实际写进 out 的条数（去重后、最多 cap）；可为 NULL
+ * @return int 0 查询已执行（一个都没看到也是 0）；-1 out 为空、cap ≤ 0、没有无线网卡或 wlanapi 取不到
+ * @note 只看第一块网卡：多网卡同时看周边 AP 意义不大，而且列表会重复
+ * @note 同名 SSID（多 BSSID / 多 band）只留一个、取信号最强的那条；隐藏 SSID（名字为空）不列出来
+ */
 int cg_wifi_networks(cg_wifi_net_t *out, int cap, int *count)
 {
     PWLAN_INTERFACE_INFO_LIST     ilist = NULL;
@@ -365,6 +412,11 @@ int cg_wifi_networks(cg_wifi_net_t *out, int cap, int *count)
 
 /* ------------------------------------------------------------ 蓝牙 */
 
+/**
+ * @brief 数本机有几块蓝牙无线电
+ * @return int 无线电块数；0 表示没有蓝牙或蓝牙符号取不到
+ * @note 没有蓝牙是正常情况，不写日志刷屏
+ */
 int cg_ble_radio_count(void)
 {
     BLUETOOTH_FIND_RADIO_PARAMS params;
@@ -384,6 +436,12 @@ int cg_ble_radio_count(void)
     return n;
 }
 
+/**
+ * @brief 取第 idx 块蓝牙无线电的名字与地址
+ * @param idx 无线电序号，0 起
+ * @param out 出口；名字是 UTF-8、地址是 "AA:BB:CC:DD:EE:FF" 文本，成功时至少被清空
+ * @return int 0 命中该序号（取属性失败时 name 与 address 仍为空）；-1 out 为空、序号越界或蓝牙取不到
+ */
 int cg_ble_radio_info(int idx, cg_ble_radio_t *out)
 {
     BLUETOOTH_FIND_RADIO_PARAMS params;
@@ -421,6 +479,14 @@ int cg_ble_radio_info(int idx, cg_ble_radio_t *out)
 }
 
 /** @brief 枚举"已知设备"（已配对 / 记得过的），共用一个实现 */
+/**
+ * @brief 枚举"已知设备"（已配对 / 记得过的），共用一个实现
+ * @param one 出口：命中第 idx 个时写入该设备的原始信息，没命中就不动它
+ * @param idx 要取的设备序号，0 起；给 -1 表示只要总数
+ * @param total 出口：本次枚举到的设备总数（一台都没枚举到就写 0）；可为 NULL
+ * @return int 1 命中并已写入 one；0 没命中
+ * @note 不做主动搜索（fIssueInquiry = FALSE）：那要几十秒，而且是"发现"不是"状态"
+ */
 static int bt_walk_devices(BLUETOOTH_DEVICE_INFO *one, int idx, int *total)
 {
     BLUETOOTH_DEVICE_SEARCH_PARAMS sp;
@@ -458,6 +524,10 @@ static int bt_walk_devices(BLUETOOTH_DEVICE_INFO *one, int idx, int *total)
     return found;
 }
 
+/**
+ * @brief 数已知蓝牙设备（已配对 / 记得过的）有几台
+ * @return int 设备台数；0 表示没有蓝牙、蓝牙符号取不到或一台都没记过
+ */
 int cg_ble_device_count(void)
 {
     BLUETOOTH_DEVICE_INFO di;
@@ -470,6 +540,12 @@ int cg_ble_device_count(void)
     return n;
 }
 
+/**
+ * @brief 取第 idx 台已知蓝牙设备的名字、地址与连接状态
+ * @param idx 设备序号，0 起
+ * @param out 出口；成功才写：name 为 UTF-8 名字、address 为 "AA:BB:CC:DD:EE:FF" 文本、connected 与 remembered 为 0/1
+ * @return int 0 成功；-1 out 为空、序号越界或蓝牙取不到
+ */
 int cg_ble_device_info(int idx, cg_ble_device_t *out)
 {
     BLUETOOTH_DEVICE_INFO di;
@@ -518,6 +594,14 @@ static unsigned long long addr_of_bytes(const unsigned char *b)
     return v;
 }
 
+/**
+ * @brief 把 64 位地址写成 "AA:BB:CC:DD:EE:FF" 文本
+ * @param addr 地址（0xAABBCCDDEEFF 就是 AA:BB:CC:DD:EE:FF）
+ * @param out 出口缓冲，写完保证 NUL 结尾
+ * @param out_size out 的字节容量；out 为空或容量 ≤ 0 时什么都不做
+ * @return void 无返回值
+ * @note 与 Windows 设置里显示的写法一致：**大写**、冒号分隔、最高字节在前
+ */
 void cg_ble_addr_str(unsigned long long addr, char *out, int out_size)
 {
     if (!out || out_size <= 0) return;
@@ -528,6 +612,12 @@ void cg_ble_addr_str(unsigned long long addr, char *out, int out_size)
              (unsigned)((addr >> 8) & 0xFF), (unsigned)(addr & 0xFF));
 }
 
+/**
+ * @brief 把 "AA:BB:CC:DD:EE:FF" 这类文本解成 64 位地址
+ * @param text 文本地址；分隔符随便（冒号 / 连字符 / 空格），十六进制位必须正好 12 个
+ * @param out 出口：成功才写
+ * @return int 0 成功；-1 text / out 为空、出现别的字符或位数不是 12
+ */
 int cg_ble_addr_from_str(const char *text, unsigned long long *out)
 {
     unsigned long long v      = 0;
@@ -551,6 +641,15 @@ int cg_ble_addr_from_str(const char *text, unsigned long long *out)
     return 0;
 }
 
+/**
+ * @brief 把 16 位 UUID 写成完整的 128 位标准基 UUID 文本
+ * @param uuid16 16 位 UUID（0x0000 ~ 0xFFFF）
+ * @param out 出口缓冲
+ * @param out_size out 的字节容量，要 > 36 才放得下
+ * @return int 写入的字符数（36）；-1 参数不合法或缓冲放不下
+ * @note **小写**：蓝牙文档、nRF Connect、Windows 都这么写 —— 要跟数据手册逐字比对的就是它的字形
+ *       （与"进制输出一律大写"那条不冲突：那条说的是寄存器数值，这条说的是 UUID 的字面量）
+ */
 int cg_ble_uuid16_str(unsigned short uuid16, char *out, int out_size)
 {
     int n;
@@ -563,6 +662,11 @@ int cg_ble_uuid16_str(unsigned short uuid16, char *out, int out_size)
 }
 
 /** @brief 把一个字符当十六进制数字解（不是就返回 -1） */
+/**
+ * @brief 把一个字符当十六进制数字解（不是就返回 -1）
+ * @param c 待解的字符（'0'~'9' / 'a'~'f' / 'A'~'F'）
+ * @return int 0 ~ 15；-1 不是十六进制数字
+ */
 static int hexval(char c)
 {
     if (c >= '0' && c <= '9') return c - '0';
@@ -571,6 +675,14 @@ static int hexval(char c)
     return -1;
 }
 
+/**
+ * @brief 从文本里解出 16 位 UUID（短写法和完整 128 位写法都认）
+ * @param text 文本 UUID；空格 / 制表符 / 短横线 / 大括号 / 前缀 0x 都会被吃掉
+ * @param out16 出口：成功才写解出的 16 位值
+ * @return int 0 成功；-1 text / out16 为空、含非法字符、位数不对或长写法尾巴不是标准基 UUID
+ * @note 长写法必须是标准基形态：去掉短横线后高 16 位是 0000、第 8 位起 24 位尾巴与基 UUID 一致，
+ *       真正要取的是中间第 4~7 位
+ */
 int cg_ble_uuid16_parse(const char *text, unsigned short *out16)
 {
     char canon[40];
@@ -626,6 +738,13 @@ int cg_ble_uuid16_parse(const char *text, unsigned short *out16)
 }
 
 /** @brief 把文本 UUID 归一成"小写、去掉短横线/大括号/0x"的形式；放不下返回 -1 */
+/**
+ * @brief 把文本 UUID 归一成"小写、去掉短横线/大括号/0x"的形式；放不下返回 -1
+ * @param text 待归一的文本 UUID；空指针或含非十六进制字符都算非法
+ * @param out 出口缓冲（归一到小写十六进制串）
+ * @param out_size out 的字节容量（含结尾 NUL）
+ * @return int 归一后的位数（大于 0）；-1 参数不合法、含非法字符或放不下
+ */
 static int uuid_canon(const char *text, char *out, int out_size)
 {
     int n = 0;
@@ -645,6 +764,13 @@ static int uuid_canon(const char *text, char *out, int out_size)
     return (n > 0) ? n : -1;
 }
 
+/**
+ * @brief 判断两个文本 UUID 是不是同一个
+ * @param a 一侧文本 UUID（短写法或 128 位长写法都行）
+ * @param b 另一侧文本 UUID
+ * @return int 1 相等；0 不相等（任一为空或写错也算 0）
+ * @note 能当 16 位解的两边就按 16 位比 —— 这样 "fff1" 与它那个长写法**相等**（最常见的用法）
+ */
 int cg_ble_uuid_equal(const char *a, const char *b)
 {
     char ca[40], cb[40];
@@ -658,6 +784,11 @@ int cg_ble_uuid_equal(const char *a, const char *b)
     return strcmp(ca, cb) == 0;
 }
 
+/**
+ * @brief 把 GATT 特征的 properties 位翻译成 CG_BLE_ATTR_* 标志
+ * @param properties 特征属性位原值（GATT 的 properties 字段）
+ * @return int CG_BLE_ATTR_READ / WRITE / WRITE_NR / NOTIFY / INDICATE 的按位或；一位都不认时是 0
+ */
 int cg_ble_attr_flags(unsigned properties)
 {
     int f = 0;
@@ -670,6 +801,13 @@ int cg_ble_attr_flags(unsigned properties)
     return f;
 }
 
+/**
+ * @brief 在已知设备里按地址或名字找一个
+ * @param addr_or_name 地址文本（能解成地址就按地址找）或设备名（不区分大小写的子串）
+ * @param out 出口：找到才写该设备的完整信息
+ * @return int 0 找到；-1 参数为空或没找到（不编一个出来）
+ * @note 名字用**不区分大小写的子串**匹配：现场记的名字常常只是设备名的一段
+ */
 int cg_ble_find_device(const char *addr_or_name, cg_ble_device_t *out)
 {
     unsigned long long want = 0;

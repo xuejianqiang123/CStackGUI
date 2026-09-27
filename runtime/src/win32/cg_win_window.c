@@ -98,6 +98,11 @@ static int accel_to_win(const cg_accel_t *k, BYTE *fVirt, WORD *vk)
 }
 
 /** @brief 按动作表建加速键表（没有带快捷键的动作时是空操作） */
+/**
+ * @brief 按动作表建加速键表（没有带快捷键的动作时是空操作）
+ * @param app 应用对象（动作表取自应用，句柄存进后端状态）
+ * @return void 无返回值
+ */
 void cgw_accel_build(cg_app_t *app)
 {
     cg_win_state_t *st;
@@ -128,6 +133,11 @@ void cgw_accel_build(cg_app_t *app)
 }
 
 /** @brief 销毁加速键表（幂等、NULL 安全） */
+/**
+ * @brief 销毁加速键表（幂等、NULL 安全）
+ * @param app 应用对象（无窗口或无表时为空操作）
+ * @return void 无返回值
+ */
 void cgw_accel_destroy(cg_app_t *app)
 {
     cg_win_state_t *st = app ? (cg_win_state_t *)app->natives : NULL;
@@ -140,6 +150,11 @@ void cgw_accel_destroy(cg_app_t *app)
 /* ------------------------------------------------------------ 后端入口 */
 
 /** @brief 后端初始化：DPI、公共控件、类注册、主窗口、tooltip、定时器、按树序建控件 */
+/**
+ * @brief 后端初始化：DPI、公共控件、类注册、主窗口、菜单/加速键、tooltip、定时器、按树序建控件
+ * @param app 应用对象（读文档建窗，句柄与状态写回应用）
+ * @return int 0 = 成功；-1 = 失败（状态分配或建窗失败）
+ */
 int cgw_win_init(cg_app_t *app)
 {
     cg_win_state_t *st;
@@ -419,6 +434,11 @@ int cgw_win_init(cg_app_t *app)
 }
 
 /** @brief 消息循环（IsDialogMessage 处理 Tab/回车导航），quit 置位即退出 */
+/**
+ * @brief 消息循环（IsDialogMessage 处理 Tab/回车导航），quit 置位即退出
+ * @param app 应用对象
+ * @return int 固定返回 0（退出原因由应用的 quit 表达）
+ */
 static int win_run(cg_app_t *app)
 {
     MSG msg;
@@ -450,6 +470,14 @@ static int win_run(cg_app_t *app)
 }
 
 /** @brief 后端清理：杀定时器、关窗口、停 GDI+、释放字体缓存 */
+/**
+ * @brief 后端清理：杀定时器、关窗口、停 GDI+、释放字体缓存
+ * @param app 应用对象（后端状态为空时直接返回）
+ * @return void 无返回值
+ * @note 除上述四项，还要按序收掉托盘图标、加速键表、串口链路、窗口图标，以及各控件的
+ *       位图 / imagelist / 背景刷 —— 关窗路径不走控件销毁流程，这些句柄只能在这里
+ *       统一释放，否则每次关窗都会漏
+ */
 static void win_shutdown(cg_app_t *app)
 {
     cg_win_state_t *st = (cg_win_state_t *)app->natives;
@@ -506,6 +534,12 @@ static void win_shutdown(cg_app_t *app)
 }
 
 /** @brief 改主窗口标题（UTF-8 -> UTF-16） */
+/**
+ * @brief 改主窗口标题（UTF-8 -> UTF-16）
+ * @param app 应用对象
+ * @param title UTF-8 标题文本
+ * @return void 无返回值
+ */
 static void win_set_title(cg_app_t *app, const char *title)
 {
     wchar_t *wt = cgw_wc_from_utf8(title);
@@ -519,12 +553,24 @@ static void win_set_title(cg_app_t *app, const char *title)
  */
 
 /** @brief 主窗口句柄；没有窗口返回 NULL（窗口类 API 的统一守卫） */
+/**
+ * @brief 主窗口句柄；没有窗口返回 NULL（窗口类 API 的统一守卫）
+ * @param app 应用对象（可为 NULL）
+ * @return HWND 主窗口句柄；无窗口时为 NULL（借用，不转移所有权）
+ */
 static HWND win_hwnd_of(const cg_app_t *app)
 {
     return (app && app->hwnd) ? (HWND)app->hwnd : NULL;
 }
 
 /** @brief 移动窗口到屏幕坐标 x,y */
+/**
+ * @brief 移动窗口到屏幕坐标 x,y
+ * @param app 应用对象
+ * @param x 屏幕 X（物理像素）
+ * @param y 屏幕 Y（物理像素）
+ * @return void 无返回值
+ */
 void cg_win_set_pos(cg_app_t *app, int x, int y)
 {
     HWND h = win_hwnd_of(app);
@@ -533,6 +579,15 @@ void cg_win_set_pos(cg_app_t *app, int x, int y)
 }
 
 /** @brief 改窗口客户区尺寸（width/height 是逻辑像素，和 .cgui 里同一套单位） */
+/**
+ * @brief 改窗口客户区尺寸（width/height 是逻辑像素，和 .cgui 里同一套单位）
+ * @param app 应用对象
+ * @param width 客户区宽（逻辑像素）
+ * @param height 客户区高（逻辑像素）
+ * @return void 无返回值
+ * @note 这里按 DPI 缩放。不缩放的话，150% 下业务调 cg_win_set_size(app, 760, 560) 只得到
+ *       760 物理像素、内容仍被裁 —— 与"窗口建窗时乘 scale"那条口径不统一（2026-09-23 高 DPI 审计）
+ */
 void cg_win_set_size(cg_app_t *app, int width, int height)
 {
     HWND h = win_hwnd_of(app);
@@ -554,6 +609,11 @@ void cg_win_set_size(cg_app_t *app, int width, int height)
 }
 
 /** @brief 把窗口移到当前显示器工作区正中 */
+/**
+ * @brief 把窗口移到当前显示器工作区正中
+ * @param app 应用对象
+ * @return void 无返回值
+ */
 void cg_win_center(cg_app_t *app)
 {
     HWND h = win_hwnd_of(app);
@@ -571,6 +631,12 @@ void cg_win_center(cg_app_t *app)
 }
 
 /** @brief 显示（show!=0）或隐藏窗口 */
+/**
+ * @brief 显示或隐藏窗口
+ * @param app 应用对象
+ * @param show 非 0 显示、0 隐藏
+ * @return void 无返回值
+ */
 void cg_win_show(cg_app_t *app, int show)
 {
     HWND h = win_hwnd_of(app);
@@ -578,6 +644,12 @@ void cg_win_show(cg_app_t *app, int show)
 }
 
 /** @brief 最小化 / 最大化 / 还原；cmd 传 "min" / "max" / "normal" */
+/**
+ * @brief 最小化 / 最大化 / 还原
+ * @param app 应用对象
+ * @param cmd 状态字符串，传 "min" / "max" / "normal"，非 min/max 时一律还原
+ * @return void 无返回值
+ */
 void cg_win_set_state(cg_app_t *app, const char *cmd)
 {
     HWND h = win_hwnd_of(app);
@@ -588,6 +660,12 @@ void cg_win_set_state(cg_app_t *app, const char *cmd)
 }
 
 /** @brief 总在最前（on!=0）或取消置顶 */
+/**
+ * @brief 总在最前或取消置顶
+ * @param app 应用对象
+ * @param on 非 0 置顶、0 取消置顶
+ * @return void 无返回值
+ */
 void cg_win_set_topmost(cg_app_t *app, int on)
 {
     HWND h = win_hwnd_of(app);
@@ -597,6 +675,12 @@ void cg_win_set_topmost(cg_app_t *app, int on)
 }
 
 /** @brief 换窗口图标（.ico 路径按 cgw_resolve_asset 找）；传 NULL 还原系统默认图标 */
+/**
+ * @brief 换窗口图标（.ico 路径按资源查找规则解析）
+ * @param app 应用对象
+ * @param ico_path .ico 路径；传 NULL 或空串还原系统默认图标，并释放上一张自建图标
+ * @return void 无返回值
+ */
 void cg_win_set_icon(cg_app_t *app, const char *ico_path)
 {
     cg_win_state_t *st = app ? (cg_win_state_t *)app->natives : NULL;
@@ -620,6 +704,13 @@ void cg_win_set_icon(cg_app_t *app, const char *ico_path)
 }
 
 /** @brief 建/改托盘图标：ico_path 传 NULL 用窗口图标，tip 传 NULL 用窗口标题 */
+/**
+ * @brief 建 / 改托盘图标
+ * @param app 应用对象
+ * @param ico_path 托盘图标 .ico 路径；NULL 或空串时退用窗口图标、再退系统默认
+ * @param tip 悬停提示；NULL 或空串时用窗口标题
+ * @return void 无返回值
+ */
 void cg_tray_set(cg_app_t *app, const char *ico_path, const char *tip)
 {
     cg_win_state_t *st;
@@ -667,6 +758,11 @@ void cg_tray_set(cg_app_t *app, const char *ico_path, const char *tip)
 }
 
 /** @brief 摘掉托盘图标 */
+/**
+ * @brief 摘掉托盘图标
+ * @param app 应用对象（没有托盘图标时为空操作）
+ * @return void 无返回值
+ */
 void cg_tray_remove(cg_app_t *app)
 {
     cg_win_state_t *st = app ? (cg_win_state_t *)app->natives : NULL;
@@ -681,6 +777,13 @@ void cg_tray_remove(cg_app_t *app)
 }
 
 /** @brief 气泡提示（托盘图标已有时才有效） */
+/**
+ * @brief 气泡提示（托盘图标已有时才有效）
+ * @param app 应用对象
+ * @param tip_title 气泡标题（UTF-8，可空）
+ * @param text 气泡正文（UTF-8，可空）
+ * @return void 无返回值
+ */
 void cg_tray_balloon(cg_app_t *app, const char *tip_title, const char *text)
 {
     cg_win_state_t *st = app ? (cg_win_state_t *)app->natives : NULL;
