@@ -1,4 +1,4 @@
-# 窗口 / 控件截图（`cg_win_screenshot` / `cg_widget_screenshot`）
+# 窗口 / 控件截图（`cg_win_screenshot` / `cg_widget_screenshot`）+ 剪贴板图片（`cg_clip_get_image`）
 
 目标：现场出问题时一键取证 —— 把整个窗口或某个控件存成 PNG，路径贴进工单。
 零新增链接依赖（GDI+ 早就在链接表里，也早在建窗口时 `GdiplusStartup` 过）。
@@ -30,6 +30,21 @@
    改成实际存在的四个函数名。
 2. **我自己的一次假验证**：用 `cmd` 的 `&` 并行跑命令时 `%errorlevel%` 读到的是启动前的旧值，
    于是"TSC_EXIT=0"是假的。以后一律把门禁输出写文件再读文件（见记忆里的那条教训）。
+
+## 追加：剪贴板图片（`cg_clip_get_image`）
+
+把示波器 / 相机截的图直接落进调试记录。同一片里做的，因为**存盘那条路与截图完全共用**
+（为此把 GDI+ 存 PNG 抽成了 `shot_save_png`）。
+
+- 优先 `CF_BITMAP`（系统会把它转成**本进程可用**的位图句柄，最省），没有就取 `CF_DIB` 自己拼
+  （`CreateDIBitmap` + 按 `biSize`/`biBitCount` 算像素偏移 —— 剪贴板给的是**打包 DIB**）。
+- **两条路都必须在 `CloseClipboard` 之前把像素复制出来**：剪贴板只保证句柄在打开期间有效。
+- `CF_DIB` 带来的 alpha 会丢（`CreateDIBitmap` 不保留）—— 截图粘贴本来也是不透明的，写明即可。
+- `--selftest` 里 GDI+ 还没起（它在建窗口时初始化）⇒ 返回 0；这条也写进了头文件与测试。
+
+真机验证（`build\clipprobe\` + `build\probe_clip.ps1`）：
+用 PowerShell 把一张 436×279 的 PNG 放进剪贴板 → 探针开窗时存成 `clip.png`（12330 字节）→
+**我逐像素看了那张图，与放进剪贴板的那张完全一致** ⇒ 剪贴板 → PNG 端到端成立。
 
 ## 已知缺口
 

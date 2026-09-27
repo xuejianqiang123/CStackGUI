@@ -1205,6 +1205,7 @@ int   cg_process_running(const char *exe_name);    /* 大小写不敏感 */
 char *cg_local_ip(void);                           /* 本机 IPv4；不发包、不查 DNS */
 char *cg_clip_get_text(void);
 int   cg_clip_set_text(const char *text);
+int   cg_clip_get_image(const char *path);   /* 剪贴板里的图片存成 PNG（1 = 成功；需 exe 在跑）*/
 int   cg_shell_open(const char *path_or_url);               /* 默认程序打开文件/网址 */
 int   cg_run_process(const char *cmd_line, int wait);
 char *cg_time_now(const char *fmt);
