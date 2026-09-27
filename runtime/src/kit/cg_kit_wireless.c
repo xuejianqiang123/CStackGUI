@@ -23,10 +23,11 @@
  *          注释 —— 原来"每次调用自己开-关"是错的：那样会让 `WlanCloseHandle` 间歇性崩在
  *          rpcrt4，且崩点随机）。除这一个句柄外不持任何可变状态。
  *
- *          **不提供"主动扫描"**（试过，撤了）：`WlanScan` 在本机实测返回 **87
- *          （ERROR_INVALID_PARAMETER）** —— 不是权限问题（那会是 5），参数与文档一致却仍失败，
- *          原因不明。留一个"本机实测不工作"的 API 比没有它更坏，所以撤掉，列表只用系统缓存
- *          （Windows 自己会定期重扫，界面隔几秒再读一次就有新数据）。哪天弄清了再说。
+ *          **主动扫描（cg_wifi_scan）**：2026-09-27 曾经把它撤掉，理由是"实测返回 87
+ *          （参数无效）、原因不明" —— **那个结论是错的**：真正的原因是本文件 `WlanScan` 的
+ *          typedef 漏了最后那个 `PVOID pReserved`（同一个病，见上面的 typedef 注释），
+ *          参数错位才报 87。修好后提交扫描返回 0，扫描接口已加回。
+ *          ⇒ 记性不如头文件：**"实测不工作"之前，先把签名对一遍官方声明**。
  *
  *          取不到的几种说法（都返回"0 个 / -1"，调用方不用自己分辨）：
  *            - 本机没有无线网卡（探针在这台机器上就是这种：接口数 = 0）；
@@ -51,8 +52,31 @@
 typedef DWORD (WINAPI *p_wlan_open_t)(DWORD, void *, DWORD *, HANDLE *);
 typedef DWORD (WINAPI *p_wlan_close_t)(HANDLE, void *);
 typedef DWORD (WINAPI *p_wlan_enum_t)(HANDLE, const void *, PWLAN_INTERFACE_INFO_LIST *);
-typedef DWORD (WINAPI *p_wlan_query_t)(HANDLE, const GUID *, WLAN_INTF_OPCODE, void *, DWORD *, void **);
-typedef DWORD (WINAPI *p_wlan_avail_t)(HANDLE, const GUID *, DWORD, PWLAN_AVAILABLE_NETWORK_LIST *);
+/** @note **7 个参数，最后一个别漏！** 原来这里写成 6 个（少了 `PWLAN_OPCODE_VALUE_TYPE` 出口），
+ *  x64 上第 7 个参数是**从栈上取**的 ⇒ wlanapi 会把"栈上捡到的垃圾"当指针写一个 4 字节出口值，
+ *  等于往调用者栈帧里乱写：表现是**随构建布局漂移**的怪事（-O1 把别的函数的计数打坏成 62、
+ *  -O2 崩在后面的 WLAN API 里），而 `-fstack-protector-all` 抓不到（写的是任意地址，不是本帧缓冲）。
+ *  2026-09-27 追了一整天的"memcheck 套件数不对"就是它。
+ *  ⇒ 运行期取符号 + 自制 typedef 时，**必须逐个参数对官方签名**。 */
+typedef DWORD (WINAPI *p_wlan_query_t)(HANDLE, const GUID *, WLAN_INTF_OPCODE, void *,
+                                       DWORD *, void **, WLAN_OPCODE_VALUE_TYPE *);
+/** @note **5 个参数，第 4 个 `pReserved` 最容易漏**（原来只写了 4 个）：
+ *  `WlanGetAvailableNetworkList(h, guid, dwFlags, pReserved, ppAvailableNetworkList)`。
+ *  少一个参数的后果很隐蔽 —— 列表指针落进 pReserved 槽（我传的是 `&alist`），
+ *  真正的出口参数成了**栈上捡到的垃圾地址**，wlanapi 于是往那儿写 8 字节 ⇒ **野写**：
+ *    - 表现为"随构建布局漂移"的怪事（-O1 把别的函数的计数打坏成 62、-O2 崩在后面的 WLAN API 里）；
+ *    - 而且 `alist` 永远是 NULL ⇒ **周边网络列表永远为空**，我还把它当成"系统扫描缓存是空的"
+ *      解释掉了（空结果被解释掉，正是最该追的那种）。
+ *  2026-09-27 追了一整天的"memcheck 套件数不对"就是这两个漏参数（`WlanQueryInterface` 漏第 7 个、
+ *  这里漏第 4 个）。⇒ 运行期取符号 + 自制 typedef，**必须逐个参数对官方声明**（比对 MinGW 的
+ *  wlanapi.h / bluetoothapis.h 就行，别凭记忆）。 */
+typedef DWORD (WINAPI *p_wlan_avail_t)(HANDLE, const GUID *, DWORD, void *,
+                                       PWLAN_AVAILABLE_NETWORK_LIST *);
+/** @note **5 个参数，最后那个 `PVOID pReserved` 别漏** —— 原来写成 4 个，于是 `WlanScan`
+ *  返回 **87（ERROR_INVALID_PARAMETER）**，而我把它当成"Windows 的行为"写进了文档与文件头 ✗。
+ *  同一个病（漏参数 ⇒ 参数错位 + 栈上垃圾当指针）。修好后扫描是能用的，见 cg_wifi_scan()。 */
+typedef DWORD (WINAPI *p_wlan_scan_t)(HANDLE, const GUID *, const PDOT11_SSID,
+                                      const PWLAN_RAW_DATA, void *);
 typedef void  (WINAPI *p_wlan_free_t)(void *);
 
 typedef HANDLE (WINAPI *p_bt_first_radio_t)(const BLUETOOTH_FIND_RADIO_PARAMS *, HANDLE *);
@@ -69,6 +93,7 @@ static p_wlan_close_t g_wlan_close;
 static p_wlan_enum_t  g_wlan_enum;
 static p_wlan_query_t g_wlan_query;
 static p_wlan_avail_t g_wlan_avail;
+static p_wlan_scan_t  g_wlan_scan;
 static p_wlan_free_t  g_wlan_free;
 static p_bt_first_radio_t g_bt_first_radio;
 static p_bt_next_radio_t  g_bt_next_radio;
@@ -104,6 +129,7 @@ static int wlan_ready(void)
     g_wlan_enum  = (p_wlan_enum_t)(void *)GetProcAddress(m, "WlanEnumInterfaces");
     g_wlan_query = (p_wlan_query_t)(void *)GetProcAddress(m, "WlanQueryInterface");
     g_wlan_avail = (p_wlan_avail_t)(void *)GetProcAddress(m, "WlanGetAvailableNetworkList");
+    g_wlan_scan  = (p_wlan_scan_t)(void *)GetProcAddress(m, "WlanScan");   /* 可选：取不到就不提供扫描 */
     g_wlan_free  = (p_wlan_free_t)(void *)GetProcAddress(m, "WlanFreeMemory");
     if (!g_wlan_open || !g_wlan_close || !g_wlan_enum || !g_wlan_query || !g_wlan_avail || !g_wlan_free) {
         cg_log(CG_LOG_WARN, "无线：wlanapi.dll 里缺符号（系统太老？），WiFi 状态查不了");
@@ -118,14 +144,13 @@ static DWORD  g_wlan_ver;
 static int    g_wlan_open_failed;     /* 开过一次失败就别每次再试（也别刷日志） */
 
 /** @brief 取（必要时建）WLAN 客户端句柄；返回 NULL = 这块用不了
- *  @note **为什么不每次调用开-关**（原来就是这么写的，是错的）：实测反复
- *        `WlanOpenHandle`/`WlanCloseHandle` 会让 `WlanCloseHandle` **间歇性崩在 rpcrt4**
- *        —— 2026-09-27 用 gdb 抓到确切调用栈：
- *          `WlanCloseHandle` -> `RpcSsDestroyClientContext` -> `RPCRT4!NDRCContextBinding` -> SIGSEGV
- *        表现是"随机、位置漂移"的崩溃（早崩在 cg_wifi_count 的 close、晚崩在
- *        cg_wifi_networks 的 close）⇒ **看日志尾部永远找不到病根**（尾部只是最后被打印的，
- *        不是崩点）。改成"进程内开一次、复用"后连跑不再出现。
- *        代价：这一个句柄到进程结束才由系统回收 —— 比"偶尔崩一下"划算得多。 */
+ *  @note 句柄按进程开一次、复用。**但别把这里当成哪个崩溃的解药**（更正一次归因）：
+ *        2026-09-27 曾出现 `WlanCloseHandle` 崩在 `RPCRT4!NDRCContextBinding` 的调用栈，
+ *        当时判断是"反复开关句柄"引起的，于是改成缓存 —— 后来查明那次崩溃的真正来源是
+ *        **本文件两处 typedef 漏参数造成的野写**（见 `p_wlan_avail_t` / `p_wlan_query_t` 的注释），
+ *        wlanapi 的内部状态被写坏了，才在后续调用里崩。缓存句柄本身没问题（一个够用、
+ *        少一次开关），所以留着；但**因果要说对**：不是它在修 bug。
+ *        代价：这一个句柄到进程结束才由系统回收。 */
 static HANDLE wlan_handle(void)
 {
     if (!wlan_ready()) return NULL;
@@ -212,8 +237,7 @@ int cg_wifi_count(void)
 int cg_wifi_info(int idx, cg_wifi_info_t *out)
 {
     PWLAN_INTERFACE_INFO_LIST list = NULL;
-    HANDLE  h   = NULL;
-    DWORD   ver = 0;
+    HANDLE  h;
     int     ret = -1;
 
     if (!out || idx < 0) return -1;
@@ -234,11 +258,12 @@ int cg_wifi_info(int idx, cg_wifi_info_t *out)
 
         /* 连上了才有 SSID / 信号：问"当前连接"这条 opcode */
         {
-            DWORD               sz = 0;
+            DWORD                      sz = 0;
+            WLAN_OPCODE_VALUE_TYPE     vt = wlan_opcode_value_type_invalid;   /* 第 7 个参数：不关心也**必须给** */
             WLAN_CONNECTION_ATTRIBUTES *ca = NULL;
 
             if (g_wlan_query(h, &it->InterfaceGuid, wlan_intf_opcode_current_connection,
-                             NULL, &sz, (void **)&ca) == 0 && ca) {
+                             NULL, &sz, (void **)&ca, &vt) == 0 && ca) {
                 const WLAN_ASSOCIATION_ATTRIBUTES *as = &ca->wlanAssociationAttributes;
                 int len = (int)as->dot11Ssid.uSSIDLength;
 
@@ -256,12 +281,36 @@ int cg_wifi_info(int idx, cg_wifi_info_t *out)
     return ret;
 }
 
+int cg_wifi_scan(void)
+{
+    PWLAN_INTERFACE_INFO_LIST ilist = NULL;
+    HANDLE  h;
+    int     ret = -1;
+
+    if (!wlan_ready() || !g_wlan_scan) return -1;      /* 老系统没有 WlanScan：如实说不行 */
+    h = wlan_handle();
+    if (!h) return -1;
+    if (g_wlan_enum(h, NULL, &ilist) == 0 && ilist && ilist->dwNumberOfItems > 0) {
+        /* 只在第一块网卡上扫；结果是**异步**的 —— 几秒后自己去 cg_wifi_networks() 取。 */
+        DWORD rc = g_wlan_scan(h, &ilist->InterfaceInfo[0].InterfaceGuid, NULL, NULL, NULL);
+
+        if (rc == 0) {
+            ret = 0;
+        } else {
+            /* 见到 5 就是"位置权限"：Win10 起扫描要它，去「设置 > 隐私 > 位置」打开 */
+            cg_log(CG_LOG_WARN, "无线：触发扫描失败（err=%lu）%s", (unsigned long)rc,
+                   rc == 5 ? " —— 去「设置 > 隐私 > 位置」把位置权限打开" : "");
+        }
+    }
+    if (ilist) g_wlan_free(ilist);
+    return ret;
+}
+
 int cg_wifi_networks(cg_wifi_net_t *out, int cap, int *count)
 {
     PWLAN_INTERFACE_INFO_LIST     ilist = NULL;
     PWLAN_AVAILABLE_NETWORK_LIST  alist = NULL;
-    HANDLE  h   = NULL;
-    DWORD   ver = 0;
+    HANDLE  h;
     int     n   = 0;
 
     if (count) *count = 0;
@@ -274,7 +323,7 @@ int cg_wifi_networks(cg_wifi_net_t *out, int cap, int *count)
         return -1;                       /* 没有无线网卡（本机探针就是这条路径） */
     }
     /* 只看第一块网卡：多网卡同时看周边 AP 意义不大，而且列表会重复 */
-    if (g_wlan_avail(h, &ilist->InterfaceInfo[0].InterfaceGuid, 0, &alist) == 0 && alist) {
+    if (g_wlan_avail(h, &ilist->InterfaceInfo[0].InterfaceGuid, 0, NULL, &alist) == 0 && alist) {
         DWORD i;
 
         for (i = 0; i < alist->dwNumberOfItems; i++) {

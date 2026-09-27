@@ -74,6 +74,14 @@ static void test_wifi(void)
     cg_test_int("count 出口为 NULL 也不崩（只是不给个数）",
                 cg_wifi_networks(nets, 4, NULL) == 0 || cg_wifi_networks(nets, 4, NULL) == -1, 1);
 
+    cg_test_note("---- 主动扫描（异步提交，几秒后结果才出现在上面那个列表里）----");
+    i = cg_wifi_scan();
+    snprintf(buf, sizeof buf, "cg_wifi_scan() 返回 %d（0 = 已提交；-1 = 没网卡 / 系统不支持）", i);
+    cg_test_note(buf);
+    /* 断契约：有网卡时"提交得出去或被系统挡住"都算正常（位置权限会挡住），没网卡时必须 -1 */
+    if (cg_wifi_count() > 0) cg_test_int("有网卡时是 0 或 -1，不是别的", i == 0 || i == -1, 1);
+    else                     cg_test_int("没网卡时如实返回 -1", i, -1);
+
     found = -123;
     i     = cg_wifi_networks(nets, 16, &found);
     snprintf(buf, sizeof buf, "周边网络接口返回 %d，count=%d", i, found);

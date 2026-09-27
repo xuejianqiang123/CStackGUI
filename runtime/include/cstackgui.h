@@ -1304,12 +1304,17 @@ typedef struct {
 int cg_wifi_count(void);
 /** 取第 idx 块网卡的状态：0 = 成功；-1 = 没有这么多块 / wlanapi 取不到 */
 int cg_wifi_info(int idx, cg_wifi_info_t *out);
+/** 让系统做一次无线扫描（**异步**：本函数不等待，几秒后结果自己出现在 cg_wifi_networks() 里）。
+ *  @return int 0 = 已提交；-1 = 没有无线网卡 / 取不到 / 这块不支持（老系统没有 WlanScan）。
+ *  @note 2026-09-27 更正：早先这里写着"`WlanScan` 实测返回 87（参数无效），已撤掉" ——
+ *        真相是**本框架自己的 typedef 漏了参数**（见 cg_kit_wireless.c 里 `p_wlan_scan_t` 的注释），
+ *        不是 Windows 的行为。接口已加回，实测提交成功。 */
+int cg_wifi_scan(void);
 /** 周边可见网络列表（同一块网卡；**同名的多个 BSSID 已合并**，取信号最强的）。
  *  返回 0 = 成功（count 给看到的个数，可能比 cap 大）；-1 = 没有无线网卡或取不到。
  *  out 放不下的丢掉、但 count 里给的是**实际看到**的个数。
- *  @note 数据来自系统最近一次扫描的缓存 ⇒ 刚开机/刚连上时可能是空的（本机 2026-09-27 实测如此）。
- *        **没有"立刻刷新"的接口**：`WlanScan` 在本机实测返回 87（参数无效），已撤掉 ——
- *        见 runtime/src/kit/cg_kit_wireless.c 文件头。隔几秒再读一次即可，Windows 自己会定期重扫。 */
+ *  @note 数据来自系统最近一次扫描的结果 ⇒ **要立刻刷新就先调 cg_wifi_scan()**（几秒后再读）；
+ *        不调也行，Windows 自己会定期重扫。 */
 int cg_wifi_networks(cg_wifi_net_t *out, int cap, int *count);
 
 /** 本机蓝牙无线电 */
