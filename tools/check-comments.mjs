@@ -144,9 +144,11 @@ function indexFunctions(src) {
     const line = lines[i];
     if (line === '' || /^\s/.test(line)) continue;      // 只看顶格行
     if (/^[#}\/*]/.test(line)) continue;
-    // 第三方 ABI 声明（如 __declspec(dllimport) 的 GDI+ 系列）不是本工程的函数，
-    // §1 的注释口径管不到它们
+    // 第三方 ABI 声明不是本工程的函数，§1 的注释口径管不到它们：
+    //   ① __declspec(dllimport) 的 GDI+ 系列；
+    //   ② 运行期 GetProcAddress 取的 DLL 函数指针 typedef（typedef DWORD (WINAPI *Fn)(...)）
     if (/^__declspec|^extern\s+"C"/.test(line)) continue;
+    if (/\bWINAPI\s+\*/.test(line)) continue;
     if (!/\(/.test(line)) continue;
     if (/\b(if|for|while|switch|return|else)\b/.test(line)) continue;
 
