@@ -12,11 +12,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-/** @brief 建环；容量非法或没内存返回 0。
- *  @note  **先无条件清零，绝不读旧内容**。这样即使调用方递进来一个没初始化的结构体，
- *         也不会去 free 一个野指针 —— free 野指针是一次堆损坏，而它报错的位置往往
- *         离现场很远（这里踩过：症状是整套测试跑到一半进程 0xC0000374 退出）。
- *         代价是"要用新容量重建，得先自己 cg_ring_free"，这条别忘了。 */
+/**
+ * @brief 建环（先无条件清零，绝不读旧内容）
+ * @param r 目标环；可以递未初始化的结构体进来
+ * @param cap 容量字节数；<= 0 视为非法
+ * @return int 1 成功、0 失败（参数非法或没内存）
+ * @note **先无条件清零，绝不读旧内容**。这样即使调用方递进来一个没初始化的结构体，
+ *       也不会去 free 一个野指针 —— free 野指针是一次堆损坏，而它报错的位置往往
+ *       离现场很远（这里踩过：症状是整套测试跑到一半进程 0xC0000374 退出）。
+ *       代价是"要用新容量重建，得先自己 cg_ring_free"，这条别忘了
+ */
 int cg_ring_init(cg_ring_t *r, int cap)
 {
     if (!r) return 0;
@@ -32,7 +37,11 @@ int cg_ring_init(cg_ring_t *r, int cap)
     return 1;
 }
 
-/** @brief 释放（幂等；NULL 安全） */
+/**
+ * @brief 释放环占用的缓冲（幂等、NULL 安全）
+ * @param r 目标环
+ * @return void 无返回值
+ */
 void cg_ring_free(cg_ring_t *r)
 {
     if (!r) return;
@@ -44,7 +53,14 @@ void cg_ring_free(cg_ring_t *r)
     r->dropped = 0;
 }
 
-/** @brief 写入 len 字节，返回实际写入。满了丢最老的；一次就超过容量时只留最后 cap 个字节 */
+/**
+ * @brief 写入字节
+ * @param r 目标环
+ * @param data 要写的字节
+ * @param len 字节数
+ * @return int 实际写入的字节数；参数非法或没建好返回 0
+ * @note 满了丢最老的；一次就超过容量时只留最后 cap 个字节
+ */
 int cg_ring_push(cg_ring_t *r, const void *data, int len)
 {
     const unsigned char *p = (const unsigned char *)data;
@@ -78,7 +94,13 @@ int cg_ring_push(cg_ring_t *r, const void *data, int len)
     return len;
 }
 
-/** @brief 取出最多 cap 字节，返回实际取出（先进先出） */
+/**
+ * @brief 取出字节（先进先出）
+ * @param r 目标环
+ * @param out 输出缓冲
+ * @param cap out 的字节数
+ * @return int 实际取出的字节数；没数据或参数非法返回 0
+ */
 int cg_ring_pop(cg_ring_t *r, void *out, int cap)
 {
     unsigned char *p = (unsigned char *)out;
@@ -96,13 +118,21 @@ int cg_ring_pop(cg_ring_t *r, void *out, int cap)
     return n;
 }
 
-/** @brief 可读字节数 */
+/**
+ * @brief 可读字节数
+ * @param r 目标环
+ * @return int 当前有多少字节；r 为 NULL 或没建好返回 0
+ */
 int cg_ring_count(const cg_ring_t *r)
 {
     return (r && r->buf) ? r->count : 0;
 }
 
-/** @brief 清空（dropped 是"历史上一共丢了多少"的累计，清空不清它） */
+/**
+ * @brief 清空（dropped 是"历史上一共丢了多少"的累计，清空不清它）
+ * @param r 目标环
+ * @return void 无返回值
+ */
 void cg_ring_clear(cg_ring_t *r)
 {
     if (!r) return;

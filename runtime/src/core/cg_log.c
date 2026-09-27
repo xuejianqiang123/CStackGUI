@@ -17,7 +17,11 @@ static FILE *s_log = NULL;
 static char  s_path[1400] = { 0 };
 static int   s_level = CG_LOG_INFO;
 
-/** @brief 等级标签（对齐日志里的列宽，方便 grep） */
+/**
+ * @brief 等级标签（对齐日志里的列宽，方便 grep）
+ * @param level 日志等级（CG_LOG_INFO / WARN / ERROR）
+ * @return const char * 静态字符串，定长 5 字符，别 free
+ */
 static const char *level_tag(int level)
 {
     switch (level) {
@@ -27,7 +31,11 @@ static const char *level_tag(int level)
     }
 }
 
-/** @brief 打开日志文件（追加）；path 为空表示只写 stderr */
+/**
+ * @brief 打开日志文件（追加）
+ * @param path 日志文件路径（UTF-8）；传 NULL 或空串表示只写 stderr
+ * @return void 无返回值（打不开就退化成只有 stderr，不打扰用户）
+ */
 void cg_log_open(const char *path)
 {
     if (s_log) {
@@ -42,7 +50,11 @@ void cg_log_open(const char *path)
     snprintf(s_path, sizeof(s_path), "%s", path);
 }
 
-/** @brief 关闭日志文件（进程收尾时调；之后 cg_log 只写 stderr） */
+/**
+ * @brief 关闭日志文件（之后 cg_log 只写 stderr）
+ * @return void 无返回值
+ * @note 进程收尾时调
+ */
 void cg_log_close(void)
 {
     if (s_log) {
@@ -51,19 +63,31 @@ void cg_log_close(void)
     }
 }
 
-/** @brief 当前日志文件路径；没打开返回 NULL */
+/**
+ * @brief 取当前日志文件路径
+ * @return const char * 内部缓冲，别 free；没打开返回 NULL
+ */
 const char *cg_log_file(void)
 {
     return s_path[0] ? s_path : NULL;
 }
 
-/** @brief 只记 >= level 的条目（默认 CG_LOG_INFO） */
+/**
+ * @brief 设日志的过滤等级
+ * @param level 只记 >= 它的条目
+ * @return void 无返回值（默认 CG_LOG_INFO）
+ */
 void cg_log_set_level(int level)
 {
     s_level = level;
 }
 
-/** @brief 写一条日志：镜像到 stderr，并追加到日志文件（带时间戳） */
+/**
+ * @brief 写一条日志：镜像到 stderr，并追加到日志文件（带时间戳）
+ * @param level 日志等级，低于当前过滤等级的条目直接丢弃
+ * @param fmt printf 风格格式串
+ * @return void 无返回值（没打开日志文件时只写 stderr）
+ */
 void cg_log(int level, const char *fmt, ...)
 {
     char    msg[1024];

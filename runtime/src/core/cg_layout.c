@@ -26,13 +26,27 @@
 /** .cgui 的 grow 允许的上限（超过按上限算） */
 #define CG_LAYOUT_MAX_WEIGHT 99
 
-/** @brief box 在该轴上的位置字段（axis 0 = 横轴用 x，1 = 竖轴用 y） */
+/**
+ * @brief 取 box 在该轴上的位置字段
+ * @param b 布局单元
+ * @param axis 0 = 横轴（用 x）、1 = 竖轴（用 y）
+ * @return int * 指向该字段的指针，调用方就地读写
+ */
 static int *box_pos(cg_layout_box_t *b, int axis) { return axis ? &b->y : &b->x; }
 
-/** @brief box 在该轴上的尺寸字段（axis 0 = 横轴用 w，1 = 竖轴用 h） */
+/**
+ * @brief 取 box 在该轴上的尺寸字段
+ * @param b 布局单元
+ * @param axis 0 = 横轴（用 w）、1 = 竖轴（用 h）
+ * @return int * 指向该字段的指针，调用方就地读写
+ */
 static int *box_size(cg_layout_box_t *b, int axis) { return axis ? &b->h : &b->w; }
 
-/** @brief 取值并夹到 0..CG_LAYOUT_MAX_WEIGHT */
+/**
+ * @brief 取该 box 的权重并夹到合法范围
+ * @param b 布局单元
+ * @return int 夹到 0..CG_LAYOUT_MAX_WEIGHT 的权重
+ */
 static int box_weight(const cg_layout_box_t *b)
 {
     int g = b->grow;
@@ -46,8 +60,9 @@ static int box_weight(const cg_layout_box_t *b)
  * @brief 在**一个轴**上分配余量（横轴与竖轴共用这份逻辑）
  * @param boxes box 数组（原地改）
  * @param count 个数
- * @param axis  0 = 横轴（x/w），1 = 竖轴（y/h）
+ * @param axis 0 = 横轴（x/w），1 = 竖轴（y/h）
  * @param delta 该轴上"容器变大了多少"（负数 = 缩小）；0 直接返回
+ * @return void 无返回值
  */
 static void layout_axis(cg_layout_box_t *boxes, int count, int axis, int delta)
 {
@@ -127,11 +142,20 @@ static void layout_axis(cg_layout_box_t *boxes, int count, int axis, int delta)
     free(idx);
 }
 
-/** @brief 按 grow 把"容器尺寸变化"分配到各 box（详见 .codebuddy/plans/grow-layout.md §2）
- *  @note 两条可直接验证的性质（`tests/unit/test_layout.c` 都钉了）：
+/**
+ * @brief 按 grow 把"容器尺寸变化"分配到各 box（详见 .codebuddy/plans/grow-layout.md §2）
+ * @param boxes 布局单元数组；进来是基准坐标，出去是算好的坐标
+ * @param count boxes 的个数
+ * @param base_w 容器的基准宽（设计宽）
+ * @param base_h 容器的基准高（设计高）
+ * @param now_w 容器的当前宽
+ * @param now_h 容器的当前高
+ * @return void 无返回值
+ * @note 两条可直接验证的性质（`tests/unit/test_layout.c` 都钉了）：
  *        ① **平移保持带间距**：一条带之后的兄弟都平移同一个累计量 ⇒ 带与带之间的距离不变；
  *        ② **末带右端**：只有它**本来就贴着容器旧边界**时，才会正好落到新边界
- *           （因为不丢像素的是 Σ"实际吃到的量" == 该轴变化量）；本来留了缝的，缝也保持。 */
+ *           （因为不丢像素的是 Σ"实际吃到的量" == 该轴变化量）；本来留了缝的，缝也保持。
+ */
 void cg_layout_apply(cg_layout_box_t *boxes, int count,
                      int base_w, int base_h, int now_w, int now_h)
 {
