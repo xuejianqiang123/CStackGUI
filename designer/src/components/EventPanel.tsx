@@ -153,6 +153,9 @@ export default function EventPanel({ doc, node, onBeginHistory, onApply }: Props
           const value = curEvents[ev] ?? "";
           const others = othersOf(value);
           const suggested = `on_${(isWindow ? "window" : node!.id).replace(/[^0-9a-zA-Z_]/g, "_")}_${ev}`;
+          /* click 已经被「动作」接管：运行时不再看 events.click（也不派发 click 回调），
+             同时绑着它还会被 --selftest 判为错误（见 cstackgui.h 的「动作」一节） */
+          const byAction = !isWindow && ev === "click" && !!node!.action;
           return (
             <div key={ev} className={value ? "ev-row bound" : "ev-row"}>
               {/* 第一行：事件名 + 操作按钮（名字长、按钮也不能折行，索性各占一行的两侧）；
@@ -176,7 +179,12 @@ export default function EventPanel({ doc, node, onBeginHistory, onApply }: Props
                   ) : null}
                   <button
                     className="mini"
-                    title={`自动命名：按「控件 id + 事件名」生成规范回调名 ${suggested}`}
+                    title={
+                      byAction
+                        ? "click 已由动作接管，不能再绑 click 回调"
+                        : `自动命名：按「控件 id + 事件名」生成规范回调名 ${suggested}`
+                    }
+                    disabled={byAction}
                     onClick={() => setEvent(ev, suggested)}
                   >
                     自动
@@ -191,10 +199,18 @@ export default function EventPanel({ doc, node, onBeginHistory, onApply }: Props
               <input
                 className="input mono ev-input"
                 value={value}
-                placeholder={suggested}
+                placeholder={byAction ? "已由动作接管" : suggested}
+                title={byAction ? "这个控件的点击走「动作」的回调，不再走 events.click" : undefined}
+                disabled={byAction}
                 onChange={(e) => setEvent(ev, e.target.value)}
                 spellCheck={false}
               />
+              {byAction ? (
+                <p className="muted small">
+                  已由动作「{node!.action}」接管：运行时会忽略这一份，同时绑 <code>click</code> 会被
+                  <code>--selftest</code> 判为错误。要改就在「属性 → 动作」里改。
+                </p>
+              ) : null}
             </div>
           );
         })}

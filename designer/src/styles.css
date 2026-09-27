@@ -2307,3 +2307,61 @@ button.icon-pick svg {
   margin: 6px 0 0;
   line-height: 1.6;
 }
+
+/* 「动作」对话框：一条动作 = 一张卡片 */
+.act-card {
+  margin-bottom: 10px;
+  padding: 10px 11px;
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.act-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+/* 动作名是卡片标题：占满剩余宽度，删除按钮贴右 */
+.act-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+}
+.act-card-head .mini {
+  flex: 0 0 auto;
+}
+.act-note {
+  margin: 2px 0 4px;
+  line-height: 1.5;
+}
+/* 快捷键的可用键列表：整张对话框只写一遍（每张卡片都印一遍太吵） */
+.act-legend {
+  margin: 0 0 10px;
+  line-height: 1.6;
+}
+.modal-foot .mini {
+  flex: 0 0 auto;
+  padding: 6px 14px;
+}
+
+/* 属性面板里的「菜单项动作」：一项一行，缩进用「n 层」文字表示（面板太窄，靠空格缩进看不出来） */
+.act-item {
+  margin-bottom: 8px;
+}
+.act-item-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.act-item-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.act-item-head select {
+  flex: 1 1 auto;
+  min-width: 0;
+}

@@ -8,7 +8,17 @@
 
 import { WINDOW_EVENTS, type CgEvent } from "./events.js";
 import { KIND_MAP, isNumEdit } from "./kinds.js";
-import { INFO_KEYS, type CgApp, type CgDoc, type CgInfo, type CgNode, type CgStyle, type CgTreeItem } from "./types.js";
+import {
+  INFO_KEYS,
+  isSafeActionName,
+  type CgAction,
+  type CgApp,
+  type CgDoc,
+  type CgInfo,
+  type CgNode,
+  type CgStyle,
+  type CgTreeItem,
+} from "./types.js";
 
 export function serializeDoc(doc: CgDoc): string {
   return `${JSON.stringify(cleanDoc(doc), null, 2)}\n`;
@@ -17,10 +27,30 @@ export function serializeDoc(doc: CgDoc): string {
 function cleanTree(item: CgTreeItem): CgTreeItem {
   const out: CgTreeItem = { text: item.text };
   if (item.id) out.id = item.id;
+  if (item.action) out.action = item.action;
   if (item.expanded) out.expanded = true;
   if (item.checked) out.checked = true;
   if (item.children?.length) out.children = item.children.map(cleanTree);
   return out;
+}
+
+/** 动作表：只写填过的字段（缺省值不写，和 cleanNode 一个口径）。
+ *  一个字段都没填的动作仍然写出 `{}` —— 它可能已经被菜单项引用着，
+ *  整条丢掉会让引用变成「不存在的动作」。 */
+function cleanActions(actions: Record<string, CgAction> | undefined): Record<string, CgAction> | undefined {
+  if (!actions) return undefined;
+  const out: Record<string, CgAction> = {};
+  for (const [name, a] of Object.entries(actions)) {
+    if (!isSafeActionName(name.trim())) continue;
+    const item: CgAction = {};
+    if (a.text) item.text = a.text;
+    if (a.accel) item.accel = a.accel;
+    if (a.handler) item.handler = a.handler;
+    if (a.checked === true) item.checked = true;
+    if (a.enabled === false) item.enabled = false;
+    out[name] = item;
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** 去掉 undefined 和空字段，让存出来的文件干净、可读、diff 友好 */
@@ -80,6 +110,8 @@ function cleanNode(node: CgNode): CgNode {
   if (node.input) out.input = node.input;
   if (node.border) out.border = node.border;
   if (node.spin) out.spin = node.spin;
+  /* 引用动作：只有真填了才写（旧的 .cgui 里没有这个字段，行为完全不变） */
+  if (node.action) out.action = node.action;
   if (node.bind?.src) {
     out.bind = node.bind.two ? { src: node.bind.src, two: true } : { src: node.bind.src };
   }
@@ -188,5 +220,12 @@ function cleanDoc(doc: CgDoc): CgDoc {
     if (Object.keys(ev).length) app.events = ev;
   }
 
-  return { cgui: 1, app, widgets: doc.widgets.map(cleanNode) };
+  /* 动作表紧跟在 app 后面：顶层三个东西，读起来是「窗口 → 命令 → 界面」 */
+  const actions = cleanActions(doc.actions);
+  return {
+    cgui: 1,
+    app,
+    ...(actions ? { actions } : {}),
+    widgets: doc.widgets.map(cleanNode),
+  };
 }

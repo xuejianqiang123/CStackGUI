@@ -18,6 +18,8 @@ type Props = {
   onSaveAs: () => void;
   onExportC: () => void;
   onOpenInfo: () => void;
+  /** 「动作」对话框：管理命名命令（文字 + 快捷键 + 回调名），菜单项/控件引用它 */
+  onOpenActions: () => void;
   running: boolean;
   onRun: () => void;
   publishing: boolean;
@@ -56,6 +58,9 @@ export default function Toolbar(p: Props) {
         <button onClick={p.onSaveAs}>另存为</button>
         <button onClick={p.onOpenInfo} title="程序名称 / 版本号 / 作者 / 版权……写进编译后的 exe 版本信息">
           程序配置
+        </button>
+        <button onClick={p.onOpenActions} title="动作：一条命名命令（文字 + 快捷键 + 回调名），菜单项和控件引用它">
+          动作
         </button>
       </div>
 

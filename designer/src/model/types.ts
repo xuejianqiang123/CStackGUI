@@ -27,6 +27,26 @@ export type CgStyle = {
 
 export type CgRect = { x: number; y: number; w: number; h: number };
 
+/** 动作（actions）：一条命名命令 = 文字 + 快捷键 + 一个回调名。
+ *  菜单项与控件用 `action` 引用它，于是「一个回调、一处启用状态」同时管住所有引用点。
+ *  真相在 runtime/src/core/cg_action.c；字段语义见 cstackgui.h 的「动作（actions）」一节。 */
+export type CgAction = {
+  /** 引用它的菜单项 / 控件显示的文字（空 = 用引用点自己的 text） */
+  text?: string;
+  /** 快捷键，如 "Ctrl+S"（空 = 无）。不允许无修饰键的单个字母/数字 */
+  accel?: string;
+  /** C 侧 CG_BIND 的名字（空 → 该动作被忽略 + 启动 WARN + --selftest 报错） */
+  handler?: string;
+  /** 初始勾选状态（同步给引用它的菜单项），缺省 false */
+  checked?: boolean;
+  /** 初始启用状态，缺省 true */
+  enabled?: boolean;
+};
+
+/** 能安全当记录键（`actions` 的键）的名字：`__proto__` 这类赋值会改到原型上，一律当非法名 */
+export const isSafeActionName = (name: string): boolean =>
+  !!name && name !== "__proto__" && name !== "constructor" && name !== "prototype";
+
 /** 树节点 / 菜单项（对应 .cgui 的 nodes 字段，可嵌套）。
  *  和 C 侧 cg_item_t 一样共用一个结构：树用 text/expanded，菜单用 text/id/checked。
  *  菜单里 text 写 "-" 表示分隔线。 */
@@ -34,6 +54,8 @@ export type CgTreeItem = {
   text: string;
   /** 菜单项标识（回调里用 cg_menu_last_id 取回） */
   id?: string;
+  /** 菜单：引用顶层 actions 里的动作名（树节点不用这个字段） */
+  action?: string;
   /** 树：初始展开 */
   expanded?: boolean;
   /** 菜单：勾选标记 */
@@ -63,6 +85,10 @@ export type CgNode = {
   text?: string;
   style?: CgStyle;
   events?: Partial<Record<CgEvent, string>>;
+  /** 引用顶层 actions 里的动作名：点击走动作的回调。
+   *  **只有支持 click 的类型**能用（看 model/events.ts 的 KIND_EVENTS）；
+   *  写了它就不能再绑 events.click（运行时忽略 click，--selftest 还会报错）。 */
+  action?: string;
   /** 控件绑定：跟着哪个控件走（见 CgBind） */
   bind?: CgBind;
   visible?: boolean;
@@ -221,5 +247,7 @@ export type CgApp = {
 export type CgDoc = {
   cgui: 1;
   app: CgApp;
+  /** 命名动作表：动作名 -> 动作（文字 / 快捷键 / 回调）。缺省 = 没有动作，老 .cgui 行为不变 */
+  actions?: Record<string, CgAction>;
   widgets: CgNode[];
 };

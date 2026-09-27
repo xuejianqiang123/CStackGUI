@@ -4,6 +4,7 @@
  * 顺手把旧的一份压进撤销栈。文件读写全部走 bridge（Electron 或浏览器降级）。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ActionsDialog from "./components/ActionsDialog";
 import Canvas from "./components/Canvas";
 import EventPanel from "./components/EventPanel";
 import Inspector from "./components/Inspector";
@@ -80,6 +81,8 @@ export default function App() {
   const [running, setRunning] = useState(false);
   /** 「程序配置」对话框开关（工具栏按钮 / WindowPanel 入口都能打开） */
   const [infoOpen, setInfoOpen] = useState(false);
+  /** 「动作」对话框开关（工具栏按钮 / electron 菜单都走这里打开） */
+  const [actionsOpen, setActionsOpen] = useState(false);
   /** 「新建工程」模板选择对话框 */
   const [newOpen, setNewOpen] = useState(false);
 
@@ -366,6 +369,7 @@ export default function App() {
       else if (action === "exportC") void doExportC();
       else if (action === "run") void doRun();
       else if (action === "programConfig") setInfoOpen(true);
+      else if (action === "actions") setActionsOpen(true);
       else if (action === "undo") undo();
       else if (action === "redo") redo();
       else if (action === "duplicate") duplicateSelected();
@@ -522,7 +526,8 @@ export default function App() {
     });
     const callbacks = uniqueCallbackNames(doc);
     const uses = collectCallbacks(doc);
-    return { count, containers, callbacks: callbacks.length, uses };
+    const actionNames = Object.keys(doc.actions ?? {});
+    return { count, containers, callbacks: callbacks.length, uses, actionNames };
   }, [doc]);
 
   return (
@@ -547,6 +552,7 @@ export default function App() {
         publishing={publishing}
         onPublish={() => void doPublish()}
         onOpenInfo={() => setInfoOpen(true)}
+        onOpenActions={() => setActionsOpen(true)}
         onZoom={(z) => setZoom(clamp(z, 0.2, 3))}
         onToggleGrid={() => setShowGrid((v) => !v)}
         onToggleSnap={() => setSnapOn((v) => !v)}
@@ -629,6 +635,15 @@ export default function App() {
                 <ul className="hint-list">
                   <li>控件 {stats.count} 个（其中容器 {stats.containers} 个）</li>
                   <li>绑定事件 {stats.uses.length} 处，涉及 {stats.callbacks} 个 C 函数</li>
+                  <li>
+                    动作 {stats.actionNames.length} 个
+                    {stats.actionNames.length ? `（${stats.actionNames.join("、")}）` : ""}
+                    <span className="muted small">
+                      {stats.actionNames.length
+                        ? " —— 菜单项/控件用 action 引用它们，一处禁用就一起灰"
+                        : " —— 工具条「动作」按钮里可以新建"}
+                    </span>
+                  </li>
                   <li>
                     窗口 {doc.app.width}×{doc.app.height}，底色 {doc.app.bg}
                   </li>
@@ -759,6 +774,13 @@ rect = { x:${selected.rect.x}, y:${selected.rect.y}, w:${selected.rect.w}, h:${s
         open={infoOpen}
         doc={doc}
         onClose={() => setInfoOpen(false)}
+        onBeginHistory={onBeginHistory}
+        onApply={onApply}
+      />
+      <ActionsDialog
+        open={actionsOpen}
+        doc={doc}
+        onClose={() => setActionsOpen(false)}
         onBeginHistory={onBeginHistory}
         onApply={onApply}
       />

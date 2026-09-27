@@ -44,7 +44,13 @@ export function textToTree(text: string): CgTreeItem[] {
   return roots;
 }
 
-/** 菜单：两空格一层；`文本 | 菜单id`；`-` 单独一行是分隔线；末尾再加 `| v` 表示勾选 */
+/** 菜单：两空格一层；`文本 | 菜单id`；`-` 单独一行是分隔线；`| v` 表示勾选；
+ *  `| @动作名` 表示这一项引用顶层 actions 里的动作（写在哪一段都认，画布写在最后）。
+ *
+ *  文字可以只写在动作里，这时这一项自己的 text 是空串（notepad.cgui 就是这么写的），
+ *  编出来是 ` | @name` 这种「第一段为空」的行 —— 不是坏了，见 Inspector 里那份清单。
+ *  **不要**把它编成只看得到 `@name` 的一行：那样 `textToMenu` 只能靠"以 @ 开头"猜，
+ *  一条文字真的以 `@` 开头的菜单项就会被吞掉（比如 "@2x 缩放"）。 */
 export function menuToText(nodes: CgTreeItem[] | undefined, depth = 0): string {
   if (!nodes?.length) return "";
   const pad = "  ".repeat(depth);
@@ -54,9 +60,17 @@ export function menuToText(nodes: CgTreeItem[] | undefined, depth = 0): string {
       lines.push(`${pad}-`);
       continue;
     }
-    let line = `${pad}${n.text}`;
-    if (n.id || n.checked) line += ` | ${n.id ?? ""}`;
-    if (n.checked) line += " | v";
+    /* 行尾的几段（顺序不能变）：第二字段的位置留给菜单 id（勾选但没 id 时也必须占位，
+     * 否则 "| v" 会被读成 id），然后是勾选、最后是动作 */
+    const fields: string[] = [];
+    if (n.id || n.checked) fields.push(n.id ?? "");
+    if (n.checked) fields.push("v");
+    if (n.action) fields.push(`@${n.action}`);
+    /* 文字为空（文字在动作里）时**不留行首那一格**：`  | @new` 才和同级的 `  -` / `  退出 | m_quit`
+     * 对齐；留了就是 `   | @new`，看着像嵌到了下一层。缩进量仍只由 pad 决定，textToMenu 不受影响。 */
+    const line = fields.length
+      ? `${pad}${n.text}${n.text ? " | " : "| "}${fields.join(" | ")}`
+      : `${pad}${n.text}`;
     lines.push(line);
     const sub = menuToText(n.children, depth + 1);
     if (sub) lines.push(sub);
@@ -78,8 +92,20 @@ export function textToMenu(text: string): CgTreeItem[] {
     } else {
       const parts = body.split("|").map((s) => s.trim());
       item = { text: parts[0] };
-      if (parts.length > 1 && parts[1]) item.id = parts[1];
-      if (parts.length > 2 && /^(v|✓|1|yes)$/i.test(parts[2])) item.checked = true;
+      /* 逐字段认，位置语义和以前一致（第 2 段 = id、第 3 段 = 勾选），
+         只是**任何一段**以 `@` 开头都当作动作名 —— 老写法读出来完全不变 */
+      for (let i = 1; i < parts.length; i += 1) {
+        const p = parts[i];
+        if (!p) continue;
+        if (p.startsWith("@")) {
+          const name = p.slice(1).trim();
+          if (name) item.action = name;
+        } else if (i === 1) {
+          item.id = p;
+        } else if (i === 2 && /^(v|✓|1|yes)$/i.test(p)) {
+          item.checked = true;
+        }
+      }
     }
     while (stack.length && stack[stack.length - 1].depth >= depth) stack.pop();
     if (!stack.length) roots.push(item);

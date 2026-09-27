@@ -120,6 +120,93 @@ if (a == 1) cg_win_show(cg_app_of(self), 1);`,
         ],
       },
       {
+        label: "动作 / 快捷键",
+        cmds: [
+          c(
+            "cg_action_invoke",
+            "触发动作",
+            "int cg_action_invoke(cg_app_t *app, const char *name)",
+            "按名字触发一个动作（.cgui 顶层 actions 里的键）；快捷键、菜单项、控件点击最终都走到这里",
+            {
+              params: [
+                "app：应用（cg_app_of(self)）",
+                "name：动作名，例如 \"save\"",
+              ],
+              ret: "1 = 真的调用了回调；0 = 没这个动作 / 被禁用 / handler 没登记",
+              sample: `/* 例：某个按钮的 click 里手动触发「保存」动作 */
+cg_action_invoke(cg_app_of(self), "save");`,
+            },
+          ),
+          c(
+            "cg_action_set_enabled",
+            "启用 / 禁用一个动作",
+            "void cg_action_set_enabled(cg_app_t *app, const char *name, int enabled)",
+            "一处调用就把所有引用它的菜单项和控件一起变灰 / 恢复（动作不存在时是空操作）",
+            {
+              sample: `/* 没有选中内容时：「删除」这个动作整体灰掉，菜单项和按钮一起 */
+cg_action_set_enabled(cg_app_of(self), "delete", 0);`,
+            },
+          ),
+          c(
+            "cg_action_is_enabled",
+            "动作是否启用",
+            "int cg_action_is_enabled(const cg_app_t *app, const char *name)",
+            "查动作的启用状态；动作不存在返回 0",
+          ),
+          c(
+            "cg_action_set_checked",
+            "勾选 / 取消勾选动作",
+            "void cg_action_set_checked(cg_app_t *app, const char *name, int checked)",
+            "勾选状态同步给所有引用它的菜单项（打勾 / 去掉）；菜单项自己不用再维护状态",
+            {
+              sample: `/* 比如「显示网格」这种开关型菜单项 */
+cg_action_set_checked(cg_app_of(self), "grid", !cg_action_is_checked(cg_app_of(self), "grid"));`,
+            },
+          ),
+          c(
+            "cg_action_is_checked",
+            "动作是否勾选",
+            "int cg_action_is_checked(const cg_app_t *app, const char *name)",
+            "查动作的勾选状态；动作不存在返回 0",
+          ),
+          c(
+            "cg_action_name",
+            "当前动作名",
+            "const char *cg_action_name(const cg_widget_t *self)",
+            "在动作的回调里问「这次是哪个动作被激活」；一个函数挂多个动作时用它分支",
+            {
+              sample: `void on_commands(cg_widget_t *self, cg_event_t ev, void *user) {
+    const char *name = cg_action_name(self);   /* "save" / "grid" ... */
+    if (strcmp(name, "save") == 0) { /* 保存 */ }
+}`,
+            },
+          ),
+          c(
+            "cg_action_count",
+            "动作个数",
+            "int cg_action_count(const cg_app_t *app)",
+            "文档里一共有多少个动作（调试与自检用）",
+          ),
+          c(
+            "cg_action_at",
+            "第 i 个动作名",
+            "const char *cg_action_at(const cg_app_t *app, int i)",
+            "按顺序取动作名，配合 cg_action_count 遍历；参数越界返回 NULL",
+            {
+              sample: `for (int i = 0; i < cg_action_count(app); i += 1) {
+    cg_log(CG_LOG_INFO, "动作 %s", cg_action_at(app, i));
+}`,
+            },
+          ),
+          c(
+            "cg_action_accel",
+            "动作的快捷键",
+            "const char *cg_action_accel(const cg_app_t *app, const char *name)",
+            "取规范化后的快捷键显示串（如 \"Ctrl+S\"）；没写或动作不存在返回空串",
+          ),
+        ],
+      },
+      {
         label: "应用与窗口",
         cmds: [
           c("cg_app_of", "取所属应用", "cg_app_t *cg_app_of(const cg_widget_t *w)", "从任意控件拿到 app，回调里第一步基本都写它", {

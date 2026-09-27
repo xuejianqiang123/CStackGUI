@@ -10,6 +10,7 @@
 import { useState } from "react";
 import { getBridge } from "../bridge";
 import { KIND_MAP, findParent, type CgDoc, type CgNode } from "../model";
+import ActionSection from "./Inspector/ActionSection";
 import BindSection from "./Inspector/BindSection";
 import ContentSection from "./Inspector/ContentSection";
 import EditSection from "./Inspector/EditSection";
@@ -123,6 +124,7 @@ export default function Inspector({ doc, node, onBeginHistory, onApply, onSelect
       <TypeSection node={node} patch={patch} />
       <HintSection node={node} patch={patch} />
       <BindSection node={node} info={info} bindIds={bindIds} patch={patch} />
+      <ActionSection doc={doc} node={node} patch={patch} />
       <ContentSection
         doc={doc}
         node={node}

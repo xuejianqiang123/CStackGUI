@@ -7,7 +7,7 @@
  */
 
 import { isContainer } from "./kinds.js";
-import type { CgDoc, CgNode, CgRect } from "./types.js";
+import type { CgDoc, CgNode, CgRect, CgTreeItem } from "./types.js";
 
 /* ------------------------------------------------------------ 遍历 */
 
@@ -16,6 +16,31 @@ export function walk(nodes: CgNode[], visit: (n: CgNode, parent: CgNode | null) 
     visit(n, parent);
     if (n.children?.length) walk(n.children, visit, n);
   }
+}
+
+/** 摊平后的树节点 / 菜单项：一行一条，带层级与写回用的下标路径 */
+export type FlatItem = {
+  item: CgTreeItem;
+  /** 嵌套深度（0 = 顶层的「文件」「编辑」这些） */
+  depth: number;
+  /** 写回用路径：每一层在父数组里的下标 */
+  path: number[];
+};
+
+/** 把嵌套的树节点 / 菜单项摊平成一行一条（菜单项的编辑要按路径写回，所以带 `path`）。
+ *  画布上有两处要用：属性面板「动作」一栏的逐项下拉、内容一栏的「文字来自动作」清单。 */
+export function flattenItems(
+  items: CgTreeItem[] | undefined,
+  depth = 0,
+  prefix: number[] = [],
+  out: FlatItem[] = [],
+): FlatItem[] {
+  (items ?? []).forEach((item, i) => {
+    const path = [...prefix, i];
+    out.push({ item, depth, path });
+    if (item.children?.length) flattenItems(item.children, depth + 1, path, out);
+  });
+  return out;
 }
 
 export function findNode(doc: CgDoc, id: string): CgNode | null {

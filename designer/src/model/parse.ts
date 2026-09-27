@@ -10,6 +10,8 @@ import { CG_EVENTS, WINDOW_EVENTS, type CgEvent } from "./events.js";
 import { KIND_MAP } from "./kinds.js";
 import {
   INFO_KEYS,
+  isSafeActionName,
+  type CgAction,
   type CgApp,
   type CgBind,
   type CgColumn,
@@ -88,11 +90,40 @@ function coerceTree(raw: unknown[]): CgTreeItem[] {
     const item: CgTreeItem = { text: typeof o.text === "string" ? o.text : "" };
     if (o.expanded === true) item.expanded = true;
     if (typeof o.id === "string" && o.id) item.id = o.id;      /* 菜单项标识，丢了回调就拿不到 */
+    /* 菜单项引用动作（运行时同样对树节点读它，树不会去看这个字段） */
+    if (typeof o.action === "string" && o.action.trim()) item.action = o.action.trim();
     if (o.checked === true) item.checked = true;                /* 菜单勾选态同理 */
     if (Array.isArray(o.children)) item.children = coerceTree(o.children);
     out.push(item);
   }
   return out;
+}
+
+/* 动作表：动作名 -> { text / accel / handler / checked / enabled }。
+ * 宽容读入：值不是对象就丢掉这一条；字段类型不对按缺省值兜底（空串 = 没填）。
+ * 空名条目**直接丢**（运行时也会忽略并写 WARN，画布上没法表示一个没有名字的动作）。 */
+function coerceAction(raw: unknown): CgAction | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const o = raw as Record<string, unknown>;
+  const a: CgAction = {};
+  if (typeof o.text === "string" && o.text.trim()) a.text = o.text.trim();
+  if (typeof o.accel === "string" && o.accel.trim()) a.accel = o.accel.trim();
+  if (typeof o.handler === "string" && o.handler.trim()) a.handler = o.handler.trim();
+  if (o.checked === true) a.checked = true;
+  if (o.enabled === false) a.enabled = false;
+  return a;
+}
+
+function coerceActions(raw: unknown): Record<string, CgAction> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const out: Record<string, CgAction> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const name = key.trim();
+    if (!isSafeActionName(name)) continue;
+    const a = coerceAction(value);
+    if (a) out[name] = a;
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 function coerceNode(raw: unknown, index: number): CgNode | null {
@@ -171,8 +202,7 @@ function coerceNode(raw: unknown, index: number): CgNode | null {
   const spin = Number(o.spin);
   if (o.spin !== undefined && (spin === 1 || spin === 2)) node.spin = spin;
 
-  /* 旧类型名补齐字段（见函数开头 alias*）：写了的字段优先，没写的按新语义给默认 */
-  if (aliasMulti) {
+  /* 旧类型名补齐字段（见函数开头 alias*）：写了的字段优先，没写的按新语义给默认 */  if (aliasMulti) {
     node.multiline = true;                       /* 多行输入：以前写死 ES_MULTILINE */
     if (!node.scroll) node.scroll = 2;           /* 纵向滚动条 */
   }
@@ -180,6 +210,10 @@ function coerceNode(raw: unknown, index: number): CgNode | null {
     if (!node.spin) node.spin = 1;               /* 自动 ±1 */
     if (!node.input) node.input = 7;             /* 整数：按键过滤 + 失焦夹取 */
   }
+
+  /* 引用动作：只记名字。动作存不存在、这个类型支不支持 click 都留给运行时校验
+     （画布在「动作」那一栏把同样的两件事提示给用户看） */
+  if (typeof o.action === "string" && o.action.trim()) node.action = o.action.trim();
 
   /* 控件绑定：src 空串或不是字符串一律当没绑（画布上「不绑定」就是这么存的） */
   if (o.bind && typeof o.bind === "object") {
@@ -297,5 +331,7 @@ export function parseDoc(text: string): { doc?: CgDoc; error?: string } {
     app: appOut,
     widgets: o.widgets.map((w, i) => coerceNode(w, i)).filter((w): w is CgNode => w !== null),
   };
+  const actions = coerceActions(o.actions);
+  if (actions) doc.actions = actions;
   return { doc };
 }

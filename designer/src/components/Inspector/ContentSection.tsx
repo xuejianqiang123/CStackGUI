@@ -5,6 +5,7 @@
  * 多行文本编辑器一律走 patchSoft（不进撤销栈，靠聚焦时压一次快照）。
  */
 import {
+  flattenItems,
   itemsToText,
   menuToText,
   tableColumnsToText,
@@ -15,11 +16,54 @@ import {
   textToTableRows,
   textToTree,
   treeToText,
+  type CgAction,
   type CgDoc,
   type CgNode,
   type KindInfo,
 } from "../../model";
 import { Area, Row, type Patch } from "./PanelUi";
+
+/** 一行的「最终显示 & 来自哪里」：菜单项的文字可以完全由动作提供（项自己只写 `| @动作名`），
+ *  那种项在编辑框里就是一行空的（形如 ` | @save`），不解释清楚会被当成坏了。 */
+function actionNote(own: string, a: CgAction | undefined): string {
+  if (!a) return "动作不存在，自检会报错";
+  const accel = a.accel ? `，快捷键 ${a.accel}` : "";
+  if (a.text && own) return `动作的文字覆盖了这一项自己的「${own}」${accel}`;
+  if (a.text) return `这一项自己没写文字${accel}`;
+  if (own) return `动作没写文字，用这一项自己的「${own}」`;
+  return "动作和这一项都没写文字 → 菜单上这一项是空白";
+}
+
+/** 「走动作」的菜单项清单：逐项说明最终显示哪段文字、来自哪里（含引用不存在动作的情况）。
+ *  这是画布上「看得见最终文字」的那一半 —— 另一半在属性面板的「动作」一栏（可逐项换动作）。 */
+function MenuActionLegend({ doc, node }: { doc: CgDoc; node: CgNode }) {
+  const rows = flattenItems(node.nodes).filter((r) => r.item.action && r.item.text !== "-");
+  if (!rows.length) return null;
+  const actions = doc.actions ?? {};
+  return (
+    <div className="hint-box">
+      <div className="hint-title">有 {rows.length} 项走动作</div>
+      <ul className="hint-list">
+        {rows.map((r) => {
+          const name = r.item.action ?? "";
+          const a = actions[name];
+          const shown = a?.text || r.item.text || "";
+          return (
+            <li key={r.path.join(".")}>
+              {r.depth ? <span className="muted small">{r.depth} 层 </span> : null}
+              <code>@{name}</code>
+              {a ? <> → 显示{shown ? `「${shown}」` : "（空白）"}</> : null}
+              <span className={a ? "muted small" : "small warn"}>　{actionNote(r.item.text, a)}</span>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="hint-foot">
+        文字写在动作里，改一次所有引用它的地方一起变；要恢复成这一项自己的文字，把动作的「文字」清空即可。
+      </div>
+    </div>
+  );
+}
 
 export type ContentSectionProps = {
   doc: CgDoc;
@@ -126,16 +170,23 @@ export default function ContentSection({
         <>
           <Area
             label="菜单项"
-            hint="两空格一层 · 文本 | id · - 是分隔线 · 末尾 | v 表示勾选"
+            hint="两空格一层 · 文本 | id · - 是分隔线 · 末尾 | v 表示勾选 · | @动作名 这一项走动作"
             rows={8}
             value={menuToText(node.nodes)}
             onFocus={onBeginHistory}
             onChange={(v) => patchSoft((n) => { n.nodes = textToMenu(v); })}
           />
+          <MenuActionLegend doc={doc} node={node} />
+          <p className="muted small">
+            某项写成 <code>| @动作名</code> 就引用「动作」（顶层 actions）里的一条命令：显示动作的文字、
+            点击走动作的回调，不再给这个控件派发 click（<code>id</code> 也就没意义了）。
+            文字为空的行（形如 <code> | @save</code>）不是坏了 —— 文字在动作里，上面那份清单列了每项最终显示什么。
+          </p>
           <p className="muted small">
             {node.type === "menu"
-              ? "菜单栏没有矩形：运行时挂在窗口上（一根窗口只能有一根）。点击某一项时给这个控件派发 click，用 cg_menu_last_id() 取回 id。"
-              : "点按钮会在下方弹出这个菜单；选中项同样回到控件的 click 回调。"}
+              ? "菜单栏没有矩形：运行时挂在窗口上（一根窗口只能有一根）。"
+              : "点按钮会在下方弹出这个菜单。"}
+            没引用动作的项：点击时给这个控件派发 click，用 <code>cg_menu_last_id()</code> 取回 id。
           </p>
         </>
       ) : null}

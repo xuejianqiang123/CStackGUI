@@ -15,6 +15,17 @@ export type CallbackUse = {
   event: CgEvent;
 };
 
+/** 动作（actions）里登记的回调。它不是"某个控件的事件"，所以单独收一遍：
+ *  它和事件回调进的是**同一张** CG_BIND 表，导出时漏了就会让用户一跑 --selftest 就红。 */
+export type ActionUse = {
+  /** CG_BIND 的名字（动作的 handler） */
+  name: string;
+  /** 动作名（顶层 actions 的键），用来写注释和 cg_action_name */
+  action: string;
+  /** 动作的显示文字（写注释用，可空） */
+  text: string;
+};
+
 /** 文档里用到的所有回调（含窗口级事件，它们挂在 app.events 上，伪控件 id 是 __window） */
 export function collectCallbacks(doc: CgDoc): CallbackUse[] {
   const uses: CallbackUse[] = [];
@@ -32,8 +43,23 @@ export function collectCallbacks(doc: CgDoc): CallbackUse[] {
   return uses;
 }
 
+/** 动作表里有回调名的动作（handler 没填的动作会被运行时忽略，不需要骨架） */
+export function collectActionHandlers(doc: CgDoc): ActionUse[] {
+  const out: ActionUse[] = [];
+  for (const [action, a] of Object.entries(doc.actions ?? {})) {
+    if (a.handler) out.push({ name: a.handler, action, text: a.text ?? "" });
+  }
+  return out;
+}
+
+/** 需要进 CG_BIND 表（= 要生成空函数骨架）的全部名字：事件回调 + 动作回调 */
 export function uniqueCallbackNames(doc: CgDoc): string[] {
-  return [...new Set(collectCallbacks(doc).map((u) => u.name))].sort();
+  return [
+    ...new Set([
+      ...collectCallbacks(doc).map((u) => u.name),
+      ...collectActionHandlers(doc).map((u) => u.name),
+    ]),
+  ].sort();
 }
 
 /** 画布上「还没绑定事件」的控件（给面板做检查用） */
@@ -57,13 +83,16 @@ const guardName = (base: string) => `${sanitizeIdent(base).toUpperCase()}_UI_EVE
 
 export type GenFile = { name: string; content: string };
 
-/** 回调名 -> 「控件id 的<事件中文名>」描述（多控件共用时列出全部） */
-function callbackBriefs(uses: CallbackUse[]): Record<string, string> {
+/** 回调名 -> 「控件id 的<事件中文名>」/「动作 xxx」描述（多处共用时列出全部） */
+function callbackBriefs(uses: CallbackUse[], actions: ActionUse[]): Record<string, string> {
   const byName: Record<string, string[]> = {};
   for (const u of uses) {
     const label = EVENT_LABEL[u.event];
     const where = u.widgetType === "window" ? "主窗口" : u.widgetId;
     (byName[u.name] ??= []).push(`${where} 的${label}`);
+  }
+  for (const a of actions) {
+    (byName[a.name] ??= []).push(a.text ? `动作 ${a.action}（${a.text}）` : `动作 ${a.action}`);
   }
   return Object.fromEntries(Object.entries(byName).map(([k, v]) => [k, v.join("、")]));
 }
@@ -166,17 +195,21 @@ export function generateC(doc: CgDoc, baseName: string): GenFile[] {
   const base = sanitizeIdent(baseName);
   const cguiFile = baseName.endsWith(".cgui") ? baseName : `${baseName}.cgui`;
   const uses = collectCallbacks(doc);
+  const actionUses = collectActionHandlers(doc);
   const names = uniqueCallbackNames(doc);
-  const briefs = callbackBriefs(uses);
+  const briefs = callbackBriefs(uses, actionUses);
+  /* 动作回调的两条固定语义（见 cstackgui.h 的「动作（actions）」一节）：
+   * self 恒为主窗口伪控件、ev 恒为 click —— 注释里写清楚，用户才不会去猜"从哪个入口点的" */
+  const actionNames = new Set(actionUses.map((a) => a.name));
 
   /* 单个回调的完整 Doxygen（self/ev/user 三参数固定） */
   const cbDoc = (n: string) =>
     `/**
- * @brief ${briefs[n] ?? n}
- * @param self 触发事件的控件
- * @param ev 事件类型
- * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
- */`;
+* @brief ${briefs[n] ?? n}
+* @param self ${actionNames.has(n) ? "主窗口伪控件（cg_widget_id(self) 是 \"__window\"）" : "触发事件的控件"}
+* @param ev ${actionNames.has(n) ? "恒为 CG_EVENT_CLICK" : "事件类型"}
+* @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+*/`;
 
   const header = `/**
  * @file    ${base}_ui_events.h
@@ -197,11 +230,23 @@ ${names.length ? `#define ${macroName(base)} \\\n${names.map((n) => `    CG_BIND
 /* 画布上声明的事件绑定清单（供人查对；运行时以 .cgui 为准）
 ${uses.length ? uses.map((u) => ` *   ${u.widgetId.padEnd(18)} ${u.event.padEnd(9)} -> ${u.name}`).join("\n") : " *   （空）"}
  */
+
+/* 画布上声明的动作（actions）清单：菜单项/控件用 "action" 引用它们，
+ * 一个动作的回调就是下面这些函数（self 是主窗口伪控件，用 cg_action_name(self) 认动作）
+${actionUses.length ? actionUses.map((a) => ` *   ${a.action.padEnd(18)} ${(doc.actions?.[a.action]?.accel ?? "").padEnd(12)} -> ${a.name}`).join("\n") : " *   （空）"}
+ */
 #endif /* ${guardName(base)} */
 `;
 
+  /* 一个回调的骨架函数体。动作回调没有"哪个控件、哪个事件"可打印，
+     改成打印被激活的动作名（这正是 cg_action_name 的用途）。 */
+  const stubFn = (n: string) =>
+    actionNames.has(n)
+      ? `${cbDoc(n)}\nvoid ${n}(cg_widget_t *self, cg_event_t ev, void *user)\n{\n    (void)ev;\n    (void)user;\n    printf("[%s] action=%s\\n", "${base}", cg_action_name(self));\n\n    /* TODO: 在这里写业务逻辑 */\n}\n`
+      : `${cbDoc(n)}\nvoid ${n}(cg_widget_t *self, cg_event_t ev, void *user)\n{\n    (void)user;\n    printf("[%s] widget=%s event=%s\\n", "${base}", cg_widget_id(self), cg_event_name(ev));\n\n    /* TODO: 在这里写业务逻辑 */\n}\n`;
+
   const stubs = `/**
- * @file    ${base}_ui_events.c
+* @file    ${base}_ui_events.c
  * @brief   事件回调实现：业务逻辑写在这里
  * @details 这份文件是「你的代码」，重新导出不会覆盖它（画布导出时同名文件会跳过）。
  *          每个回调都能拿到：
@@ -209,6 +254,8 @@ ${uses.length ? uses.map((u) => ` *   ${u.widgetId.padEnd(18)} ${u.event.padEnd(
  *          ev   事件类型（一个函数只挂一个事件时可以直接忽略）
  *          user cg_widget_set_user() 挂上去的业务数据
  *          拿别的控件用 cg_find(cg_app_of(self), "控件id")；改界面用 cg_widget_set_* 系列。
+ *          动作（actions）的回调是同一套签名，但 self 恒为主窗口伪控件、ev 恒为 click，
+ *          用 cg_action_name(self) 取回是哪个动作被激活（一个函数挂多个动作时靠它分辨）。
  */
 #include "${base}_ui_events.h"
 
@@ -216,7 +263,7 @@ ${uses.length ? uses.map((u) => ` *   ${u.widgetId.padEnd(18)} ${u.event.padEnd(
 
 ${
   names.length
-    ? names.map((n) => `${cbDoc(n)}\nvoid ${n}(cg_widget_t *self, cg_event_t ev, void *user)\n{\n    (void)user;\n    printf("[%s] widget=%s event=%s\\n", "${base}", cg_widget_id(self), cg_event_name(ev));\n\n    /* TODO: 在这里写业务逻辑 */\n}\n`).join("\n\n")
+    ? names.map(stubFn).join("\n\n")
     : `/* 画布上还没有绑定事件。在画布右侧「事件」页签里填上 C 函数名，再重新导出。 */\n`
 }`;
 
