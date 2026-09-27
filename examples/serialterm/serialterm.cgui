@@ -151,7 +151,7 @@
     {
       "id": "chk_hexview",
       "type": "checkbox",
-      "rect": { "x": 12, "y": 88, "w": 112, "h": 26 },
+      "rect": { "x": 12, "y": 88, "w": 104, "h": 26 },
       "text": "16 进制显示",
       "hint": "日志里的收发都按十六进制显示（XCOM 的「16进制显示」）",
       "events": { "change": "on_hexview_change" }
@@ -159,7 +159,7 @@
     {
       "id": "chk_stamp",
       "type": "checkbox",
-      "rect": { "x": 130, "y": 88, "w": 96, "h": 26 },
+      "rect": { "x": 120, "y": 88, "w": 88, "h": 26 },
       "text": "时间戳",
       "checked": true,
       "hint": "每行前面加 [时:分:秒]（XCOM 的「时间戳」）",
@@ -168,33 +168,43 @@
     {
       "id": "chk_frame",
       "type": "checkbox",
-      "rect": { "x": 232, "y": 88, "w": 112, "h": 26 },
+      "rect": { "x": 212, "y": 88, "w": 104, "h": 26 },
       "text": "按帧显示",
-      "hint": "把字节流按「帧间静默」切成整帧，每帧单独一行并报长度与 CRC —— 这一条 XCOM 没有",
+      "hint": "把字节流切成整帧，每帧单独一行并报长度与 CRC —— 这一条 XCOM 没有",
       "events": { "change": "on_frame_change" }
     },
     {
-      "id": "spn_gap",
-      "type": "edit",
-      "rect": { "x": 350, "y": 88, "w": 64, "h": 26 },
-      "spin": true,
-      "min": 1,
-      "max": 2000,
-      "value": 20,
-      "hint": "按帧显示的静默间隔（毫秒）：隔这么久没新字节就算一帧结束。Modbus/RTU 按波特率算 t3.5（115200 取 1、9600 取 4）",
-      "style": "input"
+      "id": "cmb_fmode",
+      "type": "combo",
+      "rect": { "x": 320, "y": 88, "w": 96, "h": 200 },
+      "items": ["静默", "换行符", "定长", "长度字段"],
+      "value": 0,
+      "hint": "怎么定界：静默（Modbus/RTU 的 t3.5）/ 换行符（AT 指令、NMEA 那种一行一条）/ 定长 / 头里带长度（MBAP）",
+      "events": { "select": "on_frame_mode_change" }
     },
     {
-      "id": "lab_gap",
+      "id": "spn_arg",
+      "type": "edit",
+      "rect": { "x": 420, "y": 88, "w": 56, "h": 26 },
+      "spin": true,
+      "min": 1,
+      "max": 60000,
+      "value": 20,
+      "hint": "参数含义随左边的模式变：静默=毫秒、换行符=分隔字节（10 = \\n）、定长=每帧字节数、长度字段=长度字段在帧内的偏移",
+      "style": "input",
+      "events": { "change": "on_frame_arg_change" }
+    },
+    {
+      "id": "lab_arg",
       "type": "label",
-      "rect": { "x": 418, "y": 92, "w": 56, "h": 20 },
+      "rect": { "x": 480, "y": 92, "w": 86, "h": 20 },
       "text": "静默ms",
       "style": "label"
     },
     {
       "id": "chk_autosave",
       "type": "checkbox",
-      "rect": { "x": 484, "y": 88, "w": 112, "h": 26 },
+      "rect": { "x": 570, "y": 88, "w": 104, "h": 26 },
       "text": "自动保存",
       "hint": "收到的字节按十六进制文本追加落盘（XCOM 的「自动保存」）",
       "events": { "change": "on_autosave_change" }
@@ -202,8 +212,8 @@
     {
       "id": "lab_savehint",
       "type": "label",
-      "rect": { "x": 602, "y": 92, "w": 386, "h": 20 },
-      "text": "（自动保存落到数据目录的 rx_log.txt：十六进制文本，字节精确、可 grep）",
+      "rect": { "x": 678, "y": 92, "w": 310, "h": 20 },
+      "text": "（自动保存落到数据目录的 rx_log.txt：十六进制文本、可 grep）",
       "style": "label"
     },
     {

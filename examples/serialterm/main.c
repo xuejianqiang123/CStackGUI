@@ -275,22 +275,56 @@ static int fill_ports(cg_app_t *app)
 
 /* ------------------------------------------------------------ 按帧显示（XCOM 没有的那一条） */
 
+/** 按帧显示的四种定界（下标与 .cgui 里 cmb_fmode 的 items 一一对应） */
+#define FMODE_SILENCE 0
+#define FMODE_DELIM   1
+#define FMODE_FIXED   2
+#define FMODE_LEN     3
+
+/** 参数框的含义随模式变，标签文字照着这张表改（标签也是控件，能 set_text） */
+static const char *const k_fmode_names[4] = { "静默", "换行符", "定长", "长度字段" };
+
 /**
- * @brief 按「静默间隔」重建切帧器（勾选框 / 间隔一改就重建）
+ * @brief 按当前「定界模式 + 参数」重建切帧器，并把参数框的单位标签改对
  * @param app 所属应用
  * @return void
- * @note 模式是**帧间静默**：隔 gap_ms 没有新字节就算一帧结束 —— 这正是 Modbus/RTU 的 t3.5。
- *       攒字节的缓冲由我们自己给（框架不 malloc）；一帧上限 FRAME_MAX，超了整帧丢掉并计数。
+ * @note 四种定界就是 `cg_frame_*` 的四种 mode：**静默**（Modbus/RTU 的 t3.5）、
+ *       **换行符**（AT 指令、NMEA 那种一行一条）、**定长**、**头里带长度**（MBAP）。
+ *       参数框只有一个（这一行就这么点地方），含义随模式变 ⇒ 旁边标签的文字也得跟着改，
+ *       否则用户会拿着"静默ms"去填"长度偏移"。
+ *       参数落在该模式不接受的区间时**退回静默并说一声**，不让界面停在"看起来在切、其实没切"。
  */
 static void framer_reset(cg_app_t *app)
 {
-    int gap = cg_widget_value(cg_find(app, "spn_gap"));
+    int         mode = cg_widget_value(cg_find(app, "cmb_fmode"));
+    int         arg  = cg_widget_value(cg_find(app, "spn_arg"));
+    int         fm   = CG_FRAME_SILENCE;
+    int         minl = 2;
+    const char *unit = "静默ms";
 
-    if (gap < 1) gap = 1;
-    if (cg_frame_init(&s_biz.fr, s_biz.frame_buf, (int)sizeof(s_biz.frame_buf),
-                      CG_FRAME_SILENCE, gap) == 0) {
-        cg_frame_limits(&s_biz.fr, 2, FRAME_MAX);
+    if (arg < 1) arg = 1;
+    if (mode == FMODE_DELIM) {
+        fm = CG_FRAME_DELIM;
+        minl = 1;
+        unit = "分隔字节";
+    } else if (mode == FMODE_FIXED) {
+        fm = CG_FRAME_FIXED;
+        minl = 1;
+        unit = "每帧字节";
+    } else if (mode == FMODE_LEN) {
+        fm = CG_FRAME_LENFIELD;
+        minl = 4;
+        unit = "长度偏移";
     }
+
+    if (cg_frame_init(&s_biz.fr, s_biz.frame_buf, (int)sizeof(s_biz.frame_buf), fm, arg) != 0) {
+        cg_frame_init(&s_biz.fr, s_biz.frame_buf, (int)sizeof(s_biz.frame_buf), CG_FRAME_SILENCE, 20);
+        minl = 2;
+        unit = "静默ms";
+        sys_line(app, "这组切帧参数不合法（比如定长比缓冲还大），已退回「静默 20ms」。");
+    }
+    cg_frame_limits(&s_biz.fr, minl, FRAME_MAX);
+    cg_widget_set_text(cg_find(app, "lab_arg"), unit);
 }
 
 /**
@@ -1032,8 +1066,40 @@ static void on_frame_change(cg_widget_t *self, cg_event_t ev, void *user)
     s_biz.frame_on = cg_widget_checked(self);
     framer_reset(app);
     sys_line(app, s_biz.frame_on
-                       ? "按帧显示：开。按「静默间隔」切帧，每帧报长度与 CRC16 结论。"
+                       ? "按帧显示：开。按左边选的定界切帧，每帧报长度与 CRC16 结论。"
                        : "按帧显示：关。");
+}
+
+/**
+ * @brief 「定界模式」下拉变了：按新模式重建切帧器（四种：静默 / 换行符 / 定长 / 长度字段）
+ * @param self 下拉框
+ * @param ev change
+ * @param user 未使用
+ * @return void
+ */
+static void on_frame_mode_change(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+
+    (void)ev;
+    (void)user;
+    framer_reset(app);
+    sys_line(app, "切帧定界换了：之后按新规则切，攒了一半的旧半帧丢掉，状态栏的帧数/丢字节数也从 0 重新算。");
+}
+
+/**
+ * @brief 「定界参数」变了：立刻生效
+ * @param self 参数框（调节器）
+ * @param ev change
+ * @param user 未使用
+ * @return void
+ * @note 不写日志：这个 change 每敲一个数字都会来一次，刷日志反而看不清别的。
+ */
+static void on_frame_arg_change(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev;
+    (void)user;
+    framer_reset(cg_app_of(self));
 }
 
 /**
@@ -1313,6 +1379,48 @@ static void on_destroy(cg_widget_t *self, cg_event_t ev, void *user)
 static void demo_report(void *user);
 
 /**
+ * @brief 演示：把切帧器设成某种定界，喂一段字节，报切出几帧
+ * @param app 所属应用
+ * @param mode 定界模式（FMODE_*）
+ * @param arg 参数（静默毫秒 / 分隔字节 / 每帧字节 / 长度字段偏移）
+ * @param data 要喂的字节
+ * @param n 字节数
+ * @param t0 起始时刻（假时间戳，不 sleep）
+ * @param chunk 每块几字节（1 = 逐字节，模拟"一次只读到几个字节"；0 = 一次喂完）
+ * @return void
+ * @note 静默模式要**空档**才成帧，所以喂完得 tick 一下把最后一帧收出来 —— 真机上就是这个样子：
+ *       对端发完不发了，靠时钟收尾（这也是 cg_frame_tick 存在的理由）。
+ */
+static void demo_feed(cg_app_t *app, int mode, int arg, const unsigned char *data, int n,
+                      unsigned long t0, int chunk)
+{
+    unsigned long f0;
+    int           i = 0, k = 0;
+
+    s_biz.frame_on = 1;
+    cg_widget_set_value(cg_find(app, "cmb_fmode"), mode);
+    cg_widget_set_value(cg_find(app, "spn_arg"), arg);
+    framer_reset(app);
+    /* **基准要在 framer_reset 之后取**：cg_frame_init 会把统计量清零（换定界＝重新开始算）*/
+    f0 = cg_frame_frames(&s_biz.fr);
+
+    while (i < n) {
+        int c = (chunk > 0) ? chunk : n;
+
+        if (c > n - i) c = n - i;
+        intake(app, data + i, c, t0 + (unsigned long)k);
+        i += c;
+        k++;
+    }
+    cg_frame_tick(&s_biz.fr, t0 + 2000);        /* 空档到点：把攒着的那帧收出来 */
+    drain_frames(app);
+    printf("[demo]   定界「%s」参数 %d：喂 %d 字节 -> 切出 %d 帧\n",
+           k_fmode_names[(mode >= 0 && mode < 4) ? mode : 0], arg, n,
+           (int)(cg_frame_frames(&s_biz.fr) - f0));
+    fflush(stdout);
+}
+
+/**
  * @brief 真链路演示（--demo=COM4）：把界面下拉设成 7E1，走**用户点「打开串口」那条路**，发一帧，2 秒后汇总
  * @param app 所属应用
  * @return void
@@ -1390,15 +1498,21 @@ static void demo_report(void *user)
 static void run_demo(cg_app_t *app)
 {
     /* Modbus/RTU：读保持寄存器 0x006B 起 3 个（01 03 00 6B 00 03 + CRC 74 17） */
-    static const unsigned char k_req[8] = { 0x01, 0x03, 0x00, 0x6B, 0x00, 0x03, 0x74, 0x17 };
-    /* 一帧噪声（长度字段离谱那种）：应当被丢掉并计数 */
-    static const unsigned char k_junk[5] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
-    unsigned long              t = 1000;
-    unsigned long              f0, d0;
+    static const unsigned char k_req[8]   = { 0x01, 0x03, 0x00, 0x6B, 0x00, 0x03, 0x74, 0x17 };
+    /* AT 指令那种"一行一条"（\r\n 收尾）*/
+    static const unsigned char k_at[8]    = { 'A', 'T', '\r', '\n', 'O', 'K', '\r', '\n' };
+    /* 定长演示：10 字节，每 4 字节一帧 -> 2 帧 + 剩 2 字节 */
+    static const unsigned char k_fix[10]  = { 'A', 'A', 'A', 'A', 'B', 'B', 'B', 'B', 'C', 'C' };
+    /* 两张粘在一起的 Modbus/TCP 响应（MBAP：长度字段在偏移 4、宽 2、总长 = 6 + 长度）*/
+    static const unsigned char k_tcp2[30] = {
+        0x00, 0x01, 0x00, 0x00, 0x00, 0x09, 0x01, 0x03, 0x06, 0xAE, 0x41, 0x56, 0x52, 0x43, 0x40,
+        0x00, 0x02, 0x00, 0x00, 0x00, 0x09, 0x01, 0x03, 0x06, 0xAE, 0x41, 0x56, 0x52, 0x43, 0x40,
+    };
+    unsigned char              mix[10];
+    unsigned long              d0;
 
     s_biz.frame_on = 1;
     framer_reset(app);
-    f0 = cg_frame_frames(&s_biz.fr);
     d0 = cg_frame_dropped(&s_biz.fr);
 
     if (s_demo_port[0]) {                       /* 给了真口：只做真链路那一段 */
@@ -1406,32 +1520,32 @@ static void run_demo(cg_app_t *app)
         return;
     }
 
-    printf("[demo] 喂 8 字节的 Modbus/RTU 帧，碎成 3+3+2（每块隔 1ms，小于静默间隔）\n");
-    intake(app, k_req, 3, t);
-    intake(app, k_req + 3, 3, t + 1);
-    intake(app, k_req + 6, 2, t + 2);
-    printf("[demo] 碎着喂完还没有整帧：%d（要有 0 = 没有整帧）\n",
-           (int)(cg_frame_frames(&s_biz.fr) - f0));
+    printf("[demo] 四种定界各喂一段（时间戳自造，不 sleep）\n");
+    /* 1) 静默：逐字节喂（块间 1ms < 20ms），空档到点才成帧 —— Modbus/RTU 的 t3.5 */
+    demo_feed(app, FMODE_SILENCE, 20, k_req, 8, 1000, 1);
+    /* 2) 换行符：AT 指令那种"一行一条"，一次读到两条也分得开 */
+    demo_feed(app, FMODE_DELIM, 10, k_at, 8, 2000, 0);
+    /* 3) 定长：每 4 字节一帧（10 字节 -> 2 帧 + 剩 2 字节留着） */
+    demo_feed(app, FMODE_FIXED, 4, k_fix, 10, 3000, 0);
+    /* 4) 长度字段：两张 MBAP 粘在一起也必须分成两帧（静默模式做不到这点） */
+    demo_feed(app, FMODE_LEN, 4, k_tcp2, 30, 4000, 0);
 
-    cg_frame_tick(&s_biz.fr, t + 2 + 100);      /* 静默到点：整帧出来 */
-    drain_frames(app);
-    printf("[demo] 静默到点后切出 %d 帧\n", (int)(cg_frame_frames(&s_biz.fr) - f0));
+    printf("[demo] ---- 噪声：静默模式分不出「零头 + 帧」是一整段（物理限制，靠 CRC 认）----\n");
+    cg_widget_set_value(cg_find(app, "cmb_fmode"), FMODE_SILENCE);
+    cg_widget_set_value(cg_find(app, "spn_arg"), 20);
+    framer_reset(app);
+    {
+        unsigned long f1 = cg_frame_frames(&s_biz.fr);
 
-    printf("[demo] 喂 1 个字节的零头（低于 min_len = 2）：应当被丢掉并计数\n");
-    intake(app, k_junk, 1, t + 200);
-    cg_frame_tick(&s_biz.fr, t + 400);
-    drain_frames(app);
-    printf("[demo] 切出 %d 帧 / 丢 %d 字节（那个零头要记在 dropped 里）\n",
-           (int)(cg_frame_frames(&s_biz.fr) - f0),
-           (int)(cg_frame_dropped(&s_biz.fr) - d0));
-
-    printf("[demo] 再喂 5 字节噪声：静默切帧**分不出**它和真帧（物理限制，不是缺陷，已写进头文件）\n");
-    printf("[demo]           所以必须配 CRC —— 上面那行「帧 #2 … CRC16 不符」就是它被认出来的样子\n");
-    intake(app, k_junk, 5, t + 600);
-    cg_frame_tick(&s_biz.fr, t + 800);
-    drain_frames(app);
-    printf("[demo] 一共切出 %d 帧（CRC 不符的那帧就是噪声）\n",
-           (int)(cg_frame_frames(&s_biz.fr) - f0));
+        mix[0] = 0x00;
+        mix[1] = 0x00;
+        memcpy(mix + 2, k_req, 8);
+        intake(app, mix, 10, 6000);
+        cg_frame_tick(&s_biz.fr, 8000);
+        drain_frames(app);
+        printf("[demo]   2 字节零头 + 一帧 -> 切成 %d 帧（一整段）、丢 %d 字节；这种帧 CRC 必错\n",
+               (int)(cg_frame_frames(&s_biz.fr) - f1), (int)(cg_frame_dropped(&s_biz.fr) - d0));
+    }
 
     /* 帧格式那三个下拉有没有接上（只打印解析结果，不真开串口） */
     {
@@ -1557,6 +1671,8 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND("on_hexview_change",  on_hexview_change),
     CG_BIND("on_stamp_change",    on_stamp_change),
     CG_BIND("on_frame_change",    on_frame_change),
+    CG_BIND("on_frame_mode_change", on_frame_mode_change),
+    CG_BIND("on_frame_arg_change",  on_frame_arg_change),
     CG_BIND("on_autosave_change", on_autosave_change),
     CG_BIND("on_send_click",      on_send_click),
     CG_BIND("on_send_submit",     on_send_submit),
