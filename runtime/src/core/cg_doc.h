@@ -185,8 +185,10 @@ typedef struct cg_node {
     char    *id;
     char    *text;
     int      x, y, w, h;
-    /** 余量分配权重（.cgui 的 grow，0..99）：容器变大时按权重吃多出来的空间，
-     *  同一容器里它之后的兄弟整体平移；0 / 不写 = 不吃余量。
+    /** 余量分配权重（.cgui 的 grow，0..99）：容器变大时按权重吃多出来的空间；
+     *  与它位置重叠的兄弟（同一行 / 同一列，即"同一条带"）原地不动，排在这一行 / 列**之后**的
+     *  兄弟整体平移；0 / 不写 = 不吃余量。
+     *  容错走 cj_int 的常规口径（小数四舍五入、true 当 1、数字串按数字读），负数与 >99 归 0。
      *  语义与几何算法见 .codebuddy/plans/grow-layout.md */
     int      grow;
     cg_style_t style;

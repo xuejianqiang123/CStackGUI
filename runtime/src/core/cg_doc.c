@@ -399,7 +399,9 @@ static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
     if (n->w < 0) n->w = 0;
     if (n->h < 0) n->h = 0;
 
-    /* grow：余量分配权重。非整数 / 负数 / 超过 99 一律当 0（不报错、不中断加载） */
+    /* grow：余量分配权重。走 cj_int 的常规口径（小数四舍五入、true 当 1、数字串按数字读），
+     * 随后**负数与超过 99 的归 0** —— 不报错、不中断加载。
+     * 注意别把这里写成"非整数当 0"：契约里那条口径漂移过，源头就是这句注释（2026-09-27 更正）。 */
     n->grow = cj_int(cj_get(o, "grow"), 0);
     if (n->grow < 0 || n->grow > 99) n->grow = 0;
 
