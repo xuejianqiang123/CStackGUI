@@ -204,7 +204,7 @@ static void on_clear_click(cg_widget_t *self, cg_event_t ev, void *user)
  * @param user 未使用
  * @return void
  * @note 多行 edit 只有一个文字色（styles.log 的浅绿），所以 RX / TX 只靠行首记号区分 ——
- *       要按方向上色就得用 terminal，而 terminal 的行色在深底下看不清（见文件头说明）。
+ *       要按方向上色就得用 terminal（它的行色现在分浅底 / 深底两套，深色下自动用亮色，见文件头说明）。
  */
 static void on_fill_click(cg_widget_t *self, cg_event_t ev, void *user)
 {

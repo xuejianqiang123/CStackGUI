@@ -64,7 +64,7 @@ typedef enum {
     CG_K_LED,        /* 状态灯（纯显示：灭 / 亮 / 闪；闪烁由控件自己定时重绘） */
     CG_K_METER,      /* 仪表盘（纯显示：圆弧量程 + 值弧 + 指针 + 中心数值） */
     CG_K_SERIAL,     /* 串口组件（无窗口：像易语言的串口组件，数据到达发 arrive） */
-    CG_K_WINDOW,     /* 伪控件：窗口自身，只有 close 事件 */
+    CG_K_WINDOW,     /* 伪控件：窗口自身；支持全部窗口级事件（就绪 / 关闭 / 移动 / 尺寸 / 托盘 / 拖放……，见 cg_doc_kind.c 的类型表） */
     CG_K_COUNT
 } cg_kind_t;
 

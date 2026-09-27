@@ -93,7 +93,7 @@ typedef enum {
     CG_EVENT_SPIN,          /* 调节钮被按下（输入框右侧的上下箭头，delta 是 ±1） */
     CG_EVENT_DROP,          /* 文件被拖进窗口（窗口级事件，绑在 app.events.drop）。
                              * 回调里用 cg_drop_count(app) / cg_drop_file(app, i) 取路径 ——
-                             * 路径只在**本次回调期间**有效（回调返回后即释放）。
+                             * cg_drop_file 返回的是**副本**（堆串，用完 cg_free），回调返回后仍有效。
                              * 放在枚举末尾：事件值是位下标，插在中间会动到前面所有事件的值。 */
     CG_EVENT_COUNT
 } cg_event_t;
@@ -383,8 +383,8 @@ int cg_win_screenshot(cg_app_t *app, const char *path);
  *
  *     { "app": { "events": { "drop": "on_files_drop" } } }
  *
- * 回调里用下面两个函数取路径。**路径只在回调期间有效** —— 回调返回后列表就被清掉了
- * （要留着就在回调里拷走），所以别把它们存起来延后使用。
+ * 回调里用下面两个函数取路径。二者给的都是**副本**（cg_drop_file 返回堆串，用完 cg_free）：
+ * 回调返回后失效的只是运行时内部那份清单，你自己存下来的副本可以延后使用。
  */
 /**
  * @brief 本次拖进来几个文件
@@ -1140,7 +1140,7 @@ void cg_widget_set_hint(cg_widget_t *w, const char *text);
 /**
  * @brief 取控件当前的悬停提示文字
  * @param w 控件
- * @return const char* 控件内部的字符串，别 free；没设过返回 NULL
+ * @return const char* 控件内部的字符串，别 free；没设过返回空串（只有 w 为 NULL 才返回 NULL）
  */
 const char *cg_widget_hint(const cg_widget_t *w);
 
@@ -1193,7 +1193,7 @@ int  cg_widget_period(const cg_widget_t *w);
 /**
  * @brief 取分隔条当前位置
  * @param w splitter 控件
- * @return int 逻辑像素（水平分栏时相对容器左边、垂直分行时相对上边）；类型不对返回 0
+ * @return int 逻辑像素（水平分栏时相对容器左边、垂直分行时相对上边）；w 为 NULL 返回 -1（本函数不校验控件类型）
  */
 int  cg_splitter_pos(const cg_widget_t *w);
 /**
@@ -1645,7 +1645,8 @@ void cg_widget_serial_set_format(cg_widget_t *w, int bits, int stop, int parity)
  * 错误处理与串口一致：失败返回 NULL / 负数，原因用 cg_net_last_error() 取；连接/监听失败时
  * 句柄是 NULL，所以 cg_net_last_error(NULL) 给的就是"刚刚那次失败的原因"。
  *
- * v1 的边界（有意不做，别猜）：**只有 TCP**（UDP 的 sendto/recvfrom 下一步）；不做 TLS；
+ * v1 的边界（有意不做，别猜）：**流那套只有 TCP**；UDP 走另一套拉取式接口
+ * （cg_net_udp_open / cg_net_sendto / cg_net_recvfrom，见下面「网口：UDP」一节）。不做 TLS；
  * 不自动重连；写是同步的（带超时，不是写队列）；接收缓冲 64KB 满了丢最老的（与串口同策略）。
  * 链接：需要 winsock2（`-lws2_32`，构建脚本里已经加上）。
  */
@@ -1732,7 +1733,8 @@ const char *cg_net_peer(const cg_net_t *n);
 const char *cg_net_last_error(const cg_net_t *n);
 /**
  * @brief 关掉连接或监听
- * @param n 连接 / 监听句柄；NULL 安全（重复调也安全，内部会置空）
+ * @param n 连接 / 监听句柄；NULL 安全，但**不是幂等**：这一调把句柄结构释放掉，
+ *          同一个指针重复调就是释放后使用（关完请立刻把变量置空，与串口关流同一个坑）
  * @return void 无返回值
  * @note 会等读线程退出，所以最坏卡一个收超时周期（约 50ms）
  */
@@ -2064,7 +2066,7 @@ char *cg_path_dir(const char *path);
 /**
  * @brief 取路径的文件名部分
  * @param path 路径
- * @return const char* **path 内部的指针，不用释放**；path 为 NULL 返回 NULL
+ * @return const char* **path 内部的指针，不用释放**；path 为 NULL 返回空串
  */
 const char *cg_path_name(const char *path);
 /**
@@ -2128,8 +2130,8 @@ char *cg_str_dup(const char *s);
 char *cg_str_trim(const char *s);
 /**
  * @brief 比较字符串（忽略英文大小写）
- * @param a 串一；NULL 与 "" 同等看待
- * @param b 串二；NULL 与 "" 同等看待
+ * @param a 串一；可传 NULL —— NULL 只与 NULL 相等，与 "" 不相等
+ * @param b 串二；可传 NULL —— 同上
  * @return int 1 相等、0 不等
  */
 int   cg_str_equal(const char *a, const char *b);
@@ -2413,11 +2415,12 @@ int cg_crc32_file(const char *path, unsigned *out);
  *   cg_serial_write(ser, frame, n);                     // 01 03 00 6B 00 03 76 87
  *
  *   cg_modbus_rsp_t r;
- *   if (cg_modbus_parse(CG_MODBUS_RTU, buf, n2, &r) == 0) {
+ *   int pr = cg_modbus_parse(CG_MODBUS_RTU, buf, n2, &r);
+ *   if (pr == 0) {
  *       if (r.exception) cg_log(CG_LOG_ERROR, "从站报异常码 %d", r.exception);
  *       else for (i = 0; i < r.nvalues; i++) cg_log(CG_LOG_INFO, "寄存器 %d = %u",
  *                                                   r.addr < 0 ? i : r.addr, r.values[i]);
- *   } else if (ret == -2) cg_log(CG_LOG_ERROR, "帧 CRC 不对 —— 线上的数据坏了");
+ *   } else if (pr == -2) cg_log(CG_LOG_ERROR, "帧 CRC 不对 —— 线上的数据坏了");
  *
  * 两条替你钉住的约定（手写时最容易错的两处）：**RTU 的 CRC 低字节在前**；
  * **异常响应的功能码在线上是 `原功能码 | 0x80`**，解析后 `out->func` 给的是原功能码、
@@ -2917,7 +2920,7 @@ int cg_wifi_count(void);
 /**
  * @brief 取第 idx 块无线网卡的状态
  * @param idx 网卡下标，0 起
- * @param out 状态出口；成功才写
+ * @param out 状态出口；**进来先清零并把 signal 置 -1**（失败时也如此），成功才填 description / state / ssid / signal
  * @return int 0 成功；-1 没有这么多块 / wlanapi 取不到
  */
 int cg_wifi_info(int idx, cg_wifi_info_t *out);
@@ -2934,7 +2937,7 @@ int cg_wifi_scan(void);
  * @brief 取周边可见网络列表（同一块网卡；**同名的多个 BSSID 已合并**，取信号最强的）
  * @param out 结果数组
  * @param cap out 能放几个
- * @param count 实际看到几个的出参（**可能比 cap 大**，放不下的丢掉但个数照给）
+ * @param count 实际写进 out 的条数出口（同名 SSID 已合并，最多 cap；放不下的丢掉、不计数）
  * @return int 0 成功；-1 没有无线网卡或取不到
  * @note 数据来自系统最近一次扫描的结果 ⇒ **要立刻刷新就先调 cg_wifi_scan()**（几秒后再读）；
  *       不调也行，Windows 自己会定期重扫

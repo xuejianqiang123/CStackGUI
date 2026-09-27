@@ -228,7 +228,7 @@ static void test_action_parse(void)
     cg_doc_free(doc);
 }
 
-/** @brief 边界：空名、重名、缺 handler、坏 accel、actions 不是对象 */
+/** @brief 边界：空名、重名、缺 handler、actions 不是对象 */
 /**
  * @brief 边界：空名、重名、缺 handler、actions 不是对象
  * @return void 无返回值
@@ -489,7 +489,7 @@ static const char *k_bad_doc =
     "  ]\n"
     "}\n";
 
-/** @brief 错配置：四类都要记账（自检据此非 0 退出），但界面不能崩、也不能被悄悄改 */
+/** @brief 错配置：五类都要记账（自检据此非 0 退出），但界面不能崩、也不能被悄悄改 */
 /**
  * @brief 错配置：五类都要记账（自检据此非 0 退出），但界面不能崩、也不能被悄悄改
  * @return void 无返回值

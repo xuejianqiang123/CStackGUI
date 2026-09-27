@@ -76,7 +76,7 @@ static void panel_draw_group(cg_app_t *app, HDC dc, cg_widget_t *w, const RECT *
             tr.top = top - sz.cy / 2;
             tr.bottom = tr.top + sz.cy + 2;
             if (tr.top < 0) { tr.bottom -= tr.top; tr.top = 0; }
-            FillRect(dc, &tr, cgw_brush_for(title_bg));   /* 缺口透出"背后"，不是组自己的填充色 */
+            FillRect(dc, &tr, cgw_brush_for(title_bg));   /* 用组自己的填充色擦开顶边线（title_bg = bg；组没设背景色时才等于"背后"色） */
             SetBkMode(dc, TRANSPARENT);
             SetTextColor(dc, (w->style.fg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.fg)
                                                             : GetSysColor(COLOR_WINDOWTEXT));

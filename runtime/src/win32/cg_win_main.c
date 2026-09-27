@@ -231,7 +231,7 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                 static wchar_t tip_buf[256];
                 wchar_t *wt = cgw_wc_from_utf8(tw->hint);
                 if (wt) {
-                    _snwprintf(tip_buf, 256, L"%ls", wt);   /* 宽串必须 %ls（见 build_rate 那条注释） */
+                    _snwprintf(tip_buf, 256, L"%ls", wt);   /* 宽串必须 %ls（见 cg_win_ownerdraw.c 的 draw_rate 那条注释） */
                     tip_buf[255] = L'\0';
                     free(wt);
                 } else {

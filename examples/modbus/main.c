@@ -96,7 +96,7 @@ static void log_sys(cg_app_t *app, const char *text)
  * @param data 字节
  * @param len 长度
  * @return void
- * @note 终端本身是 HEX 模式（cg_term_set_hex），所以这里再编一次也不会重复 ——
+ * @note 终端是**文本**模式（本示例刻意不开 cg_term_set_hex），所以这里先把字节编成 HEX 文本再写进去 ——
  *       但**自己编成文本**有个好处：日志存盘/复制出来就能直接对协议手册看。
  */
 static void log_hex(cg_app_t *app, int dir, const void *data, int len)

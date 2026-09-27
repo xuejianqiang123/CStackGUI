@@ -462,8 +462,8 @@ unsigned cg_win_behind_rgb(cg_app_t *app, void *hwnd)
              * 深色下这个面色也跟着变深（色调由 cg_win_theme.c 给）。 */
             return cgw_theme_card_face(app);
         }
-        /* 父容器没设底色：递归问"它背后是什么"（容器自己画底色用的就是这条递归，
-         * cg_win_draw_panel.c 的 behind_rgb_of）。不能去拿窗口类背景刷 —— 那是面板类
+        /* 父容器没设底色：递归问"它背后是什么"（容器自己画底色也走这条递归 ——
+         * cg_win_draw_panel.c 的 panel_draw_group 就是调 cg_win_behind_rgb()）。不能去拿窗口类背景刷 —— 那是面板类
          * 注册的 COLOR_BTNFACE+1(#F0F0F0)，口径和容器自绘对不上，容器里每个无底色
          * label / separator / badge 底下就会露一块系统灰。 */
         return cg_win_behind_rgb(app, parent);

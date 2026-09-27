@@ -248,8 +248,8 @@ static void progress_body(HDC mem, const RECT *rc, void *vctx)
  * @param w 圆环控件
  * @param rc 客户区矩形（文字居中画在里面）
  * @details 圆环本身（底色 / 轨道 / 进度弧）在 cg_skin.c 的 `cg_skin_draw_ring()` 里
- *          用 GDI+ 抗锯齿画（GDI 的粗弧锯齿非常明显）；文字要用本文件的 `cgw_font_for()`，
- *          所以留在调用方画完圆环之后补。
+ *          用 GDI+ 抗锯齿画（GDI 的粗弧锯齿非常明显）；文字要用 `cg_win_util.c` 的
+ *          `cgw_font_for()`（字体缓存不在本文件），所以留在调用方画完圆环之后补。
  * @return void 无返回值
  */
 static void draw_ring_text(HDC dc, const cg_widget_t *w, const RECT *rc)

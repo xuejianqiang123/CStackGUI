@@ -9,7 +9,7 @@
  *          3. **窗口事件**：窗口本身也是一个"控件"（伪控件 id 固定 `__window`），
  *             它的事件写在 `app.events` 里，和控件事件共用同一套 `CG_BIND` 机制。
  *
- *          窗口支持的事件（对齐「启动窗口」的事件表，共 25 个）：
+ *          窗口支持的事件（对齐「启动窗口」的事件表，共 26 个，别忘了 drop）：
  *            ready / close / closequery / destroy / move / size / activate / deactivate /
  *            firstactivate / idle / tray / show / hide / mousedown / mouseup / rdown / rup /
  *            mousemove / dblclick / gotfocus / lostfocus / keydown / keyup / char / wheel

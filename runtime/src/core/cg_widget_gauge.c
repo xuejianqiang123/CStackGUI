@@ -21,7 +21,7 @@
 #define CG_CHART_DEF_CAP 120
 /** 系列数上限：再多就该换控件了，顺便防 .cgui 写错把内存吃光 */
 #define CG_CHART_MAX_SERIES 8
-/** 窗口点数上限（一条曲线最多几万个点也够用了） */
+/** 窗口点数上限（一条曲线最多几千个点也够用了） */
 #define CG_CHART_MAX_CAP 4096
 
 /**

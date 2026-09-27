@@ -218,10 +218,10 @@ int cgw_scale_px(const cg_app_t *app, int logical);
  * @brief 取（或缓存创建）一个 HFONT
  * @param app 应用（字体按 app 缓存，退出时统一销毁）
  * @param family 字体名
- * @param size_pt 字号（磅）；<= 0 返回 NULL 走系统默认
+ * @param size_pt 字号（磅）；<= 0 视为默认字号 9pt（雅黑，随 DPI），不会返回 NULL
  * @param bold 0 常规、非 0 加粗
  * @param underline 0 无下划线、非 0 加下划线
- * @return HFONT 缓存里的字体句柄（别销毁）；size_pt <= 0 返回 NULL
+ * @return HFONT 缓存里的字体句柄（别销毁）；只有分配失败才返回 NULL（调用方再退系统默认）
  */
 HFONT cgw_font_for(cg_app_t *app, const char *family, int size_pt, int bold, int underline);
 /**
@@ -287,7 +287,7 @@ void cgw_edit_validate(cg_widget_t *w, HWND hwnd);
  * @param path 资源路径
  * @param out 解析结果输出缓冲
  * @param outsz out 的字节数
- * @return int 0 成功、非 0 找不到或放不下
+ * @return int 1 = 找到（out 里是完整路径）、0 = 三处都没找到或参数非法
  */
 int cgw_resolve_asset(const cg_app_t *app, const char *path, char *out, size_t outsz);
 /**
@@ -316,7 +316,8 @@ extern ULONG_PTR g_win_gdip_token;
 
 /* ---------------- cg_win_ctl.c：控件映射与背景色 ---------------- */
 
-/** 富文本窗口类名，Msftedit.dll 起来后是 RICHEDIT50W，否则 NULL（退回 EDIT） */
+/** 富文本窗口类名：Msftedit.dll 起来后是 RICHEDIT50W，退 Riched20.dll 则 RichEdit20W，
+ *  两个都起不来是 L"EDIT"（不会是 NULL） */
 extern const wchar_t *g_win_richedit_class;
 /** atl.dll 是否可用（browser 控件用 AtlAxWin 宿主 WebBrowser） */
 extern int g_win_atl_ok;

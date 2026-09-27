@@ -173,7 +173,7 @@ static void chart_paint(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
     else                              bg = cgw_brush_for(cg_win_behind_rgb(app, (void *)w->native));
     FillRect(dc, rc, bg);
 
-    /* 绘图区：留 28px 给左边的刻度文字、8px 内边距；有名字才给右边留图例位 */
+    /* 绘图区：留 30px 给左边的刻度文字、8px 内边距；有名字才给右边留图例位 */
     plot.left = rc->left + 30;
     plot.top = rc->top + 8;
     plot.right = rc->right - 8;
