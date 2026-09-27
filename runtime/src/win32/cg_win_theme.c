@@ -149,8 +149,14 @@ void cgw_theme_widget(cg_widget_t *w)
     /* 终端/富文本是 RichEdit：WM_CTLCOLOR 给它的底色它不理，得单独发这条消息。
      * 浅色时 wParam=1 让它回到系统色 —— 换主题要能换回来。 */
     if (cgw_is_t(w, "terminal") || cgw_is_t(w, "richtext")) {
-        SendMessageW(h, CG_EM_SETBKGNDCOLOR, app->dark ? 0 : 1,
-                     app->dark ? (LPARAM)cgw_to_colorref(CG_DARK_SURFACE_2) : 0);
+        /* 控件自己写了 bg 就**听它的** —— 此前无条件发主题色，等于把 style.bg 吃掉了
+         * （深色示例 2026-09-27 报回来的：终端上写 bg 不生效）。 */
+        if (w->style.bg != CG_COLOR_NONE) {
+            SendMessageW(h, CG_EM_SETBKGNDCOLOR, 0, (LPARAM)cgw_to_colorref(w->style.bg));
+        } else {
+            SendMessageW(h, CG_EM_SETBKGNDCOLOR, app->dark ? 0 : 1,
+                         app->dark ? (LPARAM)cgw_to_colorref(CG_DARK_SURFACE_2) : 0);
+        }
     }
 }
 

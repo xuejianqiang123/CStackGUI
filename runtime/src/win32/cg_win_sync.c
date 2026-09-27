@@ -19,9 +19,20 @@
  * 用 RichEdit 而不是 ownerdraw 列表框的理由：选择复制与自动滚动是白捡的，
  * 而"把日志复制出来贴给别人"恰恰是这类控件最常被做的事。
  */
-#define CG_TERM_COL_RX  RGB(0x1B, 0x6E, 0x33)   /* 收到：深绿 */
-#define CG_TERM_COL_TX  RGB(0x14, 0x5C, 0xA8)   /* 发出：深蓝 */
-#define CG_TERM_COL_SYS RGB(0x6B, 0x6B, 0x6B)   /* 自己记的：灰 */
+/** @brief 行色：浅底一套、深底一套
+ *  @details 原来那三个色（深绿 / 深蓝 / 中灰）是**为浅底挑的**，落在深色 RichEdit 上
+ *           对比度只有 2.6–3.2:1（深色示例 2026-09-27 实测报回来的），RX/TX 基本看不清。
+ *           深色那套是同一色相提亮后的值，对比度成倍上来。 */
+static COLORREF term_col(const cg_app_t *app, int kind)
+{
+    int dark = (app && app->dark);
+
+    switch (kind) {
+    case CG_TERM_RX:  return dark ? RGB(0x7B, 0xD8, 0x8F) : RGB(0x1B, 0x6E, 0x33);
+    case CG_TERM_TX:  return dark ? RGB(0x7A, 0xB8, 0xFF) : RGB(0x14, 0x5C, 0xA8);
+    default:          return dark ? RGB(0x9E, 0x9E, 0xA4) : RGB(0x6B, 0x6B, 0x6B);
+    }
+}
 
 /** @brief 把一行文字（带颜色）追加到 RichEdit 末尾 */
 static void term_push_line(HWND h, const char *text, COLORREF col)
@@ -98,11 +109,11 @@ static void sync_terminal(HWND h, cg_widget_t *w)
     for (i = w->term_pushed; i < w->nitems; i++) {
         const char *line = w->items[i] ? w->items[i] : "";
         unsigned char tag = (unsigned char)line[0];
-        COLORREF col = CG_TERM_COL_SYS;
+        COLORREF col = term_col(w->app, CG_TERM_SYS);
 
-        if (tag == CG_TERM_RX)       { col = CG_TERM_COL_RX;  line++; }
-        else if (tag == CG_TERM_TX)  { col = CG_TERM_COL_TX;  line++; }
-        else if (tag == CG_TERM_SYS) {                        line++; }
+        if (tag == CG_TERM_RX)       { col = term_col(w->app, CG_TERM_RX); line++; }
+        else if (tag == CG_TERM_TX)  { col = term_col(w->app, CG_TERM_TX); line++; }
+        else if (tag == CG_TERM_SYS) {                                     line++; }
         /* 首字节不是标记（用户手写的 .cgui 初始内容）就按 SYS 原样显示 */
         term_push_line(h, line, col);
     }

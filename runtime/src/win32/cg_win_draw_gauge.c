@@ -120,7 +120,8 @@ static void led_paint(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
         RECT    tr = *rc;
 
         tr.left += side + 6;
-        SetTextColor(dc, RGB(0x1D, 0x1B, 0x20));
+        /* 灯右边的说明文字画在「背后色」上 ⇒ 深色下也得变浅，否则深底暗字看不清 */
+        SetTextColor(dc, (app && app->dark) ? RGB(0xE6, 0xE0, 0xE9) : RGB(0x1D, 0x1B, 0x20));
         if (wt) {
             DrawTextW(dc, wt, -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
             free(wt);

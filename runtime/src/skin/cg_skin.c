@@ -19,6 +19,22 @@
 #include <string.h>
 #include <math.h>       /* 圆环的 GDI 回退要算弧上的点 */
 
+/** @brief 画在「背后色」（= 透明底）上的**默认**文字色：深色下必须变浅
+ *  @param w 控件（取它的 app->dark）；可传 NULL（那就当浅色）
+ *  @param disabled 禁用态（浅色下是灰、深色下用暗一点的灰，别用浅色那套灰 —— 那在深底上太亮）
+ *  @note 2026-09-27 的教训，值得留着：同一份"写死的深色字"在这个文件里有**两处**
+ *        （开关那处 / 复选框·单选那处），当时只改了前者、漏了后者 —— 而且两处的常量
+ *        差最后一位（`0x1D1B20` 与 `0x1C1B1F`），**按常量 grep 都搜不全**。
+ *        是深色示例的队友拿代码 + 截图证据报回来的。所以收成一个函数：以后要调只改这里。
+ *        （按钮那句 textcol 不在此列：那是画在 M3 浅紫填充上的字，深色下填充仍是浅紫。） */
+static unsigned sk_default_text(const cg_widget_t *w, int disabled)
+{
+    int dark = (w && w->app && w->app->dark);
+
+    if (disabled) return dark ? 0x6E6E72u : 0x9A9A9Eu;
+    return dark ? 0xE6E0E9u : 0x1D1B20u;
+}
+
 /* ---- GDI+ 扁平 API（本机 MinGW 无 gdiplus.h 头，仅前向声明用到的几个） ---- */
 typedef int     GpStatus;
 typedef float   REAL;
@@ -570,8 +586,7 @@ void cg_skin_draw_switch(cg_widget_t *w, HDC hdc, const RECT *rc)
              * 换成浅字，否则复选/单选/开关的文字就是深底暗字（2026-09-27 探针截图抓到的）。
              * 注意**不要**顺手改上面按钮那句 textcol：那是画在 M3 浅紫填充上的字，
              * 深色下按钮填充仍是浅紫，字就该保持深色。 */
-            SetTextColor(hdc, sk_colorref(disabled ? 0x9A9A9Eu
-                                          : (w->app && w->app->dark ? 0xE6E0E9u : 0x1D1B20u)));
+            SetTextColor(hdc, sk_colorref(sk_default_text(w, disabled)));
             DrawTextW(hdc, wt, -1, &tr,
                       DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
             free(wt);
@@ -686,7 +701,7 @@ void cg_skin_draw_check(cg_app_t *app, const DRAWITEMSTRUCT *dis)
         wchar_t *wt = sk_to_wcs(w->text);
         if (wt) {
             SetBkMode(dis->hDC, TRANSPARENT);
-            SetTextColor(dis->hDC, sk_colorref(disa ? 0x9A9A9Eu : 0x1C1B1Fu));
+            SetTextColor(dis->hDC, sk_colorref(sk_default_text(w, disa)));
             DrawTextW(dis->hDC, wt, -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
             free(wt);
         }
