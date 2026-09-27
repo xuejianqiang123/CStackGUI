@@ -1208,6 +1208,15 @@ unsigned cg_crc32(const void *data, int len);   /* IEEE 802.3 / zlib；"12345678
 unsigned cg_crc16(const void *data, int len);   /* CRC16/Modbus；"123456789" = 0x4B37，挂帧尾低字节在前 */
 int      cg_crc32_file(const char *path, unsigned *out);   /* 1 = 成功 */
 
+/* 无线状态（IoT 上位机先看这一眼；零新增链接依赖 —— 符号运行期从系统 DLL 取） */
+int cg_wifi_count(void);                       /* 有几块无线网卡（0 = 没有 / WLAN 服务没起） */
+int cg_wifi_info(int idx, cg_wifi_info_t *out);      /* 描述/状态/当前 SSID/信号(-1 = 没连) */
+int cg_wifi_networks(cg_wifi_net_t *out, int cap, int *count);  /* 周边网络（系统扫描缓存） */
+int cg_ble_radio_count(void);                  /* 有几个蓝牙无线电（0 = 没有 / 关着） */
+int cg_ble_radio_info(int idx, cg_ble_radio_t *out);
+int cg_ble_device_count(void);                 /* 已配对/记得过的设备数（不做主动搜索） */
+int cg_ble_device_info(int idx, cg_ble_device_t *out);
+
 /* Modbus 帧编解码（纯函数：不持状态、不碰 I/O；RTU 自动挂 CRC 并校验，TCP 带 MBAP 头） */
 int cg_modbus_build_read (int tcp, int tid, int slave, int func, int start, int count,
                           void *out, int out_size);          /* 01/02/03/04；返回帧长，-1 = 参数非法 */

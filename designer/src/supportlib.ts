@@ -908,6 +908,36 @@ cg_base_convert("FF", 16, 2, buf, (int)sizeof(buf));   /* -> "11111111" */`,
         ],
       },
       {
+        label: "无线状态（WiFi / 蓝牙）",
+        cmds: [
+          c("cg_wifi_count", "有几块无线网卡", "int cg_wifi_count(void)",
+            "0 = 本机没有无线网卡，或 WLAN 服务没起（原因在日志里）。IoT 上位机先看这一眼：设备连不上时先排除\"我这边的无线状态不对\""),
+          c("cg_wifi_info", "无线网卡状态", "int cg_wifi_info(int idx, cg_wifi_info_t *out)",
+            "取第 idx 块网卡：描述 / 状态 / 当前 SSID / 信号（0..100，没连是 -1）。**零新增链接依赖** —— 符号运行期从 wlanapi.dll 取", {
+              params: ["idx：第几块（0 起）", "out：cg_wifi_info_t"],
+              ret: "0 = 成功；-1 = 越界 / wlanapi 取不到",
+              sample: `cg_wifi_info_t w;\nfor (int i = 0; i < cg_wifi_count(); i++)\n    if (cg_wifi_info(i, &w) == 0)\n        cg_log(CG_LOG_INFO, "%s：%s  信号 %d%%", w.description,\n               w.ssid[0] ? w.ssid : "(未连接)", w.signal);`,
+            }),
+          c("cg_wifi_networks", "周边可见网络列表", "int cg_wifi_networks(cg_wifi_net_t *out, int cap, int *count)",
+            "同名的多个 BSSID 已合并（取信号最强的）。数据来自系统最近一次扫描的缓存 ⇒ 刚开机可能是空的，隔几秒再读一次", {
+              params: ["out / cap：数组与容量", "count：出口，给**实际看到**的个数（可能比 cap 大）"],
+              ret: "0 = 成功；-1 = 没有无线网卡或取不到",
+              sample: `cg_wifi_net_t nets[24]; int n = 0;\nif (cg_wifi_networks(nets, 24, &n) == 0)\n    for (int i = 0; i < n; i++)\n        cg_log(CG_LOG_INFO, "  %s  %d%%%s", nets[i].ssid, nets[i].signal,\n               nets[i].connected ? "（当前）" : "");`,
+            }),
+          c("cg_ble_radio_count", "有几个蓝牙无线电", "int cg_ble_radio_count(void)",
+            "0 = 没有蓝牙或蓝牙关着。符号运行期从 BluetoothApis.dll 取（不在 bthprops.cpl 里）"),
+          c("cg_ble_radio_info", "蓝牙无线电信息", "int cg_ble_radio_info(int idx, cg_ble_radio_t *out)",
+            "名字 + 本机蓝牙地址。**零新增链接依赖**", { ret: "0 = 成功；-1 = 越界 / 取不到" }),
+          c("cg_ble_device_count", "有几个已知蓝牙设备", "int cg_ble_device_count(void)",
+            "已配对 / 记得过的设备数。**不做主动搜索** —— 那要几十秒，且属于\"发现\"不是\"状态\""),
+          c("cg_ble_device_info", "已知蓝牙设备信息", "int cg_ble_device_info(int idx, cg_ble_device_t *out)",
+            "名字 / 地址（与 Windows 设置里显示的一致）/ 是否连着 / 是否配对过。板子在不在列表里，看它", {
+              ret: "0 = 成功；-1 = 越界 / 取不到",
+              sample: `cg_ble_device_t d;\nfor (int i = 0; i < cg_ble_device_count(); i++)\n    if (cg_ble_device_info(i, &d) == 0)\n        cg_log(CG_LOG_INFO, "[%d] %s  %s  已连接=%d", i, d.name, d.address, d.connected);`,
+            }),
+        ],
+      },
+      {
         label: "协议（Modbus）",
         cmds: [
           c("cg_modbus_build_read", "拼读请求帧（Modbus）", "int cg_modbus_build_read(int tcp, int tid, int slave, int func, int start, int count, void *out, int out_size)",

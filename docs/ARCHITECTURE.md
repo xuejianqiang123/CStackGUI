@@ -328,6 +328,11 @@ runtime/
       cg_kit_bytes.c    字节操作：反转 / 切片 / 查找 / 按字节序读写 u16·u32（拼帧拆帧的基元）
       cg_kit_check.c    校验：CRC32（IEEE 802.3）/ CRC16-Modbus（逐位算不建表 ⇒ 线程安全）、
                         MD5 / SHA-1 / SHA-256 / SHA-512（手写，零新增链接依赖；含分块文件摘要）
+      cg_kit_wireless.c 无线状态：WiFi 网卡/当前 SSID·信号/周边网络、蓝牙无线电与已知设备
+                        （IoT 上位机先看这一眼）。**零新增链接依赖**：符号全部运行期从
+                        wlanapi.dll / BluetoothApis.dll 取 —— 直接链会让既有用户项目的
+                        链接命令都得改（实测 undefined reference）。不提供主动扫描：WlanScan
+                        在本机实测返回 87 而撤掉，列表只用系统缓存
       cg_kit_modbus.c   Modbus 帧编解码（RTU / TCP）：拼读·写请求、解响应与异常帧
                         （RTU 自动挂 CRC 并校验，异常响应替你剥 0x80）。
                         **纯函数、不持状态、不碰 I/O** —— 连接 / 超时 / 重试仍归业务
