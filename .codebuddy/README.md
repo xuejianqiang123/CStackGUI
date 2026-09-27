@@ -5,6 +5,7 @@
 > `stack_overflow_check`、`error_handling_check`、`struct_best_practice_check`），其余针对 ESP32/RTOS/外设，
 > 本工程用不到。本工程自己的技能是 `designer-modify`（改画布）、`design-taste`（界面观感/设计品味）、`git-commit-style`（提交格式）等。
 > **用途**：AI 辅助编程的完整工作流体系 = 代码审查（14个专项技能）+ 开发流程（PIV 双循环）+ 辅助工具（caveman / ponytail / tokenzero / analyzing-projects / esp-idf-helper）+ 社区引入（4个）+ 本工程专属（designer-modify / git-commit-style / **safe-file-ops** / **team-parallel-delivery**），共 41 个技能目录（明细见下方目录树）
+> **权威清单**：技能分类、触发条件与产出以 **`.codebuddy/skills/INDEX.md`** 为准（新增 / 改名技能必须同步该索引）。本文件的表格是**导读**，不重复维护细节 —— 2026-09-27 发现必经链路上 8 个技能残留上游模板内容（`idf.py build`、`ai_code_review.py`、错误的"本项目"模型），根因就是缺一份权威索引与维护清单。
 > **核心价值**：质量门禁前置 + 端到端自动化 + 可追溯产出
 > **维护**：请勿随意删除此文件夹，包含项目级配置、审查规则和工作流定义
 
@@ -82,7 +83,7 @@
     │   ├── first-principles-thinking/ # 第一性原理思维准则（全局生效：需求澄清/最短路径/追根因/精简输出）
     │   ├── serial_verify/           # 串口行为验证（接入 piv-validate 第3级：烧录→观察输出→回环/应答→异常注入）
     │   └── [工具类] 辅助技能
-    │       ├── esp-idf-helper/          # ESP-IDF 命令行工作流（配置/编译/烧录/监控/排错，本地化 Windows+Git Bash 多子项目）
+    │       ├── esp-idf-helper/          # 板子侧参考：ESP-IDF 命令行工作流（本工程不含固件，见 INDEX.md）
     │       ├── analyzing-projects/      # 陌生代码库系统性分析（结构/技术栈/数据流/约定，与 prime-codebase 分工）
     │       ├── caveman/                 # 输出侧压缩：少说（山顶洞人，lite/full/ultra/文言文，默认常驻）
     │       ├── tokenzero/               # 输入侧压缩：少喂（本地 npm CLI：pack/compress/json/analyze，无损省输入 Token，手动触发）
@@ -197,7 +198,7 @@
 
 ## 🔄 开发工作流技能库（PIV 双循环框架）
 
-在 14 个审查技能之上，新增一套 **PIV 双循环开发工作流**，让"需求 → 提交"全流程顺畅、可验证、可追溯。参考 coleam00/skills 的 PIV 循环框架，并结合本嵌入式项目的 ESP-IDF 构建、tests/ 单测、ai_code_review.py 等基础设施定制。
+在 14 个审查技能之上，新增一套 **PIV 双循环开发工作流**，让"需求 → 提交"全流程顺畅、可验证、可追溯。参考 coleam00/skills 的 PIV 循环框架，并结合本工程既有的基础设施定制：`build-all.bat`（编译 + 逐示例自检）、`tools\run-tests.bat`（C 层单测）、`tools\check-format.bat`（跨端契约回归）、画布的 `tsc --noEmit` + `vite build`。
 
 ### 双循环架构
 
@@ -226,7 +227,7 @@
 | 内层 | `prime-codebase` | 加载代码库上下文（Context is King） | 上下文总结 |
 | 内层 | `piv-plan-implementation` | Validation-First 实现计划 | `.codebuddy/plans/*.md` |
 | 内层 | `piv-implement` | 严格按计划实现，计划外改动需确认 | 代码改动 |
-| 内层 | `piv-validate` | 编译（idf.py build）+ 静态检查 + 行为验证 | 验证结果清单 |
+| 内层 | `piv-validate` | 编译（`build-all.bat`）+ 静态检查 + 行为验证（`--selftest` / 真机实测） | 验证结果清单 |
 | 内层 | `piv-review-changes` | 提交前审查，按领域调用 14 个审查技能 | `.codebuddy/code-reviews/*.md` |
 | 内层 | `git-commit-style` | `[类型][模块] 描述` 格式、分批原子化提交 | git commit |
 | 内层 | `piv-create-pr` | 创建 PR/MR（含验证情况与关联文档） | PR/MR |
@@ -279,7 +280,7 @@ PIV 内层循环包含 **3 个质量门禁**，必须通过才能进入下一阶
 - ✅ 每个步骤必须有明确的验证标准
 
 #### 2. 验证门禁（`piv-validate`）
-- ✅ 编译无新增错误/警告（`idf.py build`）
+- ✅ 编译无新增错误/警告（`build-all.bat`；改了画布叠 `npx tsc --noEmit` + `npx vite build`）
 - ✅ 行为验证通过（按计划的验证方法执行）
 - ✅ 边界/异常路径覆盖（超时、错误帧、缓冲区满等）
 - ❌ 不通过 → 回到 `piv-implement` 修复
@@ -368,7 +369,7 @@ AI 自动执行：
   1. prime-codebase            → 加载项目上下文
   2. piv-plan-implementation   → 制定实现计划（.codebuddy/plans/）
   3. piv-implement             → 按计划实现
-  4. piv-validate              → idf.py build + 行为验证
+  4. piv-validate              → build-all.bat + 行为验证（再叠 run-tests / check-format）
   5. piv-review-changes        → 调用通信协议/DMA 等审查技能
   6. git-commit-style          → 按 [类型][模块] 分批提交
 ```
