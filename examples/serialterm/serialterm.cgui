@@ -96,6 +96,7 @@
       "id": "edt_recv",
       "type": "edit",
       "rect": { "x": 8, "y": 48, "w": 904, "h": 470 },
+      "grow": 1,
       "multiline": true,
       "scroll": 2,
       "maxlen": 65535,

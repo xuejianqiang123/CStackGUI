@@ -116,6 +116,7 @@
       "id": "term_log",
       "type": "terminal",
       "rect": { "x": 8, "y": 48, "w": 964, "h": 472 },
+      "grow": 1,
       "checked": true,
       "value": 500,
       "items": [
