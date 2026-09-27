@@ -15,7 +15,16 @@
  *     3) skin 不得 include cg_win_internal.h（它比 win32 低一层）；
  *     4) kit 不得 include win32/skin 的头；
  *     5) 四层的 .c 文件基名不得重复 —— build-runtime.bat 用"文件基名"做 .o
- *        （build-runtime.bat:62），撞名会互相覆盖且没有任何报错。
+ *        （build-runtime.bat:62），撞名会互相覆盖且没有任何报错；
+ *     6) docs/ARCHITECTURE.md 的 runtime 文件清单与真实文件互为镜像；
+ *     7) **业务层（examples/、apps/）不得 include Windows 头** —— "业务代码只 include
+ *        cstackgui.h"是 README 里写明的卖点（换台机器复制过去就能跑、画布「支持库」页签
+ *        查得到），但它一直只是"约定"：2026-09-27 实测现状干净（examples/apps 下一个
+ *        windows.h 都没有），干净就更该锁 —— 从网上抄一段带 <windows.h> 的代码进来，
+ *        编译器不会说任何话；
+ *     8) **运行时的工作线程只许出现在 cg_serial.c / cg_net.c** —— 读线程只把字节搬进环形
+ *        缓冲、业务在时钟回调里取走，这条线一破就是"控件被别的线程碰"的隐性数据竞争，
+ *        任何单测都测不出来（2026-09-27 实测只有这两个文件在 CreateThread）。
  *
  * 用法：node tools\check-layers.mjs
  * 退出码：0 = 全部成立；1 = 有越界（逐条给出文件:行号与它为什么重要）
@@ -186,6 +195,72 @@ for (const [base, files] of byName) {
   }
 }
 
+/* 7) 业务层（examples/、apps/）不得 include Windows 头
+ *
+ *    "业务代码从头到尾只 include cstackgui.h"是 README §1.2 写明的卖点：
+ *    界面之外的能力（文件/配置/编码/剪贴板/注册表/串口/网口）都由 cg_kit 提供，
+ *    画布「支持库」页签也是照 cstackgui.h 生成的。一旦业务代码自己 include <windows.h>：
+ *      ① 它绑死在 Win32 上（这个工程的分层卖点当场作废）；
+ *      ② 画布「支持库」里查不到那些函数，用户只能去翻 MSDN；
+ *      ③ `tools/check-support.mjs` 的一致性也失去了意义。
+ *
+ *    为什么现在才加：2026-09-27 实测现状是干净的（examples/apps 下的 .c/.h 一个
+ *    windows.h 都没有），而"干净"正是锁它的最好时机 —— 抄一段网上的 Win32 片段进来，
+ *    编译器不会说任何话。
+ *
+ *    范围：只扫 .c / .h。.rc（gallery.rc、cstackgui.rc）**必须** include <windows.h>
+ *    才写得出 VS_VERSION_INFO，天然豁免。
+ */
+{
+  const WIN_ONLY_HEADERS = [
+    "windows.h", "windowsx.h", "winuser.h", "wingdi.h", "winbase.h", "windef.h",
+    "commctrl.h", "commdlg.h", "shellapi.h", "shlobj.h", "gdiplus.h", "uxtheme.h",
+    "dwmapi.h", "tchar.h", "richedit.h", "winsock2.h", "ws2tcpip.h",
+    "atlbase.h", "atlwin.h", "mmsystem.h",
+  ];
+  for (const dir of ["examples", "apps"]) {
+    for (const f of listFiles(path.join(root, dir), [".c", ".h"])) {
+      for (const inc of includes(f)) {
+        checks++;
+        if (!WIN_ONLY_HEADERS.includes(inc.name.toLowerCase())) continue;
+        problems.push(
+          `${rel(f)}:${inc.n} — 业务代码不能 include <${inc.name}>；` +
+            `业务只 include cstackgui.h（界面之外的能力在 cg_kit 里）——` +
+            `确实需要原生能力就把它加到 runtime/src/kit 并暴露成 cg_* 函数，` +
+            `那样画布「支持库」页签也查得到`,
+        );
+      }
+    }
+  }
+}
+
+/* 8) 运行时的工作线程只许出现在 cg_serial.c / cg_net.c
+ *
+ *    ARCHITECTURE.md §8 把这条写成了硬约束："运行时的工作线程只出现在这两个文件里
+ *    （且只服务于串口与 TCP —— UDP 不开读线程）"。它存在的原因是**控件不是线程安全的**：
+ *    读线程只把字节搬进环形缓冲，业务必须在 cg_set_timer 的时钟回调里取走。
+ *    在别处悄悄开一条线程去碰控件，是那种"跑一万次才崩一次"的数据竞争，
+ *    单测与 --selftest 都照不到 —— 只有这条静态断言拦得住。
+ */
+{
+  const THREAD_ALLOWED = ["cg_serial.c", "cg_net.c"];
+  const THREAD_API = /\b(CreateThread|_beginthreadex|_beginthread|CreateRemoteThread)\s*\(/;
+  for (const f of listFiles(SRC, [".c"])) {
+    const base = path.basename(f);
+    if (THREAD_ALLOWED.includes(base)) continue;
+    const lines = fs.readFileSync(f, "utf8").split(/\r?\n/);
+    lines.forEach((line, i) => {
+      if (!THREAD_API.test(line)) return;
+      checks++;
+      problems.push(
+        `${rel(f)}:${i + 1} — 运行时的工作线程只允许出现在 ${THREAD_ALLOWED.join(" / ")}；` +
+          `控件不是线程安全的，读线程只能把字节搬进环形缓冲、业务在时钟回调里取走` +
+          `（见 docs/COMM.md）。要在这里开线程，先想清楚谁在别的线程里碰控件`,
+      );
+    });
+  }
+}
+
 if (problems.length > 0) {
   console.log(`[fail] 分层契约被破坏（${problems.length} 处 / 共检查 ${checks} 项）\n`);
   for (const p of problems) console.log(`  - ${p}`);
@@ -193,5 +268,6 @@ if (problems.length > 0) {
 }
 console.log(
   `[ok] 分层契约成立：共检查 ${checks} 项（core 平台中立 / win32 只走 cg_win_internal.h / ` +
-    `skin 不反向依赖 / kit 不依赖界面 / ${byName.size} 个 .c 基名唯一）`,
+    `skin 不反向依赖 / kit 不依赖界面 / ${byName.size} 个 .c 基名唯一 / ` +
+    `业务层不 include Windows 头 / 工作线程只在 cg_serial.c·cg_net.c）`,
 );
