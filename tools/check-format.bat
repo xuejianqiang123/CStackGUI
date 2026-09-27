@@ -113,6 +113,14 @@ echo   app config: exe version info (examples\gallery\gallery.rc)
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$exe='examples\gallery\gallery.exe'; if (-not (Test-Path $exe)) { Write-Host '[fail] gallery.exe missing - run build-all first'; exit 1 }; $v=(Get-Item $exe).VersionInfo; $want='CStackGUI ' + [char]0x63A7 + [char]0x4EF6 + [char]0x9648 + [char]0x5217 + [char]0x5BA4; if ($v.FileVersion -ne '0.1.0.0' -or $v.OriginalFilename -ne 'gallery.exe' -or $v.ProductName -ne $want) { Write-Host ('[fail] gallery.exe version info mismatch -> FileVersion=' + $v.FileVersion + ' ProductName=' + $v.ProductName + ' OriginalFilename=' + $v.OriginalFilename); exit 1 }; Write-Host ('  gallery.exe: ' + $v.ProductName + ' ' + $v.FileVersion)"
 if errorlevel 1 exit /b 1
 
+rem 技能契约：技能目录 / INDEX.md（总数与分类）/ .codebuddy 的 README.md 目录树 / 各 SKILL.md 的
+rem frontmatter / settings.json 的 scopes，五处说的必须是同一件事。
+rem （2026-09-27 清理 13 个技能时，靠人工同步了 6 个文件 40 处引用；这类"同一事实两份"的事
+rem  按本仓库自己的规矩必须机器兜 —— INDEX 维护清单里那条"记得同步 README 与映射表"从此由它兜住。）
+echo   skills: dirs vs INDEX.md vs README tree vs frontmatter vs scopes
+node tools\check-skills.mjs
+if errorlevel 1 exit /b 1
+
 echo.
 echo [ok] format contract check passed
 exit /b 0
