@@ -1867,15 +1867,20 @@ void cg_canvas_set_line_width(cg_widget_t *w, int px);
 /**
  * @brief 画一条直线（用当前颜色与线宽）
  * @param w canvas 控件
- * @param x1 起点 x；y1 起点 y；x2 终点 x；y2 终点 y（控件内坐标，逻辑像素）
+ * @param x1 起点 x（控件内坐标，逻辑像素）
+ * @param y1 起点 y
+ * @param x2 终点 x
+ * @param y2 终点 y
  * @return void 无返回值
  */
 void cg_canvas_line(cg_widget_t *w, int x1, int y1, int x2, int y2);
 /**
  * @brief 画一个矩形
  * @param w canvas 控件
- * @param x 左上角 x；y 左上角 y
- * @param wd 宽；ht 高
+ * @param x 左上角 x
+ * @param y 左上角 y
+ * @param wd 宽
+ * @param ht 高
  * @param fill 0 只描边、非 0 实心
  * @return void 无返回值
  */
@@ -1883,8 +1888,10 @@ void cg_canvas_rect(cg_widget_t *w, int x, int y, int wd, int ht, int fill);
 /**
  * @brief 画一个椭圆（矩形内切）
  * @param w canvas 控件
- * @param x 外接矩形左上角 x；y 外接矩形左上角 y
- * @param wd 外接矩形宽；ht 外接矩形高
+ * @param x 外接矩形左上角 x
+ * @param y 外接矩形左上角 y
+ * @param wd 外接矩形宽
+ * @param ht 外接矩形高
  * @param fill 0 只描边、非 0 实心
  * @return void 无返回值
  */
@@ -1892,7 +1899,8 @@ void cg_canvas_ellipse(cg_widget_t *w, int x, int y, int wd, int ht, int fill);
 /**
  * @brief 在画板上写一段文字
  * @param w canvas 控件
- * @param x 文字左上角 x；y 文字左上角 y
+ * @param x 文字左上角 x
+ * @param y 文字左上角 y
  * @param text UTF-8 文字，函数内部拷贝
  * @return void 无返回值
  */
@@ -2432,24 +2440,48 @@ typedef struct {
     unsigned short values[CG_MODBUS_MAX_VALUES];   /* 读响应：寄存器值 / 位类的 0|1；写响应：回显值 */
 } cg_modbus_rsp_t;
 
-/** 拼"读类"请求帧：**线圈 01 / 离散输入 02 / 保持寄存器 03 / 输入寄存器 04**。
- *  @param tcp CG_MODBUS_TCP 时带 MBAP 头；tid 是事务号（RTU 时忽略，随便传 0）
- *  @param slave 从站地址 0..255；start 起始地址 0..65535
- *  @param count 个数：位类 1..2000、寄存器类 1..125（规范上限）
- *  @return int 写入 out 的**帧长度**（RTU 8 字节 / TCP 12 字节）；参数非法或 out 放不下返回 -1 */
+/**
+ * @brief 拼"读类"请求帧：**线圈 01 / 离散输入 02 / 保持寄存器 03 / 输入寄存器 04**
+ * @param tcp CG_MODBUS_RTU（0）或 CG_MODBUS_TCP（1，带 7 字节 MBAP 头）
+ * @param tid 事务号，TCP 用；RTU 忽略，随便传 0
+ * @param slave 从站地址 0..255
+ * @param func 功能码：1 / 2 / 3 / 4
+ * @param start 起始地址 0..65535
+ * @param count 个数：位类 1..2000、寄存器类 1..125（规范上限）
+ * @param out 输出缓冲，帧写在这里
+ * @param out_size out 的字节数
+ * @return int 写入 out 的**帧长度**（RTU 8 字节 / TCP 12 字节）；参数非法或放不下返回 -1
+ */
 int cg_modbus_build_read(int tcp, int tid, int slave, int func, int start, int count,
                          void *out, int out_size);
 
-/** 拼"写类"请求帧：**单线圈 05 / 单寄存器 06 / 多线圈 0F / 多寄存器 10**。
- *  05/06 时 nvalues 必须为 1（05 的 1/0 会替你换成 FF00/0000）；0F/10 时 ≤ 123 个。
- *  @return int 帧长度；参数非法或 out 放不下返回 -1 */
+/**
+ * @brief 拼"写类"请求帧：**单线圈 05 / 单寄存器 06 / 多线圈 0F / 多寄存器 10**
+ * @param tcp CG_MODBUS_RTU（0）或 CG_MODBUS_TCP（1）
+ * @param tid 事务号，TCP 用；RTU 忽略，随便传 0
+ * @param slave 从站地址 0..255
+ * @param func 功能码：5 / 6 / 15 / 16
+ * @param start 起始地址 0..65535
+ * @param vals 要写的值数组；05/06 只看第一个，0F/10 最多读前 123 个
+ * @param nvalues vals 的个数：05/06 必须为 1（1/0 会替你换成 FF00/0000），0F/10 最多 123
+ * @param out 输出缓冲，帧写在这里
+ * @param out_size out 的字节数
+ * @return int 帧长度；参数非法或放不下返回 -1
+ */
 int cg_modbus_build_write(int tcp, int tid, int slave, int func, int start,
                           const unsigned short *vals, int nvalues, void *out, int out_size);
 
-/** 解析响应帧（读响应 / 写响应 / 异常响应都认）。
- *  @return int 0 = 成功；**-1** = 帧太短或参数非法；**-2** = RTU 的 CRC 不对（线上数据坏了）；
- *              **-3** = 格式不对（协议标识 / 长度字段 / 功能码 / 字节数跟规范对不上）。
- *              负值分得这么细，是为了让日志能直接说清"是坏了还是我拼错了"。 */
+/**
+ * @brief 解析响应帧（读响应 / 写响应 / 异常响应都认）
+ * @param tcp 帧格式，必须与拼请求帧时一致
+ * @param frame 收到的整帧（先切帧再解析）
+ * @param len 帧长度
+ * @param out 解析结果出口；成功才写
+ * @return int 0 成功；-1 帧太短或参数非法；-2 RTU 的 CRC 不对（线上数据坏了）；
+ *             -3 格式不对（协议标识 / 长度字段 / 功能码 / 字节数跟规范对不上）
+ * @note 负值分得这么细，是为了让日志能直接说清"是坏了还是我拼错了"；
+ *       `out->func` 在异常响应里给的是**原**功能码，异常码在 `out->exception`
+ */
 int cg_modbus_parse(int tcp, const void *frame, int len, cg_modbus_rsp_t *out);
 
 /* ---- 字节流切帧（串口 / TCP 都适用） ----
@@ -2517,41 +2549,90 @@ typedef struct {
     int            q_len[CG_FRAME_QUEUE];   /* 各帧长度（位置由 q_base 累加得出） */
 } cg_frame_t;
 
-/** 初始化切帧器：buf/buf_size 是调用方给的攒帧缓冲（够放"最大的一帧"即可）。
- *  arg 按 mode 解释：SILENCE = 静默毫秒 / FIXED = 每帧字节数 / DELIM = 结束字节 /
- *  LENFIELD = 长度字段的字节偏移（缺省宽 2、大端、帧总长 = 长度值 + 偏移 + 2）。
- *  @return int 0 = 成功；-1 = 参数不合法（mode 不认识 / 缓冲太小 / arg 越界） */
+/**
+ * @brief 初始化切帧器
+ * @param f 切帧状态（自己声明一份、别共享）
+ * @param buf 调用方给的攒帧缓冲，够放"最大的一帧"即可（这里不 malloc）
+ * @param buf_size buf 的字节数
+ * @param mode 定界方式，取 CG_FRAME_SILENCE / FIXED / DELIM / LENFIELD
+ * @param arg 按 mode 解释：SILENCE = 静默毫秒 / FIXED = 每帧字节数 / DELIM = 结束字节 /
+ *            LENFIELD = 长度字段的字节偏移（缺省宽 2、大端、帧总长 = 长度值 + 偏移 + 2）
+ * @return int 0 成功；-1 参数不合法（mode 不认识 / 缓冲太小 / arg 越界）
+ */
 int cg_frame_init(cg_frame_t *f, void *buf, int buf_size, int mode, int arg);
 
-/** LENFIELD 的细节：长度字段宽度（1 或 2 字节）、是否小端、帧总长 = 长度值 + add（> 0 才生效） */
+/**
+ * @brief 配 LENFIELD 模式的长度字段细节
+ * @param f 切帧状态
+ * @param width 长度字段宽度，1 或 2 字节
+ * @param little_endian 非 0 小端、0 大端
+ * @param add 帧总长 = 长度值 + add；传 > 0 才生效
+ * @return void 无返回值
+ */
 void cg_frame_lenfield(cg_frame_t *f, int width, int little_endian, int add);
 
-/** 帧长界：低于 min_len 当噪声丢掉；高于 max_len 整帧丢掉（都累加进 dropped）。
- *  只传 > 0 的值才生效；max_len 不许超过缓冲大小。 */
+/**
+ * @brief 设帧长的上下界
+ * @param f 切帧状态
+ * @param min_len 少于这么多字节当噪声丢掉；传 > 0 才生效
+ * @param max_len 高于这么多字节整帧丢掉；传 > 0 才生效，且不许超过缓冲大小
+ * @return void 无返回值（丢掉的字节累加进 dropped）
+ */
 void cg_frame_limits(cg_frame_t *f, int min_len, int max_len);
 
-/** 喂入刚收到的字节；now_ms 传 cg_now_ms()。
- *  @return int 0 = 已收下；-1 = 参数非法，或缓冲被没取走的帧占满（先 cg_frame_take） */
+/**
+ * @brief 喂入刚收到的字节
+ * @param f 切帧状态
+ * @param data 刚收到的字节（可以是半帧、整帧或几帧粘在一起）
+ * @param len 字节数
+ * @param now_ms 当前毫秒时基（传 cg_now_ms()；时间由调用方给，所以它是纯状态机）
+ * @return int 0 已收下；-1 参数非法，或缓冲被没取走的帧占满（先 cg_frame_take）
+ */
 int cg_frame_feed(cg_frame_t *f, const void *data, int len, unsigned long now_ms);
 
-/** 取一帧（切好的整帧按到达顺序给出）。
- *  @return int > 0 = 帧长（已写进 out）；0 = 还没有完整帧；-1 = out 放不下（帧仍在队列里） */
+/**
+ * @brief 取一帧切好的整帧（按到达顺序）
+ * @param f 切帧状态
+ * @param out 输出缓冲
+ * @param cap out 的字节数
+ * @return int > 0 帧长（已写进 out）；0 还没有完整帧；-1 out 放不下（帧仍在队列里）
+ */
 int cg_frame_take(cg_frame_t *f, void *out, int cap);
 
-/** 时间在走：静默到点就把攒着的收尾（没有定时器也能用，但最后一帧要立刻出来就得调它） */
+/**
+ * @brief 推进时间：静默到点就把攒着的收尾
+ * @param f 切帧状态
+ * @param now_ms 当前毫秒时基（传 cg_now_ms()）
+ * @return void 无返回值（没有定时器也能用，但最后一帧要立刻出来就得靠它）
+ */
 void cg_frame_tick(cg_frame_t *f, unsigned long now_ms);
 
-/** 丢掉没攒完的半帧与队列里没取走的帧（"清空接收"按钮用）。丢字节的统计量不清零。 */
+/**
+ * @brief 丢掉没攒完的半帧与队列里没取走的帧
+ * @param f 切帧状态
+ * @return void 无返回值（丢字节的统计量不清零；"清空接收"按钮用）
+ */
 void cg_frame_reset(cg_frame_t *f);
 
-/** 累计丢掉的字节数（噪声 / 超上限 / 队列满）—— **丢要丢得看得见** */
+/**
+ * @brief 取累计丢掉的字节数（噪声 / 超上限 / 队列满）
+ * @param f 切帧状态
+ * @return unsigned long 字节数 —— **丢要丢得看得见**
+ */
 unsigned long cg_frame_dropped(const cg_frame_t *f);
 
-/** 累计切出来的整帧数（含还没取走的） */
+/**
+ * @brief 取累计切出来的整帧数
+ * @param f 切帧状态
+ * @return unsigned long 帧数，含还没取走的
+ */
 unsigned long cg_frame_frames(const cg_frame_t *f);
 
-/** 毫秒时基（系统 uptime）：切帧、超时判定、去抖都用它。
- *  与 cg_time_now()（格式化成"2026-09-27 12:00:00"那种给人看的）不是一回事。 */
+/**
+ * @brief 取毫秒时基（系统 uptime）
+ * @return unsigned long 毫秒数；切帧、超时判定、去抖都用它
+ * @note 与 cg_time_now()（格式化成"2026-09-27 12:00:00"那种给人看的）不是一回事
+ */
 unsigned long cg_now_ms(void);
 
 /* ---- 通用报文组装（帧头 / 地址 / 功能码 / 数据 / 校验 / 帧尾） ----
@@ -2595,17 +2676,29 @@ typedef struct {
     int         tail_len;
 } cg_proto_t;
 
-/** 按骨架拼一帧。
- *  @return int 帧长（写进 out）；**-1** = 参数非法或 out 放不下 */
+/**
+ * @brief 按报文骨架拼一帧（帧头 / 地址 / 功能码 / [长度] / 数据 / 校验 / 帧尾）
+ * @param p 骨架，**先 memset 成 0** 再填要用的字段
+ * @param out 输出缓冲，帧写在这里
+ * @param out_size out 的字节数
+ * @return int 帧长（写进 out）；-1 参数非法或 out 放不下
+ */
 int cg_proto_build(const cg_proto_t *p, void *out, int out_size);
 
-/** 按同一骨架验一帧，并把字段拆出来（不想看的那一段传 NULL）。
- *  @param out_addr / out_func 收到的地址与功能码
- *  @param out_data / out_data_len 数据区指针（指向 frame 内部，不用释放）与长度
- *  @return int 0 = 通过；**-1** = 帧太短或参数非法；**-2** = 校验不对（线上数据坏了）；
- *              **-3** = 对不上骨架（帧头 / 地址 / 功能码 / 帧尾 / 长度字节 不一致）
- *  @note 数据长度：`with_len` 时取长度字节（并与实际长度核对），否则由帧长推算
- *        （所以解析时**不看** `cg_proto_t.data_len`）。 */
+/**
+ * @brief 按同一骨架验一帧，并把字段拆出来
+ * @param p 骨架，必须与拼帧时一致
+ * @param frame 收到的整帧
+ * @param len 帧长度
+ * @param out_addr 地址出口，可传 NULL（不想看就不给）
+ * @param out_func 功能码出口，可传 NULL
+ * @param out_data 数据区指针出口（指向 frame 内部，不用释放），可传 NULL
+ * @param out_data_len 数据区长度出口，可传 NULL
+ * @return int 0 通过；-1 帧太短或参数非法；-2 校验不对（线上数据坏了）；
+ *             -3 对不上骨架（帧头 / 地址 / 功能码 / 帧尾 / 长度字节 不一致）
+ * @note 数据长度：`with_len` 时取长度字节（并与实际长度核对），否则由帧长推算
+ *       （所以解析时**不看** `cg_proto_t.data_len`）
+ */
 int cg_proto_parse(const cg_proto_t *p, const void *frame, int len,
                    int *out_addr, int *out_func, const unsigned char **out_data, int *out_data_len);
 
@@ -2618,36 +2711,79 @@ int cg_proto_parse(const cg_proto_t *p, const void *frame, int len,
  * 正确性靠公开向量（RFC 1321 / FIPS 180-1,2,4）+ 由 Node/OpenSSL 独立派生的检验值双重钉死。
  */
 
-/** 算一段内存或一个文件的摘要，返回**小写十六进制**堆串（记得 cg_free()）
- *  @param algo "md5" / "sha1" / "sha256" / "sha512"，大小写不敏感
- *  @return char* 摘要串（MD5 32 字符、SHA-1 40、SHA-256 64、SHA-512 128）；
- *         算法名不认识、文件打不开、内存不足都返回 NULL */
+/**
+ * @brief 算一段内存的摘要
+ * @param data 数据
+ * @param len 字节数
+ * @param algo 算法名："md5" / "sha1" / "sha256" / "sha512"，大小写不敏感
+ * @return char * **小写十六进制**堆串（MD5 32 字符、SHA-1 40、SHA-256 64、SHA-512 128），
+ *         用完 cg_free；算法名不认识或内存不足返回 NULL
+ */
 char *cg_hash(const void *data, int len, const char *algo);
+/**
+ * @brief 算一个文件的摘要（分块读，不把文件整读进内存）
+ * @param path 文件路径（UTF-8）
+ * @param algo 算法名，取值同 cg_hash
+ * @return char * **小写十六进制**堆串，用完 cg_free；打不开或算法名不认识返回 NULL
+ */
 char *cg_hash_file(const char *path, const char *algo);
 
 /* ---- 剪贴板 / 外部程序 / 时间 ---- */
-/** 取剪贴板文本（没有文本返回 NULL；用完 cg_free） */
+/**
+ * @brief 取剪贴板文本
+ * @return char * 堆串，用完 cg_free；剪贴板里没有文本返回 NULL
+ */
 char *cg_clip_get_text(void);
-/** 写剪贴板文本；成功返回 0 */
+/**
+ * @brief 写剪贴板文本
+ * @param text UTF-8 文字，函数内部拷贝
+ * @return int 0 成功、非 0 失败
+ */
 int   cg_clip_set_text(const char *text);
-/** 把剪贴板里的**图片**存成 PNG（示波器/相机截的图直接落进调试记录）；成功 1。
- *  优先取 CF_BITMAP、没有就取 CF_DIB 自己拼一张；剪贴板里没有图片、打不开剪贴板、
- *  存盘失败都返回 0 并写日志。
- *  @note 实现在 win32 层（要走 GDI+），所以**需要 exe 真的在跑**（`--selftest` 里 GDI+
- *        还没起，会返回 0）。 */
+/**
+ * @brief 把剪贴板里的**图片**存成 PNG（示波器 / 相机截的图直接落进调试记录）
+ * @param path 输出 PNG 路径（UTF-8，目录须已存在）
+ * @return int 1 成功、0 失败（剪贴板里没图片 / 打不开剪贴板 / 存盘失败，都会写日志）
+ * @note 优先取 CF_BITMAP、没有就取 CF_DIB 自己拼一张；实现在 win32 层（要走 GDI+），
+ *       所以**需要 exe 真的在跑**（`--selftest` 里 GDI+ 还没起，会返回 0）
+ */
 int   cg_clip_get_image(const char *path);
-/** 用系统默认程序打开文件 / 文件夹 / 网址；成功返回 0 */
+/**
+ * @brief 用系统默认程序打开文件 / 文件夹 / 网址
+ * @param path_or_url 路径或网址
+ * @return int 0 成功、非 0 失败
+ */
 int   cg_shell_open(const char *path_or_url);
-/** 启动外部程序（cmd_line 是完整命令行）；wait=1 时返回它的退出码，wait=0 返回 0 */
+/**
+ * @brief 启动外部程序
+ * @param cmd_line 完整命令行（含程序名与参数）
+ * @param wait 1 = 等它结束并返回它的退出码、0 = 立刻返回 0
+ * @return int wait 时为子进程退出码，否则 0；失败返回非 0
+ */
 int   cg_run_process(const char *cmd_line, int wait);
-/** 当前时间字符串；fmt 传 NULL 用 "2026-09-21 02:33:53"（strftime 格式） */
+/**
+ * @brief 取当前时间字符串
+ * @param fmt strftime 格式；传 NULL 用 "2026-09-21 02:33:53"
+ * @return char * 堆串，用完 cg_free；失败返回 NULL
+ */
 char *cg_time_now(const char *fmt);
 
 /* ---- 注册表（HKEY_CURRENT_USER） ---- */
-/** 读注册表字符串值；没有返回 def 的副本。subkey 如 "Software\\MyApp" */
+/**
+ * @brief 读注册表字符串值（HKEY_CURRENT_USER 下）
+ * @param subkey 子键路径，如 "Software\\MyApp"
+ * @param name 值名
+ * @param def 没有这个值时用它的副本顶上；可传 NULL
+ * @return char * 堆串，用完 cg_free；值不存在时返回 def 的副本
+ */
 char *cg_reg_read(const char *subkey, const char *name, const char *def);
-/** 写注册表字符串值（没有就新建）；成功返回 0。
- *  subkey 如 "Software\\Microsoft\\Windows\\CurrentVersion\\Run" 可做开机自启 */
+/**
+ * @brief 写注册表字符串值（没有就新建）
+ * @param subkey 子键路径，如 "Software\\Microsoft\\Windows\\CurrentVersion\\Run" 可做开机自启
+ * @param name 值名
+ * @param value 要写的字符串
+ * @return int 0 成功、非 0 失败
+ */
 int   cg_reg_write(const char *subkey, const char *name, const char *value);
 
 /* ---- 系统信息 ----
@@ -2666,42 +2802,69 @@ int   cg_reg_write(const char *subkey, const char *name, const char *value);
  * 都会改掉用户看得见的链接命令，所以那两件都不做）。
  */
 
-/** 读环境变量（UTF-8，值可以是很长的字符串）。没有这个变量返回 NULL。
- *  @note 走 GetEnvironmentVariableW + 内部 UTF-8 转换，**不用 getenv()** ——
- *        CRT 的窄接口给的是 ANSI/MBCS，中文用户名或路径（`C:\Users\张三`）会变成乱码，
- *        而本工程内部一律 UTF-8。名字大小写不敏感（Windows 环境变量本就如此）。 */
+/**
+ * @brief 读环境变量（UTF-8，值可以是很长的字符串）
+ * @param name 变量名；大小写不敏感（Windows 环境变量本就如此）
+ * @return char * 堆串，用完 cg_free；没有这个变量返回 NULL
+ * @note 走 GetEnvironmentVariableW + 内部 UTF-8 转换，**不用 getenv()** ——
+ *       CRT 的窄接口给的是 ANSI/MBCS，中文用户名或路径（`C:\Users\张三`）会变成乱码，
+ *       而本工程内部一律 UTF-8
+ */
 char *cg_env(const char *name);
 
-/** 读环境变量当整数。没有这个变量 / 值不是合法整数（或溢出）返回 fallback。
- *  例：cg_env_int("NUMBER_OF_PROCESSORS", 1) */
+/**
+ * @brief 读环境变量当整数
+ * @param name 变量名
+ * @param fallback 没有这个变量 / 值不是合法整数（或溢出）时返回它
+ * @return int 解析出来的整数
+ * @note 例：cg_env_int("NUMBER_OF_PROCESSORS", 1)
+ */
 int cg_env_int(const char *name, int fallback);
 
-/** 1 = 这台机器是 64 位 Windows。**不随本进程的位数骗人**：32 位程序跑在 64 位系统上照样返回 1。
- *  环境变量 PROCESSOR_ARCHITECTURE 做不到这一点 —— 它给的是进程视角。 */
+/**
+ * @brief 这台机器是不是 64 位 Windows
+ * @return int 1 是、0 不是
+ * @note **不随本进程的位数骗人**：32 位程序跑在 64 位系统上照样返回 1。
+ *       环境变量 PROCESSOR_ARCHITECTURE 做不到这一点 —— 它给的是进程视角
+ */
 int cg_sys_is64(void);
 
-/** 操作系统可读名，形如 "Windows 10 (10.0.19045)"；失败返回 NULL。日志头 / 工单信息用。
- *  @note 走 ntdll 的 RtlGetVersion（GetProcAddress 取，不新增链接库）：
- *        GetVersionEx 会被 exe 清单里的兼容性声明骗，本工程没有那条声明，
- *        但别人复制这段代码时多半有。 */
+/**
+ * @brief 取操作系统可读名
+ * @return char * 形如 "Windows 10 (10.0.19045)" 的堆串，用完 cg_free；失败返回 NULL
+ * @note 日志头 / 工单信息用；走 ntdll 的 RtlGetVersion（GetProcAddress 取，不新增链接库）——
+ *       GetVersionEx 会被 exe 清单里的兼容性声明骗，本工程没有那条声明，
+ *       但别人复制这段代码时多半有
+ */
 char *cg_sys_version(void);
 
-/** 取路径所在磁盘的剩余 / 总容量（字节）。两个出口都可以传 NULL（只问其中一个）。
- *  @param path 盘符或盘上任意路径（`"C:\\"` 或 cg_app_dir() 都行）
- *  @return int 1 = 成功；0 = 路径不存在或调不动（此时两个出口都不动）。
- *  @note 剩余量给的是**当前用户可用**的那个（写日志前问"还写得下吗"才准）。 */
+/**
+ * @brief 取路径所在磁盘的剩余 / 总容量（字节）
+ * @param path 盘符或盘上任意路径（`"C:\\"` 或 cg_app_dir() 都行）
+ * @param free_bytes 剩余（可用）字节数出口；可传 NULL（只问其中一个）
+ * @param total_bytes 总容量字节数出口；可传 NULL
+ * @return int 1 成功、0 路径不存在或调不动（此时两个出口都不动）
+ * @note 剩余量给的是**当前用户可用**的那个（写日志前问"还写得下吗"才准）
+ */
 int cg_disk_space(const char *path, unsigned long long *free_bytes, unsigned long long *total_bytes);
 
-/** 按可执行文件名查进程是否在跑（大小写不敏感，如 "explorer.exe"）。返回 1 / 0。
- *  现场排查"设备厂商的服务 / 驱动在不在"用得上。 */
+/**
+ * @brief 按可执行文件名查进程是否在跑（大小写不敏感）
+ * @param exe_name 可执行文件名，如 "explorer.exe"
+ * @return int 1 在跑、0 没找到
+ * @note 现场排查"设备厂商的服务 / 驱动在不在"用得上
+ */
 int cg_process_running(const char *exe_name);
 
-/** 本机 IPv4 地址（点分十进制，如 "192.168.1.20"）；拿不到返回 NULL。
- *  @note 拿到的是**系统默认出口网卡**的地址：内部挑一条默认路由再问本地端地址，
- *        **不发任何数据包**、也不需要 DNS（离线工控机上也能用）。多网卡时未必是
- *        "连设备的那张"—— 要枚举网卡得用 iphlpapi 的 GetAdaptersInfo，那会改掉用户的
- *        链接命令，所以不做。实现在 cg_net.c（winsock2.h 必须在 windows.h 之前，
- *        那里已经处理好了）。 */
+/**
+ * @brief 取本机 IPv4 地址（点分十进制，如 "192.168.1.20"）
+ * @return char * 堆串，用完 cg_free；拿不到返回 NULL
+ * @note 拿到的是**系统默认出口网卡**的地址：内部挑一条默认路由再问本地端地址，
+ *       **不发任何数据包**、也不需要 DNS（离线工控机上也能用）。多网卡时未必是
+ *       "连设备的那张"—— 要枚举网卡得用 iphlpapi 的 GetAdaptersInfo，那会改掉用户的
+ *       链接命令，所以不做。实现在 cg_net.c（winsock2.h 必须在 windows.h 之前，
+ *       那里已经处理好了）
+ */
 char *cg_local_ip(void);
 
 /* ---- 无线状态（WiFi / 蓝牙） ----
@@ -2746,21 +2909,36 @@ typedef struct {
     int  connected;              /* 1 = 当前连的就是它 */
 } cg_wifi_net_t;
 
-/** 有几块无线网卡（0 = 本机没有无线网卡，或 WLAN 服务没起 —— 原因在日志里） */
+/**
+ * @brief 数本机有几块无线网卡
+ * @return int 块数；0 = 本机没有无线网卡，或 WLAN 服务没起（原因在日志里）
+ */
 int cg_wifi_count(void);
-/** 取第 idx 块网卡的状态：0 = 成功；-1 = 没有这么多块 / wlanapi 取不到 */
+/**
+ * @brief 取第 idx 块无线网卡的状态
+ * @param idx 网卡下标，0 起
+ * @param out 状态出口；成功才写
+ * @return int 0 成功；-1 没有这么多块 / wlanapi 取不到
+ */
 int cg_wifi_info(int idx, cg_wifi_info_t *out);
-/** 让系统做一次无线扫描（**异步**：本函数不等待，几秒后结果自己出现在 cg_wifi_networks() 里）。
- *  @return int 0 = 已提交；-1 = 没有无线网卡 / 取不到 / 这块不支持（老系统没有 WlanScan）。
- *  @note 2026-09-27 更正：早先这里写着"`WlanScan` 实测返回 87（参数无效），已撤掉" ——
- *        真相是**本框架自己的 typedef 漏了参数**（见 cg_kit_wireless.c 里 `p_wlan_scan_t` 的注释），
- *        不是 Windows 的行为。接口已加回，实测提交成功。 */
+/**
+ * @brief 让系统做一次无线扫描（**异步**：本函数不等待）
+ * @return int 0 已提交；-1 没有无线网卡 / 取不到 / 这块不支持（老系统没有 WlanScan）
+ * @note 几秒后结果自己出现在 cg_wifi_networks() 里
+ * @note 2026-09-27 更正：早先这里写着"`WlanScan` 实测返回 87（参数无效），已撤掉" ——
+ *       真相是**本框架自己的 typedef 漏了参数**（见 cg_kit_wireless.c 里 `p_wlan_scan_t` 的注释），
+ *       不是 Windows 的行为。接口已加回，实测提交成功
+ */
 int cg_wifi_scan(void);
-/** 周边可见网络列表（同一块网卡；**同名的多个 BSSID 已合并**，取信号最强的）。
- *  返回 0 = 成功（count 给看到的个数，可能比 cap 大）；-1 = 没有无线网卡或取不到。
- *  out 放不下的丢掉、但 count 里给的是**实际看到**的个数。
- *  @note 数据来自系统最近一次扫描的结果 ⇒ **要立刻刷新就先调 cg_wifi_scan()**（几秒后再读）；
- *        不调也行，Windows 自己会定期重扫。 */
+/**
+ * @brief 取周边可见网络列表（同一块网卡；**同名的多个 BSSID 已合并**，取信号最强的）
+ * @param out 结果数组
+ * @param cap out 能放几个
+ * @param count 实际看到几个的出参（**可能比 cap 大**，放不下的丢掉但个数照给）
+ * @return int 0 成功；-1 没有无线网卡或取不到
+ * @note 数据来自系统最近一次扫描的结果 ⇒ **要立刻刷新就先调 cg_wifi_scan()**（几秒后再读）；
+ *       不调也行，Windows 自己会定期重扫
+ */
 int cg_wifi_networks(cg_wifi_net_t *out, int cap, int *count);
 
 /** 本机蓝牙无线电 */
@@ -2795,56 +2973,147 @@ typedef struct {
 #define CG_BLE_ATTR_NOTIFY    0x08   /* 通知 */
 #define CG_BLE_ATTR_INDICATE  0x10   /* 指示（要确认的通知） */
 
-/** 地址 -> 文本：与 Windows 设置里一致（**大写**、冒号分隔）。out 需要 18 字节 */
+/**
+ * @brief 蓝牙地址 -> 文本（与 Windows 设置里一致：大写、冒号分隔）
+ * @param addr 地址，一个 64 位整数（0xAABBCCDDEEFF 就是 AA:BB:CC:DD:EE:FF）
+ * @param out 输出缓冲
+ * @param out_size out 的字节数，需要 18 字节
+ * @return void 无返回值（放不下就不写）
+ */
 void cg_ble_addr_str(unsigned long long addr, char *out, int out_size);
-/** 文本 -> 地址：分隔符随便（冒号 / 连字符 / 空格 / 不写），大小写都认，但**必须正好 6 字节**
- *  —— 少一位算写错，不"尽量猜"（猜错了表现为"设备找不到"，比当场报错难查得多）。
- *  @return int 0 = 成功；-1 = 格式不对 */
+/**
+ * @brief 文本 -> 蓝牙地址
+ * @param text 地址文本；分隔符随便（冒号 / 连字符 / 空格 / 不写），大小写都认
+ * @param out 地址出口；成功才写
+ * @return int 0 成功；-1 格式不对
+ * @note **必须正好 6 字节** —— 少一位算写错，不"尽量猜"（猜错了表现为"设备找不到"，
+ *       比当场报错难查得多）
+ */
 int  cg_ble_addr_from_str(const char *text, unsigned long long *out);
 
-/** 16 位短 UUID -> 标准基写法的文本（36 字符 + NUL，**小写**：蓝牙文档与 Windows 都这么写）。
- *  @return int 写入长度（36）；放不下返回 -1 */
+/**
+ * @brief 16 位短 UUID -> 标准基写法的文本
+ * @param uuid16 16 位短 UUID
+ * @param out 输出缓冲
+ * @param out_size out 的字节数，需要 36 + 1 字节
+ * @return int 写入长度（36）；放不下返回 -1
+ * @note 输出**小写** —— 蓝牙文档与 Windows 都这么写
+ */
 int cg_ble_uuid16_str(unsigned short uuid16, char *out, int out_size);
-/** 文本 -> 16 位短 UUID：认 "fff1" / "0xfff1" / "0000fff1-0000-1000-8000-00805f9b34fb"
- *  （带不带大括号都行）。**不是标准基形态的 128 位 UUID 返回 -1** —— 那不是 16 位能表达的。
- *  @return int 0 = 成功；-1 = 认不出来 */
+/**
+ * @brief 文本 -> 16 位短 UUID
+ * @param text 认 "fff1" / "0xfff1" / "0000fff1-0000-1000-8000-00805f9b34fb"（带不带大括号都行）
+ * @param out16 结果出口；成功才写
+ * @return int 0 成功；-1 认不出来
+ * @note **不是标准基形态的 128 位 UUID 返回 -1** —— 那不是 16 位能表达的
+ */
 int cg_ble_uuid16_parse(const char *text, unsigned short *out16);
-/** 两个 UUID 是不是同一个：能当 16 位解的两边按 16 位比 —— 所以 "fff1" 与它那个长写法**相等**
- *  （现场最常见的用法：拿手册上的短 UUID 去比对设备报出来的长 UUID）。
- *  @return int 1 = 相等；0 = 不等或认不出来 */
+/**
+ * @brief 两个 UUID 是不是同一个
+ * @param a UUID 文本（16 位短写法或 128 位长写法）
+ * @param b 另一个 UUID 文本
+ * @return int 1 相等、0 不等或认不出来
+ * @note 能当 16 位解的两边按 16 位比 —— 所以 "fff1" 与它那个长写法**相等**
+ *       （现场最常见的用法：拿手册上的短 UUID 去比对设备报出来的长 UUID）
+ */
 int cg_ble_uuid_equal(const char *a, const char *b);
-/** 特征的 properties 字 -> 能力位（CG_BLE_ATTR_* 的按位或）。位定义与 GATT 规范一致 */
+/**
+ * @brief 把特征的 properties 字解成能力位
+ * @param properties GATT 特征的 properties 原值
+ * @return int CG_BLE_ATTR_* 的按位或（位定义与 GATT 规范一致）
+ */
 int cg_ble_attr_flags(unsigned properties);
-/** 在已知设备里按**地址**或**名字**找：能解析成地址就按地址精确比，否则按名字做
- *  不区分大小写的**子串**匹配（现场记的名字常常只是设备名的一段）。
- *  @return int 0 = 找到（填进 out）；-1 = 没找到 */
+/**
+ * @brief 在已知设备里按**地址**或**名字**找
+ * @param addr_or_name 地址文本或设备名
+ * @param out 找到的设备；成功才写
+ * @return int 0 找到、-1 没找到
+ * @note 能解析成地址就按地址精确比，否则按名字做不区分大小写的**子串**匹配
+ *       （现场记的名字常常只是设备名的一段）
+ */
 int cg_ble_find_device(const char *addr_or_name, cg_ble_device_t *out);
 
-/** 有几个蓝牙无线电（0 = 没有蓝牙或没开；蓝牙关了也算 0） */
+/**
+ * @brief 数有几个蓝牙无线电
+ * @return int 个数；0 = 没有蓝牙或没开（蓝牙关了也算 0）
+ */
 int cg_ble_radio_count(void);
-/** 取第 idx 个无线电：0 = 成功；-1 = 越界 / 取不到 */
+/**
+ * @brief 取第 idx 个蓝牙无线电
+ * @param idx 下标，0 起
+ * @param out 结果出口；成功才写
+ * @return int 0 成功；-1 越界 / 取不到
+ */
 int cg_ble_radio_info(int idx, cg_ble_radio_t *out);
-/** 有几个已知蓝牙设备（已配对 / 记得过的） */
+/**
+ * @brief 数有几个已知蓝牙设备
+ * @return int 个数（已配对 / 记得过的；**不做主动搜索**）
+ */
 int cg_ble_device_count(void);
-/** 取第 idx 个已知设备：0 = 成功；-1 = 越界 / 取不到 */
+/**
+ * @brief 取第 idx 个已知蓝牙设备
+ * @param idx 下标，0 起
+ * @param out 结果出口；成功才写
+ * @return int 0 成功；-1 越界 / 取不到
+ */
 int cg_ble_device_info(int idx, cg_ble_device_t *out);
 
 /* ------------------------------------------------------------ 动态扩展 */
 
-/** 运行时用代码追加控件（不进 .cgui）。parent 为 NULL 时挂在窗口上。
- *  新控件的 id 也参与事件名查找，所以可以先在 .cgui 里写好事件名再动态造控件。 */
+/**
+ * @brief 运行时用代码追加控件（不进 .cgui）
+ * @param app 应用
+ * @param parent 父控件；NULL 表示挂在窗口上
+ * @param type 控件类型名
+ * @param id 控件 id（也参与事件名查找，所以可以先在 .cgui 里写好事件名再动态造控件）
+ * @param x 初始左边界（逻辑像素）
+ * @param y 初始上边界
+ * @param w 初始宽度
+ * @param h 初始高度
+ * @param text 初始文字；可为 NULL
+ * @return cg_widget_t* 新控件；失败返回 NULL
+ */
 cg_widget_t *cg_widget_add(cg_app_t *app, cg_widget_t *parent,
                            const char *type, const char *id,
                            int x, int y, int w, int h, const char *text);
 
-/** 直接在 C 里给控件绑回调（覆盖 .cgui 里的名字绑定）。 */
+/**
+ * @brief 直接在 C 里给控件绑回调（覆盖 .cgui 里的名字绑定）
+ * @param w 控件
+ * @param ev 事件类型
+ * @param fn 回调函数
+ * @return int 0 成功、非 0 失败
+ */
 int cg_on(cg_widget_t *w, cg_event_t ev, cg_event_fn fn);
-/** 按 .cgui 里的名字绑定 */
+/**
+ * @brief 按 .cgui 里写的事件回调名绑定
+ * @param w 控件
+ * @param ev 事件类型
+ * @param callback_name C 侧 CG_BIND 表里登记的名字
+ * @return int 0 成功、非 0 失败（名字没登记会失败并写警告）
+ */
 int cg_on_named(cg_widget_t *w, cg_event_t ev, const char *callback_name);
 
-/** 在回调内部「稍后执行」，避免在事件里立刻销毁控件。 */
+/**
+ * @brief 一次性定时器：延迟若干毫秒后在消息循环里执行一件事
+ * @return void 无返回值
+ * @note 在回调内部「稍后执行」，避免在事件里立刻销毁控件
+ */
 typedef struct cg_timer cg_timer_t;
+/**
+ * @brief 建一个一次性定时器，delay_ms 毫秒后在消息循环里调 fn(user)
+ * @param app 所属应用（tick 时只触发同一 app 的定时器）
+ * @param delay_ms 延迟毫秒数，负数按 0 处理
+ * @param fn 到点要执行的函数；置 NULL 等价于取消
+ * @param user 传给 fn 的业务数据
+ * @return cg_timer_t* 定时器句柄（可传给 cg_kill_timer）；失败返回 NULL
+ */
 cg_timer_t  *cg_set_timer(cg_app_t *app, int delay_ms, void (*fn)(void *), void *user);
+/**
+ * @brief 取消一个定时器
+ * @param t cg_set_timer 返回的句柄；NULL 安全
+ * @return void 无返回值（已被取消的句柄绝不再回调）
+ */
 void         cg_kill_timer(cg_timer_t *t);
 
 #ifdef __cplusplus
