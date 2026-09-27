@@ -51,7 +51,19 @@ typedef struct {
     int             tray_on;    /* 托盘图标已建 */
     int             activated;  /* 首次激活已经发过了 */
     unsigned long   tray_click_tick; /* 托盘左键单击/双击判定 */
+    /* 余量分配（.cgui 的 grow）的窗口基准：客户区在"设计尺寸"下的逻辑宽高。
+     * 第一次 WM_SIZE 取到（窗口是先按 app.w/h 建的），DPI 变化后清掉重取。 */
+    int             layout_base_w;
+    int             layout_base_h;
+    int             layout_ready;
 } cg_win_state_t;
+
+/* ---------------- cg_win_layout.c：余量分配（.cgui 的 grow） ---------------- */
+
+/** @brief 按 .cgui 的 grow 重排窗口里的控件（WM_SIZE 里调，**在派发 size 事件之前**） */
+void cgw_layout_apply(cg_app_t *app, int now_w, int now_h);
+/** @brief 丢掉布局基准，让下一个 WM_SIZE 重新取（DPI 变化后调） */
+void cgw_layout_reset(cg_app_t *app);
 
 /* ============================================================ 窗口类名 / 常量 */
 

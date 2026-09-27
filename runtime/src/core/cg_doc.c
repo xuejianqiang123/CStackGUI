@@ -399,6 +399,10 @@ static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
     if (n->w < 0) n->w = 0;
     if (n->h < 0) n->h = 0;
 
+    /* grow：余量分配权重。非整数 / 负数 / 超过 99 一律当 0（不报错、不中断加载） */
+    n->grow = cj_int(cj_get(o, "grow"), 0);
+    if (n->grow < 0 || n->grow > 99) n->grow = 0;
+
     parse_style(cj_get(o, "style"), &n->style);
 
     /* state 与顶层字段都读，顶层优先（方便手写小文件） */

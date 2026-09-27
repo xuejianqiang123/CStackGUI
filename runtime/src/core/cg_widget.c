@@ -59,6 +59,11 @@ cg_widget_t *cg_widget_new(cg_app_t *app, const char *type, const char *id,
     w->id = cg_str_dup(id);
     w->text = cg_str_dup(text ? text : "");
     w->x = x; w->y = y; w->w = width; w->h = height;
+    /* 布局基准 = 建控件时的坐标（= 设计坐标）；out_* 记"我们上次写下去的坐标"，
+     * 用来发现"有人在我们之外动过它"（分隔条拖动 / cg_widget_set_rect）—— 见 cg_layout.c */
+    w->base_x = x;      w->base_y = y;      w->base_w = width;  w->base_h = height;
+    w->out_x  = x;      w->out_y  = y;      w->out_w  = width;  w->out_h  = height;
+    w->have_base = 1;
     w->visible = 1;
     w->enabled = 1;
     w->vmin = 0;
@@ -235,6 +240,7 @@ static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node
     if (!w) return NULL;
 
     w->node = (cg_node_t *)n;
+    w->grow = n->grow;      /* 余量分配权重（布局基准已在 cg_widget_new 里按同样坐标取好） */
     w->visible = n->visible;
     w->enabled = n->enabled;
     w->checked = n->checked;

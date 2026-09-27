@@ -280,6 +280,7 @@ runtime/
       cg_widget_table.c 表格
       cg_widget_tabs.c  标签页
       cg_widget_split.c 分隔条
+      cg_layout.c       余量分配：按 .cgui 的 grow，把容器尺寸变化分给兄弟控件（纯整数，可纯单测）
       cg_widget_term.c  终端（日志视图）
       cg_widget_gauge.c 图表 + 状态灯 + 仪表盘
       cg_bind.c         控件绑定：值/文字/勾选自动同步到另一个控件
@@ -294,6 +295,7 @@ runtime/
       cg_win_ctl.c      控件 -> 窗口类与样式、背景色推导、WM_CTLCOLOR
       cg_win_create.c   原生控件创建与销毁
       cg_win_sync.c     控件状态同步与条目重建
+      cg_win_layout.c   把 core 算好的 grow 布局落到原生窗口（基准取自第一次 WM_SIZE）
       cg_win_notify.c   原生通知 -> 事件映射
       cg_win_event.c    焦点子类与窗口级事件
       cg_win_main.c     主窗口过程

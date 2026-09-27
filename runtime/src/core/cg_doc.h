@@ -185,6 +185,10 @@ typedef struct cg_node {
     char    *id;
     char    *text;
     int      x, y, w, h;
+    /** 余量分配权重（.cgui 的 grow，0..99）：容器变大时按权重吃多出来的空间，
+     *  同一容器里它之后的兄弟整体平移；0 / 不写 = 不吃余量。
+     *  语义与几何算法见 .codebuddy/plans/grow-layout.md */
+    int      grow;
     cg_style_t style;
     int      visible, enabled, checked, value, vmin, vmax;
     /** 属于标签页的第几页（tabs 的子控件用） */

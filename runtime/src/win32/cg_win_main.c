@@ -290,6 +290,9 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             cg_win_state_t *st = (cg_win_state_t *)app->natives;
             if (st) st->dpi = dpi;
             app->scale = (int)((long long)dpi * 100 / 96);
+            /* 这次尺寸变化是"换显示器"引起的，不是用户拉的：丢掉布局基准重取，
+             * 免得 grow 控件把显示器的缩放也吃一遍（见 cg_win_layout.c）。 */
+            cgw_layout_reset(app);
             SetWindowPos(hwnd, NULL, r->left, r->top, r->right - r->left, r->bottom - r->top,
                          SWP_NOZORDER | SWP_NOACTIVATE);
             for (cg_widget_t *w = app->widgets; w; w = w->next) {
@@ -321,6 +324,9 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             app->window->ev_x = (int)(short)LOWORD(lp) * 100 / sc;
             app->window->ev_y = (int)(short)HIWORD(lp) * 100 / sc;
         }
+        /* 先按 .cgui 的 grow 重排（改的是控件的逻辑坐标），**再**派发 size 事件 ——
+         * 这样业务在 size 回调里读到的控件坐标已经是对的了。 */
+        if (app && app->window) cgw_layout_apply(app, app->window->ev_x, app->window->ev_y);
         cgw_win_emit(app, CG_EVENT_SIZE);
         break;
     case WM_ACTIVATE: {

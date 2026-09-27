@@ -120,6 +120,16 @@ typedef struct {
     int         accel_cmd; /* 加速键表的命令 id；0 = 没有快捷键 */
 } cg_action_row_t;
 
+/** 余量分配的输入输出单元（core/cg_layout.c 用；见 .codebuddy/plans/grow-layout.md §2） */
+typedef struct {
+    int x, y, w, h;     /* 进来是基准坐标，出去是算好的坐标 */
+    int grow;           /* 权重 0..99；0 = 不吃余量 */
+} cg_layout_box_t;
+
+/** @brief 按 grow 把"容器尺寸变化"分配到各 box（纯整数算术、不碰 Win32，可纯单测） */
+void cg_layout_apply(cg_layout_box_t *boxes, int count,
+                     int base_w, int base_h, int now_w, int now_h);
+
 /** 运行时控件：.cgui 节点 + 原生句柄 + 回调 + 状态 */
 struct cg_widget {
     cg_node_t   *node;       /* 静态控件指向文档节点；动态控件为 NULL */
@@ -128,6 +138,13 @@ struct cg_widget {
     char        *text;
 
     int          x, y, w, h;
+    int          grow;       /* 余量分配权重（来自 .cgui 的 grow；算法见 cg_layout.c） */
+    /* 布局基准：控件创建时（= .cgui 设计坐标）记下来，每次窗口尺寸变化都从基准重算，
+     * 不做增量累加 —— 否则来回拉伸会漂移。见 .codebuddy/plans/grow-layout.md */
+    int          base_x, base_y, base_w, base_h;
+    /* 我们上一次写下去的坐标（判断"有没有人在我们之外动过它"） */
+    int          out_x, out_y, out_w, out_h;
+    int          have_base;
     int          visible, enabled, checked, value, vmin, vmax;
     int          hot;        /* 鼠标悬停中（自绘外观用，FocusProc 维护） */
     int          pressed;    /* 鼠标按下中（自绘外观用，FocusProc 维护） */
