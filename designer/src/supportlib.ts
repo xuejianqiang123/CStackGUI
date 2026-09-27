@@ -867,6 +867,33 @@ cg_base_convert("FF", 16, 2, buf, (int)sizeof(buf));   /* -> "11111111" */`,
         ],
       },
       {
+        label: "字节操作",
+        cmds: [
+          c("cg_bytes_reverse", "反转字节序", "void cg_bytes_reverse(void *data, int len)",
+            "原地反转（精易的「字节集_反转」）—— 小端设备发的多字节字段要翻过来看 / 翻过去发。len ≤ 1 或 data 传 NULL 时什么都不做"),
+          c("cg_bytes_slice", "取一段字节（取左 / 取右 / 取中）", "int cg_bytes_slice(const void *data, int len, int from, int count, void *out, int out_size)",
+            "count 传 **-1 = 取到底**（最常用）；count 超剩余时按剩余算 —— 「取右边」用的就是这个语义", {
+              params: ["from：起点（0 起）；越界返回 -1", "count：取几个字节；-1 = 取到底", "out / out_size：输出缓冲"],
+              ret: "写出的字节数；from 非法 -1、缓冲放不下 -2",
+              sample: `unsigned char head[4];\n/* 取前 4 字节（很多私有协议的帧头）*/\nif (cg_bytes_slice(rx, n, 0, 4, head, (int)sizeof(head)) != 4)\n    cg_log(CG_LOG_WARN, "帧太短");`,
+            }),
+          c("cg_bytes_find", "找子集", "int cg_bytes_find(const void *data, int len, const void *needle, int nlen, int from)",
+            "返回第一次出现的下标（可从 from 往后接着找）；没找到 / 参数非法 / needle 为空返回 -1", {
+              sample: `int i = cg_bytes_find(rx, n, "\\xAA\\x55", 2, 0);   /* 找同步头 */\nif (i >= 0) cg_log(CG_LOG_INFO, "同步头在 %d", i);`,
+            }),
+          c("cg_bytes_get_u16", "按字节序读 16 位", "int cg_bytes_get_u16(const void *data, int len, int offset, int big_endian)",
+            "big_endian 非 0 = 大端（网络序 / Modbus 寄存器序），0 = 小端。越界返回 -1（16 位值到不了 -1，所以不撞车）"),
+          c("cg_bytes_get_u32", "按字节序读 32 位", "long long cg_bytes_get_u32(const void *data, int len, int offset, int big_endian)",
+            "越界返回 -1。**用 long long 返回**：若用 int，`0xFFFFFFFF` 正好也是 -1，错误与合法值撞车、调用方没法分辨"),
+          c("cg_bytes_put_u16", "按字节序写 16 位", "int cg_bytes_put_u16(void *out, int out_size, int offset, unsigned v, int big_endian)",
+            "拼帧用。**越界时什么都不写**（半个字段写进帧里比报错更难查）", {
+              sample: `unsigned char f[8];\nf[0] = 0x01; f[1] = 0x03;                     /* 从站地址 + 功能码 */\ncg_bytes_put_u16(f, 8, 2, 0x0000, 1);         /* 寄存器地址（大端）*/\ncg_bytes_put_u16(f, 8, 4, 0x0002, 1);         /* 数量 */\nunsigned crc = cg_crc16(f, 6);                /* CRC 挂帧尾、低字节在前 */\nf[6] = (unsigned char)(crc & 0xFF); f[7] = (unsigned char)(crc >> 8);`,
+            }),
+          c("cg_bytes_put_u32", "按字节序写 32 位", "int cg_bytes_put_u32(void *out, int out_size, int offset, unsigned v, int big_endian)",
+            "同 cg_bytes_put_u16：越界返回 0 且什么都不写"),
+        ],
+      },
+      {
         label: "校验（CRC / 哈希）",
         cmds: [
           c("cg_crc32", "CRC32 校验值", "unsigned cg_crc32(const void *data, int len)",
