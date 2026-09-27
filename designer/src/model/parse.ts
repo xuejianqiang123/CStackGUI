@@ -169,6 +169,26 @@ function boolOf(v: unknown, def: boolean): boolean {
   return def;
 }
 
+/** 值取不到就返回 undefined（= 这个字段**没写**）。
+ *  与运行时同口径：`style_overlay` 读不出 `size`/`bold`/`radius` 时**不置掩码**
+ *  （它用哨兵判断，见 cg_doc.c），所以画布也必须"丢键"，**不能**写成 0 / false ——
+ *  写成 0 会顶掉命名样式里的字号（`{"use":"log","size":"abc"}` 里那个字号本该保住）。 */
+function intOk(v: unknown): number | undefined {
+  const n = numOf(v, Number.NaN);
+  return Number.isFinite(n) ? (n < 0 ? Math.ceil(n - 0.5) : Math.floor(n + 0.5)) : undefined;
+}
+
+/** 同 intOk，用于 bold（认不出来 -> undefined = 没写） */
+function boolOk(v: unknown): boolean | undefined {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return Number.isFinite(v) ? v !== 0 : undefined;
+  if (typeof v === "string") {
+    if (v === "true" || v === "1") return true;
+    if (v === "false" || v === "0") return false;
+  }
+  return undefined;
+}
+
 /** = cj_color：数字（0xAARRGGBB，含负数的补码低位）/ "#RRGGBB" / "#RGB" / 8 位 "#AARRGGBB"。
  *  0xFFFFFFFF（CG_COLOR_NONE）与认不出来的都返回 undefined（= 没设色）。
  *  写回规范形态：低 24 位装得下就写 6 位，否则写 8 位（保住 alpha）。 */
@@ -202,9 +222,9 @@ function colorOf(v: unknown): string | undefined {
  * keepDefaults：**有 use 的覆盖对象**要把"写了"的字段都留下（bold:false / size:0 / align:"left" /
  * radius:0，甚至认不出来的值取到的 0/false）—— 合并规则是"写了就覆盖"，丢了这些字段会让命名样式
  * 里的值顶回来（"画布显示的和跑起来不一样"）。
- * **位掩码口径两边一致**（cg_doc.c 的 style_overlay）：size/bold/radius 键在就置位（垃圾值取
- * 0/false）；font/fg/bg 取不到值则**不置位**（当没写）—— 所以这里对 font/fg/bg 的垃圾值直接丢键，
- * 与运行时的结果相同（2026-09-27 两边对齐后定下的口径，别再写成"只要键在就置位"）。
+ * **位掩码口径两边一致**（cg_doc.c 的 style_overlay）：**七个字段一样 —— 值取不到就算"没写"**
+ * （font/fg/bg 靠返回值判断，size/bold/radius 靠哨兵；2026-09-27 两边对齐后定下的口径）。
+ * 所以这里对认不出来的值一律**丢键**，别再写成"只要键在就置位"或"垃圾值取 0/false"。
  * 内联对象（没有 use、没有可覆盖的打底）则按老口径：等于缺省值的字段不写（位掩码没有意义）。 */
 function coerceStyleObject(raw: unknown, keepDefaults: boolean): CgStyle | undefined {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
@@ -218,12 +238,12 @@ function coerceStyleObject(raw: unknown, keepDefaults: boolean): CgStyle | undef
     if (font) out.font = font;
   }
   if (has("size")) {
-    const n = intOf(o.size, 0);
-    if (n > 0 || keepDefaults) out.size = n;
+    const n = intOk(o.size);
+    if (n !== undefined && (n > 0 || keepDefaults)) out.size = n;
   }
   if (has("bold")) {
-    const b = boolOf(o.bold, false);
-    if (b || keepDefaults) out.bold = b;
+    const b = boolOk(o.bold);
+    if (b !== undefined && (b || keepDefaults)) out.bold = b;
   }
   if (has("fg")) {
     const c = colorOf(o.fg);
@@ -238,8 +258,8 @@ function coerceStyleObject(raw: unknown, keepDefaults: boolean): CgStyle | undef
     out.align = o.align;
   }
   if (has("radius")) {
-    const n = intOf(o.radius, 0);
-    if (n > 0 || keepDefaults) out.radius = n;
+    const n = intOk(o.radius);
+    if (n !== undefined && (n > 0 || keepDefaults)) out.radius = n;
   }
   return out;
 }
