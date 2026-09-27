@@ -79,7 +79,7 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
 **改一次字号不用再改几十处**。它只有「名字引用 + 局部覆盖」这一层，**不是 CSS**
 （没有选择器 / 继承 / 层叠 / 优先级计算），见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md) 第 2.2.1 节。
 
-仓库自带三类示例，分工不同：
+仓库自带几类示例，分工不同：
 
 - `examples\lesson01_basics` ~ `examples\lesson06_window` —— **六课教学示例**：基础与容器 →
   输入与选择 → 数值与指示 → 数据与日志 → 命令与图形 → 主窗口与窗口事件。每课只讲一个主题、
@@ -90,6 +90,9 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
 - `examples\notepad\` —— **真实小工具范例（记事本）**：菜单分发、脏标记、状态栏刷新、
   文件读写、GBK/UTF-8 识别、INI 记住上次文件与窗口尺寸、关闭前拦截。**讲"一个工具该怎么组织"**，
   也是 `cg_kit` 基础能力库的活例子（全程没有 include 任何 Windows 头）。
+- `examples\serialterm\` / `examples\netterm\` / `examples\darkterm\` —— **接上真实链路与主题三个**：
+  串口助手、网络调试助手，以及**深色主题示例**（`app.dark` + 命名样式 + 一个**运行时切换主题**的按钮）。
+  前两个讲"链路上怎么收怎么发"，第三个讲"要为深色写哪套配色、哪些只能自己写死"。
 
 ### 1.3 当前边界
 
@@ -379,6 +382,9 @@ CStackGUI\
     教学使用说明.md             六课路线图 + 每课详解 + 通用知识（学这套示例先读它）
     gallery\                   控件陈列室·三合一（gallery.cgui / main.c / assets\ / 产物）
     notepad\                   真实小工具范例：记事本（菜单/文件/配置/cg_kit 全套）
+    serialterm\                串口助手（串口组件 + 终端/编辑框日志 + 分隔条 + HEX 发送）
+    netterm\                   网络调试助手（TCP/UDP + 终端日志 + 角色切换）
+    darkterm\                  深色主题示例（app.dark + 命名样式 + 运行时切换主题）
   apps\                        你自己的工程（画布导出的默认位置）
     README.md                  这个目录是干嘛的
   build-runtime.bat            编译运行时库
