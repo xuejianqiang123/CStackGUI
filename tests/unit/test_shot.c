@@ -38,4 +38,18 @@ static void test_shot_contract(void)
     }
 }
 
+/** @brief 剪贴板图片的接口契约（真机出图见 build\clipprobe\：剪贴板放一张图 → 存出的 PNG 逐像素一致） */
+static void test_clip_image_contract(void)
+{
+    cg_file_delete("build/_should_not_exist.png");
+
+    cg_test_int("路径传 NULL：报失败不崩", cg_clip_get_image(NULL), 0);
+    cg_test_int("路径传空串：报失败不崩", cg_clip_get_image(""), 0);
+    /* --selftest 里 GDI+ 还没起（它在建窗口时初始化）⇒ 连剪贴板都不去碰就返回 0。
+     * 这也顺带证明它**不会**在没准备好时误开剪贴板、更不会留下半个文件。 */
+    cg_test_int("GDI+ 没起来时：报失败不崩", cg_clip_get_image("build/_should_not_exist.png"), 0);
+    cg_test_int("  -> 且没留下半个文件", cg_file_exists("build/_should_not_exist.png"), 0);
+}
+
 CG_TEST_SUITE("截图：参数不合法时的接口契约", test_shot_contract);
+CG_TEST_SUITE("剪贴板图片：参数不合法时的接口契约", test_clip_image_contract);

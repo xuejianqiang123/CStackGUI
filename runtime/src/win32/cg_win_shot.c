@@ -1,6 +1,6 @@
 /**
  * @file    cg_win_shot.c
- * @brief   把窗口或控件存成 PNG（工单取证、写文档配图）
+ * @brief   把窗口 / 控件 / 剪贴板图片存成 PNG（工单取证、写文档配图）
  * @details 三个刻意的选择，都写在这里免得以后有人"顺手改回常规写法"：
  *
  *          **一、PrintWindow 优先，抓屏兜底。** `PrintWindow` 让窗口自己把内容画到内存 DC 上，
@@ -32,24 +32,45 @@ static const unsigned char k_png_clsid[16] = {
     0x9A, 0x73, 0x00, 0x00, 0xF8, 0x1E, 0xF3, 0x2E,
 };
 
+/** @brief 把一个位图存成 PNG（截图与剪贴板图片共用这一条路）；成功 1，失败 0 */
+static int shot_save_png(HBITMAP bmp, const char *path)
+{
+    void    *image = NULL;
+    wchar_t *wpath;
+    int      ok = 0;
+
+    if (!bmp || !path || !*path) return 0;
+    if (!g_win_gdip_token) {
+        cg_log(CG_LOG_WARN, "存图失败：这台机器上 GDI+ 没起来");
+        return 0;
+    }
+    wpath = cgw_wc_from_utf8(path);
+    if (!wpath) return 0;
+
+    if (GdipCreateBitmapFromHBITMAP(bmp, NULL, &image) != 0 || !image) {
+        cg_log(CG_LOG_WARN, "存图失败：位图转 GDI+ 对象出错");
+    } else if (GdipSaveImageToFile(image, wpath, k_png_clsid, NULL) != 0) {
+        cg_log(CG_LOG_WARN, "存图失败：写文件出错：%s", path);
+    } else {
+        ok = 1;
+    }
+    if (image) GdipDisposeImage(image);
+    free(wpath);
+    return ok;
+}
+
 /** @brief 抓一个窗口（或控件）的像素并存成 PNG；成功 1，失败 0
  *  @param hwnd 目标窗口
  *  @param path UTF-8 输出路径（扩展名随意，编码固定 PNG）
  */
 static int shot_capture(HWND hwnd, const char *path)
 {
-    RECT     rc;
-    int      cw, ch, ok = 0;
-    HDC      win_dc = NULL, mem_dc = NULL;
-    HBITMAP  bmp = NULL, old_bmp = NULL;
-    void    *image = NULL;
-    wchar_t *wpath;
+    RECT    rc;
+    int     cw, ch, ok = 0;
+    HDC     win_dc = NULL, mem_dc = NULL;
+    HBITMAP bmp = NULL, old_bmp = NULL;
 
     if (!hwnd || !path || !*path) return 0;
-    if (!g_win_gdip_token) {
-        cg_log(CG_LOG_WARN, "截图失败：这台机器上 GDI+ 没起来，存不了图");
-        return 0;
-    }
     if (!GetWindowRect(hwnd, &rc)) return 0;
     cw = rc.right - rc.left;
     ch = rc.bottom - rc.top;
@@ -58,13 +79,12 @@ static int shot_capture(HWND hwnd, const char *path)
         return 0;
     }
 
-    wpath = cgw_wc_from_utf8(path);
     win_dc = GetWindowDC(hwnd);
-    if (!wpath || !win_dc) goto done;
+    if (!win_dc) return 0;
     mem_dc = CreateCompatibleDC(win_dc);
     if (!mem_dc) goto done;
-    /* 必须用 CreateCompatibleBitmap（不是 CreateCompatibleBitmap 的 DC 版本）：
-     * 8 位调色板位图存出来会丢色，而 DDB 才能被 GdipCreateBitmapFromHBITMAP 直接吃下。 */
+    /* 必须用 CreateCompatibleBitmap（不是 DC 版本的 CreateCompatibleBitmap 位图）：
+     * 8 位调色板位图存出来会丢色，DDB 才能被 GdipCreateBitmapFromHBITMAP 直接吃下。 */
     bmp = CreateCompatibleBitmap(win_dc, cw, ch);
     if (!bmp) goto done;
     old_bmp = (HBITMAP)SelectObject(mem_dc, bmp);
@@ -75,23 +95,13 @@ static int shot_capture(HWND hwnd, const char *path)
         cg_log(CG_LOG_WARN, "PrintWindow 未成功，改用抓屏：这张图可能被其它窗口遮挡");
         if (!BitBlt(mem_dc, 0, 0, cw, ch, win_dc, 0, 0, SRCCOPY)) goto done;
     }
-    if (GdipCreateBitmapFromHBITMAP(bmp, NULL, &image) != 0 || !image) {
-        cg_log(CG_LOG_WARN, "截图失败：位图转 GDI+ 对象出错");
-        goto done;
-    }
-    if (GdipSaveImageToFile(image, wpath, k_png_clsid, NULL) != 0) {
-        cg_log(CG_LOG_WARN, "截图写文件失败：%s", path);
-        goto done;
-    }
-    ok = 1;
+    ok = shot_save_png(bmp, path);
 
 done:
-    if (image) GdipDisposeImage(image);
     if (old_bmp) SelectObject(mem_dc, old_bmp);
     if (bmp) DeleteObject(bmp);
     if (mem_dc) DeleteDC(mem_dc);
     if (win_dc) ReleaseDC(hwnd, win_dc);
-    free(wpath);
     if (ok) cg_log(CG_LOG_INFO, "截图已存：%s（%dx%d）", path, cw, ch);
     return ok;
 }
@@ -109,4 +119,71 @@ int cg_widget_screenshot(cg_widget_t *w, const char *path)
 {
     if (!w || !w->native) return 0;
     return shot_capture((HWND)w->native, path);
+}
+
+/** @brief 位图深度与调色板：算出"像素数据"在 DIB 里从第几字节开始
+ *  @details 剪贴板给的是**打包 DIB**（`BITMAPINFOHEADER` + 调色板 + 位），
+ *          位偏移要按 `biSize`（可能是 BITMAPV5HEADER）与 `biBitCount` 自己算。 */
+static const void *dib_bits(const BITMAPINFOHEADER *h)
+{
+    const unsigned char *p = (const unsigned char *)h;
+    size_t               off = h->biSize;
+
+    if (h->biBitCount <= 8) off += (size_t)(1u << h->biBitCount) * sizeof(RGBQUAD);
+    else if (h->biCompression == BI_BITFIELDS) off += 3 * sizeof(DWORD);
+    return p + off;
+}
+
+/** @brief 把剪贴板里的**图片**存成 PNG（把示波器/相机截的图直接落到调试记录里）
+ *  @param path UTF-8 输出路径（扩展名随意，编码固定 PNG）
+ *  @return int 1 = 成功；0 = 剪贴板里没有图片 / 打开剪贴板失败 / 存盘失败（都写日志）
+ *  @note 优先 `CF_BITMAP`（系统会把它转成**本进程可用**的位图句柄，最省），
+ *        没有就取 `CF_DIB` 自己拼一张。两条路都必须**在 CloseClipboard 之前**把像素复制出来 ——
+ *        剪贴板只保证句柄在剪贴板打开期间有效，关掉之后再用就是悬空句柄。
+ *        `CF_DIB` 里带的 alpha 会被丢掉（CreateDIBitmap 不保留），截图粘贴本来也是不透明的。 */
+int cg_clip_get_image(const char *path)
+{
+    HBITMAP copy = NULL;
+    int     ok = 0;
+
+    if (!path || !*path) return 0;
+    if (!g_win_gdip_token) {
+        cg_log(CG_LOG_WARN, "取剪贴板图片失败：这台机器上 GDI+ 没起来");
+        return 0;
+    }
+    if (!OpenClipboard(NULL)) {
+        cg_log(CG_LOG_WARN, "取剪贴板图片失败：打不开剪贴板（可能被别的程序占着）");
+        return 0;
+    }
+
+    {
+        HBITMAP hb = (HBITMAP)GetClipboardData(CF_BITMAP);
+
+        if (hb) copy = (HBITMAP)CopyImage(hb, IMAGE_BITMAP, 0, 0, 0);
+    }
+    if (!copy) {
+        HGLOBAL h = GetClipboardData(CF_DIB);
+
+        if (h) {
+            const BITMAPINFOHEADER *bi = (const BITMAPINFOHEADER *)GlobalLock(h);
+
+            if (bi) {
+                HDC dc = GetDC(NULL);      /* 只当调色板参考，CreateDIBitmap 不依赖它持有 */
+                copy = CreateDIBitmap(dc, bi, CBM_INIT, dib_bits(bi),
+                                      (const BITMAPINFO *)bi, DIB_RGB_COLORS);
+                ReleaseDC(NULL, dc);
+                GlobalUnlock(h);
+            }
+        }
+    }
+    CloseClipboard();      /* 像素已经复制出来了，句柄不再需要 */
+
+    if (!copy) {
+        cg_log(CG_LOG_WARN, "剪贴板里没有图片（先截个图或复制一张图再试）");
+        return 0;
+    }
+    ok = shot_save_png(copy, path);
+    DeleteObject(copy);
+    if (ok) cg_log(CG_LOG_INFO, "剪贴板图片已存：%s", path);
+    return ok;
 }

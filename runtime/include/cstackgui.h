@@ -1073,6 +1073,12 @@ char *cg_hash_file(const char *path, const char *algo);
 char *cg_clip_get_text(void);
 /** 写剪贴板文本；成功返回 0 */
 int   cg_clip_set_text(const char *text);
+/** 把剪贴板里的**图片**存成 PNG（示波器/相机截的图直接落进调试记录）；成功 1。
+ *  优先取 CF_BITMAP、没有就取 CF_DIB 自己拼一张；剪贴板里没有图片、打不开剪贴板、
+ *  存盘失败都返回 0 并写日志。
+ *  @note 实现在 win32 层（要走 GDI+），所以**需要 exe 真的在跑**（`--selftest` 里 GDI+
+ *        还没起，会返回 0）。 */
+int   cg_clip_get_image(const char *path);
 /** 用系统默认程序打开文件 / 文件夹 / 网址；成功返回 0 */
 int   cg_shell_open(const char *path_or_url);
 /** 启动外部程序（cmd_line 是完整命令行）；wait=1 时返回它的退出码，wait=0 返回 0 */
