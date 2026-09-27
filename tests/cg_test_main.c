@@ -244,7 +244,19 @@ int main(int argc, char **argv)
     }
     int ran = run_all(grep);
 
-    printf("\n%d 个套件，%d 条断言，%d 处失败\n", ran, cg_test_checks, cg_test_fails);
+    /* **两个数一起印**（跑了的 / 注册的）：它们必须相等，不等就说明有套件没跑 ——
+     * 2026-09-27 撞见过一次：日志里印 "62 个套件"，可注册是 114、断言数也是 114 套件的量
+     * （每条 114 个"跑完没有新增存活堆块"都在），也就是**功能是全量跑的、只有这个数字不对**。
+     * 根因还没查到（只在 --memcheck 构建下出现，八成与那段"热身跑"有关）。
+     * 单独印一个数，这种不一致就永远看不出来 —— 而"看起来正常其实不对"正是测试框架最不能有的毛病。 */
+    printf("\n%d 个套件（注册 %d 个），%d 条断言，%d 处失败\n",
+           ran, s_suite_count, cg_test_checks, cg_test_fails);
+    if (grep && ran != s_suite_count) {
+        /* --grep 过滤时本来就不该相等，这里不打岔 */
+    } else if (ran != s_suite_count) {
+        printf("[warn] 跑了 %d 个、注册了 %d 个 —— 数字对不上，先别信这一行（见上）\n",
+               ran, s_suite_count);
+    }
 #ifdef CG_TEST_MEMCHECK
     if (s_mem_unreliable) {
         printf("[memcheck] 注意：出现过「释放比分配多」，说明有未拦截的分配源，本次泄漏判定不完全可信\n");
