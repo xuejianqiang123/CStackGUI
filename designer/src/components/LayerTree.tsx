@@ -48,6 +48,11 @@ export default function LayerTree({ doc, selectedId, onSelect, onBeginHistory, o
           <span className={`glyph glyph-${n.type}`} />
           <span className="layer-id">{n.id}</span>
           <span className="muted small">{KIND_MAP[n.type]?.label ?? n.type}</span>
+          {n.grow ? (
+            <span className="muted small" title="容器变大时按权重吃多出来的空间">
+              余量 {n.grow}
+            </span>
+          ) : null}
           <span className="layer-actions">
             <button
               className="mini"

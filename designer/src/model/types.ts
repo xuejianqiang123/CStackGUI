@@ -82,6 +82,10 @@ export type CgNode = {
   id: string;
   type: string;
   rect: CgRect;
+  /** 余量分配（grow）：容器变大时，多出来的空间按这个权重分给同一容器里所有写了的兄弟，
+   *  该控件**之后**的兄弟整体平移。权重 0（不写）表示不参与。一个数字、横向竖向都用它。
+   *  **画布不做实时预览**，效果只在运行时生效（见 .codebuddy/plans/grow-layout.md）。 */
+  grow?: number;
   text?: string;
   style?: CgStyle;
   events?: Partial<Record<CgEvent, string>>;

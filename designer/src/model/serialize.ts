@@ -66,6 +66,8 @@ function cleanNode(node: CgNode): CgNode {
     },
   };
   if (node.text) out.text = node.text;
+  /* 余量分配：0 与不写等价（缺省不写，和本项目其它缺省字段一个口径） */
+  if (node.grow && node.grow > 0) out.grow = Math.max(1, Math.min(99, Math.round(node.grow)));
   if (node.page !== undefined && node.page > 0) out.page = Math.round(node.page);
   if (node.src) out.src = node.src;
   if (

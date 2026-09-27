@@ -201,6 +201,16 @@ function coerceNode(raw: unknown, index: number): CgNode | null {
   if (o.border !== undefined && Number.isFinite(border) && border >= 1 && border <= 6) node.border = Math.round(border);
   const spin = Number(o.spin);
   if (o.spin !== undefined && (spin === 1 || spin === 2)) node.spin = spin;
+  /* grow（余量权重 0..99）：口径**对齐运行时 cg_doc.c**（`cj_int(cj_get(o,"grow"),0)`，
+     再 `grow<0 || grow>99` 归 0）—— 数字 / 布尔 / 数字字符串都收、四舍五入，只留 1..99。
+     于是 "abc" / null / 对象 / 空串 / 0 / 负数 / 大于 99 一律当 0（= 没写），不报错、不中断加载。
+     改这里要跟 runtime/src/core/{cg_doc.c,cg_json.c} 一起看，否则「画布显示的和跑起来不一样」。 */
+  const rawGrow = o.grow;
+  const grow =
+    typeof rawGrow === "number" || typeof rawGrow === "string" || typeof rawGrow === "boolean"
+      ? Math.round(Number(rawGrow))
+      : NaN;
+  if (grow >= 1 && grow <= 99) node.grow = grow;
 
   /* 旧类型名补齐字段（见函数开头 alias*）：写了的字段优先，没写的按新语义给默认 */  if (aliasMulti) {
     node.multiline = true;                       /* 多行输入：以前写死 ES_MULTILINE */
