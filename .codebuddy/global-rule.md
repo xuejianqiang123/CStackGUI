@@ -1,9 +1,11 @@
-# 嵌入式固件全局强制规则
+# 全局强制规则（CStackGUI）
 所有代码生成、代码修改、代码评审必须遵守以下规则，默认严格生效：
 
 > **适用范围（CStackGUI）**：本仓库是 **Win32 桌面 GUI 项目**（Electron 画布 + C 运行时 + MinGW gcc），
-> 不是固件工程。下面第 1~3 节的硬件 / 中断 / RTOS 规则**只在第 6 节列出的审查技能被触发时才适用**，
-> 对 `runtime/`、`designer/` 和业务 C 代码不构成约束；本工程真正的硬门禁是
+> 不是固件工程。**2026-09-27 清理**：原第 1~3 节的硬件 / 中断 / RTOS 规则（配合那 8 个固件审查技能）
+> 已换成「平台硬性规则 / 安全规范 / 资源与生命周期」三节，对 `runtime/`、`designer/` 与业务 C 代码
+> **同样适用**，不再有"只在某类技能被触发时才适用"的例外。
+> 本工程真正的硬门禁是
 > `build-all.bat` → `examples\gallery\gallery.exe --selftest` → `tools\run-tests.bat`
 > （C 层单测：JSON / 文档 / 类型表 / 事件表 + cg_kit 冒烟） → `tools\check-format.bat`
 > （改了 `.cgui` 契约或控件类型时；它顺带检查 bat 编码），以及 README 第三章列的项目铁律。
