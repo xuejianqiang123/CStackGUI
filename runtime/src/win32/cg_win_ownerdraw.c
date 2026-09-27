@@ -120,6 +120,11 @@ static void draw_tag(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
         wchar_t *wt = cgw_wc_from_utf8(w->text ? w->text : "");
         if (wt) {
             SetBkMode(dis->hDC, TRANSPARENT);
+            /* 默认字色按**标签片自己的默认浅底**（0xE8DEF8）挑：深色下这个浅紫填充不跟随主题，
+             * 所以字保持深色才对（与按钮那条"画在 M3 浅紫填充上的字不变浅"同一个道理）。
+             * 唯一的坑：控件自己写了**深**底却没写 fg，就会深底深字 —— 本工程的约定是
+             * "写了 bg 就按自己的来、不做自动对比色"，所以这种情况请连 fg 一起写。
+             * （2026-09-27 定论：这处**不需要**改成跟随主题。） */
             SetTextColor(dis->hDC, cgw_to_colorref(widget_fg_or(w, 0x1D1B20)));
             DrawTextW(dis->hDC, wt, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             free(wt);

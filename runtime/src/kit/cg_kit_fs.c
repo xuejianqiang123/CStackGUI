@@ -97,6 +97,47 @@ char *cg_file_read(const char *path)
     return buf;
 }
 
+/** @brief 读整个**二进制**文件：返回堆缓冲（调用方 cg_free）并把长度写进 *out_len
+ *  @return unsigned char* 内容（0 字节文件也返回非 NULL）；失败 NULL（此时 *out_len 不动）
+ *  @note 与 cg_file_read 的分工：那个返回"字符串"（去 BOM、以 NUL 结尾），
+ *        **含 0x00 的二进制用它读不全** —— `strlen` 到第一个 0 就截断了。
+ *        固件/镜像/抓包/裸区日志都是含 0x00 的数据，所以要这个带长度出口的版本。
+ *        顺带：这个版本**不去 BOM** —— 二进制就是二进制，一个字节都不许动。 */
+unsigned char *cg_file_read_bytes(const char *path, int *out_len)
+{
+    wchar_t       *wp;
+    HANDLE         h;
+    DWORD          size, got = 0;
+    unsigned char *buf;
+
+    if (!path) return NULL;
+    wp = kit_w(path);
+    if (!wp) return NULL;
+    h = CreateFileW(wp, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    free(wp);
+    if (h == INVALID_HANDLE_VALUE) return NULL;
+
+    size = GetFileSize(h, NULL);
+    if (size == INVALID_FILE_SIZE || size > 0x7FFFFFFFu) {   /* 长度出口是 int，超了直接报失败 */
+        if (size > 0x7FFFFFFFu) cg_log(CG_LOG_WARN, "文件超过 2GB，读不进来：%s", path);
+        CloseHandle(h);
+        return NULL;
+    }
+    /* 0 字节文件也要返回**非 NULL**：调用方靠"NULL = 失败"来区分"空文件"与"打不开" */
+    buf = (unsigned char *)malloc((size_t)size + 1);
+    if (!buf) { CloseHandle(h); return NULL; }
+    if (size > 0 && !ReadFile(h, buf, size, &got, NULL)) {
+        free(buf);
+        CloseHandle(h);
+        return NULL;
+    }
+    CloseHandle(h);
+    buf[got] = '\0';                      /* 方便临时当字符串看，但不计进长度 */
+    if (out_len) *out_len = (int)got;
+    return buf;
+}
+
 /** @brief 写文件（覆盖，UTF-8 文本）；成功返回 0 */
 int cg_file_write(const char *path, const char *text)
 {
@@ -114,6 +155,45 @@ int cg_file_write(const char *path, const char *text)
     if (WriteFile(h, text, (DWORD)strlen(text), &wrote, NULL)) ok = 0;
     CloseHandle(h);
     return ok;
+}
+
+/** @brief 覆盖写**二进制**文件（len 可以为 0 = 建一个空文件）；成功 0，失败 -1
+ *  @note 与 cg_file_write 的分工同读那边：那个按 `strlen` 写，**数据里带 0x00 就写不全**。 */
+int cg_file_write_bytes(const char *path, const void *data, int len)
+{
+    wchar_t *wp;
+    HANDLE   h;
+    DWORD    wrote = 0;
+    int      ok = -1;
+
+    if (!path || len < 0 || (!data && len > 0)) return -1;
+    wp = kit_w(path);
+    if (!wp) return -1;
+    h = CreateFileW(wp, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    free(wp);
+    if (h == INVALID_HANDLE_VALUE) return -1;
+    if (len == 0 || WriteFile(h, data, (DWORD)len, &wrote, NULL)) ok = 0;
+    CloseHandle(h);
+    return ok;
+}
+
+/** @brief 文件大小（字节）；文件不存在 / 调不动 / 给的是目录都返回 -1
+ *  @note 想"不读内容先问大小"时用它（大文件，或只想显示大小）。 */
+long long cg_file_size(const char *path)
+{
+    wchar_t                  *wp;
+    WIN32_FILE_ATTRIBUTE_DATA fad;
+
+    if (!path) return -1;
+    wp = kit_w(path);
+    if (!wp) return -1;
+    if (!GetFileAttributesExW(wp, GetFileExInfoStandard, &fad)) {
+        free(wp);
+        return -1;
+    }
+    free(wp);
+    if (fad.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) return -1;
+    return ((long long)fad.nFileSizeHigh << 32) | (long long)fad.nFileSizeLow;
 }
 
 /** @brief 追加到文件末尾（不存在就新建）；成功返回 0 */

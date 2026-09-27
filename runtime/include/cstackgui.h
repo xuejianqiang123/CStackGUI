@@ -915,8 +915,22 @@ void cg_free(void *p);
 /* ---- 文件 ---- */
 /** 文件是否存在（目录不算） */
 int   cg_file_exists(const char *path);
-/** 读整个文件成字符串（去掉 UTF-8 BOM；二进制文件也是原样返回）；失败 NULL */
+/** 读整个文件成字符串（去掉 UTF-8 BOM；二进制文件也是原样返回）；失败 NULL
+ *  @warning **含 0x00 的二进制不要用它读** —— 它返回的是字符串，`strlen` 会在第一个 0
+ *           处截断。固件/镜像/抓包请用下面的 cg_file_read_bytes。 */
 char *cg_file_read(const char *path);
+
+/** 读整个**二进制**文件：返回堆缓冲（用完 cg_free）并把长度写进 *out_len（可传 NULL）。
+ *  @return unsigned char* 内容 —— **0 字节文件也返回非 NULL**（靠这个区分"空文件"与"打不开"）；
+ *          失败返回 NULL 且 *out_len 不动。**不去 BOM**：二进制一个字节都不许动。
+ *  @note 长度出口是 int，超过 2GB 的文件会报失败（记一条日志）。 */
+unsigned char *cg_file_read_bytes(const char *path, int *out_len);
+
+/** 覆盖写**二进制**文件（len 可以为 0 = 建一个空文件）；成功返回 0 */
+int cg_file_write_bytes(const char *path, const void *data, int len);
+
+/** 文件大小（字节）；不存在 / 目录 / 调不动返回 -1。想"不读内容先问大小"时用它 */
+long long cg_file_size(const char *path);
 /** 覆盖写文件（UTF-8 文本）；成功返回 0 */
 int   cg_file_write(const char *path, const char *text);
 /** 追加到文件末尾（文件不存在就新建）；成功返回 0 */
