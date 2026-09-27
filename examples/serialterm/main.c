@@ -149,40 +149,10 @@ static int combo_find(const cg_widget_t *w, const char *text)
     return -1;
 }
 
-/**
- * @brief 把 "1A 2B 2c" / "1A2B2C" 这种十六进制文本解析成字节
- * @param text 待解析文本（空格、逗号、连字符、换行都当分隔符）
- * @param out 输出字节缓冲
- * @param cap out 的容量（字节数）
- * @return int 解析出的字节数；遇到非法字符返回 -1；放不下返回 -2（落单半个字节也算 -1）
- * @note 不用 strtok：它会就地改原串（text 是控件内部的字符串，动不得），而且
- *       "1A2B"这种没写分隔符的也得算对，手写一遍反而更短更好懂。
- */
-static int hex_parse(const char *text, unsigned char *out, int cap)
-{
-    int hi = -1;    /* 攒着的半个字节；-1 = 手里还没有 */
-    int n  = 0;
-
-    for (; text && *text; text++) {
-        int  v;
-        char c = *text;
-
-        if (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == ',' || c == '-') continue;
-        if (c >= '0' && c <= '9')       v = c - '0';
-        else if (c >= 'a' && c <= 'f')  v = c - 'a' + 10;
-        else if (c >= 'A' && c <= 'F')  v = c - 'A' + 10;
-        else return -1;
-
-        if (hi < 0) {
-            hi = v;
-        } else {
-            if (n >= cap) return -2;
-            out[n++] = (unsigned char)((hi << 4) | v);
-            hi = -1;
-        }
-    }
-    return (hi >= 0) ? -1 : n;   /* 只剩半个字节 = 写错了 */
-}
+/* 原来这里有一段手写的 hex_parse()，serialterm 与 netterm 里各有一份、逐字相同 ——
+ * 典型的"同一事实有两份"。现在它搬进了运行时：**cg_hex_decode()**（cg_kit 的「编码」一组，
+ * 见画布「支持库」页签）。语义一字未改：空格/制表/换行/逗号/连字符都当分隔符、
+ * "1A2B" 这种不写分隔的也算对、只剩半个字节或非法字符返回 -1、放不下返回 -2。 */
 
 /* ------------------------------------------------------------ 界面刷新 */
 
@@ -454,7 +424,7 @@ static void send_current(cg_app_t *app)
 
     if (cg_widget_checked(cg_find(app, "chk_hex"))) {
         unsigned char bytes[512];
-        int           n = hex_parse(text, bytes, (int)sizeof(bytes));
+        int           n = cg_hex_decode(text, bytes, (int)sizeof(bytes));
 
         if (n == -2) {
             log_line(app, "HEX 数据太长了（一次最多 512 字节）。");
@@ -626,7 +596,7 @@ static void on_hex_change(cg_widget_t *self, cg_event_t ev, void *user)
         const char *text = cg_widget_text(cg_find(app, "edt_send"));
         if (text && *text) {
             unsigned char bytes[512];
-            int           n = hex_parse(text, bytes, (int)sizeof(bytes));
+            int           n = cg_hex_decode(text, bytes, (int)sizeof(bytes));
             char         *line;
             if (n < 0) {
                 log_line(app, "（当前输入解析不了：数字个数要是偶数，而且只允许 0-9 A-F）");
