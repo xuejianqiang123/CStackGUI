@@ -10,7 +10,7 @@
 # 或： . /d/esp/esp-idf/export.sh
 
 # 2. 进入子项目并编译
-cd proj_c2l_mainboard_p4
+cd <你的板子工程目录>      # 本仓库里没有这种目录（见 SKILL.md 的「适用边界」）
 idf.py set-target esp32p4
 idf.py build
 idf.py -p COM5 flash monitor
@@ -44,6 +44,4 @@ idf.py -p COM5 flash monitor
 - 烧录不稳 → 降到 `-b 115200`。
 
 ## 本项目子项目对应芯片
-- `proj_c2l_mainboard_p4` → esp32p4
-- `proj_c2l_mainboard_s3` → esp32s3
-- `esp32_c2_slave` → esp32c2
+- 芯片由**你自己的板子**决定：`idf.py set-target <esp32xx>`（上游模板里的工程名不属于本仓库，已移除）

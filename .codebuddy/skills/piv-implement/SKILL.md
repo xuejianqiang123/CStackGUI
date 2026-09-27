@@ -30,7 +30,7 @@ argument-hint: [plan-file-path]
 
 ### 4. 验证随行（Validation-First）
 每完成一个步骤，执行该步骤的验证方法：
-- 编译检查：`idf.py build`（或项目指定构建命令），确保无新增警告
+- 编译检查：`build-all.bat`（或 `build-app.bat <名字>`），确保无新增警告
 - 行为验证：按计划中的验证方法执行
 - 发现问题立即修复，不要带着已知问题继续写
 

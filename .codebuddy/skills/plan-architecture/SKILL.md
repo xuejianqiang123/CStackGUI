@@ -21,8 +21,8 @@ argument-hint: [prd-path-or-feature-description]
 ## 架构设计检查清单
 
 ### 1. 模块划分与数据流
-- 新增哪些模块？归属哪个子项目（proj_c2l_mainboard_p4 / s3 / esp32_c2_slave）？
-- 数据从哪来到哪去？（传感器→处理→通信→存储）
+- 新增哪些模块？落在哪一层（`runtime/src` 的 core / win32 / skin / kit，还是画布侧 `designer/src`）？
+- 数据从哪来到哪去？（`.cgui` → 文档树 → 运行时控件树 → 原生控件；业务回调 → 控件状态 → 原生同步）
 - 模块间接口函数签名（头文件契约）
 
 ### 2. 任务模型（如用 RTOS）

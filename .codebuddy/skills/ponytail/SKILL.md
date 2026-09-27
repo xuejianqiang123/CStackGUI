@@ -29,7 +29,7 @@ argument-hint: [lite|full|ultra|off | review | audit]
 1. 这个需要存在吗？        → 否：跳过（YAGNI，不写）
 2. 代码库已有了？          → 复用，不重写
 3. 标准库能做？            → 用标准库（如 C 标准库/memcpy/memset）
-4. 原生平台特性？          → 用平台特性（ESP-IDF/HAL API、硬件外设）
+4. 原生平台特性？          → 用平台特性（本工程已有的 API：`cstackgui.h` / `cg_kit`；Win32 侧只走 `cg_win_*`）
 5. 已装的依赖能做？        → 用现有依赖，不引新库
 6. 一行代码搞定？          → 写一行
 7. 到此才写：能工作的最小代码
@@ -56,7 +56,7 @@ argument-hint: [lite|full|ultra|off | review | audit]
 ## 两个应用场景
 
 ### 场景 1：写码前（默认，implement 阶段）
-进入 `piv-implement` 或任何写码前，先跑梯子：能 YAGNI 跳过?→能复用现有?→能用 ESP-IDF/HAL API?→再写。给方案时标注停在哪一层，如 `// ponytail: ESP-IDF 已有 esp_timer，复用`。
+进入 `piv-implement` 或任何写码前，先跑梯子：能 YAGNI 跳过?→能复用现有?→能用本工程已有的 API?→再写。给方案时标注停在哪一层，如 `// ponytail: cg_kit 已有 cg_ini_read，复用`。
 
 ### 场景 2：审查过度工程（review）
 - `ponytail review`：扫当前 diff，找过度设计（多余抽象/重复造轮子/不必要依赖/未用配置），给"删这些、功能不变"的简化建议。

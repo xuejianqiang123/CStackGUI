@@ -1,6 +1,6 @@
 ---
 name: esp-idf-helper
-description: ESP-IDF 构建/烧录/监控/调试命令行工作流。触发条件：配置 target、menuconfig、编译（idf.py build）、烧录（flash）、串口监控（monitor）、分区表、sdkconfig、加密烧录，或排查 build/flash/monitor 报错时。适配本项目多子项目结构（proj_c2l_mainboard_p4 / esp32_c2_slave）。
+description: ESP-IDF 构建/烧录/监控/调试命令行工作流。**注意：CStackGUI 本身不含固件**，本技能只在"你要给与 PC 端通信的板子写配套固件"时当索引用。触发条件：从零搭 ESP-IDF 工程、配置 target、menuconfig、编译（idf.py build）、烧录（flash）、串口监控（monitor）、分区表、sdkconfig、加密烧录，或排查 build/flash/monitor 报错时。命令与版本以 ESP-IDF 官方文档为准。
 auto_invoke: true
 argument-hint: [子项目 | target | 操作]
 ---
@@ -10,25 +10,28 @@ argument-hint: [子项目 | target | 操作]
 **操作目标（可选）**：$ARGUMENTS
 
 > 本 skill 提供可复用的 ESP-IDF 开发循环：**配置 → 编译 → 烧录 → 监控 → 调试/排错**。
-> 已按本项目环境本地化：**Windows + Git Bash**，`idf.py` 直接可用（非 WSL/usbipd 场景）。
+> 环境假定：**Windows + Git Bash**，`idf.py` 直接可用（非 WSL/usbipd 场景）。
+
+## ⚠️ 适用边界（先读这一节）
+
+**CStackGUI 本身不含任何固件**：它是 PC 侧的「画布 + C 运行时」（Win32/GDI+ 出 exe），
+源码里没有 `CMakeLists.txt`、没有 `app_main`、没有 `sdkconfig`。所以：
+
+- **本工程的编译与验证入口不是 `idf.py`**，而是 `build-all.bat` / `tools\run-tests.bat` /
+  `tools\check-format.bat`（口径见 `piv-validate`）。**不要拿本技能的命令去"验证本工程"。**
+- 本技能只在一种场景下有用：**你要给与 PC 端通信的板子写配套固件** —— CStackGUI 的
+  `cg_serial_*` / `cg_net_*` 就是为这类设备写的调试工具（见 `docs\COMM.md`）。
+  那时按下面的循环走，但**命令细节一律以 ESP-IDF 官方文档为准**（本技能只是索引，不是权威）。
+- 上游模板里的示例工程名（`proj_c2l_mainboard_p4` / `esp32_c2_slave` / 废弃的 `_s3`）
+  **不属于本仓库**，那张"本项目子项目"对照表已删除 —— 留着只会让人去找不存在的目录，
+  请一律换成你自己板子工程的真实路径。
 
 ## ⚠️ 核心原则
 
 - **先激活环境再操作**：`idf.py` 依赖 ESP-IDF 环境变量，每个新终端先激活一次。
-- **选对子项目**：本仓库是多固件工程，`idf.py` 必须在**对应子项目目录**下运行。
+- **选对工程目录**：`idf.py` 必须在**你要编的那个工程目录**下运行。
 - **报错先看第一段**：编译/烧录失败时，抓 **最靠前的错误行**，而不是最后的堆栈尾部。
 - **烧录是真机操作**：`flash` / `erase-flash` 会覆盖设备，属中风险，执行前确认端口对应目标板。
-
-## 本项目子项目
-
-| 子项目目录 | 芯片 | 说明 |
-|-----------|------|------|
-| `proj_c2l_mainboard_p4` | ESP32-P4 | 主板主控固件 |
-| `esp32_c2_slave` | ESP32-C2 | 从机固件 |
-
-> **注**：`proj_c2l_mainboard_s3` 为废弃目录，不再维护。
-
----
 
 ## 典型开发循环
 
@@ -39,7 +42,7 @@ argument-hint: [子项目 | target | 操作]
 # 或指向具体安装路径： . /d/esp/esp-idf/export.sh
 
 # 2) 进入目标子项目
-cd proj_c2l_mainboard_p4
+cd <你的板子工程目录>       # 本仓库里没有固件工程，见上面的「适用边界」
 
 # 3) 设置芯片 target（每个子项目首次一次）
 idf.py set-target esp32p4      # s3 用 esp32s3；c2 从机用 esp32c2
@@ -100,7 +103,9 @@ idf.py -p COM5 app-flash              # 非加密烧录 app
 
 ## 与本项目工作流的关系
 
-- 是 `piv-validate` 第 1 级（编译门禁 `idf.py build`）和 `serial_verify`（第 3 级串口实测烧录/监控）的**执行手段**。
+- **不是**本工程的验证手段：`piv-validate` 第 1 级是 `build-all.bat`，第 3 级真机实测用
+  `serial_verify`（起真窗口/真链路，**不烧固件**）。本技能只在"给板子写配套固件"时用 ——
+  见上面的「适用边界」。
 - 编译/烧录报错 → 回 `piv-implement` 修复；协议层问题配合 `communication_protocol_check` 定位根因。
 
 ## 附带资源

@@ -19,7 +19,7 @@ argument-hint: [feature-description]
 
 执行 `prime-codebase` skill 的工作流，建立代码库认知，并明确：
 
-- 本功能归属的子项目（proj_c2l_mainboard_p4 / s3 / esp32_c2_slave）
+- 本功能落在哪一块、哪一层（`runtime/src` 的 core / win32 / skin / kit、`designer/src`，还是 `examples/` / `apps/`）
 - 相关组件与可复用代码
 - 构建与验证命令
 
@@ -49,7 +49,8 @@ argument-hint: [feature-description]
 
 执行 `piv-validate` skill 的工作流：
 
-- 编译 + 静态检查（`git diff --check`、`idf.py build` 无新增警告）
+- 编译 + 静态检查（`git diff --check`、`build-all.bat` 无新增警告；
+  改了画布再加 `npx tsc --noEmit` + `npx vite build`）
 - 行为验证（按计划的验证方法）
 - 边界/异常路径覆盖
 

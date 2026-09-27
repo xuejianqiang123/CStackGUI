@@ -23,12 +23,12 @@ argument-hint: [目标目录 | 模块 | 问题]
 ## 分析流程
 
 ### 1. 边界与技术栈（先读这些）
-- 构建/依赖：`CMakeLists.txt`、`sdkconfig*`、`idf_component.yml`、`package.json`、`Cargo.toml` 等
+- 构建/依赖：`build-*.bat`、`tools\`、`package.json`（画布）等 —— 本工程**没有 CMake / idf.py**
 - 顶层目录树 + README / docs
-- 判断：语言、框架、构建系统、目标平台（本项目：ESP-IDF / C / 多芯片固件）
+- 判断：语言、框架、构建系统、目标平台（本项目：C11 + Win32/GDI+ 运行时，画布是 Electron + React + TS）
 
 ### 2. 结构与模块
-- 划分模块/组件/子项目边界（本项目：`components/`、`proj_c2l_mainboard_*`、`esp32_c2_slave`）
+- 划分模块/层边界（本项目：`runtime/src` 的 core / win32 / skin / kit、`designer/src`、`examples/` 与 `apps/`）
 - 每个模块一句话职责
 - 识别哪些是自研、哪些是第三方/框架
 
