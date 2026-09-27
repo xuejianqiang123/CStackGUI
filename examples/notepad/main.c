@@ -8,6 +8,10 @@
  *          它也是 cg_kit（基础能力库）的活例子：读文件、写文件、INI 配置、
  *          路径拼接、剪贴板、GBK 转换全都用到了，而且**没有 include 任何 Windows 头**。
  *
+ *          「文件」菜单的四条命令（新建 / 打开 / 保存 / 另存为）用**动作（actions）**实现：
+ *          `.cgui` 里一处写清「文字 + 快捷键 + 回调名」，菜单项只写 "action" 引用它们。
+ *          快捷键由消息循环里的加速键表处理，所以焦点在输入框里按 Ctrl+S 也能保存。
+ *
  * 界面在 notepad.cgui 里；本文件只有行为和「启动时该干什么」。
  * 编译：在项目根跑 build-app.bat notepad
  */
@@ -212,7 +216,9 @@ static void on_ready(cg_app_t *app, void *user)
 }
 
 /**
- * @brief 菜单点击：一个函数分发全部菜单项
+ * @brief 菜单点击：分发「文件」菜单以外的菜单项
+ * @details 「文件」菜单的新建/打开/保存/另存为已改成动作（actions），点击走动作回调，
+ *          不在这里 —— 见下面的「动作回调」一节。
  * @param self 菜单控件（menu / menubutton 通用）
  * @param ev 事件（总是 click）
  * @param user 未使用
@@ -227,27 +233,7 @@ static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
     (void)user;
     if (!id) return;            /* 自检里会合成一次 click，那时没有"刚点的项" */
 
-    if (strcmp(id, "m_new") == 0) {
-        if (s_biz.dirty) {
-            cg_message_box(edt, "当前内容还没保存。先保存，再新建。", "提示", 1);
-            return;
-        }
-        if (edt) cg_widget_set_text(edt, "");
-        s_biz.path[0] = '\0';
-        s_biz.dirty = 0;
-        refresh(app);
-    } else if (strcmp(id, "m_open") == 0) {
-        char path[1024];
-        path[0] = '\0';
-        if (cg_open_file_dialog(self, "打开", "文本文件(*.txt)|*.txt|所有文件(*.*)|*.*",
-                               path, sizeof(path))) {
-            open_path(app, path);
-        }
-    } else if (strcmp(id, "m_save") == 0) {
-        save_ask(app, self, 0);
-    } else if (strcmp(id, "m_save_as") == 0) {
-        save_ask(app, self, 1);
-    } else if (strcmp(id, "m_copy") == 0) {
+    if (strcmp(id, "m_copy") == 0) {
         cg_clip_set_text(edt ? cg_widget_text(edt) : "");
         cg_status_set(cg_find(app, "sb_main"), 0, "已复制全部内容到剪贴板");
     } else if (strcmp(id, "m_paste") == 0) {
@@ -327,6 +313,73 @@ static void on_close(cg_widget_t *self, cg_event_t ev, void *user)
     cg_cancel_close(app);                   /* 这次不关了 */
 }
 
+/* ------------------------------------------------------------ 动作回调
+ * 签名与事件回调完全一样，但有两个固定值：self 恒为**主窗口伪控件**（不是菜单项），
+ * ev 恒为 click。所以拿 app 用 cg_app_of(self)，拿控件用 cg_find()；
+ * 一个 handler 挂了多个动作时，用 cg_action_name(self) 问是哪一个。
+ */
+
+/**
+ * @brief 动作 new：新建（有未保存内容就拦一下）
+ * @param self 主窗口伪控件
+ * @param ev 恒为 click
+ * @param user 未使用
+ */
+static void on_file_new(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t    *app = cg_app_of(self);
+    cg_widget_t *edt = cg_find(app, "edt_body");
+
+    (void)ev;
+    (void)user;
+    if (s_biz.dirty) {
+        cg_message_box(self, "当前内容还没保存。先保存，再新建。", "提示", 1);
+        return;
+    }
+    if (edt) cg_widget_set_text(edt, "");
+    s_biz.path[0] = '\0';
+    s_biz.dirty = 0;
+    refresh(app);
+}
+
+/**
+ * @brief 动作 open：选文件后读进来
+ * @param self 主窗口伪控件（可直接当通用对话框的 parent）
+ * @param ev 恒为 click
+ * @param user 未使用
+ */
+static void on_file_open(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    char      path[1024];
+
+    (void)ev;
+    (void)user;
+    path[0] = '\0';
+    if (cg_open_file_dialog(self, "打开", "文本文件(*.txt)|*.txt|所有文件(*.*)|*.*",
+                           path, sizeof(path))) {
+        open_path(app, path);
+    }
+}
+
+/**
+ * @brief 动作 save / save_as：**同一个 handler**，靠 cg_action_name() 区分是哪个动作
+ * @details 保存 = 有当前路径就直接写盘；另存为 = 强制弹路径对话框。
+ * @param self 主窗口伪控件
+ * @param ev 恒为 click
+ * @param user 未使用
+ */
+static void on_file_save(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    const char *name = cg_action_name(self);
+    cg_app_t   *app  = cg_app_of(self);
+    int         force_dialog = (name && strcmp(name, "save_as") == 0);
+
+    (void)ev;
+    (void)user;
+    save_ask(app, self, force_dialog);
+}
+
 /* ------------------------------------------------------------ 绑定表 */
 
 static const cg_binding_t k_bindings[] = {
@@ -334,6 +387,9 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND("on_body_change",  on_body_change),
     CG_BIND("on_window_size",  on_window_size),
     CG_BIND("on_close",        on_close),
+    CG_BIND("on_file_new",     on_file_new),
+    CG_BIND("on_file_open",    on_file_open),
+    CG_BIND("on_file_save",    on_file_save),
     CG_BIND_END
 };
 

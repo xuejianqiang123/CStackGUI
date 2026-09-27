@@ -13,6 +13,12 @@
     },
     "events": { "close": "on_close", "size": "on_window_size" }
   },
+  "actions": {
+    "new":     { "text": "新建",      "accel": "Ctrl+N",       "handler": "on_file_new" },
+    "open":    { "text": "打开...",   "accel": "Ctrl+O",       "handler": "on_file_open" },
+    "save":    { "text": "保存",      "accel": "Ctrl+S",       "handler": "on_file_save" },
+    "save_as": { "text": "另存为...", "accel": "Ctrl+Shift+S", "handler": "on_file_save" }
+  },
   "widgets": [
     {
       "id": "menu_main",
@@ -22,10 +28,10 @@
         {
           "text": "文件",
           "children": [
-            { "text": "新建", "id": "m_new" },
-            { "text": "打开...", "id": "m_open" },
-            { "text": "保存", "id": "m_save" },
-            { "text": "另存为...", "id": "m_save_as" },
+            { "action": "new" },
+            { "action": "open" },
+            { "action": "save" },
+            { "action": "save_as" },
             { "text": "-" },
             { "text": "退出", "id": "m_quit" }
           ]
