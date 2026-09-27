@@ -1157,7 +1157,12 @@ void cg_log_set_level(int level);
 
 /* 基础能力（cg_kit）：界面之外但做真工具一定会用的。
  * 全是"返回堆串，用完 cg_free"；有了它们业务代码真的只 include cstackgui.h。 */
-char *cg_file_read(const char *path);                       /* 整文件，UTF-8 BOM 自动去掉 */
+char *cg_file_read(const char *path);                       /* 整文件，UTF-8 BOM 自动去掉。
+                                                             * ⚠ 含 0x00 的二进制**别用它**：它返回字符串，
+                                                             *   strlen 会在第一个 0 处截断（固件/镜像用下面的）*/
+unsigned char *cg_file_read_bytes(const char *path, int *out_len);  /* 二进制：带长度出口；0 字节文件也非 NULL */
+int   cg_file_write_bytes(const char *path, const void *data, int len);  /* 二进制覆盖写；len = 0 建空文件 */
+long long cg_file_size(const char *path);                   /* 不存在 / 目录 = -1 */
 int   cg_file_write(const char *path, const char *text);    /* 覆盖写 UTF-8 */
 int   cg_file_append(const char *path, const char *text);
 int   cg_dir_list(const char *dir, const char *filter, int index, char *out, int out_size);
