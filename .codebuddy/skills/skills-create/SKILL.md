@@ -14,7 +14,7 @@ argument-hint: [skill-name-and-purpose]
 ## 规范总览
 
 - **位置**：每个 skill 一个目录：`.codebuddy/skills/<skill-name>/SKILL.md`
-- **命名**：小写 + 连字符（如 `dma_cache_check`、`piv-validate`）
+- **命名**：小写 + 连字符（如 `buffer_overflow_check`、`piv-validate`）
 - **格式**：YAML frontmatter + Markdown 正文（中文正文）
 - **frontmatter 字段**：
   - `name`：技能名（与目录一致）
@@ -50,7 +50,7 @@ argument-hint: [<参数>]
 
 ## 编写质量要求
 
-1. **description 是灵魂**：必须包含"使用时机/触发条件"，否则 agent 不知道该何时调用。参考现有 skills：如 `dma_cache_check` 写"只要出现 DMA、BDMA、外设传输…自动触发"。
+1. **description 是灵魂**：必须包含"使用时机/触发条件"，否则 agent 不知道该何时调用。参考现有 skills：如 `communication_protocol_check` 写"审查串口、SPI、I2C、WiFi…自动触发"。
 2. **可执行优先**：每个步骤要是可执行的动作，不要空话。
 3. **清单化**：检查项用 `- [ ]`，让执行有勾稽感。
 4. **有产出物**：明确输出文件路径与格式（本项目惯例：docs/、.codebuddy/plans/、.codebuddy/code-reviews/）。
@@ -58,7 +58,7 @@ argument-hint: [<参数>]
 
 ## 两类技能定位（本项目）
 
-- **审查类**（已有 14 个）：嵌入式专项质量检查，如 `buffer_overflow_check`、`interrupt_check` —— 被 `piv-review-changes` 按领域调用
+- **审查类**（已有 7 个）：C 代码与界面质量检查，如 `buffer_overflow_check`、`communication_protocol_check`（另有 `design-taste` 管界面观感）—— 被 `piv-review-changes` 按领域调用
 - **流程类**（PIV 系列）：开发工作流，如 `piv-validate`、`git-commit-style` —— 定义"怎么做"的环节
 
 ## 创建流程

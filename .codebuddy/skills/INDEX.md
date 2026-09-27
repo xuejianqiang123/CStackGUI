@@ -4,7 +4,7 @@
 > 新增 / 删除 / 改名技能时：**先改本文件**，再改 `global-rule.md`（触发规则）与 `README.md`（导读）。
 > 维护约定：本文件只写"是什么 / 何时触发 / 产出"，具体规则一律以对应 `SKILL.md` 正文为准，不在此重复。
 >
-> 更新：2026-09-27 ｜ 技能总数：**41** ｜ 口径：`ls .codebuddy/skills/` 的目录数
+> 更新：2026-09-27（清理：删 13 个本工程用不到的技能，41 → 28）｜ 技能总数：**28** ｜ 口径：`ls .codebuddy/skills/` 的目录数
 > **★ = 本工程专属**（其余是从嵌入式模板继承来的，见每类下的适用说明）
 
 ---
@@ -13,22 +13,29 @@
 
 | 类 | 数量 | 作用 | 何时被用到 |
 |---|---|---|---|
-| **A 审查类** | 15 | 代码质量门禁（由 `piv-review-changes` 按领域调用，映射表见 `global-rule.md` §7） | 写码后 / 提交前 |
+| **A 审查类** | 7 | 代码质量门禁（由 `piv-review-changes` 按领域调用，映射表见 `global-rule.md` §7） | 写码后 / 提交前 |
 | **B 流程类（PIV 双循环）** | 13 | 需求 → 提交的开发工作流与 3 道门禁 | 每次开发 |
 | **C 本工程专属规程** | 1 | `designer-modify`：改画布的说明书 | 改 `designer/` 时 |
-| **D 正交约束与工具** | 8 | 压缩、思维准则、文件安全、真机实测、辅助 | 始终生效 / 按需 |
-| **E 社区引入** | 4 | 外部技能（保留上游结构，勿改正文） | 按需显式调用 |
+| **D 正交约束与工具** | 6 | 压缩、思维准则、文件安全、真机实测、辅助 | 始终生效 / 按需 |
+| **E 社区引入** | 1 | 外部技能（保留上游结构，勿改正文） | 按需显式调用 |
 
-> 15 + 13 + 1 + 8 + 4 = **41**。
+> 7 + 13 + 1 + 6 + 1 = **28**。
 > `designer-modify` 单独成类，是因为它既不是"审查"也不是"流程步骤"；其余几个 ★ 技能
 > 按功能归在上面各自的类里。
+>
+> **2026-09-27 清理记录**：删掉 13 个本工程用不到的技能 —— 8 个纯固件审查（`dma_cache_check` /
+> `interrupt_check` / `stack_overflow_check` / `rtos_task_check` / `flash_storage_check` /
+> `peripheral_conflict_check` / `power_management_check` / `watchdog_timer_check`）、板子侧索引
+> `esp-idf-helper`、社区技能 3 个（`neuroarxiv` / `using-codegraph` / `advise-project-approach`）、
+> 输入侧压缩 `tokenzero`。口径：本工程是 Win32/GDI+ 桌面工具包 + 画布，**没有 MCU**，
+> 被删的都是"给板子写固件"才用得到的。恢复办法：`git checkout <该次提交>^ -- .codebuddy/skills/<技能名>`。
 
 ---
 
-## A. 审查类（15）—— 质量门禁执行体
+## A. 审查类（7）—— 质量门禁执行体
 
-`global-rule.md` §7 给出"改动领域 → 调哪个"的映射表。带 **〔固件〕** 的只在
-**给板子写配套固件**时适用（本工程是 Win32/GDI+ 桌面工具包，没有 MCU）。
+`global-rule.md` §7 给出"改动领域 → 调哪个"的映射表。2026-09-27 清理后，本类只留本工程真会命中的领域；
+原先 8 个标 〔固件〕 的（DMA / 中断 / 栈用量 / RTOS / Flash / 外设 / 低功耗 / 看门狗）随 MCU 场景一起删除。
 
 | 技能 | 改动领域 | 检查重点 |
 |---|---|---|
@@ -39,14 +46,6 @@
 | `struct_best_practice_check` | 结构体 / 位域 / 函数指针 / 柔性数组 | 对齐、pack、18 种用法 |
 | `firmware_code_style` | 新增 / 修改 `.c` `.h` | 命名、分层、Doxygen 注释、项目铁律 |
 | ★ `design-taste` | 画布与 `.cgui` App 的界面观感 / 配色 / 字体 / 间距 / 动效 / 文案 | 设计读盘 + 三旋钮、AI 味黑名单、质量地板 |
-| `dma_cache_check` 〔固件〕 | DMA / 内存搬运 / cache | cache 刷新、对齐、栈内存做 DMA |
-| `interrupt_check` 〔固件〕 | 中断 / ISR / NVIC | 标志清除、共享变量、中断内禁阻塞 |
-| `stack_overflow_check` 〔固件〕 | 栈用量 / 局部大数组 / 递归 | 自动评估栈用量 |
-| `rtos_task_check` 〔固件〕 | RTOS 任务 / 信号量 / 队列 | 优先级、死锁、任务饿死 |
-| `flash_storage_check` 〔固件〕 | Flash / NVS / OTA / 分区表 | 擦写寿命、掉电保护、回滚 |
-| `peripheral_conflict_check` 〔固件〕 | GPIO / 外设 / 时钟 | 引脚复用、时钟源冲突 |
-| `power_management_check` 〔固件〕 | 低功耗 / 睡眠 / 唤醒源 | 睡眠模式、GPIO 漏电、功耗量化 |
-| `watchdog_timer_check` 〔固件〕 | 看门狗 / 定时器 | 喂狗、超时配置、定时器冲突 |
 
 > 调用规则：改动涉及哪类代码，就加载对应 `SKILL.md` 执行其**完整检查清单**，不得凭经验泛泛而过。
 
@@ -92,31 +91,29 @@
 
 ---
 
-## D. 正交约束与工具（8）
+## D. 正交约束与工具（6）
 
 | 技能 | 作用层 | 触发 |
 |---|---|---|
 | `first-principles-thinking` | 决策层（始终生效） | 任何需求 / 方案 / 排查 / 输出 |
 | `caveman` | 输出侧（少说） | 常驻；`lite/full/ultra/wenyan/off` |
 | `ponytail` | 生成侧（少写） | 常驻 full；`lite/full/ultra/off` |
-| `tokenzero` | 输入侧（少喂） | 手动；`pack/compress/json/analyze` |
 | ★ `safe-file-ops` | 文件操作（非破坏） | 准备删除 / 清理 / 覆盖时 |
 | `serial_verify` | 验证侧（真机实测） | `piv-validate` 第 3 级；GUI / 收发 / 交互类改动 |
 | `analyzing-projects` | 认知侧（陌生代码库） | 接手新项目 / 陌生子模块 / "这块怎么工作的" |
-| `esp-idf-helper` | 板子侧参考（**本工程不含固件**） | 只在给与 PC 端通信的板子写配套固件时 |
 
-> 三者压缩正交：`ponytail` 少写代码 ｜ `caveman` 少说废话 ｜ `tokenzero` 少喂上下文。
+> 两侧压缩正交：`ponytail` 少写代码 ｜ `caveman` 少说废话。（输入侧压缩 `tokenzero` 随 2026-09-27 清理移除；
+> 板子侧参考 `esp-idf-helper` 同样已删 —— 本工程不含固件。）
 
 ---
 
-## E. 社区引入（4）—— 保留上游结构，勿改正文
+## E. 社区引入（1）—— 保留上游结构，勿改正文
 
 | 技能 | 用途 | 外部依赖 |
 |---|---|---|
-| `advise-project-approach` | 项目策略咨询（架构 / 技术栈 / 成本 / 对标） | 无 |
-| `neuroarxiv` | 新架构前查 arXiv 先例（prior art） | 需联网 |
-| `using-codegraph` | tree-sitter 代码知识图谱（SQLite 亚毫秒查询） | Python + 一次性装 codegraph CLI |
 | `wavedrom-gen` | 时序描述 → WaveJSON → SVG / PNG / HTML | Node 20+ + `npm ci` |
+
+> 2026-09-27 清理：`advise-project-approach` / `neuroarxiv` / `using-codegraph` 三个在本工程从未用过，已删。
 
 ---
 

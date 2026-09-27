@@ -1,6 +1,6 @@
 ---
 name: piv-review-changes
-description: 提交前对全部改动做技术审查（质量门禁），产出审查报告到 .codebuddy/code-reviews/。触发条件：piv-validate 通过后、用户说"审查代码"、"code review"、"检查质量"，或准备提交（git-commit-style）前强制触发。会自动调用本项目的 14 个嵌入式审查 skills。
+description: 提交前对全部改动做技术审查（质量门禁），产出审查报告到 .codebuddy/code-reviews/。触发条件：piv-validate 通过后、用户说"审查代码"、"code review"、"检查质量"，或准备提交（git-commit-style）前强制触发。会自动调用本工程适用的审查 skills（映射表见 global-rule.md 第 7 节）。
 auto_invoke: true
 ---
 
@@ -34,10 +34,10 @@ git ls-files --others --exclude-standard   # 新增文件
 - 性能：不必要的计算、内存浪费、重复读取
 - 代码质量：DRY、命名、复杂度、注释完整性
 
-### 嵌入式专项审查（调用对应 skills）
+### 专项审查（调用对应 skills）
 按改动涉及的领域，加载并执行对应的审查技能。
 
-**权威映射表**见 `.codebuddy/global-rule.md` 第 7 节"嵌入式审查 Skills 自动触发规则"，包含 14 个审查技能的完整领域映射与检查重点。
+**权威映射表**见 `.codebuddy/global-rule.md` 第 7 节"审查 Skills 自动触发规则"，包含本工程适用审查技能的完整领域映射与检查重点。
 
 > 规则：改动涉及哪类代码，就加载对应 skill 执行其完整检查清单，而不是凭经验泛泛而过。
 

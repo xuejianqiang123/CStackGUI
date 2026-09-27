@@ -23,10 +23,11 @@ argument-hint: [plan-file-path]
 - 新代码风格与所在文件/组件保持一致
 - 为可复用的逻辑补充头文件注释（函数职责、参数、返回值、错误码）
 
-### 3. 嵌入式特别注意
-- 涉及 DMA/中断/共享变量：参考对应审查 skills 的规范来写（`dma_cache_check`、`interrupt_check`）
+### 3. 本工程特别注意
+- Win32 资源：窗口 / 句柄 / GDI 对象用完即还，别漏（参考 `error_handling_check` 的资源路径检查）
 - 错误处理：每个可能失败的路径都要有处理（参考 `error_handling_check`）
-- 内存：优先静态分配，明确 buffer 大小上限
+- 内存：优先静态分配，明确 buffer 大小上限（参考 `memory_leak_check`）
+- 收发与协议：串口 / 网口的字节流按帧切（`cg_frame_*`），参考 `communication_protocol_check`
 
 ### 4. 验证随行（Validation-First）
 每完成一个步骤，执行该步骤的验证方法：

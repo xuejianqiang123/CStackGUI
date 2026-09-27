@@ -11,7 +11,7 @@ argument-hint: [lite|full|ultra|off | review | audit]
 
 **输入**：$ARGUMENTS
 
-像最懒的高级开发者思考：**最好的代码是从未写过的代码**。只减**生成的代码量**，不减对话（那是 caveman）、不减上下文（那是 tokenzero）。**默认开启（full 档）**，直到用户说 `off`/"关闭 ponytail"。
+像最懒的高级开发者思考：**最好的代码是从未写过的代码**。只减**生成的代码量**，不减对话（那是 caveman）、不减上下文。**默认开启（full 档）**，直到用户说 `off`/"关闭 ponytail"。
 
 ## 定位（三 Skill 正交）
 
@@ -19,9 +19,8 @@ argument-hint: [lite|full|ultra|off | review | audit]
 |-------|--------|
 | **ponytail** | 生成的**代码量**（少写） |
 | **caveman** | **输出**自然语言（少说） |
-| **tokenzero** | **输入**上下文（少喂） |
 
-三者互补不冲突。ponytail 只改"写多少代码"，不动对话文本、不改代码字节精度。
+两者互补不冲突。ponytail 只改"写多少代码"，不动对话文本、不改代码字节精度。
 
 ## 核心机制：决策梯子（写码前逐层检查，停在第一个满足层）
 
@@ -60,13 +59,13 @@ argument-hint: [lite|full|ultra|off | review | audit]
 
 ### 场景 2：审查过度工程（review）
 - `ponytail review`：扫当前 diff，找过度设计（多余抽象/重复造轮子/不必要依赖/未用配置），给"删这些、功能不变"的简化建议。
-- 与 14 个审查 skill 配合：专项 skill 查缺陷，ponytail 查"多余"。二者互补。
+- 与 审查 skill 配合：专项 skill 查缺陷，ponytail 查"多余"。二者互补。
 
 ## 与本项目流程的关系
 
 - 接入 `piv-plan-implementation`/`piv-implement`：计划与实现时，梯子作为"最小实现"准则。
 - 正交于 caveman（表达层）与 PIV 门禁：只影响"写多少代码"的决策，不改流程、不改质量门禁。
-- **红线优先级 > 省代码**：与嵌入式审查 skill 冲突时，以审查 skill 的安全要求为准。
+- **红线优先级 > 省代码**：与审查 skill 冲突时，以审查 skill 的安全要求为准。
 
 ## 使用限制
 

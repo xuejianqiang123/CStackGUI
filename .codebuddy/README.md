@@ -1,11 +1,12 @@
 # CodeBuddy AI 开发配置指南（v0.1）
 
-> **项目**：CStackGUI（画布 + C 运行时）。下面这套体系源自嵌入式固件模板：14 个专项审查技能
-> 里只有一部分对本工程有意义（`firmware_code_style`、`buffer_overflow_check`、`memory_leak_check`、
-> `stack_overflow_check`、`error_handling_check`、`struct_best_practice_check`），其余针对 ESP32/RTOS/外设，
-> 本工程用不到。本工程自己的技能是 `designer-modify`（改画布）、`design-taste`（界面观感/设计品味）、`git-commit-style`（提交格式）等。
-> **用途**：AI 辅助编程的完整工作流体系 = 代码审查（14个专项技能）+ 开发流程（PIV 双循环）+ 辅助工具（caveman / ponytail / tokenzero / analyzing-projects / esp-idf-helper）+ 社区引入（4个）+ 本工程专属（designer-modify / git-commit-style / **safe-file-ops** / **team-parallel-delivery**），共 41 个技能目录（明细见下方目录树）
-> **权威清单**：技能分类、触发条件与产出以 **`.codebuddy/skills/INDEX.md`** 为准（新增 / 改名技能必须同步该索引）。本文件的表格是**导读**，不重复维护细节 —— 2026-09-27 发现必经链路上 8 个技能残留上游模板内容（`idf.py build`、`ai_code_review.py`、错误的"本项目"模型），根因就是缺一份权威索引与维护清单。
+> **项目**：CStackGUI（画布 + C 运行时）。这套体系源自嵌入式固件模板，**2026-09-27 已按本工程实际清理过**：
+> 删掉 13 个用不到的技能（8 个纯固件审查、板子侧 `esp-idf-helper`、社区 3 个、输入侧压缩 `tokenzero`），
+> 41 → **28 个**。留下的审查技能都是本工程真的会命中的：`firmware_code_style`（C 规范）、
+> `buffer_overflow_check`、`memory_leak_check`、`error_handling_check`、`struct_best_practice_check`、
+> `communication_protocol_check`（串口/网口是本工程核心能力），以及画布与 `.cgui` 的 `design-taste`。
+> **用途**：AI 辅助编程的工作流体系 = 代码审查（7 个）+ 开发流程（PIV 双循环 13 个）+ 辅助工具（caveman / ponytail / analyzing-projects）+ 社区引入（1 个）+ 本工程专属（designer-modify / design-taste / git-commit-style / safe-file-ops / team-parallel-delivery），共 **28 个**技能目录（明细见下方目录树与 `INDEX.md`）
+> **权威清单**：技能分类、触发条件与产出以 **`.codebuddy/skills/INDEX.md`** 为准（新增 / 改名 / **删除**技能必须同步该索引）。本文件的表格是**导读**，不重复维护细节 —— 2026-09-27 发现必经链路上 8 个技能残留上游模板内容（`idf.py build`、`ai_code_review.py`、错误的"本项目"模型），根因就是缺一份权威索引与维护清单。
 > **核心价值**：质量门禁前置 + 端到端自动化 + 可追溯产出
 > **维护**：请勿随意删除此文件夹，包含项目级配置、审查规则和工作流定义
 
@@ -15,30 +16,26 @@
 
 这是一个 **完整的 AI 辅助开发体系**（v0.1），覆盖四大能力模块：
 
-### 1️⃣ 质量保障（14 个审查技能）
-- ✅ **自动检测**嵌入式开发风险（内存泄漏、栈溢出、DMA 错误、死锁等 150+ 检查项）
-- ✅ **强制执行**行业最佳实践（RTOS 规范、通信协议、低功耗设计）
+### 1️⃣ 质量保障（7 个审查技能）
+- ✅ **自动检测** C 层与界面层的常见风险（缓冲区越界、内存泄漏、协议超时/粘包、错误路径漏处理、结构体对齐等）
+- ✅ **强制执行**项目自己的规矩（`firmware_code_style` 的命名/注释/分层，`design-taste` 的界面观感与文案）
 - ✅ **提交前审查**（质量门禁），在提交前发现并修复问题
-- ✅ **统一代码风格**，确保团队代码一致性
+- ✅ **统一代码风格**，确保跨端（`runtime/` + `designer/`）一致性
 
-### 2️⃣ 开发工作流（14 个 PIV 循环技能）
+### 2️⃣ 开发工作流（13 个 PIV 循环技能）
 - ✅ **需求 → 提交全流程自动化**（prime → plan → implement → validate → review → commit → PR）
 - ✅ **3 个强制门禁**（计划门禁 + 验证门禁 + 审查门禁），确保质量
 - ✅ **产出可追溯**（PRD/SDD/计划/审查报告），随时回溯
 - ✅ **Validation-First**：先想清楚"怎么证明它工作"，再写代码
 
-### 3️⃣ 辅助工具（5 个）
-- ✅ **esp-idf-helper**：ESP-IDF 命令行工作流（配置/编译/烧录/监控/排错）
+### 3️⃣ 辅助工具（3 个）
 - ✅ **analyzing-projects**：陌生代码库系统性分析（结构/技术栈/数据流/约定）
-- ✅ **caveman / tokenzero / ponytail**：输出/输入/生成三侧压缩（省 Token、少写代码）
+- ✅ **caveman / ponytail**：输出侧 / 生成侧压缩（少说废话、少写代码）
 
-### 4️⃣ 社区技能（4 个）
-- ✅ **advise-project-approach**：项目策略咨询（动手前/中/后研究最佳路径）
-- ✅ **neuroarxiv**：新架构前查 arXiv 先例，避免重复造轮子
-- ✅ **using-codegraph**：tree-sitter 代码知识图谱（SQLite 亚毫秒查询）
-- ✅ **wavedrom-gen**：时序描述 → WaveJSON → SVG/PNG/HTML 波形图
+### 4️⃣ 社区技能（1 个）
+- ✅ **wavedrom-gen**：时序描述 → WaveJSON → SVG/PNG/HTML 波形图（协议/时序图用）
 
-**简单理解**：就像给 AI 装上了"固件开发专家大脑" + "项目经理的流程管控"，既能审查代码质量，又能管理整个开发流程。
+**简单理解**：就像给 AI 装上了"本工程的规范意识" + "项目经理的流程管控"，既能审查代码质量，又能管理整个开发流程。
 
 ---
 
@@ -52,46 +49,33 @@
 ├── plans/                 # 实现计划产出目录（PIV 工作流自动生成）
 ├── code-reviews/          # 代码审查报告产出目录（PIV 工作流自动生成）
 └── skills/
-    ├── [审查类] 14 个嵌入式专项质量检查技能
+    ├── [审查类] 6 个 C 代码质量检查技能（★ `design-taste` 列在下面[本工程专属]里）
     │   ├── buffer_overflow_check/        # 缓冲区溢出、数组越界、危险函数
-    │   ├── communication_protocol_check/  # 通信协议：超时、CRC、粘包、字节序
-    │   ├── dma_cache_check/              # DMA 与 Cache 一致性、对齐检查
+    │   ├── communication_protocol_check/  # 通信协议：超时、CRC、粘包、字节序（本工程核心）
     │   ├── error_handling_check/         # 错误码、断言、日志、容错机制
-    │   ├── firmware_code_style/          # 代码规范：命名、分层、注释
-    │   ├── flash_storage_check/          # Flash 擦写寿命、NVS、OTA、掉电保护
-    │   ├── interrupt_check/              # 中断安全：FromISR、volatile、标志清除
+    │   ├── firmware_code_style/          # 本工程 C 规范：命名、分层、Doxygen 注释、项目铁律
     │   ├── memory_leak_check/            # 内存泄漏、堆碎片、野指针
-    │   ├── peripheral_conflict_check/    # GPIO 复用、时钟冲突、寄存器访问
-    │   ├── power_management_check/       # 低功耗：睡眠模式、唤醒源、功耗评估
-    │   ├── rtos_task_check/              # RTOS 任务：死锁、优先级反转、栈大小
-    │   ├── stack_overflow_check/         # 栈溢出检测、栈消耗估算
-    │   ├── struct_best_practice_check/   # 结构体：对齐、位域、内存优化
-    │   └── watchdog_timer_check/         # 看门狗与定时器：喂狗、超时配置
+    │   └── struct_best_practice_check/   # 结构体：对齐、位域、内存优化
     ├── [流程类] 开发工作流技能（PIV 双循环）
     │   ├── plan-create-prd/          # 需求澄清 → PRD（含验收标准/非目标）
-    │   ├── plan-architecture/        # 架构设计 → SDD（任务/内存/外设/协议）
+    │   ├── plan-architecture/        # 架构设计 → SDD（模块/数据流/接口契约）
     │   ├── piv-slice-epic/           # 大需求拆解为可独立验证的切片
     │   ├── prime-codebase/           # 加载代码库上下文（Context is King）
     │   ├── piv-plan-implementation/  # Validation-First 实现计划
     │   ├── piv-implement/            # 严格按计划实现（不做计划外改动）
     │   ├── piv-validate/             # 编译+静态+行为验证（门禁 1）
-    │   ├── piv-review-changes/       # 提交前审查（调用 14 个审查技能，门禁 2）
+    │   ├── piv-review-changes/       # 提交前审查（按领域调用审查技能，门禁 2）
     │   ├── piv-create-pr/            # 创建 PR/MR（含验证情况与关联文档）
     │   │   （提交规范在根级 git-commit-style/：[类型][模块] 格式，2026-09-20 合并原 piv-commit）
     │   ├── piv-run-full-loop/        # 端到端全循环（描述→提交自动化）
     │   ├── skills-create/            # 创建/更新技能（元技能）
     │   ├── first-principles-thinking/ # 第一性原理思维准则（全局生效：需求澄清/最短路径/追根因/精简输出）
-    │   ├── serial_verify/           # 串口行为验证（接入 piv-validate 第3级：烧录→观察输出→回环/应答→异常注入）
+    │   ├── serial_verify/           # PC 侧真机行为验证（接入 piv-validate 第3级：起真窗口收发→回环/应答→异常注入）
     │   └── [工具类] 辅助技能
-    │       ├── esp-idf-helper/          # 板子侧参考：ESP-IDF 命令行工作流（本工程不含固件，见 INDEX.md）
     │       ├── analyzing-projects/      # 陌生代码库系统性分析（结构/技术栈/数据流/约定，与 prime-codebase 分工）
     │       ├── caveman/                 # 输出侧压缩：少说（山顶洞人，lite/full/ultra/文言文，默认常驻）
-    │       ├── tokenzero/               # 输入侧压缩：少喂（本地 npm CLI：pack/compress/json/analyze，无损省输入 Token，手动触发）
-    │       └── ponytail/                # 生成侧压缩：少写（决策梯子/YAGNI，默认 full 档，嵌入式禁 ultra、红线不砍）
-    ├── [社区技能] 外部引入（2026-08-23，保留上游原结构，可直接运行）
-    │   ├── advise-project-approach/  # 项目策略咨询：动手前/中/后研究最佳路径，输出带证据的决策报告
-    │   ├── neuroarxiv/               # 新架构前查 arXiv 先例（prior art），避免重复造轮子
-    │   ├── using-codegraph/          # 本地 tree-sitter 代码知识图谱（SQLite 亚毫秒查询/改动影响面）
+    │       └── ponytail/                # 生成侧压缩：少写（决策梯子/YAGNI，默认 full 档，红线不砍）
+    ├── [社区技能] 外部引入（2026-08-23 引入 4 个；2026-09-27 清理后只留 wavedrom-gen）
     │   └── wavedrom-gen/             # 时序描述 → WaveJSON → SVG/PNG/HTML（Datasheet 级 setup/hold 标注）
     └── [本工程专属] CStackGUI 自己的技能
         ├── designer-modify/          # 改画布 designer/ 的说明书（.cgui 契约、新增控件的 7~8 处、验证门禁）
@@ -112,12 +96,12 @@
     "autoInvokeSkill": true,                // 自动触发审查技能
     "strictMode": true,                     // 严格模式：必须修复所有问题
     "codeLanguage": "C",                    // 项目主语言
-    "scopes": ["embedded", "esp32", "rtos", "firmware"],
+    "scopes": ["desktop", "win32", "c", "cgui"],   // 2026-09-27 清理：原来是 ["embedded", "esp32", "rtos", "firmware"]
     "maxContextFileNum": 10,                // 最大上下文文件数
     "enableCodeReviewAutoScan": true,       // 启用自动扫描
     "disableUnreasonableRefactor": true,    // 禁止不合理的重构
     "preferChineseReply": true,             // 中文回复
-    "excludePaths": ["build/", "output/", "keil/", "debug/", "*.hex", "*.bin", "*.log"],
+    "excludePaths": ["build/", "output/", "release/", "designer/dist/", "node_modules/", "*.log"],
     "enableSmartContextFilter": true,       // 智能上下文过滤
     "autoCompressConversation": true,       // 自动压缩对话
     "enforceSkillOnCodeGen": true,          // 代码生成时强制检查
@@ -136,18 +120,18 @@
 
 定义了所有代码必须遵守的硬性规则，包括：
 
-#### 1. **硬件相关硬性规则**
-- 禁止随意修改寄存器、时钟、GPIO、DMA、NVIC 配置
-- 硬件改动必须给出风险提示和替代方案
+#### 1. **平台硬性规则**（本工程没有 MCU，2026-09-27 清理后只留通用项）
+- 不改用户环境与系统级设置；系统符号运行期取（**零新增链接依赖**是本工程的硬约束）
+- 平台行为以官方头文件/文档为准，不凭记忆下"系统不支持"的结论
 
 #### 2. **安全规范**
 - 数组、缓冲区必须做边界判断
 - 禁止裸指针直接运算
-- 中断函数必须极简（无延时、无阻塞）
+- 接口签名必须与官方声明**逐参数一致**（运行期取符号 + 自制 typedef 是高危区）
 
-#### 3. **RTOS 规范**
-- FreeRTOS 禁止在中断中调用非 FromISR 接口
-- 栈上禁止分配大数组（必须用全局/静态变量）
+#### 3. **资源与生命周期**（原 RTOS 规范，已换成非 MCU 版本）
+- 句柄 / GDI 对象 / 窗口：创建即配对释放（`error_handling_check` 查资源泄漏）
+- 栈上禁止放大数组（用全局/静态变量，或调用方提供的缓冲）
 
 #### 4. **评审优先级**
 ```
@@ -158,47 +142,36 @@
 
 ## 🛠️ 审查技能库（14个专业技能，全部已深度完善 ✅）
 
-### 内存安全类（4个）
+### 内存与结构体类（3个）
 | 技能名称 | 功能说明 | 检查项 | 完善状态 |
 |---------|---------|--------|----------|
 | `buffer_overflow_check` | 缓冲区溢出检测 | 10项（TOCTOU、整数溢出、格式化字符串） | ✅ 专家级 |
 | `memory_leak_check` | 内存泄漏检测 | 12项（Double Free、堆碎片、野指针） | ✅ 专家级 |
-| `stack_overflow_check` | 栈溢出检测 | 10项（栈消耗估算、递归深度、RTOS栈） | ✅ 专家级 |
 | `struct_best_practice_check` | 结构体设计最佳实践 | 18种高级用法 | ✅ 已完善 |
 
-### 硬件相关类（3个）
+### 协议与质量类（3个）
 | 技能名称 | 功能说明 | 检查项 | 完善状态 |
 |---------|---------|--------|----------|
-| `interrupt_check` | 中断安全审查 | 10项（FromISR、volatile、原子操作） | ✅ 专家级 |
-| `dma_cache_check` | DMA与Cache审查 | 7项（Cache一致性、对齐检查） | ✅ 已更新 |
-| `peripheral_conflict_check` | 外设冲突检测 | 10项（GPIO复用、时钟配置、寄存器访问） | ✅ 专家级 |
-
-### 系统管理类（3个）
-| 技能名称 | 功能说明 | 检查项 | 完善状态 |
-|---------|---------|--------|----------|
-| `rtos_task_check` | RTOS任务管理 | 10项（死锁、优先级反转、信号量泄漏） | ✅ 专家级 |
-| `watchdog_timer_check` | 看门狗与定时器 | 12项（超时配置、多任务喂狗、定时器溢出） | ✅ 专家级 |
-| `power_management_check` | 低功耗管理 | 11项（GPIO漏电、功耗量化、数据保存） | ✅ 专家级 |
-
-### 通信与存储类（2个）
-| 技能名称 | 功能说明 | 检查项 | 完善状态 |
-|---------|---------|--------|----------|
-| `communication_protocol_check` | 通信协议审查 | 9项（超时、CRC、粘包、字节序） | ✅ 专家级 |
-| `flash_storage_check` | Flash存储审查 | 13项（寿命计算、OTA回滚、掉电保护） | ✅ 专家级 |
-
-### 质量保障类（2个）
-| 技能名称 | 功能说明 | 检查项 | 完善状态 |
-|---------|---------|--------|----------|
+| `communication_protocol_check` | 通信协议审查（串口/网口是本工程核心能力） | 9项（超时、CRC、粘包、字节序） | ✅ 专家级 |
 | `error_handling_check` | 错误处理审查 | 9项（返回值检查、资源泄漏、恢复策略） | ✅ 专家级 |
 | `firmware_code_style` | 代码规范检查 | 15类（命名、分层、注释、安全） | ✅ 专家级 |
 
-**📊 总计**：150+ 专业检查项，每项都包含错误示例、正确示例、原理分析、后果说明
+### 界面类（1个）
+| 技能名称 | 功能说明 | 检查项 | 完善状态 |
+|---------|---------|--------|----------|
+| `design-taste` | 界面观感与文案门禁（画布与 `.cgui` 两端） | 设计读盘+三旋钮、AI 味黑名单、质量地板 | ✅ 已完善 |
+
+**📊 总计**：7 个审查技能约 70 项检查（缓冲区 10 / 内存 12 / 结构体 18 / 协议 9 / 错误处理 9 / C 规范 15 类），每项都含错误示例、正确示例、原理分析、后果说明
+
+> **2026-09-27 清理**：原有 14 个专项审查技能里，8 个针对 MCU 的（DMA / 中断 / Flash / 外设 / 低功耗 / RTOS /
+> 看门狗 / 栈用量）已删除 —— 本工程是 Win32/GDI+ 桌面工具包 + 画布，**没有 MCU**，只有"给板子写配套固件"
+> 才用得到它们。要恢复：`git checkout <该次提交>^ -- .codebuddy/skills/<技能名>`。
 
 ---
 
 ## 🔄 开发工作流技能库（PIV 双循环框架）
 
-在 14 个审查技能之上，新增一套 **PIV 双循环开发工作流**，让"需求 → 提交"全流程顺畅、可验证、可追溯。参考 coleam00/skills 的 PIV 循环框架，并结合本工程既有的基础设施定制：`build-all.bat`（编译 + 逐示例自检）、`tools\run-tests.bat`（C 层单测）、`tools\check-format.bat`（跨端契约回归）、画布的 `tsc --noEmit` + `vite build`。
+在 7 个审查技能之上，新增一套 **PIV 双循环开发工作流**，让"需求 → 提交"全流程顺畅、可验证、可追溯。参考 coleam00/skills 的 PIV 循环框架，并结合本工程既有的基础设施定制：`build-all.bat`（编译 + 逐示例自检）、`tools\run-tests.bat`（C 层单测）、`tools\check-format.bat`（跨端契约回归）、画布的 `tsc --noEmit` + `vite build`。
 
 ### 双循环架构
 
@@ -213,7 +186,7 @@
 │  加载上下文        Validation-First 计划        按计划实现            │
 │       ↓                                                           │
 │  piv-validate→piv-review-changes→git-commit-style→piv-create-pr    │
-│  编译+行为验证     审查(调14个技能)     原子提交       创建 PR/MR    │
+│  编译+行为验证     审查(调审查技能)     原子提交       创建 PR/MR    │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -222,13 +195,13 @@
 | 环节 | 技能 | 功能说明 | 产出物 |
 |------|------|---------|--------|
 | 外层 | `plan-create-prd` | 需求澄清 → PRD（含验收标准/非目标） | `docs/PRD_*.md` |
-| 外层 | `plan-architecture` | 嵌入式架构设计（任务/内存/外设/协议） | `docs/SDD_*.md` |
+| 外层 | `plan-architecture` | 架构设计（模块 / 数据流 / 接口契约） | `docs/SDD_*.md` |
 | 外层 | `piv-slice-epic` | 大需求拆解为可独立验证/提交的切片 | `docs/SLICES_*.md` |
 | 内层 | `prime-codebase` | 加载代码库上下文（Context is King） | 上下文总结 |
 | 内层 | `piv-plan-implementation` | Validation-First 实现计划 | `.codebuddy/plans/*.md` |
 | 内层 | `piv-implement` | 严格按计划实现，计划外改动需确认 | 代码改动 |
 | 内层 | `piv-validate` | 编译（`build-all.bat`）+ 静态检查 + 行为验证（`--selftest` / 真机实测） | 验证结果清单 |
-| 内层 | `piv-review-changes` | 提交前审查，按领域调用 14 个审查技能 | `.codebuddy/code-reviews/*.md` |
+| 内层 | `piv-review-changes` | 提交前审查，按领域调用 7 个审查技能 | `.codebuddy/code-reviews/*.md` |
 | 内层 | `git-commit-style` | `[类型][模块] 描述` 格式、分批原子化提交 | git commit |
 | 内层 | `piv-create-pr` | 创建 PR/MR（含验证情况与关联文档） | PR/MR |
 | 全流程 | `piv-run-full-loop` | 从描述到提交的端到端自动化 | 完整交付 |
@@ -286,7 +259,7 @@ PIV 内层循环包含 **3 个质量门禁**，必须通过才能进入下一阶
 - ❌ 不通过 → 回到 `piv-implement` 修复
 
 #### 3. 审查门禁（`piv-review-changes`）
-- ✅ 按改动领域自动调用 14 个嵌入式审查 skills
+- ✅ 按改动领域自动调用 审查 skills（本工程适用的 7 个）
 - ✅ 无 critical/high 级别问题，或已修复
 - ✅ 产出审查报告到 `.codebuddy/code-reviews/`
 - ❌ 不通过 → 回到 `piv-implement` / `piv-validate`
@@ -297,7 +270,7 @@ PIV 内层循环包含 **3 个质量门禁**，必须通过才能进入下一阶
 
 当执行 `piv-review-changes` 或 AI 生成代码时，按改动领域自动调用对应的审查技能。
 
-**权威映射表**见 `.codebuddy/global-rule.md` 第 7 节，包含 14 个审查技能的领域映射与触发规则。
+**权威映射表**见 `.codebuddy/global-rule.md` 第 7 节，包含 7 个审查技能的领域映射与触发规则。
 
 ---
 
@@ -307,41 +280,29 @@ PIV 内层循环包含 **3 个质量门禁**，必须通过才能进入下一阶
 
 AI 会自动识别代码场景并调用相应技能，你只需要正常写需求：
 
-**示例 1：写 UART DMA 接收函数**
+**示例 1：写串口收发 + 按帧取数据**
 ```
-你："帮我写一个 UART DMA 接收函数，带超时重试"
+你："帮我写一个串口收发，按帧取数据，带超时重试"
 
 AI 自动执行：
-  1. 识别涉及：UART + DMA + 错误处理
+  1. 识别涉及：串口协议 + 缓冲区 + 错误处理
   2. 自动调用：
-     - communication_protocol_check（超时机制）
-     - dma_cache_check（DMA安全）
-     - error_handling_check（重试逻辑）
+     - communication_protocol_check（超时机制、粘包、字节序）
+     - buffer_overflow_check（缓冲区边界）
+     - error_handling_check（重试与失败路径）
   3. 生成代码
   4. 自动审查并修复问题
   5. 输出最终代码 + 审查报告
 ```
 
-**示例 2：创建 FreeRTOS 任务**
+**示例 2：改画布 / 加控件**
 ```
-你："创建一个温度采集任务，1秒采集一次"
+你："给日志视图加一个清空按钮，样式跟上边那排一致"
 
 AI 自动调用：
-  - rtos_task_check（任务栈大小、优先级）
-  - communication_protocol_check（I2C/SPI 通信）
-  - error_handling_check（传感器异常处理）
-```
-
----
-
-### 2️⃣ **手动指定技能**
-
-如果需要针对性审查，可以明确指定：
-
-```
-"用 struct_best_practice_check 审查这个结构体"
-"检查这段代码的内存泄漏问题"
-"用 dma_cache_check 审查 DMA 配置"
+  - design-taste（按钮四态、间距节奏、文案）
+  - designer-modify（.cgui 契约：新增控件要动的 7~8 处）
+  - error_handling_check（回调里的失败路径）
 ```
 
 ---
@@ -423,7 +384,7 @@ AI 分析需求（识别涉及的技术领域）
 ### ✅ 推荐做法
 1. **描述清晰需求**：说明功能、使用的外设、性能要求
    ```
-   ✅ "写一个基于 FreeRTOS 的温度传感器驱动，用 I2C 通信，支持错误重试"
+   ✅ "给串口视图加一个按帧显示的开关，带超时重试"
    ❌ "写个温度读取函数"
    ```
 
@@ -561,20 +522,19 @@ argument-hint: [optional-parameter]
 | **AI 评审覆盖** | 3 层 | **8 层全覆盖** | +167% |
 | **文档完整度** | 简单规则 | **原理+示例+后果+修复** | +400% |
 
-### 📋 AI 代码评审的 8 层扫描清单
-
-本技能库基于 `ai_code_review.py` 的专业评审规则构建：
-
+### 📋 审查扫描清单（按改动领域）
 | 层级 | 检查重点 | 对应 Skills | 风险等级 |
 |------|---------|------------|----------|
-| **第 1 层** | 内存安全（缓冲区溢出） | buffer_overflow_check | 🔴 致命 |
-| **第 2 层** | 中断与并发安全 | interrupt_check | 🔴 致命 |
-| **第 3 层** | DMA 与 Cache 一致性 | dma_cache_check | 🔴 致命 |
-| **第 4 层** | RTOS 任务与死锁 | rtos_task_check | 🔴 致命 |
-| **第 5 层** | 数值与边界安全（TOCTOU） | buffer_overflow_check | 🔴 致命 |
-| **第 6 层** | 资源与状态机（泄漏） | error_handling_check | 🟠 高危 |
-| **第 7 层** | 硬件与外设（寄存器） | peripheral_conflict_check | 🔴 致命 |
-| **第 8 层** | 协议与通信（超时） | communication_protocol_check | 🔴 致命 |
+| **第 1 层** | 内存安全（缓冲区溢出、整数溢出） | buffer_overflow_check | 🔴 致命 |
+| **第 2 层** | 内存生命周期（泄漏、野指针、double free） | memory_leak_check | 🔴 致命 |
+| **第 3 层** | 协议与通信（超时、粘包、校验、字节序） | communication_protocol_check | 🔴 致命 |
+| **第 4 层** | 资源与错误路径（返回值、句柄/GDI 释放、恢复） | error_handling_check | 🟠 高危 |
+| **第 5 层** | 结构与对齐（位域、pack、函数指针） | struct_best_practice_check | 🟠 高危 |
+| **第 6 层** | 代码规范（命名、分层、Doxygen 注释） | firmware_code_style | 🟡 中 |
+| **第 7 层** | 界面观感与文案（画布 / `.cgui`） | design-taste | 🟡 中 |
+
+> 2026-09-27 更正：原表第 2/3/4/7 层是中断 / DMA / RTOS / 外设（MCU 专项），随那 8 个固件技能一起删去；
+> 原分层依据 `ai_code_review.py` 也不是本工程的东西。
 
 ### 🌟 核心亮点特性
 
@@ -647,9 +607,9 @@ for (int i = 0; i < 16; i++) {
 - Light Sleep < 1mA
 - Modem Sleep < 20mA
 
-#### 4. ESP32 平台深度适配
-- **ESP32 系列**：ESP-IDF、FreeRTOS、NVS、OTA、heap_caps_malloc、分区表、加密烧录
-- 支持多芯片示例：ESP32-P4、ESP32-C2（审查技能里保留的示例，与本工程无关）
+#### 4. 本工程适配
+- **跨端一致**：一份 `.cgui` 描述同时驱动画布（Electron + React + TS）与 C 运行时（Win32/GDI+）
+- **零新增链接依赖**：Win32 / WLAN / 蓝牙符号运行期取（`GetProcAddress`），用户项目不用改链接命令
 
 ### 📚 关键改进方法论
 
@@ -695,18 +655,14 @@ for (int i = 0; i < 16; i++) {
 ## 📚 参考资料
 
 - **结构体最佳实践**：基于《你的 C 代码为什么乱？看完这 18 种结构体用法就懂了》
-- **嵌入式安全规范**：业界通用的固件开发最佳实践
-- **RTOS 规范**：FreeRTOS 官方文档与常见陷阱
-- **通信协议设计**：可靠性、超时、重传机制
-- **AI 代码评审**：基于 ai_code_review.py 的 8 层扫描清单
-- **量化评估**：栈消耗估算、Flash 寿命计算、功耗目标值
+- **C 层代码规范**：本工程 `firmware_code_style`（命名、分层、Doxygen 注释）
+- **通信协议设计**：可靠性、超时、重传、切帧（`cg_frame_*`）
+- **界面品味**：本工程 `design-taste`（设计读盘、AI 味黑名单、质量地板）
 
 ## 📖 技能详细文档
 
-所有 14 个技能的详细规则和检查项，请查看 `.codebuddy/skills/` 目录下对应的 `SKILL.md` 文件：
-- 每个 SKILL.md 包含 10-18 项详细检查规则
-- 每项规则都有错误示例、正确示例、原理分析、后果说明
-- 支持 ESP32 和 STM32 双平台示例代码
+全部 **28 个**技能的权威清单（分类、触发条件、产出）见 `.codebuddy/skills/INDEX.md`；
+规则正文在各技能目录的 `SKILL.md` 里（每项规则都有错误示例、正确示例、原理分析与后果说明）。
 
 ---
 
@@ -717,6 +673,7 @@ for (int i = 0; i < 16; i++) {
 | 2026-08-23 | v0.1 初始版本 | 1. 建立完整配置体系，审查规则 + 工作流定义 <br> 2. [完善审查技能]14 个专项审查技能深度完善，150+ 检查项覆盖 <br> 3. [PIV 双循环工作流]新增 12 个开发流程技能（PRD→架构→切片→实现→验证→审查→提交→PR），参考 coleam00/skills <br>  4. [结构化产出 + 原子验证]学习 Archify，新增 JSON Schema 验证机制（实现计划、审查报告）|
 | 2026-08-23 | v0.1 新增社区技能 | 1. [社区技能]完整引入 4 个外部 skill（保留上游原结构，diff 校验一致）：<br> - advise-project-approach（项目策略咨询，无本地依赖）<br> - neuroarxiv（arXiv 先例查证，需联网）<br> - using-codegraph（tree-sitter 代码知识图谱，需 Python + 一次性安装 codegraph CLI）<br> - wavedrom-gen（时序波形图生成，需 Node 20+ 与 npm ci）|
 | 2026-09-22 | v0.2 新增设计品味技能 | 1. [本工程专属]新增 `design-taste`：提炼 anthropics/frontend-design、pbakaus/impeccable(craft-floor)、Leonxlnx/taste-skill、nextlevelbuilder/ui-ux-pro-max、Owl-Listener/designer-skills、ibelick/ui-skills、davila7/claude-code-templates、carmahhawwari/ui-design-brain 八套设计技能，删去 web 专有部分后落到本项目的画布 UI 与 `.cgui` 桌面 App 两端<br> 2. [门禁]global-rule §7 映射表增加"界面观感/界面文案"一行，写界面即自动触发 |
+| 2026-09-27 | v0.3 技能清理（41 → 28） | 1. [清理]删掉 13 个本工程用不到的技能：8 个纯固件审查（DMA/中断/栈/RTOS/Flash/外设/低功耗/看门狗）、板子侧 `esp-idf-helper`、社区 3 个（`neuroarxiv`/`using-codegraph`/`advise-project-approach`）、输入侧压缩 `tokenzero` <br> 2. [同步]`INDEX.md` 计数与分类、`global-rule.md` §7 映射表、本文件导读、5 个技能正文里的引用与举例一并更新（无断链）<br> 3. [依据]本工程是 Win32/GDI+ 桌面工具包 + 画布，没有 MCU（恢复：`git checkout <该次提交>^ -- .codebuddy/skills/<技能名>`） |
 
 > **当前版本**：v0.1（持续完善中，版本号将在正式发布后更新）
 
