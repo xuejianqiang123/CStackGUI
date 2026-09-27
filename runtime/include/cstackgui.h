@@ -989,6 +989,46 @@ int cg_hex_decode(const char *text, void *out, int out_size);
 /** Base64 编码（RFC 4648，带 '=' 填充）。out 需要 ((len+2)/3)*4+1 字节；返回写入长度 */
 int cg_base64_encode(const void *data, int len, char *out, int out_size);
 
+/* ---- 字节操作（拼帧 / 拆帧的基元）
+ * 来历：精易 `字节集_` 那一族（27 条：反转 / 取左右 / 找子集 / 替换 …）在 C 侧**不需要一个
+ * 新的"字节缓冲类型"** —— 本工程的房屋风格是 `(data, len, …, out, out_size)` 进、返回写出的
+ * 长度，再加个会分配内存的类型等于多一套所有权模型；而那一族里最常用的两个
+ * （字节 ↔ 十六进制文本）早就有 `cg_hex_decode` / `cg_hex_encode` 了。
+ * 所以这里只补**缺的基元**：反转、切片、查找、按字节序读写 16/32 位整数
+ * （最后两个是工控拼帧/拆帧的真正核心：报文里就是大端小端的 u16/u32）。
+ * 字节序参数统一：`big_endian` 非 0 = 大端（网络序 / Modbus 的寄存器序），0 = 小端。
+ */
+
+/** 原地反转字节序（精易的"字节集_反转"）。len ≤ 1 或 data 为 NULL 时什么都不做 */
+void cg_bytes_reverse(void *data, int len);
+
+/** 取一段（"取左边 / 取右边 / 取中间"）：从 from 起取 count 个字节。
+ *  @param count **传 -1 = 取到底**（最常见的那一种）
+ *  @param from 起点，0 起；越界（<0 或 >= len）返回 -1，什么都不写
+ *  @return int 写出的字节数；from 非法 -1、out 放不下 -2、out 为 NULL 或 out_size<=0 -1
+ *  @note count 超出剩余长度时**按剩余算**（不报错）—— 这正是"取右边"想要的语义 */
+int cg_bytes_slice(const void *data, int len, int from, int count, void *out, int out_size);
+
+/** 在 data 里找 needle 第一次出现的位置（从 from 开始找）。
+ *  @return int 下标（0 起）；没找到 / 参数非法 / needle 为空返回 -1 */
+int cg_bytes_find(const void *data, int len, const void *needle, int nlen, int from);
+
+/** 从 offset 读一个 16 位无符号整数（按 big_endian 定字节序）。
+ *  @return int 0..65535；**越界或参数非法返回 -1**（16 位值不可能到 -1，所以能这么用） */
+int cg_bytes_get_u16(const void *data, int len, int offset, int big_endian);
+
+/** 从 offset 读一个 32 位无符号整数；越界或参数非法返回 -1。
+ *  **用 long long 而不是 int**：`unsigned` 的 `0xFFFFFFFF` 转成 int 正好是 -1，
+ *  那样"错误"与一个合法值撞车、调用方没法分辨。 */
+long long cg_bytes_get_u32(const void *data, int len, int offset, int big_endian);
+
+/** 把 16 位整数写进 out 的 offset 处（按 big_endian 定字节序）。
+ *  @return int 1 = 成功；0 = 越界 / 参数非法（什么都不写） */
+int cg_bytes_put_u16(void *out, int out_size, int offset, unsigned v, int big_endian);
+
+/** 把 32 位整数写进 out 的 offset 处；返回 1/0（同 cg_bytes_put_u16） */
+int cg_bytes_put_u32(void *out, int out_size, int offset, unsigned v, int big_endian);
+
 /** Base64 解码。空白与换行忽略；**带不带 '=' 填充都认**（JWT 那类不填充的也能解）。
  *  长度不合法（不含规填充、尾部有多余位）返回 -1。out 需要 (strlen+3)/4*3 字节 */
 int cg_base64_decode(const char *text, void *out, int out_size);
