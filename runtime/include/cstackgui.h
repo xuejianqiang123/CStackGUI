@@ -1106,6 +1106,63 @@ unsigned cg_crc16(const void *data, int len);
  *  @return int 1 = 成功；0 = 打不开或中途读出错（宁可报失败，也不给一个"看着像但不完整"的值） */
 int cg_crc32_file(const char *path, unsigned *out);
 
+/* ---- Modbus 帧编解码（RTU / TCP） ----
+ * 工控上位机十有八九要读写寄存器，而"拼请求帧 / 认响应帧 / 认出异常帧"这段与界面、与传输
+ * 都无关，**每个项目都要重写一遍** —— 这里给现成的。**纯函数：不持状态、不碰 I/O**，
+ * 连接 / 超时 / 重试 / 轮询节奏仍归应用（框架给原料，事务归业务）。
+ *
+ *   unsigned char frame[32];
+ *   int n = cg_modbus_build_read(CG_MODBUS_RTU, 0, 1, 3, 0x006B, 3, frame, sizeof frame);
+ *   cg_serial_write(ser, frame, n);                     // 01 03 00 6B 00 03 76 87
+ *
+ *   cg_modbus_rsp_t r;
+ *   if (cg_modbus_parse(CG_MODBUS_RTU, buf, n2, &r) == 0) {
+ *       if (r.exception) cg_log(CG_LOG_ERROR, "从站报异常码 %d", r.exception);
+ *       else for (i = 0; i < r.nvalues; i++) cg_log(CG_LOG_INFO, "寄存器 %d = %u",
+ *                                                   r.addr < 0 ? i : r.addr, r.values[i]);
+ *   } else if (ret == -2) cg_log(CG_LOG_ERROR, "帧 CRC 不对 —— 线上的数据坏了");
+ *
+ * 两条替你钉住的约定（手写时最容易错的两处）：**RTU 的 CRC 低字节在前**；
+ * **异常响应的功能码在线上是 `原功能码 | 0x80`**，解析后 `out->func` 给的是原功能码、
+ * `out->exception` 给异常码。另外 0x05 在线路上是 `FF00`/`0000` 而不是 1/0：
+ * 拼装时给 1/0 也认（替你换算），解析时原样给出（调试工具该显示线上真实的东西）。
+ */
+#define CG_MODBUS_RTU  0   /* 帧尾带 CRC16（低字节在前） */
+#define CG_MODBUS_TCP  1   /* 带 7 字节 MBAP 头，帧尾无 CRC */
+
+/** 响应帧最多解出几个值：规范上限是 250 字节数据 ⇒ 125 个寄存器（位类最多解到这么多为止） */
+#define CG_MODBUS_MAX_VALUES 125
+
+/** 解析结果。异常响应时 nvalues = 0、exception 非 0；写响应把回显的地址与值填进来 */
+typedef struct {
+    int            slave;      /* 从站地址（TCP 时取自 MBAP 的单元标识） */
+    int            func;       /* 功能码（异常响应给的是**原**功能码，不是 |0x80 那个） */
+    int            exception;  /* 0 = 正常；非 0 = 异常码（1 非法功能 / 2 非法地址 / 3 非法数据 / 4 从站故障 …） */
+    int            addr;       /* 写响应的地址回显；读响应 / 异常响应为 -1 */
+    int            nvalues;    /* values 里有效个数；异常响应为 0 */
+    unsigned short values[CG_MODBUS_MAX_VALUES];   /* 读响应：寄存器值 / 位类的 0|1；写响应：回显值 */
+} cg_modbus_rsp_t;
+
+/** 拼"读类"请求帧：**线圈 01 / 离散输入 02 / 保持寄存器 03 / 输入寄存器 04**。
+ *  @param tcp CG_MODBUS_TCP 时带 MBAP 头；tid 是事务号（RTU 时忽略，随便传 0）
+ *  @param slave 从站地址 0..255；start 起始地址 0..65535
+ *  @param count 个数：位类 1..2000、寄存器类 1..125（规范上限）
+ *  @return int 写入 out 的**帧长度**（RTU 8 字节 / TCP 12 字节）；参数非法或 out 放不下返回 -1 */
+int cg_modbus_build_read(int tcp, int tid, int slave, int func, int start, int count,
+                         void *out, int out_size);
+
+/** 拼"写类"请求帧：**单线圈 05 / 单寄存器 06 / 多线圈 0F / 多寄存器 10**。
+ *  05/06 时 nvalues 必须为 1（05 的 1/0 会替你换成 FF00/0000）；0F/10 时 ≤ 123 个。
+ *  @return int 帧长度；参数非法或 out 放不下返回 -1 */
+int cg_modbus_build_write(int tcp, int tid, int slave, int func, int start,
+                          const unsigned short *vals, int nvalues, void *out, int out_size);
+
+/** 解析响应帧（读响应 / 写响应 / 异常响应都认）。
+ *  @return int 0 = 成功；**-1** = 帧太短或参数非法；**-2** = RTU 的 CRC 不对（线上数据坏了）；
+ *              **-3** = 格式不对（协议标识 / 长度字段 / 功能码 / 字节数跟规范对不上）。
+ *              负值分得这么细，是为了让日志能直接说清"是坏了还是我拼错了"。 */
+int cg_modbus_parse(int tcp, const void *frame, int len, cg_modbus_rsp_t *out);
+
 /* ---- 哈希（摘要） ----
  * MD5 / SHA-1 / SHA-256 / SHA-512，**手写实现**，不调系统的 CryptoAPI。
  * 理由有两条（原先写的"会改掉用户的链接命令"是错的，已按实验更正 —— advapi32 本来就能
