@@ -725,9 +725,23 @@ if (text) {
     cg_free(text);
 }`,
           }),
+          c("cg_file_read_bytes", "读整个二进制文件（固件 / 镜像 / 抓包）", "unsigned char *cg_file_read_bytes(const char *path, int *out_len)",
+            "**含 0x00 的数据必须用它** —— `cg_file_read` 返回的是字符串，`strlen` 会在第一个 0 处截断。0 字节文件也返回非 NULL（靠这个区分「空文件」与「打不开」）；不去 BOM", {
+              params: ["path：文件路径", "out_len：长度出口（可传 NULL）；失败时不动"],
+              ret: "堆缓冲（用完 cg_free）；打不开返回 NULL",
+              sample: `int n = 0;\nunsigned char *fw = cg_file_read_bytes(fw_path, &n);\nif (!fw) { cg_log(CG_LOG_ERROR, "固件打不开"); return; }\ncg_log(CG_LOG_INFO, "固件 %d 字节，CRC32 = %08X", n, cg_crc32(fw, n));\ncg_free(fw);`,
+            }),
           c("cg_file_write", "写文件（覆盖）", "int cg_file_write(const char *path, const char *text)", "整体覆盖成 UTF-8 文本；成功 0", {
             sample: `cg_file_write(path, cg_widget_text(cg_find(cg_app_of(self), "edt_body")));`,
           }),
+          c("cg_file_write_bytes", "写二进制文件（覆盖）", "int cg_file_write_bytes(const char *path, const void *data, int len)",
+            "按长度写，**数据里带 0x00 也不会截断**；len 传 0 = 建一个空文件。成功 0", {
+              sample: `unsigned char frame[8] = { 0x01, 0x03, 0x00, 0x00, 0x00, 0x02, 0xC4, 0x0B };\ncg_file_write_bytes("frame.bin", frame, (int)sizeof frame);`,
+            }),
+          c("cg_file_size", "问文件大小", "long long cg_file_size(const char *path)",
+            "想「不读内容先问大小」时用它；不存在 / 目录 / 调不动返回 -1", {
+              sample: `long long n = cg_file_size(path);\nif (n < 0) cg_status_set(sb, 0, "文件读不到");\nelse       cg_status_set(sb, 0, cg_str_format("%lld 字节", n));`,
+            }),
           c("cg_file_append", "追加到文件", "int cg_file_append(const char *path, const char *text)", "加到末尾，文件不存在就新建（写日志常用）", {
             sample: `cg_file_append("log.txt", cg_str_format("%s 打开 %s\\r\\n", cg_time_now(NULL), path));`,
           }),
