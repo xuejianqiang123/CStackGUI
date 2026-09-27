@@ -127,7 +127,11 @@ static void layout_axis(cg_layout_box_t *boxes, int count, int axis, int delta)
     free(idx);
 }
 
-/** @brief 按 grow 把"容器尺寸变化"分配到各 box（详见 .codebuddy/plans/grow-layout.md §2） */
+/** @brief 按 grow 把"容器尺寸变化"分配到各 box（详见 .codebuddy/plans/grow-layout.md §2）
+ *  @note 两条可直接验证的性质（`tests/unit/test_layout.c` 都钉了）：
+ *        ① **平移保持带间距**：一条带之后的兄弟都平移同一个累计量 ⇒ 带与带之间的距离不变；
+ *        ② **末带右端**：只有它**本来就贴着容器旧边界**时，才会正好落到新边界
+ *           （因为不丢像素的是 Σ"实际吃到的量" == 该轴变化量）；本来留了缝的，缝也保持。 */
 void cg_layout_apply(cg_layout_box_t *boxes, int count,
                      int base_w, int base_h, int now_w, int now_h)
 {
