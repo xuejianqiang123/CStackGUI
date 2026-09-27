@@ -172,6 +172,39 @@ if (knownCallback) {
   console.log("[note] 输入文件里没有任何已绑定的回调名，跳过 action 往返探针");
 }
 
+/* 命名样式（styles{}）与它的三种引用形态 —— 和 bind / action 属于同一类"丢了不报错"的
+ * 东西：丢了 styles{} 或丢了引用，运行时不报错、不崩，只是**外观悄悄变了**；
+ * 更麻烦的是 **C 侧自检发现不了**（一份没有命名样式的文档照样能通过），
+ * 所以必须在第 3 步逐字核对。（2026-09-27 补：此前这条缝谁都没盯着。）
+ * 三种形态各挂一个：styles{} 本身、纯字符串引用、{ use, 覆盖字段 }。 */
+const probeStyle = "cgui_roundtrip_style";
+doc.styles = { ...(doc.styles ?? {}) };
+if (!doc.styles[probeStyle]) {
+  doc.styles[probeStyle] = { font: "Consolas", size: 13, fg: "#010203" };
+  touched += 1;
+}
+let styleHostRef = "";          /* 纯引用 "名字" 的控件 */
+let styleHostUse = "";          /* { "use": "名字", ...覆盖 } 的控件 */
+walk(doc.widgets, (n) => {
+  if (!n.id || n.style) return;                 /* 已有样式的控件不动，免得改变原文档观感 */
+  if (!styleHostRef) {
+    n.style = probeStyle;
+    styleHostRef = n.id;
+  } else if (!styleHostUse) {
+    n.style = { use: probeStyle, size: 11 };
+    styleHostUse = n.id;
+  }
+});
+if (!styleHostRef) console.log("[note] 没有空闲控件可挂样式纯引用，跳过该探针");
+if (!styleHostUse) console.log("[note] 没有空闲控件可挂 {use,...}，跳过该探针");
+if (styleHostRef || styleHostUse) touched += 1;
+
+/* app.dark：应用级开关，同样属于"丢了不报错、只是界面变了"的那类 */
+if (doc.app) {
+  doc.app.dark = "auto";
+  touched += 1;
+}
+
 const written = serializeDoc(doc);
 fs.mkdirSync(path.dirname(output), { recursive: true });
 fs.writeFileSync(output, written, "utf8");
@@ -218,6 +251,43 @@ console.log(`[ok] 画布改动 ${touched} 处，写出 ${output}（${written.len
       }
       console.log(`[ok] 恒等回写：action "${probeAction}" 与引用点无损`);
     }
+  }
+
+  /* 命名样式（styles{}）与两种引用形态，逐字核对 —— 与 bind/action 同理：丢了不报错，
+   * 只是外观悄悄变了，而 C 侧自检对此**完全无感**（它只报错不报丢）。 */
+  {
+    const want = doc.styles[probeStyle] ?? {};
+    const got  = back.doc?.styles?.[probeStyle];
+    if (!got) {
+      console.error(`[fail] 恒等回写丢了命名样式：${probeStyle}`);
+      lost += 1;
+    } else {
+      for (const k of ["font", "size", "fg", "bg", "align", "bold", "radius"]) {
+        if (JSON.stringify(got[k] ?? null) !== JSON.stringify(want[k] ?? null)) {
+          console.error(`[fail] 命名样式 ${probeStyle}.${k} 变了：${want[k]} -> ${got[k]}`);
+          lost += 1;
+        }
+      }
+    }
+    if (styleHostRef) {
+      const n = back.doc ? findNode(back.doc, styleHostRef) : null;
+      if (!n || n.style !== probeStyle) {
+        console.error(`[fail] 恒等回写丢了样式纯引用：${styleHostRef} -> "${probeStyle}"`);
+        lost += 1;
+      }
+    }
+    if (styleHostUse) {
+      const s = back.doc ? findNode(back.doc, styleHostUse)?.style : null;
+      if (!s || typeof s !== "object" || s.use !== probeStyle || Number(s.size) !== 11) {
+        console.error(`[fail] 恒等回写丢了 {use,...} 形态：${styleHostUse} -> ${JSON.stringify(s)}`);
+        lost += 1;
+      }
+    }
+    if (doc.app?.dark !== undefined && back.doc?.app?.dark !== doc.app.dark) {
+      console.error(`[fail] 恒等回写丢了 app.dark：${doc.app.dark} -> ${back.doc?.app?.dark}`);
+      lost += 1;
+    }
+    console.log(`[ok] 恒等回写：命名样式 "${probeStyle}" 与两种引用形态无损`);
   }
 
   if (lost) process.exit(1);
