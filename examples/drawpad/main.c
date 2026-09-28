@@ -11,6 +11,11 @@
  *          就是**画板内**的逻辑像素，拿到就能画（不用再减 `cg_widget_x/y`）。运行时在按下时
  *          自动捕获鼠标，拖出画板边界也还能收到移动与抬起，一笔不会在边上断掉。
  *
+ *          拖动中有**橡皮筋预览**：直线 / 矩形 / 椭圆在拖动时就跟着鼠标走，松手才提交成命令
+ *          （自由笔本来就是一段段提交，天然实时）。画板的命令模型没有任何"预演"接口，所以预览
+ *          只能这么实现：把一条**临时命令**塞进命令表的空槽（不推进 s_live），再整表重放一次
+ *          —— 见 preview_op。松手提交的那条与预览用的是同一套取点 / 归一化，所以画面不会跳。
+ *
  *          为什么不能挂**窗口级**（`app.events`）：按下 / 移动 / 抬起落在画板这个**子窗口**上时
  *          消息只送给画板，父窗口收不到 —— 早先那种写法在真机上"按下拖动毫无反应"，根因就是这条。
  *          当时把"画板不能拖拽作图"记成了已知缺口，能力补齐后那条结论已作废。
@@ -54,6 +59,7 @@ static int       s_penw;          /**< 本次落笔冻结的笔宽 */
 static unsigned  s_ink;           /**< 本次落笔冻结的颜色 */
 static int       s_x0, s_y0;      /**< 按下点（直线 / 矩形 / 椭圆的起点、文字的落点） */
 static int       s_lx, s_ly;      /**< 自由笔的上一个点 */
+static int       s_px, s_py;      /**< 上一次预览到的点：同一个点重复上报时不必白重放一遍 */
 static char      s_last[160];     /**< 最近一次操作，供状态栏第 3 段显示 */
 
 /**
@@ -99,19 +105,22 @@ static void refresh_status(cg_app_t *app)
 }
 
 /**
- * @brief 按前 s_live 条命令整体重画画板
+ * @brief 按命令表的前 count 条整体重画画板
  * @param cv 画板控件；NULL 安全
+ * @param count 回放多少条；会被夹到 0..kMaxOps（拖动预览时会用到 s_live + 1）
  * @return void 无返回值
  * @note 画板没有"擦掉一笔"的接口：先清掉全部绘制记录，再把命令逐条回放 ——
- *       撤销 / 重做 / 清空都只能走这一条路
+ *       撤销 / 重做 / 清空 / 拖动预览都只能走这一条路
  */
-static void replay_canvas(cg_widget_t *cv)
+static void replay_canvas_n(cg_widget_t *cv, int count)
 {
     int i;
 
     if (!cv) return;
+    if (count > kMaxOps) count = kMaxOps;
+    if (count < 0) count = 0;
     cg_canvas_clear(cv);                          /* 清掉录制内容 */
-    for (i = 0; i < s_live; i++) {
+    for (i = 0; i < count; i++) {
         const draw_op_t *o = &s_ops[i];
 
         cg_canvas_set_color(cv, o->color);
@@ -124,6 +133,38 @@ static void replay_canvas(cg_widget_t *cv)
         default:         break;
         }
     }
+}
+
+/**
+ * @brief 按已提交的 s_live 条命令整体重画画板
+ * @param cv 画板控件；NULL 安全
+ * @return void 无返回值
+ */
+static void replay_canvas(cg_widget_t *cv)
+{
+    replay_canvas_n(cv, s_live);
+}
+
+/**
+ * @brief 拖动预览（橡皮筋）：已提交的命令 + 一条还没提交的临时命令
+ * @param cv 画板控件
+ * @param o 临时命令；传 NULL 表示只重放已提交的（等于取消预览）
+ * @return void 无返回值
+ * @note 画板是"录制命令 → 重绘时按序回放"的模型，**没有"画一笔但不作数"的接口** —— 所以预览
+ *       只能整表重放一次：把临时命令写进命令表的第一个空槽（**不推进 s_live**），再按
+ *       s_live + 1 条回放；下一帧会覆盖那个槽位，所以它始终算不上"已提交"。
+ *       命令上限 512 条，一次重放是几百次 GDI 调用 —— 拖动时够快
+ */
+static void preview_op(cg_widget_t *cv, const draw_op_t *o)
+{
+    if (!cv) return;
+    if (!o) {
+        replay_canvas(cv);                        /* 取消预览：回到已提交的样子 */
+        return;
+    }
+    if (s_live >= kMaxOps) return;                /* 表满：预览也没地方放（提交时同样会被拒） */
+    s_ops[s_live] = *o;                           /* 临时占用第一个空槽，不推进 s_live */
+    replay_canvas_n(cv, s_live + 1);
 }
 
 /**
@@ -193,32 +234,71 @@ static void on_board_mouse(cg_widget_t *self, cg_event_t ev, void *user)
         s_y0 = y;
         s_lx = x;
         s_ly = y;
+        s_px = x;
+        s_py = y;
         return;
     }
 
     /* 事件名就是 CG_EVENT_* 这一套（别写成 CG_EV_*：2026-09-28 编译期撞过，gcc 会替你纠正） */
     if (ev == CG_EVENT_MOUSEMOVE) {
-        if (!s_drawing || s_tool != TOOL_FREEHAND) return;   /* 只有自由笔边拖边画 */
-        if (!canvas_hit(cv, x, y)) return;
-        memset(&o, 0, sizeof(o));
-        o.type = OP_LINE;
-        o.x1 = s_lx;
-        o.y1 = s_ly;
-        o.x2 = x;
-        o.y2 = y;
-        o.color = s_ink;
-        o.penw  = s_penw;
-        if (!cmd_push(&o)) {
-            s_drawing = 0;
-            note(app, "命令表已满（%d 条）", kMaxOps);
+        cg_widget_t *sb = cg_find(app, "sb_main");
+
+        if (!s_drawing) return;                  /* 没按下：悬停移动不做事（事件很频繁） */
+        if (!canvas_hit(cv, x, y)) return;       /* 画板外：这一段跳过，笔迹不糊到边上 */
+
+        if (s_tool == TOOL_FREEHAND) {
+            memset(&o, 0, sizeof(o));
+            o.type = OP_LINE;
+            o.x1 = s_lx;
+            o.y1 = s_ly;
+            o.x2 = x;
+            o.y2 = y;
+            o.color = s_ink;
+            o.penw  = s_penw;
+            if (!cmd_push(&o)) {
+                s_drawing = 0;
+                note(app, "命令表已满（%d 条）", kMaxOps);
+                return;
+            }
+            cg_canvas_set_color(cv, o.color);    /* 这一段直接补画，不必整块重放 */
+            cg_canvas_set_line_width(cv, o.penw);
+            cg_canvas_line(cv, o.x1, o.y1, o.x2, o.y2);
+            s_lx = x;
+            s_ly = y;
+            refresh_status(app);
             return;
         }
-        cg_canvas_set_color(cv, o.color);        /* 这一段直接补画，不必整块重放 */
-        cg_canvas_set_line_width(cv, o.penw);
-        cg_canvas_line(cv, o.x1, o.y1, o.x2, o.y2);
-        s_lx = x;
-        s_ly = y;
-        refresh_status(app);
+
+        /* 其余工具：拖动中给"橡皮筋"预览，松手才提交（不预览的话用户看不到自己画到哪儿了）。
+         * 同一个点重复上报时直接返回 —— 预览是整表重放，别为没变化的位置白重放一遍 */
+        if (x == s_px && y == s_py) return;
+        s_px = x;
+        s_py = y;
+
+        memset(&o, 0, sizeof(o));
+        o.color = s_ink;
+        o.penw  = s_penw;
+        if (s_tool == TOOL_LINE) {
+            o.type = OP_LINE;
+            o.x1 = s_x0;
+            o.y1 = s_y0;
+            o.x2 = x;
+            o.y2 = y;
+            if (sb) cg_status_setf(sb, 2, "拖动中：直线 (%d,%d)→(%d,%d)", o.x1, o.y1, o.x2, o.y2);
+        } else if (s_tool == TOOL_RECT || s_tool == TOOL_ELLIPSE) {
+            o.type = (s_tool == TOOL_RECT) ? OP_RECT : OP_ELLIPSE;
+            o.x1 = s_x0 < x ? s_x0 : x;          /* 与提交时同一套归一化：松手那一下画面不跳 */
+            o.y1 = s_y0 < y ? s_y0 : y;
+            o.x2 = s_x0 > x ? s_x0 : x;
+            o.y2 = s_y0 > y ? s_y0 : y;
+            if (sb) {
+                cg_status_setf(sb, 2, "拖动中：%s %d×%d",
+                               (s_tool == TOOL_RECT) ? "矩形" : "椭圆", o.x2 - o.x1, o.y2 - o.y1);
+            }
+        } else {
+            return;                              /* 文字按按下点落笔，拖动里没有可预览的形变 */
+        }
+        preview_op(cv, &o);
         return;
     }
 
