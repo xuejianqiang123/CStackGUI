@@ -92,6 +92,18 @@ static char          s_cells[HR_MAX_COLS][HR_CELL_MAX]; /**< 解析一行的单�
 static hr_row_t      s_rows[HR_MAX_ROWS];          /**< 行索引：偏移 + 长度，不拷行内容 */
 static hr_state_t    s;
 
+static char s_boot_csv[1024]; /**< 命令行点名的 CSV：有窗口时启动就读它并生成报告（见 main 的参数约定） */
+
+/**
+ * @brief 生成 HTML 报告并请网页控件加载它（前向声明；定义在下面的"事件回调"一节）
+ * @param app 应用
+ * @return void 无返回值
+ * @note 就绪钩子与按钮回调都要用它，所以先声明 —— 少了它 gcc 会连着报
+ *       "implicit declaration"与"conflicting types"；声明本身也要带注释块，
+ *       否则注释门禁会把它算成一个"没注释的函数"
+ */
+static void hr_generate_and_show(cg_app_t *app);
+
 /* ------------------------------------------------------------ 文本小工具 */
 
 /**
@@ -121,17 +133,22 @@ static void hr_trim_cell(char *dst, int cap, const char *src, int len)
  * @brief 按逗号切一行 CSV 成若干单元格（不做引号转义）
  * @param line 行内容（不必以 '\0' 结尾）
  * @param len 行字节数
- * @param cells 出口：二维单元格缓冲，写满 max 个就只数不写
- * @param max cells 的行数上限
+ * @param cells 出口：一段连续的单元格缓冲，第 n 格从 cells + n × stride 开始
+ * @param stride 每格占多少字节（单元格缓冲的行宽）
+ * @param max 最多写几格，超出的只数不写
  * @return int 切出来的单元格个数（已夹到 max）
+ * @note 这里传的是"扁平缓冲 + 行宽"，不是二维数组形参：二维数组形参在注释门禁的参数
+ *       解析里会被漏数（踩过一次，报"@param 多出"），扁平写法两者都过得去
  */
-static int hr_split_cells(const char *line, int len, char cells[][HR_CELL_MAX], int max)
+static int hr_split_cells(const char *line, int len, char *cells, int stride, int max)
 {
     int i, start = 0, n = 0;
 
     for (i = 0; i <= len; i++) {
         if (i == len || line[i] == ',') {
-            if (n < max) hr_trim_cell(cells[n], HR_CELL_MAX, line + start, i - start);
+            if (n < max) {
+                hr_trim_cell(cells + (size_t)n * (size_t)stride, stride, line + start, i - start);
+            }
             n++;
             start = i + 1;
         }
@@ -396,7 +413,8 @@ static void hr_html_table(void)
     }
     hr_out_str("</tr></thead>\n<tbody>\n");
     for (r = 0; r < s.rows; r++) {
-        int n = hr_split_cells((const char *)s_window + s_rows[r].off, s_rows[r].len, s_cells, HR_MAX_COLS);
+        int n = hr_split_cells((const char *)s_window + s_rows[r].off, s_rows[r].len,
+                               &s_cells[0][0], HR_CELL_MAX, HR_MAX_COLS);
 
         hr_out_str("<tr>");
         for (c = 0; c < s.cols; c++) {
@@ -504,7 +522,7 @@ static void hr_load(cg_app_t *app, const char *path)
     while (pos < take && s_window[pos] != '\n') pos++;
     llen = pos - start;
     if (llen > 0 && s_window[start + llen - 1] == '\r') llen--;
-    n = hr_split_cells((const char *)s_window + start, llen, s_cells, HR_MAX_COLS);
+    n = hr_split_cells((const char *)s_window + start, llen, &s_cells[0][0], HR_CELL_MAX, HR_MAX_COLS);
     s.cols = (n < 1) ? 1 : n;
     for (c = 0; c < s.cols; c++) {
         if (s_cells[c][0] == '\0') snprintf(s.col_title[c], HR_TITLE_MAX, "列%d", c + 1);
@@ -524,7 +542,7 @@ static void hr_load(cg_app_t *app, const char *path)
         s_rows[r].off = start;
         s_rows[r].len = llen;
         r++;
-        n = hr_split_cells((const char *)s_window + start, llen, s_cells, HR_MAX_COLS);
+        n = hr_split_cells((const char *)s_window + start, llen, &s_cells[0][0], HR_CELL_MAX, HR_MAX_COLS);
         for (c = 0; c < s.cols; c++) {
             double v = 0.0;
 
@@ -574,6 +592,13 @@ static void on_ready(cg_app_t *app, void *user)
     hr_note(app, CG_TERM_SYS, "报告写进用户数据目录，纯 HTML + 内嵌 CSS，不引外部资源、不含 JavaScript，离线可看。");
     hr_note(app, CG_TERM_SYS, "预览区是 browser 控件（实验性）：起不来会降级成空占位，那时点「用系统默认浏览器打开」。");
     cg_log(CG_LOG_INFO, "HTML 报告器启动");
+
+    /* 命令行点了名的 CSV：有窗口就顺手读进去、生成报告并预览（自检不开窗，也就不碰盘） */
+    if (s_boot_csv[0] && cg_app_has_window(app)) {
+        hr_note(app, CG_TERM_TX, "命令行点了名，直接处理：%s", s_boot_csv);
+        hr_load(app, s_boot_csv);
+        if (s.loaded) hr_generate_and_show(app);
+    }
 }
 
 /**
@@ -604,23 +629,32 @@ static void on_btn_open_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief 「生成并预览」：写 HTML 到用户数据目录，再让网页控件加载它
+ * @brief 「生成并预览」按钮：转给生成流程
  * @param self 被点的按钮
  * @param ev 事件类型
  * @param user 未使用
  * @return void 无返回值
- * @note 自检 / CI 不开窗：写盘与 navigate 都不做（先问有没有窗口）
  */
 static void on_btn_generate_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
-    cg_app_t    *app = cg_app_of(self);
+    (void)ev;
+    (void)user;
+    hr_generate_and_show(cg_app_of(self));
+}
+
+/**
+ * @brief 生成 HTML 报告并请网页控件加载它（按钮与"命令行点名"两条路共用）
+ * @param app 应用
+ * @return void 无返回值
+ * @note 自检 / CI 不开窗：写盘与导航都不做（先问有没有窗口）
+ */
+static void hr_generate_and_show(cg_app_t *app)
+{
     cg_widget_t *sb  = cg_find(app, "sb_main");
     cg_widget_t *web = cg_find(app, "web_view");
     char        *dir, *ts, *full;
     char         fname[80];
 
-    (void)ev;
-    (void)user;
     if (!s.loaded) {
         hr_note(app, CG_TERM_SYS, "还没打开数据：先点「打开 CSV...」选一个。");
         return;
@@ -746,6 +780,33 @@ static void on_close(cg_widget_t *self, cg_event_t ev, void *user)
     s.win_len = 0;
 }
 
+/**
+ * @brief 判断字符串是不是以某个后缀结尾（不区分 ASCII 大小写）
+ * @param s 待检查的字符串；NULL 安全
+ * @param suffix 后缀，如 ".cgui"
+ * @return int 1 是、0 否
+ * @note 自己按字节折大小写，不引 <ctype.h>：这里只是给命令行参数分个类。
+ *       必须定义在 main 之前 —— 放到后面会被当成隐式声明
+ */
+static int ends_with_ci(const char *s, const char *suffix)
+{
+    int ls, lf, i;
+
+    if (!s || !suffix) return 0;
+    ls = (int)strlen(s);
+    lf = (int)strlen(suffix);
+    if (lf <= 0 || lf > ls) return 0;
+    for (i = 0; i < lf; i++) {
+        unsigned char a = (unsigned char)s[ls - lf + i];
+        unsigned char b = (unsigned char)suffix[i];
+
+        if (a >= 'A' && a <= 'Z') a = (unsigned char)(a - 'A' + 'a');
+        if (b >= 'A' && b <= 'Z') b = (unsigned char)(b - 'A' + 'a');
+        if (a != b) return 0;
+    }
+    return 1;
+}
+
 /* ------------------------------------------------------------ 绑定表 */
 
 static const cg_binding_t k_bindings[] = {
@@ -776,7 +837,19 @@ int main(int argc, char **argv)
         desc.cgui_path = (argc > 2) ? argv[2] : "htmlreport.cgui";
         return cg_app_selftest(&desc);
     }
-    desc.cgui_path = (argc > 1) ? argv[1] : "htmlreport.cgui";
+
+    /* 参数约定（与 examples\dataview 一致，三种都支持）：
+     *   不写参数            → 按 exe 同目录自动找 htmlreport.cgui
+     *   写 xxx.cgui         → 用它当界面；再给第二个参数就是启动要处理的数据文件
+     *   写 xxx.csv / 其它   → 当数据文件：界面按同目录自动找，启动后读它、生成报告并预览 */
+    desc.cgui_path = "htmlreport.cgui";
+    if (argc > 1 && ends_with_ci(argv[1], ".cgui")) {
+        desc.cgui_path = argv[1];
+        if (argc > 2) snprintf(s_boot_csv, sizeof s_boot_csv, "%s", argv[2]);
+    } else if (argc > 1) {
+        snprintf(s_boot_csv, sizeof s_boot_csv, "%s", argv[1]);
+    }
+
     cg_log(CG_LOG_INFO, "HTML 报告器启动，界面文件：%s", desc.cgui_path);
     return cg_app_run(&desc);
 }
