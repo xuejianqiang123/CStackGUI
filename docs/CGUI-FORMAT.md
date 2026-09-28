@@ -1316,4 +1316,5 @@ void   cg_set_title(cg_app_t *app, const char *title);
 | `image` 的 `src` 找不到图片 | 只警告，控件显示成虚线占位框（把路径画在中间便于排查） |
 | `button` / `iconbutton` 的 `src` 找不到图片 | 只警告；`button` 照常画纯色按钮、`iconbutton` 画占位框 |
 | 循环里逐行 `cg_table_add_row` 填很多行 | **每加一行都会整表重建**（删列、删全部行再重插）⇒ 界面连续闪烁、耗时随行数涨得很快。用 `cg_table_begin_update` / `cg_table_end_update` 把"清空 + 填行"包起来：中间只记脏、结束时重建一次（`dataview` 翻页就靠这个） |
+| `table` 的双击事件只告诉业务"哪一行"，不告诉"哪一列" | 双击回调里用 `cg_table_selected(w)` 取行号（双击前的选中变化已经把它更新好了）；**列号框架不给**，要按列做事就自己放一个"操作列"下拉 —— `dataview` 的"双击进入编辑"就是这么做的 |
 | `cg_tree_add` / `cg_table_add_row` 等用在错的控件类型上 | 打印一行 `需要 xxx 控件，实际给的是 yyy`，返回 -1，不做任何修改 |

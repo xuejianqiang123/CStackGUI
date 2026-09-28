@@ -17,15 +17,22 @@
  *          顺带钉住一条最容易误判的：**当前页 ≠ 全部行**。「统计」按钮把「当前页」与「全部行」
  *          并排算一遍，就是让「只看当前页就下结论」这个坑当场显形。
  *
- *          三条有意留的简化（诚实说明，不是漏做）：
+ *          交互上两件值得注意的：**排序是显式按钮**（选「排序列」→ 点「排序」，方向看「降序」勾选；
+ *          不再拿双击当排序键），**双击表格行 = 进入编辑**（把该行「编辑列」那一格预填进输入框，
+ *          改完点「写入」或回车）。
+ *
+ *          四条有意留的简化（诚实说明，不是漏做）：
  *            * CSV 只认逗号与换行：**不处理引号转义、不处理字段内换行**、不转码
  *              （别的程序另存的 ANSI/GBK 文件中文会乱码）；
  *            * 文件超过 16 MB 只解析前一段（先用问大小的接口量一遍），状态栏会写明「已截断」；
  *            * 内存全是固定数组 / static 缓冲，**没有任何 malloc/free**：行数 10 万、列数 32、
  *              单元格 128 字节这些上限写在下面的宏里，超了会明说，不会悄悄丢。
  *              唯一一处堆内存来自整读文件的接口，用完立刻还回去。
+ *            * 编辑**只改内存里那一份字节，绝不回写原文件**（要留档请用「导出全部行」另存）：
+ *              整读走的是简化解析，照写回去可能把用户的原始文件结构搞坏；新值含逗号 / 引号 /
+ *              换行一律拒绝 —— 不做引号转义就写，会把这一行切成多列或错位。
  *
- *          界面在 dataview.cgui 里；本文件只有行为。
+ *          界面在 dataview.cgui 里（第二行工具栏是排序与编辑那组控件）；本文件只有行为。
  *          编译：在项目根跑 build-app.bat dataview
  */
 #include "cstackgui.h"
@@ -64,8 +71,14 @@ typedef struct {
     double avg;        /**< 平均（numeric > 0 时有效） */
 } col_stat_t;
 
-/* 已载入的文件与索引：只有 load_csv() 写，其余函数只读 */
-static unsigned char *s_text;        /**< 整份文件内容，来自整读接口；换文件时还回去 */
+/* 已载入的文件与索引：只有 load_csv() / text_replace() 写，其余函数只读 */
+static unsigned char *s_text;        /**< 当前那份文件字节：装载时指向堆，写入后指向 s_edit_buf */
+static unsigned char *s_text_heap;   /**< 整读接口给的那份堆内存；换文件时还的是它 */
+
+/* 写入（编辑）的工作缓冲：为什么非要有它 —— 改写是"往中间插 / 删一段"，整读给的堆缓冲没法原地
+ * 变长，所以第一次写入时把整份拷进这块上限大小的 static 缓冲，之后一直在这儿改（s_len 从此指着它）。
+ * 代价是常驻 16 MB 的静态内存（见文件头"有意留的简化"）；示例的取舍，真项目该按需分配。 */
+static unsigned char  s_edit_buf[CG_LOAD_LIMIT + 1];
 static int            s_len;         /**< s_text 里实际解析的字节数（截断时小于文件大小） */
 static long long      s_file_size;   /**< 文件真实大小（问出来的，用来说明有没有截断） */
 static int            s_truncated;   /**< 1 = 文件超限，只解析了前一段 */
@@ -296,6 +309,67 @@ static int cell_copy(int row, int col, char *out, int cap)
 }
 
 /**
+ * @brief 取第 col 格在 s_text 里的**原始**字节区间（含首尾空白，不含逗号）
+ * @param r 行索引（指向 s_rows 里的一条）
+ * @param col 列号，0 起
+ * @param off 输出：这一格第一个字节在 s_text 里的偏移；可为 NULL
+ * @param len 输出：这一格的字节数；可为 NULL
+ * @return int 1 找到、0 这一行没有第 col 格
+ * @note 与 cell_copy_at 的分工：那个是"读值"（去首尾空白、按上限截断、拷一份出来），这个是
+ *       "落笔位置"（替换时动的是原始区间，所以首尾空白也算在里面，新值会连空白一起顶掉）
+ */
+static int cell_span(const row_t *r, int col, int *off, int *len)
+{
+    int i, c = 0, start;
+
+    if (!r || !s_text || col < 0 || r->off < 0 || r->len < 0) return 0;
+    start = r->off;
+    for (i = 0; i <= r->len; i++) {
+        int at_end = (i >= r->len);
+
+        if (!at_end && s_text[r->off + i] != ',') continue;
+        if (c == col) {
+            if (off) *off = start;
+            if (len) *len = r->off + i - start;
+            return 1;
+        }
+        if (at_end) return 0;                    /* 这一行没有第 col 格 */
+        c++;
+        start = r->off + i + 1;
+    }
+    return 0;
+}
+
+/**
+ * @brief 把 s_text 里 [off, off+old_len) 这一段换成新值（整份搬进工作缓冲）
+ * @param off 替换起点（s_text 内的偏移）
+ * @param old_len 被替换掉的字节数
+ * @param val 新值，不需要结尾 0
+ * @param vlen 新值的字节数
+ * @param new_len 输出：替换后的总字节数；可为 NULL
+ * @return int 1 成功、0 参数非法或结果超出载入上限（**此时一个字节都没动**）
+ * @note 长度会变 ⇒ 用 memmove 把尾巴整段挪开 / 挪回来（memmove 能处理重叠，所以可以就地改）；
+ *       第一次写入先把整份拷进 s_edit_buf，之后 s_text 就一直指着它改（见那块缓冲的说明）。
+ *       容量先判后用：超限直接返回 0，绝不写坏缓冲
+ */
+static int text_replace(int off, int old_len, const char *val, int vlen, int *new_len)
+{
+    int tail;
+
+    if (!s_text || !val || vlen < 0 || off < 0 || old_len < 0) return 0;
+    if (off + old_len > s_len) return 0;
+    if (s_len - old_len + vlen > CG_LOAD_LIMIT) return 0;
+    tail = s_len - off - old_len;
+
+    if (s_text != s_edit_buf) memcpy(s_edit_buf, s_text, (size_t)s_len);
+    memmove(s_edit_buf + off + vlen, s_edit_buf + off + old_len, (size_t)tail);
+    if (vlen > 0) memcpy(s_edit_buf + off, val, (size_t)vlen);
+    s_text = s_edit_buf;
+    if (new_len) *new_len = s_len - old_len + vlen;
+    return 1;
+}
+
+/**
  * @brief 把第 row 行摊成每列一个字符串指针（填 s_cell[] 与 s_cells[]）
  * @param row 行号（s_rows 里的下标）
  * @return void 无返回值
@@ -402,7 +476,7 @@ static void ensure_columns(cg_app_t *app)
 }
 
 /**
- * @brief 把列名填进「排序列 / 统计列」两个下拉框
+ * @brief 把列名填进「排序列 / 统计列 / 编辑列」三个下拉框
  * @param app 应用
  * @return void 无返回值
  * @note 装载期间把装载标记置 1：程序改下拉框的值也会派发选中事件，别被当成用户选列
@@ -411,17 +485,21 @@ static void fill_col_combos(cg_app_t *app)
 {
     cg_widget_t *cbo_sort = cg_find(app, "cbo_sort");
     cg_widget_t *cbo_stat = cg_find(app, "cbo_stat");
+    cg_widget_t *cbo_edit = cg_find(app, "cbo_edit");
     int          c;
 
     cg_widget_list_clear(cbo_sort);
     cg_widget_list_clear(cbo_stat);
+    cg_widget_list_clear(cbo_edit);
     for (c = 0; c < s_col_count; c++) {
         cg_widget_list_addf(cbo_sort, "%d. %s", c + 1, s_col_title[c]);
         cg_widget_list_addf(cbo_stat, "%d. %s", c + 1, s_col_title[c]);
+        cg_widget_list_addf(cbo_edit, "%d. %s", c + 1, s_col_title[c]);
     }
     if (s_col_count > 0) {
         cg_widget_set_value(cbo_sort, 0);
         cg_widget_set_value(cbo_stat, 0);
+        cg_widget_set_value(cbo_edit, 0);
     }
 }
 
@@ -533,7 +611,8 @@ static void sort_by(cg_app_t *app, int col)
         if (!text_to_double(buf, &v)) { numeric = 0; break; }
     }
 
-    if (col != s_sort_col) s_sort_desc = 0;      /* 换了一列：方向回到升序 */
+    /* 方向完全由调用方定好放在 s_sort_desc 里（「排序」按钮按「降序」勾选设置），本函数不再改它：
+     * 「同一列再排一次换方向」那套老逻辑已经删掉 —— 它原来靠双击表格触发，而双击现在是"进入编辑" */
 
     s_cmp_col     = col;
     s_cmp_desc    = s_sort_desc ? 1 : 0;
@@ -737,10 +816,11 @@ static void load_csv(cg_app_t *app, const char *path)
     long long sz;
     int       keep;
 
-    if (s_text) {                                   /* 换文件：先还上一份 */
-        cg_free(s_text);
-        s_text = NULL;
+    if (s_text_heap) {                              /* 换文件：只还堆上那一份 */
+        cg_free(s_text_heap);
+        s_text_heap = NULL;
     }
+    s_text = NULL;                                  /* 写过一格后 s_text 指着工作缓冲，这里一并断开 */
     s_len       = 0;
     s_row_count = 0;
     s_truncated = 0;
@@ -749,9 +829,11 @@ static void load_csv(cg_app_t *app, const char *path)
     s_file_size = sz;
     s_truncated = (sz > CG_LOAD_LIMIT) ? 1 : 0;
 
-    s_text = (unsigned char *)cg_file_read_bytes(path, &s_len);
+    s_text_heap = (unsigned char *)cg_file_read_bytes(path, &s_len);
+    s_text      = s_text_heap;
     if (!s_text || s_len <= 0) {
-        if (s_text) { cg_free(s_text); s_text = NULL; }
+        if (s_text_heap) { cg_free(s_text_heap); s_text_heap = NULL; }
+        s_text = NULL;
         s_len = 0;
         status_msg(app, "打不开或空文件：%s", path);
         render_page(app);                           /* 表格清空、分页归到 1 页空页 */
@@ -789,6 +871,149 @@ static void load_csv(cg_app_t *app, const char *path)
     if (s_row_capped) report(app, "  行数超过上限 %d：后面的行没有进索引（状态栏标了「已截断」）", CG_MAX_ROWS);
     report(app, "两条限制：CSV 解析是简化版 —— 不处理引号转义、字段内不换行；");
     report(app, "          表格的列只加不删 —— 换成列更少的文件时，多出来的列会留着（显示为空）。");
+}
+
+/**
+ * @brief 「写入」的核心：把输入框的当前文字写进「选中行 + 编辑列」那一格（只改内存）
+ * @param app 应用
+ * @return void 无返回值
+ * @note **只改内存里的 s_text，绝不回写原文件**：本示例从不用「覆盖写」去动用户打开的那个 CSV ——
+ *       悄悄改写别人的原始数据太危险，而且整读走的是简化解析（引号 / 字段内换行都没处理），
+ *       照写回去可能把文件结构搞坏。要留档就点「导出全部行」另存一份（这句会同时写进报告区与
+ *       状态栏，免得用户以为文件已经被改）。
+ * @note 新值含逗号 / 引号 / 换行一律**拒绝**：本示例的 CSV 不做引号转义，写进去会把这一行切成
+ *       多列或错位 —— 宁可拒绝，也不写坏数据。超 CG_CELL_MAX 也拒绝。
+ * @note 长度会变 ⇒ 走 text_replace 重建到工作缓冲，必须 index_build() 重算全表偏移，再
+ *       render_page()（行数变了它会自己夹一次页号）。自检（无窗口）下不读盘、不弹框，安全空跑
+ */
+static void apply_edit(cg_app_t *app)
+{
+    cg_widget_t *tbl = cg_find(app, "tbl_data");
+    cg_widget_t *cbo = cg_find(app, "cbo_edit");
+    cg_widget_t *edt = cg_find(app, "edt_value");
+    const char  *val;
+    char         old[CG_CELL_MAX];
+    int          sel, row, col, off = 0, len = 0, vlen, new_len = 0;
+
+    if (!s_text || s_row_count <= 0) { status_msg(app, "还没有数据，先打开一个 CSV"); return; }
+    if (s_truncated) { status_msg(app, "文件超过上限只读了前一段，不能写入（改的不是完整文件）"); return; }
+    if (!tbl) return;
+
+    sel = cg_table_selected(tbl);
+    if (sel < 0) { status_msg(app, "先在表格里选中一行，再双击进入编辑"); return; }
+
+    col = cbo ? cg_widget_value(cbo) : -1;
+    if (col < 0 || col >= s_col_count) { status_msg(app, "先在「编辑列」里选一列"); return; }
+
+    row = s_page * CG_PAGE_ROWS + sel;               /* 页内行号 → 全局行号 */
+    if (row < 0 || row >= s_row_count) { status_msg(app, "行号越界，先翻页重来"); return; }
+
+    val = edt ? cg_widget_text(edt) : NULL;          /* 可编辑 edit 的读值就是 cg_widget_text */
+    if (!val) val = "";
+
+    /* 见函数头：本示例不做引号转义，含 , " 换行的新值写进去会破坏行结构 */
+    if (strchr(val, ',') || strchr(val, '"') || strchr(val, '\n') || strchr(val, '\r')) {
+        status_msg(app, "新值不能含逗号 / 引号 / 换行（本示例不做引号转义）");
+        return;
+    }
+    vlen = (int)strlen(val);
+    if (vlen > CG_CELL_MAX - 1) {
+        status_msg(app, "新值太长（最多 %d 个字符）", CG_CELL_MAX - 1);
+        return;
+    }
+
+    if (!cell_span(&s_rows[row], col, &off, &len)) {
+        status_msg(app, "这一行没有第 %d 列，无法写入", col + 1);
+        return;
+    }
+
+    cell_copy_at(&s_rows[row], col, old, sizeof old);   /* 原值（去首尾空白）用来判「值变没变」 */
+    if (strcmp(old, val) == 0) { status_msg(app, "值没变，未改动"); return; }
+
+    if (!text_replace(off, len, val, vlen, &new_len)) {
+        status_msg(app, "写不下：结果超过载入上限 %d KB", CG_LOAD_LIMIT / 1024);
+        return;
+    }
+    s_len = new_len;
+
+    index_build();                                   /* 字节长度变了：全表的偏移都得重算 */
+    render_page(app);                                /* 保持当前页（行数变了这里会夹一次页号） */
+
+    report_reset(app);
+    report(app, "已在内存里改一格：第 %d 行 · 列「%s」", row + 1, s_col_title[col]);
+    report(app, "  只改了内存，原文件未改动；要留档请用「导出全部行」另存。");
+    report(app, "  本示例的 CSV 是简化解析（不处理引号转义）：新值里含逗号 / 引号 / 换行会被拒绝。");
+    status_msg(app, "已写入内存：第 %d 行 · 列「%s」（原文件未改）", row + 1, s_col_title[col]);
+}
+
+/**
+ * @brief 「写入」：把 edt_value 的文字写进选中行「编辑列」那一格（只改内存）
+ * @param self 被点的按钮
+ * @param ev 事件类型
+ * @param user 挂在该控件上的业务数据，本示例不用
+ * @return void 无返回值
+ * @note 真正的活在 apply_edit 里；这里只是事件入口。自检会合成这次点击，回调里不读盘、不弹框
+ */
+static void on_btn_apply_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev;
+    (void)user;
+    apply_edit(cg_app_of(self));
+}
+
+/**
+ * @brief 输入框里按回车 = 点「写入」（同一个动作的第二个入口）
+ * @param self 输入框控件（单行 edit 才有 submit 事件）
+ * @param ev 事件类型
+ * @param user 挂在该控件上的业务数据，本示例不用
+ * @return void 无返回值
+ */
+static void on_edt_value_submit(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev;
+    (void)user;
+    apply_edit(cg_app_of(self));
+}
+
+/**
+ * @brief 「排序」：按「排序列」下拉 + 「降序」勾选重新排序（排序的唯一显式入口）
+ * @param self 被点的按钮
+ * @param ev 事件类型
+ * @param user 挂在该控件上的业务数据，本示例不用
+ * @return void 无返回值
+ * @note 方向完全由勾选框决定：同一列再点一次不会自动翻方向（老的双击切换已删）。列号越界与
+ *       没数据的提示都由 sort_by 自己说
+ */
+static void on_btn_sort_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t    *app = cg_app_of(self);
+    cg_widget_t *cbo = cg_find(app, "cbo_sort");
+    cg_widget_t *chk = cg_find(app, "chk_desc");
+    int          col = cbo ? cg_widget_value(cbo) : -1;
+
+    (void)ev;
+    (void)user;
+
+    s_sort_desc = chk ? cg_widget_checked(chk) : 0;  /* checkbox 的勾选状态用 cg_widget_checked 取 */
+    sort_by(app, col);
+}
+
+/**
+ * @brief 「降序」勾选变了：只提示方向，真正重排等点「排序」
+ * @param self 勾选框控件
+ * @param ev 事件类型
+ * @param user 挂在该控件上的业务数据，本示例不用
+ * @return void 无返回值
+ * @note 勾选时**不立刻重排**：重排十万行是可感知的耗时，交给显式按钮，用户按一下心里有数
+ */
+static void on_chk_desc_change(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+
+    (void)ev;
+    (void)user;
+
+    status_msg(app, "排序方向：%s（点「排序」生效）", cg_widget_checked(self) ? "降序" : "升序");
 }
 
 /* ============================================================ 事件回调 */
@@ -862,7 +1087,7 @@ static void on_btn_stats_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief 下拉选好了：排序列直接重排，统计列只提示（等用户点「统计」）
+ * @brief 下拉选好了：三个下拉都只提示（等用户点对应的按钮）
  * @param self 被改的下拉框
  * @param ev 事件类型
  * @param user 挂在该控件上的业务数据，本示例不用
@@ -884,14 +1109,16 @@ static void on_cbo_select(cg_widget_t *self, cg_event_t ev, void *user)
 
     idx = cg_widget_value(self);
     if (strcmp(id, "cbo_sort") == 0) {
-        /* 又选了同一列：什么都不做 —— 下拉框会派发"重新选了当前项"这种事件，不挡的话
-         * 会白重排一遍、表格跟着重建一次（用户看到的就是"没换列也闪一下"） */
-        if (idx == s_sort_col) return;
-        s_sort_desc = 0;                            /* 换列从升序开始；同一列换方向请双击表格 */
-        sort_by(app, idx);
+        /* 不再「选中即排序」：排序改到「排序」按钮上（方向由「降序」勾选决定）。这里只提示，
+         * 免得选列的瞬间就重排十万行、表格跟着重建一次 */
+        if (idx >= 0 && idx < s_col_count)
+            status_msg(app, "排序列：%s（点「排序」按钮；方向看「降序」勾选）", s_col_title[idx]);
     } else if (strcmp(id, "cbo_stat") == 0) {
         if (idx >= 0 && idx < s_col_count)
             status_msg(app, "统计列：%s（点「统计」看当前页与全部行的对比）", s_col_title[idx]);
+    } else if (strcmp(id, "cbo_edit") == 0) {
+        if (idx >= 0 && idx < s_col_count)
+            status_msg(app, "编辑列：%s（双击表格行预填，改完点「写入」）", s_col_title[idx]);
     }
 }
 
@@ -920,34 +1147,42 @@ static void on_page_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief 排序的触发入口：本版表格没有「点了第几列表头」事件，改挂在双击表格上
- * @param self 表格控件
+ * @brief 双击表格行 = 进入编辑：把「编辑列」那一格预填进输入框
+ * @param self 被双击的表格控件
  * @param ev 事件类型
  * @param user 挂在该控件上的业务数据，本示例不用
  * @return void 无返回值
- * @note 通读 .cgui 格式文档，`table` 只有 select / dblclick / check / gotfocus / lostfocus，
- *       没有「表头点击」这一项，所以排序的触发方式选了**双击表格行**：按「排序列」下拉里选中的
- *       那一列排，同一列再双击一次换升 / 降序
+ * @note **双击不再排序**（排序改到了「排序」按钮）。选中行由 cg_table_selected 给 —— 双击前的
+ *       LVN_ITEMCHANGED 已经把它更新成刚点的那行；页内行号映射成全局行号 = 当前页 × 每页行数 +
+ *       页内行号。这里**只预填、不读文件、不弹框**：自检（无窗口）会合成这个事件，回调必须安全空跑。
+ *       框架没有「把焦点交给某个控件」的接口，所以只预填 + 状态栏提示，让用户自己去输入框里改
  */
 static void on_table_dblclick(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app = cg_app_of(self);
-    cg_widget_t *cbo = cg_find(app, "cbo_sort");
-    int          col;
+    cg_widget_t *cbo = cg_find(app, "cbo_edit");
+    cg_widget_t *edt = cg_find(app, "edt_value");
+    char         buf[CG_CELL_MAX];
+    int          sel, row, col;
 
     (void)ev;
     (void)user;
 
-    if (s_row_count <= 0) { status_msg(app, "还没有数据，先打开一个 CSV"); return; }
+    if (!s_text || s_row_count <= 0) { status_msg(app, "还没有数据，先打开一个 CSV"); return; }
+    if (s_truncated) { status_msg(app, "文件只读了前一段，不能编辑（改的不是完整文件）"); return; }
+
+    sel = cg_table_selected(self);
+    if (sel < 0) { status_msg(app, "先点一行选中，再双击进入编辑"); return; }
 
     col = cbo ? cg_widget_value(cbo) : -1;
-    if (col < 0 || col >= s_col_count) {
-        status_msg(app, "先在「排序列」里选一列，再双击表格排序");
-        return;
-    }
+    if (col < 0 || col >= s_col_count) { status_msg(app, "先在「编辑列」里选一列"); return; }
 
-    s_sort_desc = (col == s_sort_col) ? !s_sort_desc : 0;   /* 同列双击：翻方向 */
-    sort_by(app, col);
+    row = s_page * CG_PAGE_ROWS + sel;
+    if (row < 0 || row >= s_row_count) { status_msg(app, "行号越界，先翻页重来"); return; }
+
+    cell_copy_at(&s_rows[row], col, buf, sizeof buf);   /* 预填该格当前文字（去首尾空白） */
+    if (edt) cg_widget_set_text(edt, buf);
+    status_msg(app, "编辑：第 %d 行 · 列 %s（改完点「写入」）", row + 1, s_col_title[col]);
 }
 
 /**
@@ -973,12 +1208,25 @@ static void on_ready(cg_app_t *app, void *user)
     s_file_size    = 0;
     s_truncated    = 0;
 
+    {
+        /* 新控件的初始状态：编辑列回第 1 列、降序不勾、输入框清空。全是程序在改控件，也不读文件，
+         * 自检（无窗口）下同样安全 */
+        cg_widget_t *cbo_edit = cg_find(app, "cbo_edit");
+        cg_widget_t *chk_desc = cg_find(app, "chk_desc");
+        cg_widget_t *edt_val  = cg_find(app, "edt_value");
+
+        if (cbo_edit) cg_widget_set_value(cbo_edit, 0);
+        if (chk_desc) cg_widget_set_checked(chk_desc, 0);
+        if (edt_val)  cg_widget_set_text(edt_val, "");
+    }
+
     report_reset(app);
     report(app, "请打开一个 CSV");
     report(app, "  打开后按页读：表格里只放当前页的 %d 行，翻页才换一批；", CG_PAGE_ROWS);
     report(app, "  单文件最多索引 %d KB、%d 行、%d 列，单元格最多 %d 字符。",
            CG_LOAD_LIMIT / 1024, CG_MAX_ROWS, CG_MAX_COLS, CG_CELL_MAX);
-    report(app, "  选中「排序列」即排序，双击表格可在升 / 降序之间切换。");
+    report(app, "  选好「排序列」点「排序」按钮排序（方向看「降序」勾选）；双击表格行进入编辑，");
+    report(app, "  改完点「写入」——**只改内存，原文件不动**，要留档请用「导出全部行」另存。");
 
     render_page(app);                               /* 空表 + 总页数 0 */
 
@@ -1025,7 +1273,11 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND("on_btn_stats_click",  on_btn_stats_click),
     CG_BIND("on_cbo_select",       on_cbo_select),         /* 两个下拉共用 */
     CG_BIND("on_page_change",      on_page_change),
-    CG_BIND("on_table_dblclick",   on_table_dblclick),     /* 挂在表格的双击上 */
+    CG_BIND("on_table_dblclick",   on_table_dblclick),     /* 挂在表格的双击上：进入编辑 */
+    CG_BIND("on_btn_sort_click",   on_btn_sort_click),
+    CG_BIND("on_chk_desc_change",  on_chk_desc_change),
+    CG_BIND("on_btn_apply_click",  on_btn_apply_click),
+    CG_BIND("on_edt_value_submit", on_edt_value_submit),
     CG_BIND_END
 };
 
