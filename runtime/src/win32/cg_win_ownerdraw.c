@@ -61,7 +61,12 @@ static void draw_icon_button(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
         InflateRect(&inner, -4, -4);
         FrameRect(dc, &inner, (HBRUSH)GetStockObject(GRAY_BRUSH));
         SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, RGB(120, 120, 128));
+        /* 图标占位文字：深色下中灰读不清，走文字色兜底（浅色维持原值） */
+        {
+            unsigned t = cgw_theme_text(w->app);
+
+            SetTextColor(dc, t != CG_COLOR_NONE ? cgw_to_colorref(t) : RGB(120, 120, 128));
+        }
         DrawTextW(dc, L"图标", -1, &inner, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
 }

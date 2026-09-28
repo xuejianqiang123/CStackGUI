@@ -325,6 +325,8 @@ int cg_app_run(const cg_app_desc_t *desc)
     cg_app_t app;
     int rc;
 
+    cg_win_console_utf8();  /* 控制台默认代码页是 GBK，会把日志里的 UTF-8 中文显示成乱码；
+                             * 有控制台时切 UTF-8（core 层不 include windows.h，走这个包装） */
     cg_diag_init();     /* 日志 + 崩溃兜底：后面任何失败都要留下痕迹（GUI 版看不到 stderr） */
 
     rc = app_open(&app, desc, 1);

@@ -97,6 +97,12 @@ unsigned cgw_theme_card_face(const cg_app_t *app);
  * @return unsigned 0xRRGGBB；返回 CG_COLOR_NONE = 别动（浅色下就是这条）
  */
 unsigned cgw_theme_text(const cg_app_t *app);
+
+/**
+ * @brief 清掉父容器"背后色"的采样缓存（换主题时调）
+ * @return void 无返回值
+ */
+void cgw_clear_behind_cache(void);
 /**
  * @brief 让**一个**控件的原生窗口跟随当前主题
  * @param w 控件

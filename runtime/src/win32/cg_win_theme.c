@@ -224,6 +224,7 @@ void cgw_theme_apply(cg_app_t *app)
     }
     st->bg_color = cgw_theme_window_bg(app);
     st->bg_brush = CreateSolidBrush(st->bg_color);
+    cgw_clear_behind_cache();   /* 标签页页体的"背后色"按窗口缓存，换主题必须清，否则停在旧色 */
 
     if (h) {
         /* 窗口类的背景刷是注册类时给的那个（COLOR_BTNFACE+1）—— 深色下必须换掉，

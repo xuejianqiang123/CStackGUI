@@ -406,23 +406,44 @@ static int parent_paint_point(HWND parent, HWND child, COLORREF *out)
  *  @param child 子控件窗口；转给采样函数以避开它覆盖的点
  *  @return unsigned 0xRRGGBB；采样失败退回纯白
  */
+static struct { HWND parent; unsigned rgb; } s_behind_cache[8];
+static int s_behind_cache_used = 0;
+
+/**
+ * @brief 清掉父容器"背后色"的采样缓存（换主题前后必调）
+ * @return void 无返回值
+ * @note 缓存里存的是**采样当时**的像素值，命中即返回、永不失效 —— 切主题后挂在 tabs 页体里的
+ *       无底色控件会一直停在旧主题的底色上（2026-09-28 排查发现的真缺陷）。重采样代价极低，
+ *       而换主题本身是低频操作，所以换主题时直接清掉最省事
+ */
+void cgw_clear_behind_cache(void)
+{
+    s_behind_cache_used = 0;
+}
+
+/**
+ * @brief 取某个子控件"背后"那片父容器的像素色（无底色控件的兜底背景用）
+ * @param parent 父窗口（典型是 tabs 页体这类系统容器）
+ * @param child 子控件窗口
+ * @return unsigned 0xRRGGBB；采样失败回退白色
+ * @note 结果按父窗口缓存（最多 8 条），命中即返回；**换主题时必须由 cgw_clear_behind_cache()
+ *       清掉**，否则页体里的控件会停在旧主题的底色上
+ */
 static unsigned parent_body_rgb(HWND parent, HWND child)
 {
-    static struct { HWND parent; unsigned rgb; } cache[8];
-    static int used = 0;
     COLORREF c;
     unsigned rgb;
     int i;
 
-    for (i = 0; i < used; i++) {
-        if (cache[i].parent == parent) return cache[i].rgb;
+    for (i = 0; i < s_behind_cache_used; i++) {
+        if (s_behind_cache[i].parent == parent) return s_behind_cache[i].rgb;
     }
     rgb = 0xFFFFFF;
     if (parent_paint_point(parent, child, &c)) rgb = rgb_of(c);
-    if (used < 8) {
-        cache[used].parent = parent;
-        cache[used].rgb = rgb;
-        used++;
+    if (s_behind_cache_used < 8) {
+        s_behind_cache[s_behind_cache_used].parent = parent;
+        s_behind_cache[s_behind_cache_used].rgb = rgb;
+        s_behind_cache_used++;
     }
     return rgb;
 }

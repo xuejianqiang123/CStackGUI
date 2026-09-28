@@ -606,10 +606,10 @@ void cg_skin_draw_switch(cg_widget_t *w, HDC hdc, const RECT *rc)
     ky = y + (hpx - knob) / 2;
 
     if (on)            track_fill = 0x6750A4u;                     /* on：主题紫 */
-    else if (disabled) track_fill = 0xC9C5D0u;
+    else if (disabled) track_fill = cg_skin_neutral(w->app, 0xC9C5D0u, 0x3D3945u);
     else if (pressed)  track_fill = sk_shade(0x9A949Eu, 0.85f);
     else if (hot)      track_fill = sk_shade(0x9A949Eu, 0.92f);
-    else               track_fill = 0x9A949Eu;                     /* off：画布同款灰 */
+    else               track_fill = cg_skin_neutral(w->app, 0x9A949Eu, 0x49454Fu);   /* off：画布同款灰（深色给深灰） */
 
     /* 轨道 + 圆钮（GDI+ 抗锯齿；挂了回退 GDI） */
     if (GdipCreateFromHDC(hdc, &g) == SK_GDIP_OK && g) {
@@ -732,10 +732,10 @@ void cg_skin_draw_check(cg_app_t *app, const DRAWITEMSTRUCT *dis)
 
                 if (on && disa)       fill = 0xBEB5CFu;   /* 禁用+选中：降饱和紫，别和可用态混淆 */
                 else if (on)          fill = pressed ? sk_shade(0x6750A4u, 0.86f) : 0x6750A4u;
-                else if (disa)      { fill = 0xE2E2E4u; border = 0xDCDCDEu; }
+                else if (disa)      { fill = cg_skin_neutral(app, 0xE2E2E4u, 0x2E2B33u); border = 0xDCDCDEu; }
                 else if (pressed)   { fill = 0xEADDFFu; border = 0x6750A4u; }
                 else if (hot)       { fill = 0xF6F2FAu; border = 0x6750A4u; }
-                else                { fill = 0xFFFFFFFFu; border = 0x79747Eu; }
+                else                { fill = cg_skin_neutral(app, 0xFFFFFFFFu, 0x1D1B20u); border = 0x79747Eu; }
 
                 {
                     GpSolidFill *bf = NULL;
@@ -950,9 +950,11 @@ void cg_skin_draw_progress(cg_widget_t *w, HDC hdc, const RECT *rc)
         GdipDeleteGraphics(g);
     } else {
         /* 回退：GDI 圆角矩形 */
-        HBRUSH bg = CreateSolidBrush(sk_colorref(0xE6E1E9u));
+        /* GDI 回退分支要与 GDI+ 主路径取同一套槽底/描边值（深浅色都一致）；
+         * 填充 fb 是品牌紫，按口径不跟随主题 */
+        HBRUSH bg = CreateSolidBrush(sk_colorref(cg_skin_neutral(w->app, 0xE6E1E9u, 0x2E2B33u)));
         HBRUSH fb = CreateSolidBrush(sk_colorref((w->style.fg != CG_COLOR_NONE) ? w->style.fg : 0x6750A4u));
-        HPEN   dp = CreatePen(PS_SOLID, 1, RGB(0xCA, 0xC4, 0xD0));   /* 与 GDI+ 路径一致的浅灰描边，避免默认黑笔 */
+        HPEN   dp = CreatePen(PS_SOLID, 1, sk_colorref(cg_skin_neutral(w->app, 0xCAC4D0u, 0x3D3945u)));
         HBRUSH ob = (HBRUSH)SelectObject(hdc, bg);
         HPEN   op = (HPEN)SelectObject(hdc, dp);
         RoundRect(hdc, x, y, x + wp, y + hp, rad * 2, rad * 2);

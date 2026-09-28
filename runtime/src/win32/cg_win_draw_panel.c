@@ -121,8 +121,10 @@ static void panel_group_body(HDC mem, const RECT *rc, void *vctx)
  */
 static void panel_draw_card_shape(cg_app_t *app, HDC dc, cg_widget_t *w, const RECT *rc)
 {
-    unsigned face = GetSysColor(COLOR_BTNFACE);
-    unsigned facergb = ((face & 0xFFu) << 16) | (face & 0xFF00u) | ((face >> 16) & 0xFFu);
+    /* 面色兜底要走主题：深色下卡片才不会是"浅灰卡片配深色内容"（2026-09-28 排查）。
+     * cgw_theme_card_face() 返回的已经是 0xRRGGBB，所以下面不再做 B/R 颠倒 */
+    unsigned face = cgw_theme_card_face(app);
+    unsigned facergb = face;
 
     /* 先整块清成"背后色"再画圆角：圆角弧外露出的四角才是页面底色，圆角才真正成立。
      * 原来直接把整个矩形填成卡片底色，四个圆角外糊着一圈直角色块（2026-09-25 用户报"卡片丑"）。 */
@@ -138,7 +140,7 @@ static void panel_draw_card_shape(cg_app_t *app, HDC dc, cg_widget_t *w, const R
         HBRUSH br = NULL;
         HGDIOBJ oldbr;
         if (cgw_is_t(w, "card") || w->style.bg != CG_COLOR_NONE) {
-            br = CreateSolidBrush((w->style.bg != CG_COLOR_NONE) ? fillc : GetSysColor(COLOR_BTNFACE));
+            br = CreateSolidBrush((w->style.bg != CG_COLOR_NONE) ? fillc : cgw_to_colorref(facergb));
             oldbr = SelectObject(dc, br);
         } else {
             oldbr = SelectObject(dc, GetStockObject(NULL_BRUSH));
@@ -319,8 +321,9 @@ static void splitter_body(HDC mem, const RECT *rc, void *vctx)
         int vert = cgw_splitter_is_vert(w);
         int cx = rc->left + (rc->right - rc->left) / 2;
         int cy = rc->top + (rc->bottom - rc->top) / 2;
-        HBRUSH line = cgw_brush_for(0xCAC4D0);
-        HBRUSH dot  = cgw_brush_for(0x79747E);
+        /* 分隔条的线与握点属"中性细部件"：浅色沿用原值、深色给深色版（与分组框描边同一套深色值） */
+        HBRUSH line = cgw_brush_for(cg_skin_neutral(c->app, 0xCAC4D0u, 0x3D3945u));
+        HBRUSH dot  = cgw_brush_for(cg_skin_neutral(c->app, 0x79747Eu, 0x49454Fu));
         RECT r = *rc;
         int i;
         if (vert) { r.left = cx; r.right = cx + 1; } else { r.top = cy; r.bottom = cy + 1; }

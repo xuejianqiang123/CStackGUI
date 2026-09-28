@@ -162,7 +162,12 @@ static void image_draw(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
         DeleteObject(br);
 
         SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, RGB(90, 90, 96));
+        /* 缺图占位文字画在"背后色"上：深色下深灰字读不清，走文字色兜底（浅色维持原值） */
+        {
+            unsigned t = cgw_theme_text(app);
+
+            SetTextColor(dc, t != CG_COLOR_NONE ? cgw_to_colorref(t) : RGB(90, 90, 96));
+        }
         if (w && w->src && *w->src) {
             wchar_t *wt = cgw_wc_from_utf8(w->src);
             if (wt) {
