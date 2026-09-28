@@ -901,6 +901,13 @@ C 侧 `runtime/src/core/cg_doc_kind.c` 的 `k_kinds`，画布侧 `designer/src/m
 - `rate` 星数 = `max-min`（上限 10）；`pagination` 页数 = `max-min+1`；当前值都用 `cg_widget_value()` 读。
 - `canvas` 用 `cg_canvas_clear/set_color/set_line_width/line/rect/ellipse/text` 在回调里画，
   绘制命令被录下来，重绘时按序回放。
+- **`canvas` 目前不能拖拽作图（2026-09-28 实测，已知缺口）**：画板自身只声明 `click` / `dblclick`，
+  **没有** `mousedown` / `mousemove` / `mouseup`；而把这三个挂在**窗口级**（`app.events`）也不管用 ——
+  程序化键鼠的对照实验里，合成**点击按钮**能正常驱动程序（日志有记录），但同样的合成"按下 → 拖动 → 抬起"
+  在**画板上**与**窗口空白客户区**各做一次，程序**毫无反应**，即窗口级鼠标事件在真机运行中没有被派发。
+  另外画板的 `click` 也**不回写坐标**（`ev_x` / `ev_y` 拿不到）。所以"在画板上拖拽作图"这条路目前走不通，
+  要支持它需要给 `canvas` 补上自己的鼠标事件（或让窗口级鼠标事件真正派发并对子控件区域做命中测试）。
+  参考实现见 `examples\drawpad`（设计、命令表与回放逻辑都是对的，能力补齐即可直接用）。
 - `badge` / `tag` / `shape` 只有 `text` 与样式（配色/圆角）能配；`tag` 能点（`click`），`badge` / `shape` 没有事件。
 - `card` 与 `group` / `box` 同为容器，子控件坐标相对卡片客户区。
 - 表格的**行级附加状态**（行勾选 / 行数值 / 行图标）**不是 `.cgui` 字段**，是运行时 API：
