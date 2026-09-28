@@ -797,6 +797,28 @@ int  cg_table_add_row(cg_widget_t *w, const char *const *cells, int ncells);
  */
 void cg_table_clear(cg_widget_t *w);
 /**
+ * @brief 开始批量更新表格：到 end 之前只记脏，不做任何重建
+ * @param w table 控件
+ * @return void 无返回值
+ * @note **填表前一定成对用上这两个**：表格每次加行 / 清空都会**整表重建**（删列、删全部行再重插），
+ *       所以逐行加 200 行 = 200 次整表重建 —— 肉眼看到的是一片连续闪烁，耗时也随行数涨得很快。
+ *       begin 之后中间一次都不重建，end 时只重建一次，看着就是"一下换好"。
+ * @note 它与 end 必须**在同一个消息处理里成对**出现：期间控件显示的还是旧内容。可嵌套，按计数配平
+ * @code
+ *   cg_table_begin_update(tbl);
+ *   cg_table_clear(tbl);
+ *   for (i = 0; i < n; i++) cg_table_add_row(tbl, cells[i], ncols);
+ *   cg_table_end_update(tbl);
+ * @endcode
+ */
+void cg_table_begin_update(cg_widget_t *w);
+/**
+ * @brief 结束批量更新：计数配平归零时把积累的改动一次重建出来
+ * @param w table 控件
+ * @return void 无返回值（没有未配平的 begin 时是空操作）
+ */
+void cg_table_end_update(cg_widget_t *w);
+/**
  * @brief 表格行数
  * @param w table 控件
  * @return int 行数；非 table 控件返回 0

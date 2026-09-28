@@ -414,6 +414,10 @@ static void lf_scan(cg_app_t *app, int mode)
         s_clip[0] = '\0';
     }
 
+    /* 命中行的表格填法用**批量更新**围起来：表格每加一行都会整表重建，命中几百行时
+     * 不围起来就是几百次重建 —— 界面上看着一直在闪（与 dataview 同一个坑）。
+     * 只围"查看"这条路：导出 / 剪贴板两条路不碰表格 */
+    cg_table_begin_update(tbl);
     while (pos < s_lf.win_len) {
         char prev[LF_PREVIEW + 8];
         int  start = pos, len;
@@ -441,6 +445,8 @@ static void lf_scan(cg_app_t *app, int mode)
             lf_clip_line(lineno, prev);
         }
     }
+
+    cg_table_end_update(tbl);     /* 与上面的 begin 成对：到这里才重建一次表格 */
 
     s_lf.total_lines = lineno;
     s_lf.hits        = hits;

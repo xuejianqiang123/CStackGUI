@@ -452,6 +452,9 @@ static void render_page(cg_app_t *app)
     if (s_page < 0) s_page = 0;
     if (s_page > pages - 1) s_page = pages - 1;      /* 行数变少 / 重排之后页号可能越界 */
 
+    /* 清空 + 逐行填用**批量更新**围起来：表格每加一行都会整表重建一遍，不围的话一页 200 行
+     * 就是 200 次重建，翻页时表格会连续闪烁（2026-09-28 用户报的问题）。围起来只重建一次 */
+    cg_table_begin_update(tbl);
     cg_table_clear(tbl);                             /* 表格里永远只有当前页这几行 */
     first = s_page * CG_PAGE_ROWS;
     last  = first + CG_PAGE_ROWS;
@@ -461,6 +464,7 @@ static void render_page(cg_app_t *app)
         row_into_slots(i);                           /* 第 i 行 → 每列一个缓冲 */
         cg_table_add_row(tbl, s_cells, s_col_count); /* 加行时控件把文字拷走，缓冲可以马上被覆盖 */
     }
+    cg_table_end_update(tbl);
 
     if (pg) {
         cg_widget_set_value_range(pg, 1, pages);     /* 分页控件：页数 = max - min + 1，最少 1 页 */
@@ -880,6 +884,9 @@ static void on_cbo_select(cg_widget_t *self, cg_event_t ev, void *user)
 
     idx = cg_widget_value(self);
     if (strcmp(id, "cbo_sort") == 0) {
+        /* 又选了同一列：什么都不做 —— 下拉框会派发"重新选了当前项"这种事件，不挡的话
+         * 会白重排一遍、表格跟着重建一次（用户看到的就是"没换列也闪一下"） */
+        if (idx == s_sort_col) return;
         s_sort_desc = 0;                            /* 换列从升序开始；同一列换方向请双击表格 */
         sort_by(app, idx);
     } else if (strcmp(id, "cbo_stat") == 0) {

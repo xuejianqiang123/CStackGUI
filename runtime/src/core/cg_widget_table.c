@@ -70,7 +70,7 @@ int cg_table_add_column(cg_widget_t *w, const char *title, int width)
     w->ncols = new_ncols;
     w->row_cells = new_ncols;
     w->items_dirty = 1;
-    cg_widget_sync(w);
+    if (!w->items_batch) cg_widget_sync(w);   /* 批量更新期间只记脏，结束时一次重建 */
     return old_ncols;
 }
 
@@ -106,7 +106,7 @@ int cg_table_add_row(cg_widget_t *w, const char *const *cells, int ncells)
     w->nrows++;
     w->row_cells = w->ncols;
     w->items_dirty = 1;
-    cg_widget_sync(w);
+    if (!w->items_batch) cg_widget_sync(w);   /* 批量更新期间只记脏，结束时一次重建 */
     return w->nrows - 1;
 }
 
@@ -130,7 +130,31 @@ void cg_table_clear(cg_widget_t *w)
     w->nrows = 0;
     w->table_sel = -1;
     w->items_dirty = 1;
-    cg_widget_sync(w);
+    if (!w->items_batch) cg_widget_sync(w);   /* 批量更新期间只记脏，结束时一次重建 */
+}
+
+/**
+ * @brief 开始批量更新表格：到 end 之前只记脏，不做任何重建
+ * @param w table 控件；类型不符直接忽略
+ * @return void 无返回值
+ * @note 存在的理由见公共头里的说明：表格每加一行都整表重建，逐行填表会连续闪烁且越填越慢
+ */
+void cg_table_begin_update(cg_widget_t *w)
+{
+    if (!w || !want_type(w, "table", "cg_table_begin_update")) return;
+    w->items_batch++;
+}
+
+/**
+ * @brief 结束批量更新：计数配平归零时把积累的改动一次重建出来
+ * @param w table 控件；类型不符直接忽略
+ * @return void 无返回值（没有未配平的 begin 时是空操作）
+ */
+void cg_table_end_update(cg_widget_t *w)
+{
+    if (!w || !want_type(w, "table", "cg_table_end_update")) return;
+    if (w->items_batch > 0) w->items_batch--;
+    if (w->items_batch == 0 && w->items_dirty) cg_widget_sync(w);
 }
 
 /**

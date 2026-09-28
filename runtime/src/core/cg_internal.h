@@ -181,6 +181,8 @@ struct cg_widget {
     char       **items;      /* listbox / combo / tabs 标签 / statusbar 分段 / terminal 的行 */
     int          nitems;
     int          items_dirty;/* 需要后端重建条目 */
+    /** 表格批量更新计数：> 0 时加行 / 清空只记脏、不重建（见 cg_table_begin_update） */
+    int          items_batch;
     int          scroll_bottom;
     /** terminal 专用：后端已经推送了多少行。比 nitems 大 = 中途裁剪/清空过，
      *  后端得整体重灌（见 cg_win_sync.c 的 sync_terminal）。 */
