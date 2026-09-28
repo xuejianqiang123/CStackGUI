@@ -133,22 +133,20 @@ static void hr_trim_cell(char *dst, int cap, const char *src, int len)
  * @brief 按逗号切一行 CSV 成若干单元格（不做引号转义）
  * @param line 行内容（不必以 '\0' 结尾）
  * @param len 行字节数
- * @param cells 出口：一段连续的单元格缓冲，第 n 格从 cells + n × stride 开始
- * @param stride 每格占多少字节（单元格缓冲的行宽）
+ * @param cells 出口：二维单元格缓冲，写满 max 格就只数不写
  * @param max 最多写几格，超出的只数不写
  * @return int 切出来的单元格个数（已夹到 max）
- * @note 这里传的是"扁平缓冲 + 行宽"，不是二维数组形参：二维数组形参在注释门禁的参数
- *       解析里会被漏数（踩过一次，报"@param 多出"），扁平写法两者都过得去
+ * @note 形参就用二维数组、行宽由宏给：调用方直接传 s_cells，不必再记一个行宽参数。
+ *       （早先为绕开注释门禁对二维数组形参的漏数，这里一度改成"扁平缓冲 + 行宽"；
+ *        门禁的 paramName 修好后改回自然写法）
  */
-static int hr_split_cells(const char *line, int len, char *cells, int stride, int max)
+static int hr_split_cells(const char *line, int len, char cells[][HR_CELL_MAX], int max)
 {
     int i, start = 0, n = 0;
 
     for (i = 0; i <= len; i++) {
         if (i == len || line[i] == ',') {
-            if (n < max) {
-                hr_trim_cell(cells + (size_t)n * (size_t)stride, stride, line + start, i - start);
-            }
+            if (n < max) hr_trim_cell(cells[n], HR_CELL_MAX, line + start, i - start);
             n++;
             start = i + 1;
         }
@@ -414,7 +412,7 @@ static void hr_html_table(void)
     hr_out_str("</tr></thead>\n<tbody>\n");
     for (r = 0; r < s.rows; r++) {
         int n = hr_split_cells((const char *)s_window + s_rows[r].off, s_rows[r].len,
-                               &s_cells[0][0], HR_CELL_MAX, HR_MAX_COLS);
+                               s_cells, HR_MAX_COLS);
 
         hr_out_str("<tr>");
         for (c = 0; c < s.cols; c++) {
@@ -522,7 +520,7 @@ static void hr_load(cg_app_t *app, const char *path)
     while (pos < take && s_window[pos] != '\n') pos++;
     llen = pos - start;
     if (llen > 0 && s_window[start + llen - 1] == '\r') llen--;
-    n = hr_split_cells((const char *)s_window + start, llen, &s_cells[0][0], HR_CELL_MAX, HR_MAX_COLS);
+    n = hr_split_cells((const char *)s_window + start, llen, s_cells, HR_MAX_COLS);
     s.cols = (n < 1) ? 1 : n;
     for (c = 0; c < s.cols; c++) {
         if (s_cells[c][0] == '\0') snprintf(s.col_title[c], HR_TITLE_MAX, "列%d", c + 1);
@@ -542,7 +540,7 @@ static void hr_load(cg_app_t *app, const char *path)
         s_rows[r].off = start;
         s_rows[r].len = llen;
         r++;
-        n = hr_split_cells((const char *)s_window + start, llen, &s_cells[0][0], HR_CELL_MAX, HR_MAX_COLS);
+        n = hr_split_cells((const char *)s_window + start, llen, s_cells, HR_MAX_COLS);
         for (c = 0; c < s.cols; c++) {
             double v = 0.0;
 

@@ -122,7 +122,10 @@ function paramName(p) {
     const m = p.match(/\(\s*\*\s*([A-Za-z_]\w*)\s*\)/);
     return m ? m[1] : null;
   }
-  const m = p.match(/([A-Za-z_]\w*)\s*(\[\s*\w*\s*\])?\s*$/);
+  // 允许"一个或多个"数组后缀：`char cells[][N]`、`int a[2][3]` 这类二维数组形参，
+  // 旧写法只认一对 []，于是取不到参数名、被当成未命名参数漏数（2026-09-28 实测：
+  // 一次落盘报 "@param 多出（签名 3 个）"，其实签名有 4 个参数）。
+  const m = p.match(/([A-Za-z_]\w*)\s*((?:\[\s*\w*\s*\])*)\s*$/);
   return m ? m[1] : null;
 }
 
