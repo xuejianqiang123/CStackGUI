@@ -1,0 +1,133 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "数据浏览器",
+    "width": 1040,
+    "height": 700,
+    "bg": "#F3EDF7",
+    "info": {
+      "product": "CStackGUI 数据浏览器",
+      "desc": "分页浏览大 CSV：建一次索引，界面只渲染当前页；支持按列排序、当前页与全部行的对比统计、导出当前页或全部行",
+      "version": "1.0.0.0",
+      "author": "CStackGUI"
+    }
+  },
+  "widgets": [
+    {
+      "id": "sb_main",
+      "type": "statusbar",
+      "rect": { "x": 0, "y": 676, "w": 1040, "h": 24 },
+      "items": ["请打开一个 CSV", "排序：原始顺序", "—"]
+    },
+    {
+      "id": "btn_open",
+      "type": "button",
+      "rect": { "x": 8, "y": 8, "w": 104, "h": 30 },
+      "text": "打开 CSV...",
+      "hint": "选一个 CSV / 文本文件；超过索引上限的文件只读前一段",
+      "events": { "click": "on_btn_open_click" }
+    },
+    {
+      "id": "btn_export_page",
+      "type": "button",
+      "rect": { "x": 120, "y": 8, "w": 132, "h": 30 },
+      "text": "导出当前页",
+      "hint": "把表格里这一页的行写成 CSV（带表头）",
+      "events": { "click": "on_btn_export_click" }
+    },
+    {
+      "id": "btn_export_all",
+      "type": "button",
+      "rect": { "x": 260, "y": 8, "w": 132, "h": 30 },
+      "text": "导出全部行",
+      "hint": "把索引到的全部行写成 CSV；攒块写盘，多少行都不占内存",
+      "events": { "click": "on_btn_export_click" }
+    },
+    {
+      "id": "btn_stats",
+      "type": "button",
+      "rect": { "x": 400, "y": 8, "w": 112, "h": 30 },
+      "text": "统计",
+      "hint": "对「统计列」做当前页 / 全部行的并排统计（最小 / 最大 / 合计 / 平均 / 非数值行数）",
+      "events": { "click": "on_btn_stats_click" }
+    },
+    {
+      "id": "lab_sort",
+      "type": "label",
+      "rect": { "x": 524, "y": 14, "w": 56, "h": 22 },
+      "text": "排序列"
+    },
+    {
+      "id": "cbo_sort",
+      "type": "combo",
+      "rect": { "x": 584, "y": 8, "w": 180, "h": 30 },
+      "hint": "选中即按该列排序；之后双击表格可在升 / 降序之间切换",
+      "items": [],
+      "events": { "select": "on_cbo_select" }
+    },
+    {
+      "id": "lab_stat",
+      "type": "label",
+      "rect": { "x": 776, "y": 14, "w": 56, "h": 22 },
+      "text": "统计列"
+    },
+    {
+      "id": "cbo_stat",
+      "type": "combo",
+      "rect": { "x": 836, "y": 8, "w": 196, "h": 30 },
+      "hint": "选好列后点「统计」，看这一列的当前页与全部行差多少",
+      "items": [],
+      "events": { "select": "on_cbo_select" }
+    },
+    {
+      "id": "grp_table",
+      "type": "group",
+      "rect": { "x": 8, "y": 46, "w": 1024, "h": 430 },
+      "text": "当前页（表格里只有这一页的行，其余的行只在索引里）",
+      "children": [
+        {
+          "id": "tbl_data",
+          "type": "table",
+          "rect": { "x": 16, "y": 30, "w": 992, "h": 392 },
+          "hint": "双击表格 = 按「排序列」排序（同一列再双击换升 / 降序）",
+          "columns": [],
+          "events": { "dblclick": "on_table_dblclick" }
+        }
+      ]
+    },
+    {
+      "id": "sp_split",
+      "type": "splitter",
+      "format": "row",
+      "rect": { "x": 8, "y": 480, "w": 1024, "h": 6 },
+      "hint": "上下拖动：数据页变大，报告区让位"
+    },
+    {
+      "id": "grp_report",
+      "type": "group",
+      "rect": { "x": 8, "y": 490, "w": 1024, "h": 146 },
+      "text": "报告 / 统计（只读，程序写）",
+      "children": [
+        {
+          "id": "edt_report",
+          "type": "edit",
+          "rect": { "x": 16, "y": 30, "w": 992, "h": 108 },
+          "multiline": true,
+          "scroll": 3,
+          "input": 1,
+          "hint": "载入限制、排序结论、当前页与全部行的统计都写在这里；只读，能选中复制"
+        }
+      ]
+    },
+    {
+      "id": "pg_main",
+      "type": "pagination",
+      "rect": { "x": 360, "y": 640, "w": 320, "h": 32 },
+      "hint": "页数 = 总行数 ÷ 每页行数；翻页只重渲染一页，不会卡",
+      "value": 1,
+      "min": 1,
+      "max": 1,
+      "events": { "change": "on_page_change" }
+    }
+  ]
+}

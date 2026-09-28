@@ -1,0 +1,94 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "环境与配置快照",
+    "width": 1000,
+    "height": 640,
+    "bg": "#F3EDF7",
+    "info": {
+      "product": "CStackGUI 环境快照",
+      "desc": "环境与配置快照示例：懒加载的树 + 目录快照，只读采集环境变量与用户数据目录",
+      "version": "1.0.0.0",
+      "author": "CStackGUI"
+    }
+  },
+  "widgets": [
+    {
+      "id": "sb_main",
+      "type": "statusbar",
+      "rect": { "x": 0, "y": 616, "w": 1000, "h": 24 },
+      "items": ["就绪", "条目 0 · 目录 0", "—"]
+    },
+    {
+      "id": "btn_refresh",
+      "type": "button",
+      "rect": { "x": 12, "y": 12, "w": 120, "h": 32 },
+      "text": "重新采集",
+      "hint": "清空树与节点表，重扫用户数据目录并重建两个根节点",
+      "events": { "click": "on_btn_refresh_click" }
+    },
+    {
+      "id": "btn_export",
+      "type": "button",
+      "rect": { "x": 140, "y": 12, "w": 120, "h": 32 },
+      "text": "导出快照",
+      "hint": "弹保存对话框，把当前已采集的内容写成 UTF-8 文本",
+      "events": { "click": "on_btn_export_click" }
+    },
+    {
+      "id": "btn_copy",
+      "type": "button",
+      "rect": { "x": 268, "y": 12, "w": 120, "h": 32 },
+      "text": "复制快照",
+      "hint": "把同一份快照文本送进剪贴板",
+      "events": { "click": "on_btn_copy_click" }
+    },
+    {
+      "id": "lab_hint",
+      "type": "label",
+      "rect": { "x": 404, "y": 16, "w": 584, "h": 24 },
+      "text": "展开节点才采集；导出 / 复制对当前已采集的内容做一次快照"
+    },
+    {
+      "id": "grp_mid",
+      "type": "group",
+      "rect": { "x": 12, "y": 52, "w": 976, "h": 400 },
+      "text": "采集内容（左：树 · 右：条目）",
+      "children": [
+        {
+          "id": "tree_main",
+          "type": "tree",
+          "rect": { "x": 12, "y": 24, "w": 360, "h": 340 },
+          "hint": "展开才采集；变量 / 分组 / 目录 / 扩展名各有不同的条目表",
+          "events": { "select": "on_tree_sel", "expand": "on_tree_expand" }
+        },
+        {
+          "id": "sp_main",
+          "type": "splitter",
+          "format": "col",
+          "rect": { "x": 376, "y": 24, "w": 6, "h": 340 },
+          "hint": "左右拖动：树变宽 / 变窄，右边的表格跟着让位"
+        },
+        {
+          "id": "tbl_items",
+          "type": "table",
+          "rect": { "x": 386, "y": 24, "w": 578, "h": 340 },
+          "columns": [
+            { "title": "名称", "w": 240 },
+            { "title": "值或大小", "w": 180 },
+            { "title": "备注" }
+          ],
+          "hint": "变量 / 扩展名 / 目录 / 根与分组节点各有不同的列内容"
+        }
+      ]
+    },
+    {
+      "id": "term_log",
+      "type": "terminal",
+      "rect": { "x": 12, "y": 460, "w": 976, "h": 148 },
+      "checked": true,
+      "value": 800,
+      "hint": "每行一条采集与导出记录"
+    }
+  ]
+}
