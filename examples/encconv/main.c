@@ -3,6 +3,15 @@
  * @brief   编码与换行转换器：枚举目录 → 判定编码 → 预览 → GBK/UTF-8 互转 + 换行统一
  * @details 真实需求：一批 GBK 老文件要转成 UTF-8。界面在 encconv.cgui 里，本文件只有行为。
  *
+ *          【这个工具的"价值"怎么让人一眼看到】（2026-09-28 按用户"好像没有体现出价值"的反馈改）
+ *          光报"转换 2、输出 71 字节"这种元数据，价值是感觉不到的。真正的一幕是：
+ *          **同一份字节，按 GBK 解读是正常中文，拿 UTF-8 打开就是乱码**。所以：
+ *            * 「预览选中」（或双击表格）对疑似 GBK 的文件**两种解读都贴出来**（A 按 GBK 正确解、
+ *              B 同一份字节按 UTF-8 强行解），差别当场可见；
+ *            * 「造示例文件」一键在目录框那个目录里造 4 个文件（3 个真 GBK + 1 个纯 ASCII 对照），
+ *              不用自己先找素材 —— 原先用户数据目录是空的，一开箱点「枚举文件」得到 0 个，
+ *              整条流程没有可看的东西。
+ *
  *          【第一步：先把运行时能力核实清楚，再决定怎么做】
  *
  *          - 编码转换（现成的两把刷子，都返回堆串、用完 cg_free，失败返回 NULL）：
@@ -219,9 +228,9 @@ static const char *enc_vtext(int v, int brief)
         }
     }
     switch (v) {
-    case ENC_V_UTF8:     return "合法 UTF-8，无需转换（注：纯 ASCII 也走这条）";
+    case ENC_V_UTF8:     return "无需转换（已是合法 UTF-8；纯 ASCII 也算）";
     case ENC_V_UTF8_BOM: return "带 UTF-8 BOM，本身即 UTF-8";
-    case ENC_V_GBK:      return "不是合法 UTF-8，按疑似 GBK/ANSI 处理（可能会误判）";
+    case ENC_V_GBK:      return "候选：疑似 GBK/ANSI（判定只是猜，可能误判）";
     case ENC_V_UTF16:    return "UTF-16 BOM，本工具不处理";
     case ENC_V_BINARY:   return "含 0x00，疑似二进制，跳过";
     case ENC_V_TOO_BIG:  return "超 8 MB 上限，跳过（不截断）";
@@ -412,8 +421,8 @@ static void preview_selected(cg_app_t *app)
     }
 
     cg_term_clear(term);
-    note(app, CG_TERM_SYS, "预览：%s —— 只显示前 %d 行，按「%s」试解（乱码就是乱码，不做掩盖）",
-         s_files[row].name, ENCCONV_PREVIEW_LINES, enc_vtext(s_files[row].verdict, 1));
+    note(app, CG_TERM_SYS, "预览：%s（%s）—— 只显示前 %d 行；疑似 GBK 的会贴**两种解读**做对照",
+         s_files[row].name, enc_vtext(s_files[row].verdict, 1), ENCCONV_PREVIEW_LINES);
 
     if (s_files[row].verdict == ENC_V_TOO_BIG) {
         note(app, CG_TERM_SYS, "文件超上限，未读取。");
@@ -450,6 +459,9 @@ static void preview_selected(cg_app_t *app)
             if (n > ENCCONV_MAX_BYTES) n = ENCCONV_MAX_BYTES;
             memcpy(s_in, raw + off, (size_t)n);
             s_in[n] = '\0';
+
+            /* A：按 GBK 正确解读 —— 这就是"转换之后"的样子 */
+            note(app, CG_TERM_TX, "【A 按 GBK 正确解读】（= 转换之后的内容）");
             txt = cg_gbk_to_utf8((const char *)s_in);   /* 试解：这一步对错都照实显示 */
             if (txt) {
                 cg_term_write(term, CG_TERM_RX, txt, first_lines_len(txt, (int)strlen(txt), ENCCONV_PREVIEW_LINES));
@@ -457,6 +469,12 @@ static void preview_selected(cg_app_t *app)
             } else {
                 note(app, CG_TERM_SYS, "按 GBK 解不出内容。");
             }
+
+            /* B：**同一份字节**按 UTF-8 强行解读 —— 也就是"现在拿编辑器打开它看到的乱码"。
+             * 这里故意一个字节都不转，直接把原始字节写进终端，让它按 UTF-8 解出来 */
+            note(app, CG_TERM_SYS, "【B 同一份字节按 UTF-8 强行解读】（= 现在双击文件看到的乱码）");
+            cg_term_write(term, CG_TERM_RX, raw + off,
+                          first_lines_len((const char *)raw + off, n, ENCCONV_PREVIEW_LINES));
         } else {
             int cut = first_lines_len((const char *)raw + off, len - off, ENCCONV_PREVIEW_LINES);
 
@@ -464,6 +482,68 @@ static void preview_selected(cg_app_t *app)
         }
     }
     cg_free(raw);
+}
+
+/**
+ * @brief 在当前目录框里造几个典型 GBK 老文件（一键就有素材可演示）
+ * @param app 应用
+ * @return void 无返回值
+ * @note 为什么需要它：本工具的价值是"把乱码变回正常中文"，可这要求手头先有一批 GBK 老文件 ——
+ *       一开箱目录是空的，点「枚举文件」得到 0 个，价值就没机会展示（用户反馈）。造的 4 个文件
+ *       对应真实工控场景：GBK+CRLF 的报警记录、GBK+LF 的参数表、GBK 的设备清单，外加一个
+ *       **纯 ASCII 对照**（它会判"无需转换"，把"纯 ASCII 谁都合法"这条边界也一并演示）。
+ *       源码里的文本是 UTF-8，落盘前用 cg_utf8_to_gbk 转成 GBK 字节 —— 所以造出来的是真 GBK 文件
+ */
+static void make_samples(cg_app_t *app)
+{
+    static const struct {
+        const char *name;   /**< 文件名 */
+        const char *text;   /**< 内容（UTF-8 源码，落盘前转 GBK） */
+    } k_samples[] = {
+        { "报警记录_2026-09-28.txt",
+          "时间,设备,信息\r\n19:34:01,PLC-1,主轴过载报警\r\n19:35:22,PLC-2,急停按下\r\n19:36:10,PLC-1,恢复正常\r\n" },
+        { "参数表.txt",
+          "参数名,设定值,单位\n目标温度,185,度\n保温时间,45,分钟\n冷却方式,风冷,-\n" },
+        { "设备清单.csv",
+          "编号,名称,状态\r\n01,一号注塑机,运行\r\n02,二号注塑机,停机\r\n03,机械手,待机\r\n" },
+        { "readme_ascii.txt",
+          "plain ascii only - this one needs no conversion\r\n" },
+    };
+    cg_widget_t *edt = cg_find(app, "edt_dir");
+    const char  *dir = edt ? cg_widget_text(edt) : NULL;
+    char        *fallback = NULL;
+    int          i, ok = 0, fail = 0;
+
+    if (!dir || !*dir) {                     /* 目录框空着：先落到用户数据目录 */
+        fallback = cg_app_data_dir();
+        if (!fallback) {
+            note(app, CG_TERM_SYS, "目录框空着，且取用户数据目录失败：先把目录填上。");
+            return;
+        }
+        if (edt) cg_widget_set_text(edt, fallback);
+        dir = fallback;
+    }
+
+    for (i = 0; i < (int)(sizeof(k_samples) / sizeof(k_samples[0])); i++) {
+        char *gbk  = cg_utf8_to_gbk(k_samples[i].text);      /* UTF-8 源码 -> GBK 字节 */
+        char *path = cg_path_join(dir, k_samples[i].name);
+
+        if (!gbk || !path || cg_file_write_bytes(path, gbk, (int)strlen(gbk)) != 0) {
+            fail++;
+            note(app, CG_TERM_SYS, "  %s：写不进去（目录可能不存在），跳过。", k_samples[i].name);
+        } else {
+            ok++;
+            note(app, CG_TERM_TX, "  已造 %s（%d 字节，GBK）", k_samples[i].name, (int)strlen(gbk));
+        }
+        if (gbk)  cg_free(gbk);
+        if (path) cg_free(path);
+    }
+
+    note(app, CG_TERM_SYS, "造示例完成：%d 个成功、%d 个失败（目录：%s）", ok, fail, dir);
+    note(app, CG_TERM_SYS, "  其中 readme_ascii.txt 是纯 ASCII 对照：它会判「无需转换」（谁都能读它）");
+    if (fallback) cg_free(fallback);
+
+    scan_dir(app);                            /* 顺手枚举一遍：接着双击一行就能看对照预览 */
 }
 
 /* ------------------------------------------------------------ 转换与落盘 */
@@ -583,11 +663,30 @@ static int build_output(cg_app_t *app, int idx, int *out_len)
 }
 
 /**
+ * @brief 另存时的新文件名：换掉原扩展名再加 .utf8.txt / .gbk.txt
+ * @param name 原文件名（相对目录的名字）
+ * @param dir 0 = GBK→UTF-8、1 = UTF-8→GBK
+ * @return char * 堆串（cg_str_format 出的），调用方 cg_free；失败返回 NULL
+ * @note 早先是直接追加，于是得到 `参数表.txt.utf8.txt` 这种双后缀 —— 观感差、也没必要；
+ *       现在换成 `参数表.utf8.txt`。没有扩展名（或以点开头的隐藏名）就退化成追加
+ */
+static char *out_name(const char *name, int dir)
+{
+    const char *dot = name ? strrchr(name, '.') : NULL;
+    const char *suf = (dir == 1) ? ".gbk.txt" : ".utf8.txt";
+
+    if (!name) return NULL;
+    if (dot && dot != name) return cg_str_format("%.*s%s", (int)(dot - name), name, suf);
+    return cg_str_format("%s%s", name, suf);
+}
+
+/**
  * @brief 遍历枚举表，把「按当前方向算候选」的文件逐个转换并落盘，边做边报进度
  * @param app 应用
  * @return void 无返回值
- * @note 默认另存新文件（原名 + .utf8.txt / .gbk.txt）；勾了「覆盖原文件」要两步确认，
- *       第一次点击只提示，第二次才真写。本框架**没有改名接口**，所以覆盖就是直接写原名
+ * @note 默认另存新文件（换掉扩展名再加 .utf8.txt / .gbk.txt：参数表.txt → 参数表.utf8.txt）；
+ *       勾了「覆盖原文件」要两步确认，第一次点击只提示，第二次才真写。
+ *       本框架**没有改名接口**，所以覆盖就是直接写原名
  */
 static void convert_all(cg_app_t *app)
 {
@@ -671,7 +770,7 @@ static void convert_all(cg_app_t *app)
             }
             cg_free(src);
         } else {
-            char *newname = cg_str_format("%s%s", f->name, dir == 0 ? ".utf8.txt" : ".gbk.txt");
+            char *newname = out_name(f->name, dir);
             char *dst     = newname ? cg_path_join(s_dir, newname) : NULL;
 
             if (newname) cg_free(newname);
@@ -733,11 +832,13 @@ static void on_btn_click(cg_widget_t *self, cg_event_t ev, void *user)
 
     if (!cg_app_has_window(app)) {                         /* 自检不开窗：不发真 I/O */
         note(app, CG_TERM_SYS, "自检模式：跳过「%s」（不真读盘）。",
-             strcmp(id, "btn_scan") == 0    ? "枚举"
-           : strcmp(id, "btn_preview") == 0 ? "预览" : "转换");
+             strcmp(id, "btn_scan") == 0     ? "枚举"
+           : strcmp(id, "btn_preview") == 0  ? "预览"
+           : strcmp(id, "btn_samples") == 0  ? "造示例文件" : "转换");
         return;
     }
 
+    if (strcmp(id, "btn_samples") == 0) { make_samples(app);     return; }
     if (strcmp(id, "btn_scan") == 0)    { scan_dir(app);         return; }
     if (strcmp(id, "btn_preview") == 0) { preview_selected(app); return; }
     if (strcmp(id, "btn_convert") == 0) { convert_all(app);      return; }

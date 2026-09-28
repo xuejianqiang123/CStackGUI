@@ -7,7 +7,7 @@
     "bg": "#F3EDF7",
     "info": {
       "product": "CStackGUI 编码转换器",
-      "desc": "GBK/UTF-8 互转 + 换行统一：整读 + 8 MB 上限，判定按 UTF-8 校验，可能误判",
+      "desc": "GBK/UTF-8 互转 + 换行统一：整读 + 8 MB 上限，判定按 UTF-8 校验可能误判；可一键造 GBK 示例文件，预览按两种解读对照",
       "version": "1.0.0.0",
       "author": "CStackGUI"
     },
@@ -35,21 +35,29 @@
         {
           "id": "edt_dir",
           "type": "edit",
-          "rect": { "x": 64, "y": 28, "w": 430, "h": 26 },
+          "rect": { "x": 64, "y": 28, "w": 340, "h": 26 },
           "hint": "填要扫描的目录。没有「选目录」对话框，所以手填路径；或点右边的便捷按钮"
         },
         {
           "id": "btn_datadir",
           "type": "button",
-          "rect": { "x": 502, "y": 28, "w": 150, "h": 28 },
+          "rect": { "x": 412, "y": 28, "w": 120, "h": 28 },
           "text": "用用户数据目录",
           "hint": "把用户数据目录填进目录框（该目录会自动创建）",
           "events": { "click": "on_btn_click" }
         },
         {
+          "id": "btn_samples",
+          "type": "button",
+          "rect": { "x": 540, "y": 28, "w": 120, "h": 28 },
+          "text": "造示例文件",
+          "hint": "在目录框那个目录里造 4 个示例（3 个真 GBK 中文文件 + 1 个纯 ASCII 对照），然后自动枚举 —— 没有素材时用它一键开始",
+          "events": { "click": "on_btn_click" }
+        },
+        {
           "id": "btn_scan",
           "type": "button",
-          "rect": { "x": 660, "y": 28, "w": 150, "h": 28 },
+          "rect": { "x": 668, "y": 28, "w": 120, "h": 28 },
           "text": "枚举文件",
           "hint": "按文本类扩展名枚举目录；每个文件整读一遍做判定（可能较慢）",
           "events": { "click": "on_btn_click" }
@@ -57,9 +65,9 @@
         {
           "id": "btn_preview",
           "type": "button",
-          "rect": { "x": 816, "y": 28, "w": 176, "h": 28 },
+          "rect": { "x": 796, "y": 28, "w": 196, "h": 28 },
           "text": "预览选中",
-          "hint": "把选中文件前 20 行按当前判定试解后显示（双击表格也行）",
+          "hint": "把选中文件前 20 行按当前判定试解后显示；疑似 GBK 的会贴两种解读做对照（双击表格也行）",
           "events": { "click": "on_btn_click" }
         },
         {
