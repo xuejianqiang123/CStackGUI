@@ -168,7 +168,9 @@ export const KIND_EVENTS: Record<string, CgEvent[]> = {
   image: ["click", "dblclick"],
   timer: ["tick"],
   serial: ["arrive"],
-  canvas: ["click", "dblclick"],
+  /* 画板：2026-09-28 补上自己的鼠标三件套（拖拽作图只能在子控件自己的消息里做），
+   * 事件里的坐标就是画板内的逻辑像素。必须和 runtime/src/core/cg_doc_kind.c 的 canvas 行一致 */
+  canvas: ["click", "dblclick", "mousedown", "mouseup", "mousemove"],
   colorpicker: ["change"],
   browser: [],
   badge: [],

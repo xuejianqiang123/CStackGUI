@@ -468,11 +468,11 @@ static void draw_canvas(HDC dc, cg_widget_t *w, const RECT *rc)
 }
 
 /**
- * @brief 画板控件窗口过程：自绘 + 左键抬起派发 click（双击由运行时合成）
+ * @brief 画板控件窗口过程：自绘 + 派发自己的鼠标事件（按下 / 移动 / 抬起）与 click
  * @param hwnd 本控件窗口
  * @param msg 消息号
- * @param wp 附加参数（随 msg 而定，本过程未使用）
- * @param lp 附加参数（随 msg 而定，本过程未使用）
+ * @param wp 附加参数（鼠标消息里是 MK_* 位）
+ * @param lp 附加参数（鼠标消息里是客户区坐标）
  * @return LRESULT 处理结果，未处理的消息交给 DefWindowProcW
  */
 static LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
@@ -496,11 +496,33 @@ static LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         EndPaint(hwnd, &ps);
         return 0;
     }
+    case WM_LBUTTONDOWN:
+    case WM_MOUSEMOVE:
     case WM_LBUTTONUP: {
         cg_widget_t *w = cgw_widget_by_hwnd(app, hwnd);
         if (w && !g_win_in_notify) {
+            /* 画板级的鼠标事件（2026-09-28 补）：拖拽作图必须走**子控件自己的消息** ——
+             * 按下 / 移动 / 抬起落在画板上时只送给画板，父窗口一辈子收不到，所以挂窗口级
+             * 事件是画不出东西的（那次"画板无法画"的根因）。
+             * 坐标填**画板内**的逻辑像素（业务拿到就能直接画）；按下时 SetCapture，
+             * 这样拖出控件边界也还能收到移动与抬起，一笔不会在边上断掉。 */
+            int sc = (w->app && w->app->scale > 0) ? w->app->scale : 100;
+            cg_event_t ev = (msg == WM_LBUTTONDOWN) ? CG_EVENT_MOUSEDOWN
+                          : (msg == WM_LBUTTONUP)   ? CG_EVENT_MOUSEUP
+                                                    : CG_EVENT_MOUSEMOVE;
+
+            if (msg == WM_LBUTTONDOWN) SetCapture(hwnd);
+            w->ev_x = (int)(short)LOWORD(lp) * 100 / sc;
+            w->ev_y = (int)(short)HIWORD(lp) * 100 / sc;
+            w->ev_keys = ((wp & MK_CONTROL) ? 1 : 0) | ((wp & MK_SHIFT) ? 2 : 0) |
+                         ((GetKeyState(VK_MENU) & 0x8000) ? 4 : 0);
+
             g_win_in_notify = 1;
-            cg_dispatch(w, CG_EVENT_CLICK);   /* 双击由运行时按系统间隔合成 */
+            if (cg_kind_supports_event(w->type, ev)) cg_dispatch(w, ev);
+            if (msg == WM_LBUTTONUP) {
+                ReleaseCapture();
+                cg_dispatch(w, CG_EVENT_CLICK);   /* 抬起补一次 click；双击由运行时按系统间隔合成 */
+            }
             g_win_in_notify = 0;
         }
         break;

@@ -6,19 +6,14 @@
  *          "擦掉某一笔"的接口。撤销只能：丢掉最后一条 → 清空记录 → 把剩下的逐条重放。
  *          本示例把每条命令**另存**进一张固定数组，它才是可撤销的"真相来源"。
  *
- *          交互：**画板控件自身没有鼠标事件**（只声明点击 / 双击，没有按下 / 拖动 / 抬起），
- *          所以"按下 → 拖 → 抬起"走的是**窗口级**鼠标事件（写在 .cgui 的 app.events 里）；
- *          坐标从事件里取（相对**窗口客户区**），再减掉画板的 x / y 才是画板内坐标。
+ *          交互：**画板有自己的鼠标事件**（`mousedown` / `mousemove` / `mouseup`，2026-09-28 补齐），
+ *          所以"按下 → 拖 → 抬起"直接绑在**画板**上；回调里 `cg_event_x` / `cg_event_y` 给的
+ *          就是**画板内**的逻辑像素，拿到就能画（不用再减 `cg_widget_x/y`）。运行时在按下时
+ *          自动捕获鼠标，拖出画板边界也还能收到移动与抬起，一笔不会在边上断掉。
  *
- *          **2026-09-28 真机实测结论（合成键鼠，可复现，见本次提交说明）**：
- *            用程序化键鼠在真实窗口里做对照实验 —— 合成**点击「撤销」按钮**能正常驱动程序
- *            （日志出现"撤销一笔，剩 3 笔"），说明合成输入与坐标换算都没问题；而同样的
- *            "按下 → 拖动 → 抬起"在**画板上**与**窗口空白客户区**各做一次，程序**毫无反应**
- *            （日志里没有任何作图记录）。结论：这套"用窗口级鼠标事件做拖拽"的写法在当前
- *            运行时**走不通**；加上画板只声明点击 / 双击、且点击不回写坐标，**目前无法在画板上作图**。
- *          这是产品缺一块能力（画板需要自己的 mousedown / mousemove / mouseup，或窗口级鼠标事件
- *          需真正派发并对子控件区域做命中测试），不是本示例写错 —— 设计、命令表与回放逻辑都是
- *          对的，能力补齐后本示例即可直接可用。
+ *          为什么不能挂**窗口级**（`app.events`）：按下 / 移动 / 抬起落在画板这个**子窗口**上时
+ *          消息只送给画板，父窗口收不到 —— 早先那种写法在真机上"按下拖动毫无反应"，根因就是这条。
+ *          当时把"画板不能拖拽作图"记成了已知缺口，能力补齐后那条结论已作废。
  *
  *          只 include cstackgui.h 与标准头；不碰 Windows 头、不 malloc / free（命令表是固定数组，
  *          上限写在宏里）；截图 / 写盘前先问有没有窗口，这样自检（不开窗）也能跑干净。
@@ -146,50 +141,45 @@ static int cmd_push(const draw_op_t *o)
 }
 
 /**
- * @brief 把窗口客户区坐标换算成画板内坐标
+ * @brief 点是否落在画板内
  * @param cv 画板控件
- * @param wx 窗口客户区 x（来自事件）
- * @param wy 窗口客户区 y（来自事件）
- * @param cx 出参：画板内 x
- * @param cy 出参：画板内 y
+ * @param x 画板内 x（画板自己派发的鼠标事件给的就是画板内坐标）
+ * @param y 画板内 y
  * @return int 1 落在画板内、0 落在画板外（这一下不算画）
+ * @note 坐标口径 2026-09-28 起变了：画板有了自己的鼠标事件，事件里的坐标**已经是画板内**的
+ *       逻辑像素，所以这里只做范围判断 —— 不再需要减掉画板的 x / y（那是窗口级事件时代的算法）
  */
-static int to_canvas(cg_widget_t *cv, int wx, int wy, int *cx, int *cy)
+static int canvas_hit(cg_widget_t *cv, int x, int y)
 {
-    int x = wx - cg_widget_x(cv);
-    int y = wy - cg_widget_y(cv);
-
-    if (x < 0 || y < 0 || x > cg_widget_w(cv) || y > cg_widget_h(cv)) return 0;
-    *cx = x;
-    *cy = y;
-    return 1;
+    return (x >= 0 && y >= 0 && x <= cg_widget_w(cv) && y <= cg_widget_h(cv)) ? 1 : 0;
 }
 
 /**
- * @brief 窗口级鼠标事件：一个 handler 服务按下 / 拖动 / 抬起三个事件
- * @param self 窗口伪控件（窗口级事件的发送者）
+ * @brief 画板级鼠标事件：一个 handler 服务按下 / 拖动 / 抬起三个事件
+ * @param self 画板控件（这三个事件由画板自己派发，self 就是画板）
  * @param ev 事件类型（按下 / 拖动 / 抬起之一）
  * @param user 未使用
  * @return void 无返回值
- * @note 画板控件自己没有鼠标事件，所以"按下 → 拖 → 抬起"只能挂在**窗口**上；
- *       坐标相对窗口客户区，减掉画板的 x / y 才是画板内坐标。自由笔在拖动事件里逐段补线
+ * @note 坐标就是**画板内**的逻辑像素（画板自己的鼠标事件给的口径），拿到直接用；只有"起笔"与
+ *       "每一段"做范围判断 —— 拖到画板外的点跳过，笔迹不会糊到边上。自由笔在拖动事件里逐段补线
  */
-static void on_win_mouse(cg_widget_t *self, cg_event_t ev, void *user)
+static void on_board_mouse(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app = cg_app_of(self);
-    cg_widget_t *cv;
+    cg_widget_t *cv  = self;                     /* 事件从画板来，cv 就是它自己 */
     draw_op_t    o;
     int          x, y;
 
     (void)user;
-    if (!cg_app_has_window(app)) return;         /* 自检不开窗，窗口级事件也不会来 */
-    cv = cg_find(app, "cv_board");
-    if (!cv) return;
+    if (!cg_app_has_window(app)) return;         /* 自检不开窗：合成事件下不画、也不报错 */
+
+    x = cg_event_x(self);
+    y = cg_event_y(self);
 
     if (ev == CG_EVENT_MOUSEDOWN) {
         cg_widget_t *cbo, *cp, *pe;
 
-        if (!to_canvas(cv, cg_event_x(self), cg_event_y(self), &x, &y)) return;
+        if (!canvas_hit(cv, x, y)) return;       /* 起笔必须落在画板里 */
         cbo = cg_find(app, "cbo_tool");
         cp  = cg_find(app, "cp_ink");
         pe  = cg_find(app, "edt_pen");
@@ -209,7 +199,7 @@ static void on_win_mouse(cg_widget_t *self, cg_event_t ev, void *user)
     /* 事件名就是 CG_EVENT_* 这一套（别写成 CG_EV_*：2026-09-28 编译期撞过，gcc 会替你纠正） */
     if (ev == CG_EVENT_MOUSEMOVE) {
         if (!s_drawing || s_tool != TOOL_FREEHAND) return;   /* 只有自由笔边拖边画 */
-        if (!to_canvas(cv, cg_event_x(self), cg_event_y(self), &x, &y)) return;
+        if (!canvas_hit(cv, x, y)) return;
         memset(&o, 0, sizeof(o));
         o.type = OP_LINE;
         o.x1 = s_lx;
@@ -239,7 +229,7 @@ static void on_win_mouse(cg_widget_t *self, cg_event_t ev, void *user)
         refresh_status(app);
         return;
     }
-    if (!to_canvas(cv, cg_event_x(self), cg_event_y(self), &x, &y)) return;
+    if (!canvas_hit(cv, x, y)) return;           /* 收尾这一下也要在画板里 */
 
     memset(&o, 0, sizeof(o));
     o.color = s_ink;
@@ -417,7 +407,7 @@ static void on_ready(cg_app_t *app, void *user)
 /* ------------------------------------------------------------ 绑定表 */
 
 static const cg_binding_t k_bindings[] = {
-    CG_BIND("on_win_mouse", on_win_mouse),   /**< 按下 / 拖动 / 抬起共用 */
+    CG_BIND("on_board_mouse", on_board_mouse),   /**< 画板的按下 / 拖动 / 抬起共用 */
     CG_BIND("on_edit_op",   on_edit_op),     /**< 撤销 / 重做 / 清空共用 */
     CG_BIND("on_export",    on_export),
     CG_BIND_END

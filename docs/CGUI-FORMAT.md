@@ -757,7 +757,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `arrive` | 串口组件收到数据（缓冲有数据就在主线程派发；回调里 `cg_widget_serial()` 取句柄再 `cg_serial_read()`，数据落到哪个控件由这行代码决定） | 只有串口组件 |
 | `check` | 表格勾选列的行勾选状态变了 | 只有表格（`.cgui` 里开 `check`） |
 | `gotfocus` / `lostfocus` | 控件获得 / 失去键盘焦点 | 有焦点概念的原生控件（输入类、按钮、开关勾选、滑块、列表/下拉/树/表格/标签页）|
-| `mousedown` / `mouseup` | 按下 / 松开左键 | 窗口（客户区）+ `button` / `edit`（控件内）|
+| `mousedown` / `mouseup` | 按下 / 松开左键 | 窗口（客户区）+ `button` / `edit` / `canvas`（控件内；**画板给的坐标是画板内的**逻辑像素）|
 | `rdown` / `rup` | 按下 / 松开右键 | 同上 |
 | `mousemove` | 鼠标移动（触发频繁，别做重活） | 同上 |
 | `keydown` / `keyup` / `char` / `wheel` | 按键 / 放键 / 字符输入 / 滚轮 | 窗口（全窗口）+ `button` / `edit`（控件持有焦点时）|
@@ -811,7 +811,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `shape` | 外形框 | 否 | 120×120 | — | **无** | 自注册面板窗口（自绘外形）|
 | `timer` | 时钟 | 否 | 无矩形 | — | `tick` | **无窗口**，后端 50ms 心跳驱动（`period` 毫秒）|
 | `serial` | 串口 | 否 | 无矩形 | — | `arrive` | **无窗口**（像易语言的串口组件）：只带参数（`port`/`baud`/`bits`/`stop`/`parity`/`auto`），收到数据在主线程派发 `arrive`，**数据落到哪个控件由用户代码决定**（terminal / chart / listbox 都行） |
-| `canvas` | 画板 | 否 | 240×160 | — | `click`、`dblclick` | 自绘窗口（`cg_canvas_*` 画线/矩形/椭圆/文字）|
+| `canvas` | 画板 | 否 | 240×160 | — | `click`、`dblclick`、鼠标三件套（`mousedown` / `mouseup` / `mousemove`；坐标是画板内逻辑像素，按下时运行时自动捕获鼠标）| 自绘窗口（`cg_canvas_*` 画线/矩形/椭圆/文字）|
 | `colorpicker` | 颜色选择 | 否 | 64×28 | — | `change` | `BUTTON` 自绘色块（点击弹系统取色器，值存 `value`）|
 | `browser` | 网页浏览 | 否 | 320×240 | — | **无** | `AtlAxWin` 宿主系统 WebBrowser（起不来降级 `STATIC` 占位；实验性）|
 | `badge` | 徽章 | 否 | 48×24 | `99+` | **无** | `BUTTON` 自绘小圆片 |
@@ -901,13 +901,13 @@ C 侧 `runtime/src/core/cg_doc_kind.c` 的 `k_kinds`，画布侧 `designer/src/m
 - `rate` 星数 = `max-min`（上限 10）；`pagination` 页数 = `max-min+1`；当前值都用 `cg_widget_value()` 读。
 - `canvas` 用 `cg_canvas_clear/set_color/set_line_width/line/rect/ellipse/text` 在回调里画，
   绘制命令被录下来，重绘时按序回放。
-- **`canvas` 目前不能拖拽作图（2026-09-28 实测，已知缺口）**：画板自身只声明 `click` / `dblclick`，
-  **没有** `mousedown` / `mousemove` / `mouseup`；而把这三个挂在**窗口级**（`app.events`）也不管用 ——
-  程序化键鼠的对照实验里，合成**点击按钮**能正常驱动程序（日志有记录），但同样的合成"按下 → 拖动 → 抬起"
-  在**画板上**与**窗口空白客户区**各做一次，程序**毫无反应**，即窗口级鼠标事件在真机运行中没有被派发。
-  另外画板的 `click` 也**不回写坐标**（`ev_x` / `ev_y` 拿不到）。所以"在画板上拖拽作图"这条路目前走不通，
-  要支持它需要给 `canvas` 补上自己的鼠标事件（或让窗口级鼠标事件真正派发并对子控件区域做命中测试）。
-  参考实现见 `examples\drawpad`（设计、命令表与回放逻辑都是对的，能力补齐即可直接用）。
+- **`canvas` 有自己的一套鼠标事件（2026-09-28 补齐）**：`mousedown` / `mousemove` / `mouseup` 直接绑在
+  画板上，回调里 `cg_event_x` / `cg_event_y` 给的就是**画板内**的逻辑像素（拿到就能画，不必再减
+  `cg_widget_x/y`）；按下时运行时自动 `SetCapture`，拖出画板边界也还能收到移动与抬起 —— 一笔不会在
+  边上断掉。`click` / `dblclick` 照旧可用，坐标也一并回写了。
+  早先那句"画板不能拖拽作图"**已作废**：那是把这三个事件挂在**窗口级**（`app.events`）的写法 ——
+  按下 / 移动 / 抬起落在画板这个子窗口上时只送给画板，父窗口收不到，所以毫无反应。
+  完整可用的例子见 `examples\drawpad`。
 - `badge` / `tag` / `shape` 只有 `text` 与样式（配色/圆角）能配；`tag` 能点（`click`），`badge` / `shape` 没有事件。
 - `card` 与 `group` / `box` 同为容器，子控件坐标相对卡片客户区。
 - 表格的**行级附加状态**（行勾选 / 行数值 / 行图标）**不是 `.cgui` 字段**，是运行时 API：

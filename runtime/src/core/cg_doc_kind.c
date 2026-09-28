@@ -68,7 +68,10 @@ static const cg_kind_info_t k_kinds[] = {
     { "separator",  CG_K_SEPARATOR,  0, 200,   2, "",     0 },
     { "image",      CG_K_IMAGE,      0, 200, 120, "",     CG_EV_CLICK | CG_EV_DBLCLICK },
     { "timer",      CG_K_TIMER,      0,   0,   0, "",     CG_EV_TICK },
-    { "canvas",     CG_K_CANVAS,     0, 240, 160, "",     CG_EV_CLICK | CG_EV_DBLCLICK },
+    /* 画板：2026-09-28 补上自己的鼠标三件套 —— 拖拽作图只能在**子控件自己的消息**里做，
+     * 落在画板上的按下 / 移动 / 抬起只送给画板，父窗口永远收不到（见 cg_win_draw_canvas.c） */
+    { "canvas",     CG_K_CANVAS,     0, 240, 160, "",     CG_EV_CLICK | CG_EV_DBLCLICK |
+                                                          CG_EV_MOUSEDOWN | CG_EV_MOUSEUP | CG_EV_MOUSEMOVE },
     { "colorpicker", CG_K_COLORPICK, 0,  64,  28, "",     CG_EV_CHANGE },
     { "browser",    CG_K_BROWSER,    0, 320, 240, "",     0 },
     { "badge",      CG_K_BADGE,      0,  48,  24, "99+",  0 },

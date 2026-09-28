@@ -10,11 +10,6 @@
       "desc": "鼠标拖拽作图、撤销 / 重做、导出 PNG；绘制命令被录制、重绘时按序回放",
       "version": "1.0.0.0",
       "author": "CStackGUI"
-    },
-    "events": {
-      "mousedown": "on_win_mouse",
-      "mousemove": "on_win_mouse",
-      "mouseup": "on_win_mouse"
     }
   },
   "widgets": [
@@ -105,7 +100,12 @@
       "type": "canvas",
       "rect": { "x": 12, "y": 54, "w": 736, "h": 372 },
       "style": { "bg": "#FFFFFF" },
-      "hint": "在画板上按下并拖动即作图；图形是被录制的绘制命令，重绘时按序回放"
+      "hint": "在画板上按下并拖动即作图；图形是被录制的绘制命令，重绘时按序回放",
+      "events": {
+        "mousedown": "on_board_mouse",
+        "mousemove": "on_board_mouse",
+        "mouseup": "on_board_mouse"
+      }
     },
     {
       "id": "term_log",
