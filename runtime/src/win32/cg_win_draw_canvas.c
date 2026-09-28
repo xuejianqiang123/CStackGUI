@@ -468,6 +468,22 @@ static void draw_canvas(HDC dc, cg_widget_t *w, const RECT *rc)
 }
 
 /**
+ * @brief 画板一帧的适配器：把 draw_canvas 塞进双缓冲回调的签名
+ * @param mem 内存位图 DC（双缓冲的离屏 DC）
+ * @param rc 离屏位图矩形（左上角 0,0）
+ * @param vctx canvas_ctx_t（只需要里面的 w）
+ * @return void 无返回值
+ * @note draw_canvas 自己先把整块 rc 铺满底色再回放命令，所以这一帧是"画满 rc"的 ——
+ *       双缓冲的前提（帧没画满会在贴上屏时留下垃圾像素）
+ */
+static void canvas_body(HDC mem, const RECT *rc, void *vctx)
+{
+    canvas_ctx_t *ctx = (canvas_ctx_t *)vctx;
+
+    if (ctx->w) draw_canvas(mem, ctx->w, rc);
+}
+
+/**
  * @brief 画板控件窗口过程：自绘 + 派发自己的鼠标事件（按下 / 移动 / 抬起）与 click
  * @param hwnd 本控件窗口
  * @param msg 消息号
@@ -489,7 +505,15 @@ static LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         cg_widget_t *w = cgw_widget_by_hwnd(app, hwnd);
         GetClientRect(hwnd, &rc);
         if (w) {
-            draw_canvas(dc, w, &rc);
+            /* 双缓冲：draw_canvas 是"先铺满底色、再一笔笔描图形"，直绘在屏幕上时每一笔之间
+             * 都是可见的中间态 —— 拖动预览（每步整表重放）下就是肉眼可见的持续闪烁
+             * （2026-09-28 用户报"画图时一直在闪烁"）。与 ring/progress/chart/panel/image
+             * 统一走 cgw_paint_buffered：先画进内存位图，最后一次贴上屏。 */
+            canvas_ctx_t ctx;
+            ctx.app  = app;
+            ctx.hwnd = hwnd;
+            ctx.w    = w;
+            cgw_paint_buffered(dc, &rc, canvas_body, &ctx);
         } else {
             FillRect(dc, &rc, cgw_brush_for(cg_win_behind_rgb(app, hwnd)));
         }

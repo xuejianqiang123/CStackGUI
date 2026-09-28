@@ -912,6 +912,8 @@ C 侧 `runtime/src/core/cg_doc_kind.c` 的 `k_kinds`，画布侧 `designer/src/m
   绘制记录，重绘时按序回放。所以想做拖动预览（橡皮筋），只能自己维护命令表 —— 把**临时命令**写进
   命令表的空闲槽、`cg_canvas_clear()` 后连已提交的一起重放一次，松手再把它正式提交（下一次移动会
   覆盖那个槽位，所以它始终不算已提交）。`examples\drawpad` 的 `preview_op` 就是这么做的。
+  画板的重绘走**双缓冲**（与 `ring` / `progress` / `chart` / `panel` / `image` 一致）：一帧先画进
+  内存位图、最后一次贴上屏，所以"每一步重放整张画布"这种预览不会闪。
 - `badge` / `tag` / `shape` 只有 `text` 与样式（配色/圆角）能配；`tag` 能点（`click`），`badge` / `shape` 没有事件。
 - `card` 与 `group` / `box` 同为容器，子控件坐标相对卡片客户区。
 - 表格的**行级附加状态**（行勾选 / 行数值 / 行图标）**不是 `.cgui` 字段**，是运行时 API：

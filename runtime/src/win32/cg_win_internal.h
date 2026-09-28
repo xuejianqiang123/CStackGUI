@@ -253,7 +253,9 @@ HBRUSH cgw_brush_for(unsigned rgb);
  * @details 自绘控件分几笔直接画在屏幕 DC 上时，每一笔之间都是可见的中间状态
  *          （底色先糊上去、内容再一笔一笔出现）——拖滑块 / 拽分隔条 / 实时图表 / 缩放
  *          窗口这类高频重绘下就是肉眼可见的闪烁。先画进内存位图、最后一次贴上屏，
- *          中间状态就不会被扫出来。2026-09-25 起，ring/progress/chart/panel/image/splitter 统一走它
+ *          中间状态就不会被扫出来。2026-09-25 起，ring/progress/chart/panel/image/splitter 统一走它；
+ *          2026-09-28 补上**画板（canvas）**—— 它原来直绘，拖动预览（每步"铺底 + 重放全部图形"）
+ *          时每帧都能看见白底
  */
 void cgw_paint_buffered(HDC dc, const RECT *rc,
                         void (*fn)(HDC, const RECT *, void *), void *ctx);
