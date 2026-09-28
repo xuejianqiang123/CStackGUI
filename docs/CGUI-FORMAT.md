@@ -893,8 +893,11 @@ C 侧 `runtime/src/core/cg_doc_kind.c` 的 `k_kinds`，画布侧 `designer/src/m
   回调里 `cg_widget_serial(w)` 取句柄（**未打开/自检合成触发时是 NULL，必须先判**），`cg_serial_read()` 非阻塞取数据，
   想喂几个控件喂几个控件。运行时动态换端口/波特率：`cg_widget_serial_open(w, "COM4")`（会先关旧的）
   和 `cg_widget_serial_set_baud(w, 115200)`（开着就按新参数重开）。app 退出时链路自动关。
-- `colorpicker` 的当前颜色存在 `value`（`0xRRGGBB`），点色块弹系统取色器。**要程序改颜色别用
-  `cg_widget_set_value()`** —— 那条路会按 `min`/`max` 截断，颜色不是区间值。
+- `colorpicker` 的当前颜色存在 `value`（`0xRRGGBB`），点色块弹系统取色器。程序改颜色**直接用
+  `cg_widget_set_value()`** 即可（2026-09-28 核实：运行时对 `colorpicker` 的值是特判的，
+  **不按 `min`/`max` 夹取**）—— 早先那句"会被区间截断、别用它"已经过时。
+- `colorpicker` 只有 `change` 一个事件，而且是**在系统取色器里点了确定之后**才发；
+  **没有单独的"被点击"事件**，所以"点色块选中它"这种事得靠 `change` 来做。
 - `rate` 星数 = `max-min`（上限 10）；`pagination` 页数 = `max-min+1`；当前值都用 `cg_widget_value()` 读。
 - `canvas` 用 `cg_canvas_clear/set_color/set_line_width/line/rect/ellipse/text` 在回调里画，
   绘制命令被录下来，重绘时按序回放。

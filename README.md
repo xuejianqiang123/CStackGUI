@@ -412,6 +412,8 @@ CStackGUI\
     framedec\                  帧协议解析器（自定义帧：切帧 / 三种校验 / 解码，噪声与残帧都给明确结论）
     settings\                  设置持久化（INI / 注册表 HKCU / 用户数据目录 三个后端并排对比，含注册表往返自测）
     encconv\                   编码与换行转换器（GBK ↔ UTF-8 + 换行统一：先按严格 UTF-8 校验判定，超限只跳过不截断）
+    drawpad\                   画板（拖拽作图 / 撤销重做 / 导出 PNG；讲清"图形是被录制的绘制命令"）
+    palette\                   调色板（取色 + HEX/rgb/hsl/相对亮度/对比度换算 + 8 格调色板 + 导出 CSS）
   apps\                        你自己的工程（画布导出的默认位置）
     README.md                  这个目录是干嘛的
   build-runtime.bat            编译运行时库

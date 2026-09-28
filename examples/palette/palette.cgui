@@ -1,0 +1,107 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "调色板 / 取色工具",
+    "width": 720,
+    "height": 600,
+    "bg": "#F3EDF7",
+    "info": {
+      "product": "CStackGUI 调色板",
+      "desc": "取色与颜色换算：当前色、8 格调色板、CSS / HEX 导出",
+      "version": "1.0.0.0",
+      "author": "CStackGUI"
+    }
+  },
+  "widgets": [
+    {
+      "id": "sb_main",
+      "type": "statusbar",
+      "rect": { "x": 0, "y": 576, "w": 720, "h": 24 },
+      "items": ["就绪", "取色 / 调色板", "—"]
+    },
+    {
+      "id": "lab_cur",
+      "type": "label",
+      "rect": { "x": 14, "y": 16, "w": 64, "h": 24 },
+      "text": "当前色"
+    },
+    {
+      "id": "cp_cur",
+      "type": "colorpicker",
+      "rect": { "x": 82, "y": 12, "w": 64, "h": 28 },
+      "value": 6770852,
+      "hint": "点色块弹系统取色器；值 = 0xRRGGBB",
+      "events": { "change": "on_color_change" }
+    },
+    {
+      "id": "btn_pick",
+      "type": "button",
+      "rect": { "x": 158, "y": 12, "w": 96, "h": 28 },
+      "text": "取色",
+      "hint": "弹系统取色器，确定后设为当前色",
+      "events": { "click": "on_pick_click" }
+    },
+    {
+      "id": "edt_info",
+      "type": "edit",
+      "rect": { "x": 14, "y": 50, "w": 692, "h": 150 },
+      "multiline": true,
+      "scroll": 2,
+      "input": 1,
+      "text": "（取色后显示换算）",
+      "hint": "只读：HEX / rgb() / hsl() / 相对亮度 / 对白对黑对比度 / 建议字色"
+    },
+    {
+      "id": "lab_pal",
+      "type": "label",
+      "rect": { "x": 14, "y": 212, "w": 300, "h": 24 },
+      "text": "调色板（8 格，改任一格即设为当前色）"
+    },
+    { "id": "cp_1", "type": "colorpicker", "rect": { "x": 14, "y": 240, "w": 64, "h": 28 }, "value": 6770852, "events": { "change": "on_color_change" } },
+    { "id": "cp_2", "type": "colorpicker", "rect": { "x": 98, "y": 240, "w": 64, "h": 28 }, "value": 1797683, "events": { "change": "on_color_change" } },
+    { "id": "cp_3", "type": "colorpicker", "rect": { "x": 182, "y": 240, "w": 64, "h": 28 }, "value": 12595248, "events": { "change": "on_color_change" } },
+    { "id": "cp_4", "type": "colorpicker", "rect": { "x": 266, "y": 240, "w": 64, "h": 28 }, "value": 743376, "events": { "change": "on_color_change" } },
+    { "id": "cp_5", "type": "colorpicker", "rect": { "x": 350, "y": 240, "w": 64, "h": 28 }, "value": 16362240, "events": { "change": "on_color_change" } },
+    { "id": "cp_6", "type": "colorpicker", "rect": { "x": 434, "y": 240, "w": 64, "h": 28 }, "value": 41891, "events": { "change": "on_color_change" } },
+    { "id": "cp_7", "type": "colorpicker", "rect": { "x": 518, "y": 240, "w": 64, "h": 28 }, "value": 9315498, "events": { "change": "on_color_change" } },
+    { "id": "cp_8", "type": "colorpicker", "rect": { "x": 602, "y": 240, "w": 64, "h": 28 }, "value": 4545124, "events": { "change": "on_color_change" } },
+    {
+      "id": "btn_add",
+      "type": "button",
+      "rect": { "x": 14, "y": 284, "w": 150, "h": 32 },
+      "text": "加入调色板",
+      "hint": "把当前色填进第一个空色格",
+      "events": { "click": "on_pal_click" }
+    },
+    {
+      "id": "btn_clear",
+      "type": "button",
+      "rect": { "x": 174, "y": 284, "w": 100, "h": 32 },
+      "text": "清空",
+      "hint": "8 个色格复位成空位",
+      "events": { "click": "on_pal_click" }
+    },
+    {
+      "id": "btn_export",
+      "type": "button",
+      "rect": { "x": 284, "y": 284, "w": 150, "h": 32 },
+      "text": "导出到文件",
+      "hint": "把调色板写成 palette.css 与 palette.txt，落在用户数据目录",
+      "events": { "click": "on_pal_click" }
+    },
+    {
+      "id": "btn_copy",
+      "type": "button",
+      "rect": { "x": 444, "y": 284, "w": 130, "h": 32 },
+      "text": "复制 HEX",
+      "hint": "把调色板拼成纯 HEX 列表送进剪贴板",
+      "events": { "click": "on_pal_click" }
+    },
+    {
+      "id": "term_out",
+      "type": "terminal",
+      "rect": { "x": 14, "y": 328, "w": 692, "h": 236 },
+      "grow": 1
+    }
+  ]
+}
