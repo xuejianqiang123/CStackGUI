@@ -362,14 +362,15 @@ static void on_btn_draw_clear_click(cg_widget_t *self, cg_event_t ev, void *user
  * @param ev click
  * @param user 未使用
  * @return void 无返回值
- * @note **坐标要减掉控件自己的位置**：`cg_event_x/y()` 给的是相对**窗口客户区**的坐标，
- *       而 `cg_canvas_*` 要的是相对控件左上角的坐标（差值用 `cg_widget_x/y()` 拿）。
+ * @note **画板的鼠标事件给的坐标就是画板内坐标**（2026-09-28 起画板有自己的
+ *       `mousedown`/`mousemove`/`mouseup`，`cg_event_x/y()` 已经是相对画板左上角的逻辑像素），
+ *       所以**不用再减** `cg_widget_x/y()` —— 减了反而会按画板的位置整体偏移。
  *       这个"点一下画一个点"的用法，做个取点工具 / 标注小工具正好。
  */
 static void on_cv_board_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
-    int x = cg_event_x(self) - cg_widget_x(self);
-    int y = cg_event_y(self) - cg_widget_y(self);
+    int x = cg_event_x(self);
+    int y = cg_event_y(self);
 
     (void)ev;
     (void)user;
