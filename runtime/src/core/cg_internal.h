@@ -184,6 +184,10 @@ struct cg_widget {
     /** 表格批量更新计数：> 0 时加行 / 清空只记脏、不重建（见 cg_table_begin_update） */
     int          items_batch;
     int          scroll_bottom;
+    /** statusbar 专用：上一次设过的分段布局（段数 + 客户区宽）。SB_SETPARTS 会让整条状态栏
+     *  重算重画，而状态栏是"数字一跳就刷一次"的控件 —— 布局没变就别重设（见 cg_win_sync.c）。 */
+    int          sb_n;
+    int          sb_w;
     /** terminal 专用：后端已经推送了多少行。比 nitems 大 = 中途裁剪/清空过，
      *  后端得整体重灌（见 cg_win_sync.c 的 sync_terminal）。 */
     int          term_pushed;

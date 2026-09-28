@@ -16,6 +16,11 @@
  *          只能这么实现：把一条**临时命令**塞进命令表的空槽（不推进 s_live），再整表重放一次
  *          —— 见 preview_op。松手提交的那条与预览用的是同一套取点 / 归一化，所以画面不会跳。
  *
+ *          命令表（固定数组，上限 kMaxOps = 4096）与"满了以后"的脾气：自由笔**贴着上一个点
+ *          2px 以内的移动不记**（不然鼠标一动就是一条，几秒见底）；真满了则**只报一次**
+ *          （note_full）并**拒绝起笔** —— 早先每次起笔都刷一条同样的提示，终端被刷屏、状态栏
+ *          跟着一直重画（2026-09-28 用户报"状态条一直闪烁"）。表一空出来（撤销 / 清空）自动复位。
+ *
  *          为什么不能挂**窗口级**（`app.events`）：按下 / 移动 / 抬起落在画板这个**子窗口**上时
  *          消息只送给画板，父窗口收不到 —— 早先那种写法在真机上"按下拖动毫无反应"，根因就是这条。
  *          当时把"画板不能拖拽作图"记成了已知缺口，能力补齐后那条结论已作废。
@@ -31,8 +36,10 @@
 #include <stdio.h>
 #include <string.h>
 
-/** 命令表上限：满了不再接新笔（固定数组，绝不 malloc） */
-#define kMaxOps    512
+/** 命令表上限：满了不再接新笔（固定数组，绝不 malloc）。
+ *  每条命令约 90 字节，4096 条约 370 KB 静态 —— 拿这点常驻内存换"随手画几笔就满"的别扭
+ *  （2026-09-28 用户报"命令表已满"：自由笔一格一条，512 条几秒就见底） */
+#define kMaxOps    4096
 /** 文字命令的固定缓冲 */
 #define kOpTextLen 48
 
@@ -60,6 +67,7 @@ static unsigned  s_ink;           /**< 本次落笔冻结的颜色 */
 static int       s_x0, s_y0;      /**< 按下点（直线 / 矩形 / 椭圆的起点、文字的落点） */
 static int       s_lx, s_ly;      /**< 自由笔的上一个点 */
 static int       s_px, s_py;      /**< 上一次预览到的点：同一个点重复上报时不必白重放一遍 */
+static int       s_said_full;     /**< 1 = "命令表已满"已经报过（每次"满"只报一条，别刷屏） */
 static char      s_last[160];     /**< 最近一次操作，供状态栏第 3 段显示 */
 
 /**
@@ -86,7 +94,25 @@ static void note(cg_app_t *app, const char *fmt, ...)
 }
 
 /**
- * @brief 刷新状态栏：工具 / 已画几笔 / 最近操作
+ * @brief 命令表满了的提示：每次"满"只报一条，并把用户该做什么说清楚
+ * @param app 应用
+ * @return void 无返回值
+ * @note 满了以后用户每按一次都会失败：不加这个开关就会一秒一条地刷终端、状态栏跟着一直重画
+ *       （2026-09-28 用户报"状态条一直闪烁"）。表一空出来（撤销 / 清空 / 重做）开关自动复位
+ */
+static void note_full(cg_app_t *app)
+{
+    if (s_live < kMaxOps) {          /* 又有位置了：下次满再报 */
+        s_said_full = 0;
+        return;
+    }
+    if (s_said_full) return;
+    s_said_full = 1;
+    note(app, "命令表已满（%d 条）：点「清空」，或先撤销几笔再画", kMaxOps);
+}
+
+/**
+ * @brief 刷新状态栏：工具 / 命令条数 / 最近操作
  * @param app 应用
  * @return void 无返回值
  */
@@ -100,7 +126,9 @@ static void refresh_status(cg_app_t *app)
     if (tool < 0 || tool > 4) tool = 0;
     if (!sb) return;
     cg_status_setf(sb, 0, "工具：%s", k_names[tool]);
-    cg_status_setf(sb, 1, "已画 %d 笔", s_live);
+    /* 报的是**命令条数**（自由笔一笔会记很多条），不是"笔画数"；满了在状态栏就看得出来 */
+    if (s_live >= kMaxOps) cg_status_setf(sb, 1, "命令 %d 条（满）", s_live);
+    else                   cg_status_setf(sb, 1, "命令 %d 条", s_live);
     cg_status_set(sb, 2, s_last);
 }
 
@@ -221,6 +249,10 @@ static void on_board_mouse(cg_widget_t *self, cg_event_t ev, void *user)
         cg_widget_t *cbo, *cp, *pe;
 
         if (!canvas_hit(cv, x, y)) return;       /* 起笔必须落在画板里 */
+        if (s_live >= kMaxOps) {                 /* 表满：连起笔都不给，免得画一笔存不下的 */
+            note_full(app);
+            return;
+        }
         cbo = cg_find(app, "cbo_tool");
         cp  = cg_find(app, "cp_ink");
         pe  = cg_find(app, "edt_pen");
@@ -247,6 +279,13 @@ static void on_board_mouse(cg_widget_t *self, cg_event_t ev, void *user)
         if (!canvas_hit(cv, x, y)) return;       /* 画板外：这一段跳过，笔迹不糊到边上 */
 
         if (s_tool == TOOL_FREEHAND) {
+            int dx = x - s_lx;
+            int dy = y - s_ly;
+
+            /* 贴着上一个点的移动不记：命令表是固定数组，鼠标每动一个像素就记一条的话几秒就满
+             * （2026-09-28 用户报"命令表已满"就是这个）；段长 2px 以内直接跳过，笔迹看不出差别 */
+            if (dx < 2 && dx > -2 && dy < 2 && dy > -2) return;
+
             memset(&o, 0, sizeof(o));
             o.type = OP_LINE;
             o.x1 = s_lx;
@@ -257,7 +296,7 @@ static void on_board_mouse(cg_widget_t *self, cg_event_t ev, void *user)
             o.penw  = s_penw;
             if (!cmd_push(&o)) {
                 s_drawing = 0;
-                note(app, "命令表已满（%d 条）", kMaxOps);
+                note_full(app);
                 return;
             }
             cg_canvas_set_color(cv, o.color);    /* 这一段直接补画，不必整块重放 */
@@ -265,7 +304,8 @@ static void on_board_mouse(cg_widget_t *self, cg_event_t ev, void *user)
             cg_canvas_line(cv, o.x1, o.y1, o.x2, o.y2);
             s_lx = x;
             s_ly = y;
-            refresh_status(app);
+            /* 不在每一段都刷状态栏：状态栏每刷一次都要重画，"数字一直在跳"本身就很晃眼。
+             * 计数在抬手时由 refresh_status 统一更新（撤销 / 重做 / 清空也都会刷） */
             return;
         }
 
@@ -337,7 +377,7 @@ static void on_board_mouse(cg_widget_t *self, cg_event_t ev, void *user)
         note(app, "文字落在 (%d,%d)", o.x1, o.y1);
     }
     if (!cmd_push(&o)) {
-        note(app, "命令表已满（%d 条），这一笔没记下", kMaxOps);
+        note_full(app);
         return;
     }
     replay_canvas(cv);                           /* 进表后把绘制记录整体重建 */

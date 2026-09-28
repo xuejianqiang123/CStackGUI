@@ -449,10 +449,34 @@ static void build_tabs(HWND h, cg_widget_t *w)
 }
 
 /**
- * @brief 状态栏：按段数均分，最后一段吃掉余量
+ * @brief 状态栏第 i 段现在显示的文本是否已经是 wt
+ * @param h 状态栏窗口
+ * @param i 段号
+ * @param wt 期望的宽串；NULL 当空串
+ * @return int 1 = 已经是（不必再设一遍）、0 = 需要设
+ * @note 设一遍**一模一样**的文本也会让这一段重画；状态栏更新频繁时这就是闪烁来源
+ */
+static int status_text_is(HWND h, int i, const wchar_t *wt)
+{
+    wchar_t cur[512];
+    LRESULT len;
+
+    if (!wt) wt = L"";
+    len = SendMessageW(h, SB_GETTEXTLENGTHW, (WPARAM)i, 0);
+    if ((int)LOWORD(len) != lstrlenW(wt)) return 0;       /* 长度不同：要设 */
+    memset(cur, 0, sizeof(cur));
+    SendMessageW(h, SB_GETTEXTW, (WPARAM)i, (LPARAM)cur);
+    return lstrcmpW(cur, wt) == 0;
+}
+
+/**
+ * @brief 状态栏：按段数均分，最后一段吃掉余量（只更新真正变了的段与布局）
  * @param h 目标状态栏
  * @param w statusbar 控件（读条目，段数上限 32）
  * @return void 无返回值
+ * @note **别每次都重设分段**：SB_SETPARTS 会让整条状态栏重算重画，而状态栏是"数字一跳刷一次"的
+ *       控件 —— 每次同步都重设的表现就是状态栏持续闪烁（2026-09-28 用户报"状态条一直闪烁"）。
+ *       分段只由客户区宽与段数决定，这两个没变就跳过；文本也是"已经一样就不设"
  */
 static void build_status(HWND h, cg_widget_t *w)
 {
@@ -467,11 +491,17 @@ static void build_status(HWND h, cg_widget_t *w)
     for (int i = 0; i < n; i++) {
         parts[i] = (i == n - 1) ? -1 : total * (i + 1) / n;
     }
-    SendMessageW(h, SB_SETPARTS, (WPARAM)n, (LPARAM)parts);
+    if (n != w->sb_n || total != w->sb_w) {
+        SendMessageW(h, SB_SETPARTS, (WPARAM)n, (LPARAM)parts);
+        w->sb_n = n;
+        w->sb_w = total;
+    }
     for (int i = 0; i < n; i++) {
         const char *text = (i < w->nitems) ? w->items[i] : "";
         wchar_t *wt = cgw_wc_from_utf8(text ? text : "");
-        SendMessageW(h, SB_SETTEXTW, (WPARAM)i, (LPARAM)(wt ? wt : L""));
+        if (!status_text_is(h, i, wt)) {
+            SendMessageW(h, SB_SETTEXTW, (WPARAM)i, (LPARAM)(wt ? wt : L""));
+        }
         free(wt);
     }
 }

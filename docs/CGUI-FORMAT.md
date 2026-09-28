@@ -1324,5 +1324,6 @@ void   cg_set_title(cg_app_t *app, const char *title);
 | `image` 的 `src` 找不到图片 | 只警告，控件显示成虚线占位框（把路径画在中间便于排查） |
 | `button` / `iconbutton` 的 `src` 找不到图片 | 只警告；`button` 照常画纯色按钮、`iconbutton` 画占位框 |
 | 循环里逐行 `cg_table_add_row` 填很多行 | **每加一行都会整表重建**（删列、删全部行再重插）⇒ 界面连续闪烁、耗时随行数涨得很快。用 `cg_table_begin_update` / `cg_table_end_update` 把"清空 + 填行"包起来：中间只记脏、结束时重建一次（`dataview` 翻页就靠这个） |
+| 每秒刷好几次状态栏 | 运行时现在只更新**真变了**的段与分段布局（`SB_SETPARTS` 只在段数 / 客户区宽变了才重设、文本一样就不设），所以不会再整条重画；但**内容一直在变**本身仍然晃眼 —— 拖动中 / 收数据中这类高频循环里能少刷就少刷，改成抬手或结束时统一刷一次（`drawpad` 原来是每画一小段刷一次，2026-09-28 改掉） |
 | 表格里"双击了哪一格"怎么拿 | 行号用 `cg_table_selected(w)` —— 双击前的选中变化已经把它更新好了；**列号用 `cg_table_last_col(w)`**，后端收到双击通知时把 `iSubItem` 记在控件上。于是"双击哪一格就编辑哪一格"做得出来（`dataview`：双击 → `cg_input_box` 弹框 → 回车写回） |
 | `cg_tree_add` / `cg_table_add_row` 等用在错的控件类型上 | 打印一行 `需要 xxx 控件，实际给的是 yyy`，返回 -1，不做任何修改 |
