@@ -402,6 +402,8 @@ CStackGUI\
     modbus\                    Modbus/TCP 上位机（cg_modbus_* 拼帧解帧 + cg_frame_* 切帧 + mock-slave.mjs 模拟从站）
     hextool\                   进制与校验工具箱（HEX/文本互转 + 大小端 + CRC16/CRC32/MD5/SHA + Base64/URL + 报文组装）
     filecheck\                 文件核对工具（两个文件的大小与五种摘要比对 + 逐字节差异定位 + 报告导出）
+    traytool\                  托盘常驻小工具（托盘图标 + 关窗即最小化 + 5 条全局快捷键 + 剪贴板 + 截图 + 切深色）
+    syspanel\                  系统与配置面板（系统位数/版本/磁盘占用/环境变量/进程存在性/串口枚举 + INI 读写）
   apps\                        你自己的工程（画布导出的默认位置）
     README.md                  这个目录是干嘛的
   build-runtime.bat            编译运行时库
