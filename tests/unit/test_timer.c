@@ -192,6 +192,6 @@ static void test_timer_two_apps(void)
 }
 
 CG_TEST_SUITE("定时器：一次性与 kill", test_timer_basic);
-CG_TEST_SUITE("定时器：回调里重挂不同级触发", test_timer_rearm_same_tick);
+CG_TEST_SUITE("定时器：回调里重挂，同一轮不再触发", test_timer_rearm_same_tick);
 CG_TEST_SUITE("定时器：多应用隔离", test_timer_two_apps);
 CG_TEST_SUITE("定时器：同轮注销绝不触发", test_timer_kill_in_tick);
