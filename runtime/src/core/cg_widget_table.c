@@ -129,6 +129,7 @@ void cg_table_clear(cg_widget_t *w)
     w->rows = NULL;
     w->nrows = 0;
     w->table_sel = -1;
+    w->table_col = -1;                        /* 行都清空了，"上次双击哪一格"也一起作废 */
     w->items_dirty = 1;
     if (!w->items_batch) cg_widget_sync(w);   /* 批量更新期间只记脏，结束时一次重建 */
 }
@@ -188,4 +189,17 @@ const char *cg_table_cell(const cg_widget_t *w, int row, int col)
 int cg_table_selected(const cg_widget_t *w)
 {
     return w ? w->table_sel : -1;
+}
+
+/**
+ * @brief 最近一次在表格上双击的那一列（0 起）
+ * @param w table 控件；非 table 控件或还没双击过返回 -1
+ * @return int 列号；-1 = 没双击过
+ * @note 双击事件本身只带行号（行用 cg_table_selected 取），列号是后端在收到 NM_DBLCLK 时
+ *       从 NMITEMACTIVATE.iSubItem 记下来的（见 cg_win_notify.c）—— 于是"双击哪一格就编辑哪一格"
+ *       不需要业务再自己摆一个"操作列"下拉
+ */
+int cg_table_last_col(const cg_widget_t *w)
+{
+    return w ? w->table_col : -1;
 }

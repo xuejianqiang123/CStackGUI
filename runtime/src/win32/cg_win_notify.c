@@ -271,6 +271,14 @@ LRESULT cgw_notify_common(cg_app_t *app, const NMHDR *hdr)
         break;
     }
     case NM_DBLCLK:
+        /* 表格的双击：NMITEMACTIVATE 里带着 iItem / iSubItem，把"点了哪一格"记在控件上，
+         * 业务回调里用 cg_table_selected / cg_table_last_col 现问。**先认类型再读**：其它
+         * 控件类的 NM_DBLCLK 只给 NMHDR，按 NMITEMACTIVATE 硬读会读到越界内存 */
+        if (hdr && !strcmp(w->type, "table")) {
+            const NMITEMACTIVATE *na = (const NMITEMACTIVATE *)hdr;
+            w->table_sel = na->iItem;
+            w->table_col = na->iSubItem;
+        }
         cg_dispatch(w, CG_EVENT_DBLCLICK);
         break;
     case TVN_ITEMEXPANDEDW: {               /* TVN_ITEMEXPANDEDW = TVN_FIRST-55（Unicode） */

@@ -1013,6 +1013,7 @@ void cg_widget_set_rect/pos/size(...);
 void cg_widget_set_visible/enabled/checked/value(...);
 void cg_widget_set_colors(cg_widget_t *w, unsigned fg, unsigned bg);   /* CG_COLOR_NONE = 系统默认 */
 void cg_widget_set_font(cg_widget_t *w, const char *family, int size_pt, int bold);
+void cg_widget_focus(cg_widget_t *w);              /* 键盘焦点交给它（刚预填完输入框就能直接敲） */
 
 /* 控件绑定：dst 一直跟着 src 走（见 2.8）。two_way 非 0 = 双向 */
 int  cg_bind(cg_widget_t *src, cg_widget_t *dst, int two_way);
@@ -1055,6 +1056,7 @@ void cg_table_end_update(cg_widget_t *w);
 int  cg_table_row_count(const cg_widget_t *w);
 const char *cg_table_cell(const cg_widget_t *w, int row, int col);
 int  cg_table_selected(const cg_widget_t *w);
+int  cg_table_last_col(const cg_widget_t *w);      /* 最近一次双击的列；-1 = 没双击过 */
 
 /* 状态栏 / 标签页 / 图片（图标按钮也用这两个 API 换图） */
 void cg_status_set(cg_widget_t *w, int part, const char *text);
@@ -1292,7 +1294,7 @@ void   cg_set_title(cg_app_t *app, const char *title);
 | 图表 | `cg_chart_` 系列（推点、清空、系列与坐标轴设置） | 本文 2.10 |
 | 串口 | `cg_serial_` 系列（枚举 / 打开 / 收发 / 关闭） | `COMM.md` |
 | 网口 | `cg_net_` 系列（TCP 客户端与服务端、UDP 数据报） | `COMM.md` |
-| 通用对话框 | `cg_open_file_dialog` / `cg_save_file_dialog` / `cg_choose_color` / `cg_message_box` | 本文 6 节上文 |
+| 通用对话框 | `cg_open_file_dialog` / `cg_save_file_dialog` / `cg_choose_color` / `cg_message_box` / **`cg_input_box`**（单行输入，原值预填且全选） | 本文 6 节上文 |
 | 窗口 | `cg_win_center` / `cg_win_set_pos` / `cg_win_set_size` / `cg_win_show` / `cg_win_set_topmost` / `cg_win_set_state` / `cg_win_set_icon` / `cg_cancel_close` / **`cg_win_screenshot` / `cg_widget_screenshot`**（存 PNG） | 本文第 1 节 |
 | 散项 | `cg_splitter_pos` / `cg_splitter_set`、`cg_browser_navigate`、`cg_widget_hint`、`cg_widget_count`、`cg_widget_set_value_range`、`cg_widget_list_scroll_bottom`、`cg_file_exists` / `cg_file_delete` / `cg_file_copy`、`cg_dir_exists` / `cg_dir_create`、`cg_event_name` / `cg_event_from_name`、`cg_dump_doc` | 头文件 |
 
@@ -1316,5 +1318,5 @@ void   cg_set_title(cg_app_t *app, const char *title);
 | `image` 的 `src` 找不到图片 | 只警告，控件显示成虚线占位框（把路径画在中间便于排查） |
 | `button` / `iconbutton` 的 `src` 找不到图片 | 只警告；`button` 照常画纯色按钮、`iconbutton` 画占位框 |
 | 循环里逐行 `cg_table_add_row` 填很多行 | **每加一行都会整表重建**（删列、删全部行再重插）⇒ 界面连续闪烁、耗时随行数涨得很快。用 `cg_table_begin_update` / `cg_table_end_update` 把"清空 + 填行"包起来：中间只记脏、结束时重建一次（`dataview` 翻页就靠这个） |
-| `table` 的双击事件只告诉业务"哪一行"，不告诉"哪一列" | 双击回调里用 `cg_table_selected(w)` 取行号（双击前的选中变化已经把它更新好了）；**列号框架不给**，要按列做事就自己放一个"操作列"下拉 —— `dataview` 的"双击进入编辑"就是这么做的 |
+| 表格里"双击了哪一格"怎么拿 | 行号用 `cg_table_selected(w)` —— 双击前的选中变化已经把它更新好了；**列号用 `cg_table_last_col(w)`**，后端收到双击通知时把 `iSubItem` 记在控件上。于是"双击哪一格就编辑哪一格"做得出来（`dataview`：双击 → `cg_input_box` 弹框 → 回车写回） |
 | `cg_tree_add` / `cg_table_add_row` 等用在错的控件类型上 | 打印一行 `需要 xxx 控件，实际给的是 yyy`，返回 -1，不做任何修改 |

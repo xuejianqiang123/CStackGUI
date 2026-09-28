@@ -97,33 +97,10 @@
       "events": { "change": "on_chk_desc_change" }
     },
     {
-      "id": "lab_edit",
+      "id": "lab_tip",
       "type": "label",
-      "rect": { "x": 216, "y": 52, "w": 56, "h": 22 },
-      "text": "编辑列"
-    },
-    {
-      "id": "cbo_edit",
-      "type": "combo",
-      "rect": { "x": 276, "y": 46, "w": 180, "h": 30 },
-      "hint": "双击表格行预填这一列的值；改完点「写入」",
-      "items": [],
-      "events": { "select": "on_cbo_select" }
-    },
-    {
-      "id": "edt_value",
-      "type": "edit",
-      "rect": { "x": 464, "y": 46, "w": 372, "h": 30 },
-      "hint": "双击表格行会把该格文字填进来；在这里改，然后点「写入」或按回车",
-      "events": { "submit": "on_edt_value_submit" }
-    },
-    {
-      "id": "btn_apply",
-      "type": "button",
-      "rect": { "x": 844, "y": 46, "w": 104, "h": 30 },
-      "text": "写入",
-      "hint": "把输入框的文字写进选中行「编辑列」那一格（只改内存，不回写原文件）",
-      "events": { "click": "on_btn_apply_click" }
+      "rect": { "x": 216, "y": 52, "w": 620, "h": 22 },
+      "text": "编辑：双击表格里任意一格即可改这一格（改的是内存，原文件不动）"
     },
     {
       "id": "grp_table",
@@ -135,7 +112,7 @@
           "id": "tbl_data",
           "type": "table",
           "rect": { "x": 16, "y": 30, "w": 992, "h": 392 },
-          "hint": "双击某行 = 进入编辑：把该行「编辑列」那一格预填进上面输入框，改完点「写入」",
+          "hint": "双击任意一格 = 编辑这一格：弹输入框（原值预填、全选），回车即写回内存",
           "columns": [],
           "events": { "dblclick": "on_table_dblclick" }
         }

@@ -347,6 +347,7 @@ static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node
     w->style.font = cg_str_dup(n->style.font);   /* 拷贝一份，文档释放后控件仍可用 */
     w->tree_sel = -1;
     w->table_sel = -1;
+    w->table_col = -1;
 
     /* 结构化内容：文档 -> 运行时（各存一份，文档释放后控件仍可用） */
     if (n->items && n->nitems) {

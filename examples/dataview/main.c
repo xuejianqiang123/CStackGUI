@@ -18,8 +18,9 @@
  *          并排算一遍，就是让「只看当前页就下结论」这个坑当场显形。
  *
  *          交互上两件值得注意的：**排序是显式按钮**（选「排序列」→ 点「排序」，方向看「降序」勾选；
- *          不再拿双击当排序键），**双击表格行 = 进入编辑**（把该行「编辑列」那一格预填进输入框，
- *          改完点「写入」或回车）。
+ *          不再拿双击当排序键），**双击表格里任意一格 = 直接改这一格** —— 双击事件本身只带行号，
+ *          列号用 `cg_table_last_col()` 问（后端在双击时把 iSubItem 记在控件上），再用
+ *          `cg_input_box()` 弹个单行输入框（原值预填且全选），回车即生效。改的是**内存里那一份**。
  *
  *          四条有意留的简化（诚实说明，不是漏做）：
  *            * CSV 只认逗号与换行：**不处理引号转义、不处理字段内换行**、不转码
@@ -476,7 +477,7 @@ static void ensure_columns(cg_app_t *app)
 }
 
 /**
- * @brief 把列名填进「排序列 / 统计列 / 编辑列」三个下拉框
+ * @brief 把列名填进「排序列 / 统计列」两个下拉框
  * @param app 应用
  * @return void 无返回值
  * @note 装载期间把装载标记置 1：程序改下拉框的值也会派发选中事件，别被当成用户选列
@@ -485,21 +486,17 @@ static void fill_col_combos(cg_app_t *app)
 {
     cg_widget_t *cbo_sort = cg_find(app, "cbo_sort");
     cg_widget_t *cbo_stat = cg_find(app, "cbo_stat");
-    cg_widget_t *cbo_edit = cg_find(app, "cbo_edit");
     int          c;
 
     cg_widget_list_clear(cbo_sort);
     cg_widget_list_clear(cbo_stat);
-    cg_widget_list_clear(cbo_edit);
     for (c = 0; c < s_col_count; c++) {
         cg_widget_list_addf(cbo_sort, "%d. %s", c + 1, s_col_title[c]);
         cg_widget_list_addf(cbo_stat, "%d. %s", c + 1, s_col_title[c]);
-        cg_widget_list_addf(cbo_edit, "%d. %s", c + 1, s_col_title[c]);
     }
     if (s_col_count > 0) {
         cg_widget_set_value(cbo_sort, 0);
         cg_widget_set_value(cbo_stat, 0);
-        cg_widget_set_value(cbo_edit, 0);
     }
 }
 
@@ -874,8 +871,11 @@ static void load_csv(cg_app_t *app, const char *path)
 }
 
 /**
- * @brief 「写入」的核心：把输入框的当前文字写进「选中行 + 编辑列」那一格（只改内存）
+ * @brief 把新值写进"第 row 行第 col 列"那一格（只改内存）
  * @param app 应用
+ * @param row 全局行号（0 起）
+ * @param col 列号（0 起）
+ * @param val 新值（UTF-8），可为 NULL（当空串）
  * @return void 无返回值
  * @note **只改内存里的 s_text，绝不回写原文件**：本示例从不用「覆盖写」去动用户打开的那个 CSV ——
  *       悄悄改写别人的原始数据太危险，而且整读走的是简化解析（引号 / 字段内换行都没处理），
@@ -884,31 +884,17 @@ static void load_csv(cg_app_t *app, const char *path)
  * @note 新值含逗号 / 引号 / 换行一律**拒绝**：本示例的 CSV 不做引号转义，写进去会把这一行切成
  *       多列或错位 —— 宁可拒绝，也不写坏数据。超 CG_CELL_MAX 也拒绝。
  * @note 长度会变 ⇒ 走 text_replace 重建到工作缓冲，必须 index_build() 重算全表偏移，再
- *       render_page()（行数变了它会自己夹一次页号）。自检（无窗口）下不读盘、不弹框，安全空跑
+ *       render_page()（行数变了它会自己夹一次页号）
  */
-static void apply_edit(cg_app_t *app)
+static void apply_cell_edit(cg_app_t *app, int row, int col, const char *val)
 {
-    cg_widget_t *tbl = cg_find(app, "tbl_data");
-    cg_widget_t *cbo = cg_find(app, "cbo_edit");
-    cg_widget_t *edt = cg_find(app, "edt_value");
-    const char  *val;
-    char         old[CG_CELL_MAX];
-    int          sel, row, col, off = 0, len = 0, vlen, new_len = 0;
+    char old[CG_CELL_MAX];
+    int  off = 0, len = 0, vlen, new_len = 0;
 
     if (!s_text || s_row_count <= 0) { status_msg(app, "还没有数据，先打开一个 CSV"); return; }
     if (s_truncated) { status_msg(app, "文件超过上限只读了前一段，不能写入（改的不是完整文件）"); return; }
-    if (!tbl) return;
-
-    sel = cg_table_selected(tbl);
-    if (sel < 0) { status_msg(app, "先在表格里选中一行，再双击进入编辑"); return; }
-
-    col = cbo ? cg_widget_value(cbo) : -1;
-    if (col < 0 || col >= s_col_count) { status_msg(app, "先在「编辑列」里选一列"); return; }
-
-    row = s_page * CG_PAGE_ROWS + sel;               /* 页内行号 → 全局行号 */
     if (row < 0 || row >= s_row_count) { status_msg(app, "行号越界，先翻页重来"); return; }
-
-    val = edt ? cg_widget_text(edt) : NULL;          /* 可编辑 edit 的读值就是 cg_widget_text */
+    if (col < 0 || col >= s_col_count) { status_msg(app, "列号越界"); return; }
     if (!val) val = "";
 
     /* 见函数头：本示例不做引号转义，含 , " 换行的新值写进去会破坏行结构 */
@@ -941,38 +927,10 @@ static void apply_edit(cg_app_t *app)
 
     report_reset(app);
     report(app, "已在内存里改一格：第 %d 行 · 列「%s」", row + 1, s_col_title[col]);
+    report(app, "  新值：%.*s", CG_CELL_MAX - 1, val);
     report(app, "  只改了内存，原文件未改动；要留档请用「导出全部行」另存。");
     report(app, "  本示例的 CSV 是简化解析（不处理引号转义）：新值里含逗号 / 引号 / 换行会被拒绝。");
     status_msg(app, "已写入内存：第 %d 行 · 列「%s」（原文件未改）", row + 1, s_col_title[col]);
-}
-
-/**
- * @brief 「写入」：把 edt_value 的文字写进选中行「编辑列」那一格（只改内存）
- * @param self 被点的按钮
- * @param ev 事件类型
- * @param user 挂在该控件上的业务数据，本示例不用
- * @return void 无返回值
- * @note 真正的活在 apply_edit 里；这里只是事件入口。自检会合成这次点击，回调里不读盘、不弹框
- */
-static void on_btn_apply_click(cg_widget_t *self, cg_event_t ev, void *user)
-{
-    (void)ev;
-    (void)user;
-    apply_edit(cg_app_of(self));
-}
-
-/**
- * @brief 输入框里按回车 = 点「写入」（同一个动作的第二个入口）
- * @param self 输入框控件（单行 edit 才有 submit 事件）
- * @param ev 事件类型
- * @param user 挂在该控件上的业务数据，本示例不用
- * @return void 无返回值
- */
-static void on_edt_value_submit(cg_widget_t *self, cg_event_t ev, void *user)
-{
-    (void)ev;
-    (void)user;
-    apply_edit(cg_app_of(self));
 }
 
 /**
@@ -1087,7 +1045,7 @@ static void on_btn_stats_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief 下拉选好了：三个下拉都只提示（等用户点对应的按钮）
+ * @brief 下拉选好了：两个下拉都只提示（等用户点对应的按钮）
  * @param self 被改的下拉框
  * @param ev 事件类型
  * @param user 挂在该控件上的业务数据，本示例不用
@@ -1116,9 +1074,6 @@ static void on_cbo_select(cg_widget_t *self, cg_event_t ev, void *user)
     } else if (strcmp(id, "cbo_stat") == 0) {
         if (idx >= 0 && idx < s_col_count)
             status_msg(app, "统计列：%s（点「统计」看当前页与全部行的对比）", s_col_title[idx]);
-    } else if (strcmp(id, "cbo_edit") == 0) {
-        if (idx >= 0 && idx < s_col_count)
-            status_msg(app, "编辑列：%s（双击表格行预填，改完点「写入」）", s_col_title[idx]);
     }
 }
 
@@ -1147,23 +1102,24 @@ static void on_page_change(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief 双击表格行 = 进入编辑：把「编辑列」那一格预填进输入框
+ * @brief 双击表格里任意一格 = 编辑这一格：弹输入框，确定后写回内存
  * @param self 被双击的表格控件
  * @param ev 事件类型
  * @param user 挂在该控件上的业务数据，本示例不用
  * @return void 无返回值
- * @note **双击不再排序**（排序改到了「排序」按钮）。选中行由 cg_table_selected 给 —— 双击前的
- *       LVN_ITEMCHANGED 已经把它更新成刚点的那行；页内行号映射成全局行号 = 当前页 × 每页行数 +
- *       页内行号。这里**只预填、不读文件、不弹框**：自检（无窗口）会合成这个事件，回调必须安全空跑。
- *       框架没有「把焦点交给某个控件」的接口，所以只预填 + 状态栏提示，让用户自己去输入框里改
+ * @note **双击不再排序**（排序在「排序」按钮上）。行号来自 cg_table_selected —— 双击前的
+ *       LVN_ITEMCHANGED 已经把它更新成刚点的那行；**列号来自 cg_table_last_col**，后端在收到
+ *       双击通知时把 iSubItem 记在控件上。页内行号要映射成全局行号：当前页 × 每页行数 + 页内行号。
+ * @note 输入框用 cg_input_box：原值预填且**全选**，用户直接敲就是替换，回车即确定。**自检（无窗口）
+ *       下它不弹、返回 0**，这里顺势返回 —— 不读盘不写盘，合成事件下安全空跑
  */
 static void on_table_dblclick(cg_widget_t *self, cg_event_t ev, void *user)
 {
-    cg_app_t    *app = cg_app_of(self);
-    cg_widget_t *cbo = cg_find(app, "cbo_edit");
-    cg_widget_t *edt = cg_find(app, "edt_value");
-    char         buf[CG_CELL_MAX];
-    int          sel, row, col;
+    cg_app_t *app = cg_app_of(self);
+    char      cur[CG_CELL_MAX];
+    char      val[CG_CELL_MAX];
+    char      tip[128];
+    int       sel, row, col;
 
     (void)ev;
     (void)user;
@@ -1172,17 +1128,20 @@ static void on_table_dblclick(cg_widget_t *self, cg_event_t ev, void *user)
     if (s_truncated) { status_msg(app, "文件只读了前一段，不能编辑（改的不是完整文件）"); return; }
 
     sel = cg_table_selected(self);
-    if (sel < 0) { status_msg(app, "先点一行选中，再双击进入编辑"); return; }
+    col = cg_table_last_col(self);
+    if (sel < 0 || col < 0) { status_msg(app, "先点一行选中，再双击要改的那一格"); return; }
 
-    col = cbo ? cg_widget_value(cbo) : -1;
-    if (col < 0 || col >= s_col_count) { status_msg(app, "先在「编辑列」里选一列"); return; }
+    row = s_page * CG_PAGE_ROWS + sel;               /* 页内行号 → 全局行号 */
+    if (row < 0 || row >= s_row_count || col >= s_col_count) {
+        status_msg(app, "这一格不在数据里");
+        return;
+    }
 
-    row = s_page * CG_PAGE_ROWS + sel;
-    if (row < 0 || row >= s_row_count) { status_msg(app, "行号越界，先翻页重来"); return; }
+    cell_copy_at(&s_rows[row], col, cur, sizeof cur);          /* 原值：预填进输入框 */
+    snprintf(tip, sizeof tip, "第 %d 行 · 列「%s」", row + 1, s_col_title[col]);
 
-    cell_copy_at(&s_rows[row], col, buf, sizeof buf);   /* 预填该格当前文字（去首尾空白） */
-    if (edt) cg_widget_set_text(edt, buf);
-    status_msg(app, "编辑：第 %d 行 · 列 %s（改完点「写入」）", row + 1, s_col_title[col]);
+    if (!cg_input_box(self, "编辑单元格", tip, cur, val, sizeof val)) return;   /* 取消 / 无窗口 */
+    apply_cell_edit(app, row, col, val);
 }
 
 /**
@@ -1209,15 +1168,10 @@ static void on_ready(cg_app_t *app, void *user)
     s_truncated    = 0;
 
     {
-        /* 新控件的初始状态：编辑列回第 1 列、降序不勾、输入框清空。全是程序在改控件，也不读文件，
-         * 自检（无窗口）下同样安全 */
-        cg_widget_t *cbo_edit = cg_find(app, "cbo_edit");
+        /* 新控件的初始状态：降序不勾。全是程序在改控件，也不读文件，自检（无窗口）下同样安全 */
         cg_widget_t *chk_desc = cg_find(app, "chk_desc");
-        cg_widget_t *edt_val  = cg_find(app, "edt_value");
 
-        if (cbo_edit) cg_widget_set_value(cbo_edit, 0);
         if (chk_desc) cg_widget_set_checked(chk_desc, 0);
-        if (edt_val)  cg_widget_set_text(edt_val, "");
     }
 
     report_reset(app);
@@ -1225,8 +1179,9 @@ static void on_ready(cg_app_t *app, void *user)
     report(app, "  打开后按页读：表格里只放当前页的 %d 行，翻页才换一批；", CG_PAGE_ROWS);
     report(app, "  单文件最多索引 %d KB、%d 行、%d 列，单元格最多 %d 字符。",
            CG_LOAD_LIMIT / 1024, CG_MAX_ROWS, CG_MAX_COLS, CG_CELL_MAX);
-    report(app, "  选好「排序列」点「排序」按钮排序（方向看「降序」勾选）；双击表格行进入编辑，");
-    report(app, "  改完点「写入」——**只改内存，原文件不动**，要留档请用「导出全部行」另存。");
+    report(app, "  选好「排序列」点「排序」按钮排序（方向看「降序」勾选）；");
+    report(app, "  **双击表格里任意一格**弹出输入框，改完按回车即生效 —— 只改内存、原文件不动，");
+    report(app, "  要留档请用「导出全部行」另存。");
 
     render_page(app);                               /* 空表 + 总页数 0 */
 
@@ -1276,8 +1231,6 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND("on_table_dblclick",   on_table_dblclick),     /* 挂在表格的双击上：进入编辑 */
     CG_BIND("on_btn_sort_click",   on_btn_sort_click),
     CG_BIND("on_chk_desc_change",  on_chk_desc_change),
-    CG_BIND("on_btn_apply_click",  on_btn_apply_click),
-    CG_BIND("on_edt_value_submit", on_edt_value_submit),
     CG_BIND_END
 };
 

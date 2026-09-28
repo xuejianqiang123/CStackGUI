@@ -475,6 +475,14 @@ const char *cg_widget_type(const cg_widget_t *w);
  */
 const char *cg_widget_text(const cg_widget_t *w);
 /**
+ * @brief 让控件拿到键盘焦点
+ * @param w 控件；没有原生窗口（自检 / 无窗口模式）时是空操作
+ * @return void 无返回值
+ * @note 典型用法：程序刚把一段文字预填进输入框（`cg_widget_set_text`），接着把焦点交给它，
+ *       用户不用再去点一下就能直接敲字
+ */
+void cg_widget_focus(cg_widget_t *w);
+/**
  * @brief 取控件左边界
  * @param w 控件
  * @return int 逻辑像素，相对父容器；w 为 NULL 返回 0
@@ -838,6 +846,14 @@ const char *cg_table_cell(const cg_widget_t *w, int row, int col);
  * @return int 最后一次点击的行号；没选中返回 -1
  */
 int  cg_table_selected(const cg_widget_t *w);
+/**
+ * @brief 最近一次在表格上双击的那一列（0 起）
+ * @param w table 控件；非 table 控件或还没双击过返回 -1
+ * @return int 列号；-1 = 没双击过
+ * @note 表格的双击事件只带行号（行用 `cg_table_selected` 取），列号由后端在双击时记在控件上，
+ *       业务在 dblclick 回调里现问现用 —— "双击哪一格就编辑哪一格"靠它才做得到
+ */
+int  cg_table_last_col(const cg_widget_t *w);
 
 /* ------------------------------------------------------------ 表格（增强） */
 
@@ -1863,6 +1879,22 @@ int  cg_choose_color(cg_widget_t *parent, unsigned *rgb);
  * @return void 无返回值
  */
 void cg_message_box(cg_widget_t *parent, const char *text, const char *title, int icon);
+/**
+ * @brief 弹一个单行输入框，等用户点确定 / 取消（模态）
+ * @param parent 定位用的控件，可为 NULL
+ * @param title 标题，NULL 用 "输入"
+ * @param prompt 输入框上方的提示，可为 NULL
+ * @param value 初始值，可为 NULL —— 弹出来就**全选**，直接敲字等于替换
+ * @param out 输出缓冲，用户点确定时写进 UTF-8 文本（按 cap 截断，总以 '\0' 结尾）
+ * @param cap out 的字节数
+ * @return int 1 = 用户点了确定（out 里有值）；0 = 取消 / 失败 / 当前没有窗口
+ * @note **无窗口（自检）时不弹**，直接返回 0 —— 业务据此走"没改"的分支，别在这条路径上读盘写盘
+ * @note 模态期间应用自己的定时器与窗口消息仍会被派发（与本工程其它通用对话框一致）
+ * @note 外观用的是系统对话框：本工程没有 .rc 资源，模板在内存里拼；字体 / 字号取属主窗口的，
+ *       所以与主界面一致（换字号不会错位：DLU 按同一套字体算）
+ */
+int cg_input_box(cg_widget_t *parent, const char *title, const char *prompt,
+                 const char *value, char *out, int cap);
 
 /* ------------------------------------------------------------ 画板
  * canvas 控件上用代码绘制。坐标系是控件内左上角 (0,0)，

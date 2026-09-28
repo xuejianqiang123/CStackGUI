@@ -206,6 +206,7 @@ struct cg_widget {
     int          nrows;
     int          row_cells;
     int          table_sel;     /* 当前选中行；-1 无 */
+    int          table_col;     /* 最近一次双击的列；-1 = 还没双击过（见 cg_table_last_col） */
 
     /* 标签页：选中页用 value；本控件属于父标签页的第几页用 page */
     int          page;
