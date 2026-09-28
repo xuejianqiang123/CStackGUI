@@ -147,6 +147,7 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
 | 内部为什么这么设计、模块怎么分层 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | 自绘外观（M3）怎么改 | [docs/M3-SKIN.md](docs/M3-SKIN.md) |
 | 怎么读写串口 / 网口 TCP 与 UDP / 通信层怎么用 | [docs/COMM.md](docs/COMM.md) |
+| 想按入门顺序读一遍（10 篇文章 + 图文） | [docs/articles/README.md](docs/articles/README.md) |
 | 把工程交付给别人、打包发布 | [packaging/](packaging/) |
 | C 代码规范、改动前必读的约定 | `.codebuddy/skills/`（`firmware_code_style` / `designer-modify`）|
 
@@ -391,7 +392,7 @@ CStackGUI\
     lesson03_values\           教学示例 03：数值与指示（滑块/进度/圆环/仪表盘/状态灯/评分）
     lesson04_data\             教学示例 04：数据与日志（标签页/树/表格/终端/图表/分隔条）
     lesson05_commands\         教学示例 05：命令与图形（菜单/工具栏/画板/外形/图片/网页）
-    lesson06_window\           教学示例 06：主窗口与窗口事件（app.* 配置 / 25 种窗口事件 / 程序信息）
+    lesson06_window\           教学示例 06：主窗口与窗口事件（app.* 配置 / 26 种窗口事件 / 程序信息）
     教学使用说明.md             六课路线图 + 每课详解 + 通用知识（学这套示例先读它）
     gallery\                   控件陈列室·三合一（gallery.cgui / main.c / assets\ / 产物）
     notepad\                   真实小工具范例：记事本（菜单/文件/配置/cg_kit 全套）
@@ -420,6 +421,7 @@ CStackGUI\
     gen-launcher.bat           生成工程级启动脚本（不含 goto/标签，UTF-8 前导 + 版本标记幂等）
     check-support.mjs          画布「支持库」表 vs cstackgui.h 的一致性检查
     check-comments.mjs         C 函数注释规范门禁（runtime/ tests/ examples/ 的 @brief/@param/@return）
+   apply-comments.mjs         按"补丁块"批量落盘注释改动（并行起草后一次写入，含"只改注释"复核）
     check-kit.bat              cg_kit 基础能力冒烟测试（编译并运行 kit-test.c）
     kit-test.c                 上面那个测试的源码（文件/配置/编码/剪贴板/注册表）
     format-roundtrip.mjs       .cgui 往返：画布改 -> C 读 -> 再写回

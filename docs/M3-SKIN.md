@@ -10,7 +10,7 @@
 这让做出来的界面"很 Win32"，和现代 M3 观感有距离。
 
 架构上这本来就是 `cg_backend_t` 该管的范畴：换一套外观 = 换一个 backend，上层（`cg_doc`/`cg_app`/业务）零改动。
-`ARCHITECTURE.md §8.2` 的规划是「加 `cg_backend_d2d.c`，实现圆角/波纹/主题色」——
+`ARCHITECTURE.md` 第 8 节「下一条路 › 下一步的候选」里规划的是「**D2D 外观内核**：拿到带 `d2d1.h` 的工具链后替换 `skin/`，换来波纹/阴影这类真特效」——
 **但本机 MinGW-w64 的 include 里没有 `d2d1.h` / `dwrite.h`**，手写 D2D 的 COM vtable 绑定极易下标错位导致崩溃。
 而 **GDI+ 已经是运行时依赖**（图片/画板在用，`-lgdiplus` 已链接），它同样能画抗锯齿圆角矩形、平滑文字。
 
@@ -80,8 +80,9 @@ examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui
    （不吃自定义皮肤）—— 这是 Win32 固有限制（见 README「当前边界」），要么接受、要么换成自绘窗口类。
 2. **窗口级 M3**：圆角已在 `win_init` 做；再加 M3 表面色调、 elevation 阴影。
 3. **波纹（ripple）**：按下时从点击点扩散的水波纹——GDI+ 只能做"近似"动画（WM_TIMER 驱动），真正流畅要靠 D2D 后端。
-4. **`cg_backend_d2d.c`**：等工具链有 `d2d1.h`/`dwrite.h` 时，把 `cg_skin.c` 的绘制内核换成 D2D/DirectWrite，
-   接入点（§2）不变，上层零改动。
+4. **D2D 绘制内核**：等工具链有 `d2d1.h`/`dwrite.h` 时，把 `cg_skin.c` 的绘制内核换成 D2D/DirectWrite，
+   接入点（§2）不变，上层零改动。（只换 `cg_skin.c` 内部实现，**不新增 `cg_backend_*.c` 这种文件** ——
+   第 2 节定的接入点就是"换内核、不动上层"。）
 5. **画布预览同步**：让 designer 的 `WidgetView` 也用同样的圆角/主题色预览，所见即所得。
 
 ## 6. 与画布 / 格式的关系
