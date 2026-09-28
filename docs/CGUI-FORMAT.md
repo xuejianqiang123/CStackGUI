@@ -1048,6 +1048,10 @@ void cg_tree_expand(cg_widget_t *w, int item, int expand);
 int  cg_table_add_column(cg_widget_t *w, const char *title, int width);  /* width 0 = 均分 */
 int  cg_table_add_row(cg_widget_t *w, const char *const *cells, int ncells);
 void cg_table_clear(cg_widget_t *w);
+/* 批量更新：两个之间只记脏、不重建，end 时重建一次。循环填表必须用它包住 ——
+ * 表格每加一行都整表重建，逐行填 N 行 = N 次重建（连续闪烁 + 越填越慢），见文末"常见坑" */
+void cg_table_begin_update(cg_widget_t *w);
+void cg_table_end_update(cg_widget_t *w);
 int  cg_table_row_count(const cg_widget_t *w);
 const char *cg_table_cell(const cg_widget_t *w, int row, int col);
 int  cg_table_selected(const cg_widget_t *w);
@@ -1311,4 +1315,5 @@ void   cg_set_title(cg_app_t *app, const char *title);
 | 控件 id 重复 | 不报错，但 `cg_find` 命中的是**后建**的那个（运行时按创建顺序倒序查找）；`cg_widget_add` 造重名会直接失败并报错 |
 | `image` 的 `src` 找不到图片 | 只警告，控件显示成虚线占位框（把路径画在中间便于排查） |
 | `button` / `iconbutton` 的 `src` 找不到图片 | 只警告；`button` 照常画纯色按钮、`iconbutton` 画占位框 |
+| 循环里逐行 `cg_table_add_row` 填很多行 | **每加一行都会整表重建**（删列、删全部行再重插）⇒ 界面连续闪烁、耗时随行数涨得很快。用 `cg_table_begin_update` / `cg_table_end_update` 把"清空 + 填行"包起来：中间只记脏、结束时重建一次（`dataview` 翻页就靠这个） |
 | `cg_tree_add` / `cg_table_add_row` 等用在错的控件类型上 | 打印一行 `需要 xxx 控件，实际给的是 yyy`，返回 -1，不做任何修改 |
