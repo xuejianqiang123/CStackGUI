@@ -410,6 +410,7 @@ CStackGUI\
     envsnap\                   环境快照（懒加载的树：展开才采集 + 环境变量与用户数据目录 + 导出 / 复制）
     htmlreport\                HTML 报告器（CSV → 离线可看的 HTML：内嵌 CSS / 无 JavaScript / 单元格转义；网页控件预览 + 系统浏览器兜底）
     framedec\                  帧协议解析器（自定义帧：切帧 / 三种校验 / 解码，噪声与残帧都给明确结论）
+    settings\                  设置持久化（INI / 注册表 HKCU / 用户数据目录 三个后端并排对比，含注册表往返自测）
   apps\                        你自己的工程（画布导出的默认位置）
     README.md                  这个目录是干嘛的
   build-runtime.bat            编译运行时库
