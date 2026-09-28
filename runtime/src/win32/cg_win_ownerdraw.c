@@ -230,7 +230,13 @@ static void draw_pagination(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
         wchar_t *lt = cgw_wc_from_utf8(w->value <= w->vmin ? "" : "<");
         wchar_t *rt = cgw_wc_from_utf8(w->value >= w->vmax ? "" : ">");
         SetBkMode(dis->hDC, TRANSPARENT);
-        SetTextColor(dis->hDC, GetSysColor(COLOR_WINDOWTEXT));
+        /* 分页文字也要跟随主题：底色走"背后色"（已经跟随），文字却取系统字色 ⇒ 深色下是深底黑字。
+         * 与圆环 / 标题 / 仪表同一套口径（2026-09-28 排查发现） */
+        {
+            unsigned tfg = cgw_theme_text(w->app);
+
+            SetTextColor(dis->hDC, tfg != CG_COLOR_NONE ? cgw_to_colorref(tfg) : GetSysColor(COLOR_WINDOWTEXT));
+        }
         l.right = rc.left + (rc.right - rc.left) / 3;
         r.left = rc.right - (rc.right - rc.left) / 3;
         if (lt) { DrawTextW(dis->hDC, lt, -1, &l, DT_CENTER | DT_VCENTER | DT_SINGLELINE); free(lt); }

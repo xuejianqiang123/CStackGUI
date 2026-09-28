@@ -434,7 +434,13 @@ static void meter_paint(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
         tr.right = rc->right;
         tr.top = cy + r * 30 / 100;
         tr.bottom = tr.top + 28;
-        SetTextColor(dc, RGB(0x1D, 0x1B, 0x20));
+        /* 中心数值也要跟随主题：这里原来是写死的近黑，深色盘面上一片黑读不出来（2026-09-28
+         * 排查发现，与圆环中心文字同一毛病）。深色取主题浅字，浅色保持原来的近黑 */
+        {
+            unsigned tfg = cgw_theme_text(app);
+
+            SetTextColor(dc, tfg != CG_COLOR_NONE ? cgw_to_colorref(tfg) : RGB(0x1D, 0x1B, 0x20));
+        }
         DrawTextW(dc, wtx, -1, &tr, DT_CENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
         SetBkMode(dc, oldmode);
         if (of) SelectObject(dc, of);

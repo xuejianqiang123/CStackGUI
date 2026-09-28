@@ -78,8 +78,14 @@ static void panel_draw_group(cg_app_t *app, HDC dc, cg_widget_t *w, const RECT *
             if (tr.top < 0) { tr.bottom -= tr.top; tr.top = 0; }
             FillRect(dc, &tr, cgw_brush_for(title_bg));   /* 用组自己的填充色擦开顶边线（title_bg = bg；组没设背景色时才等于"背后"色） */
             SetBkMode(dc, TRANSPARENT);
-            SetTextColor(dc, (w->style.fg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.fg)
-                                                            : GetSysColor(COLOR_WINDOWTEXT));
+            /* 标题文字也要跟随主题：没写 fg 时不该退到系统字色 —— 深色面板上那就是"深底黑字"，
+             * 用户手动检查时正是发现"分组框标题在深色下看不见"（2026-09-28）。口径与圆环中心文字一致 */
+            {
+                unsigned tfg = cgw_theme_text(w->app);
+
+                SetTextColor(dc, (w->style.fg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.fg)
+                              : (tfg != CG_COLOR_NONE ? cgw_to_colorref(tfg) : GetSysColor(COLOR_WINDOWTEXT)));
+            }
             if (wt) DrawTextW(dc, wt, -1, &tr, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
         }
         if (wt) free(wt);
@@ -169,8 +175,13 @@ static void panel_draw_card_shape(cg_app_t *app, HDC dc, cg_widget_t *w, const R
             tr.left += cgw_scale_px(app, 12);
             tr.top += cgw_scale_px(app, 6);
             SetBkMode(dc, TRANSPARENT);
-            SetTextColor(dc, (w->style.fg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.fg)
-                                                            : GetSysColor(COLOR_WINDOWTEXT));
+            /* card 标题同病同修：没写 fg 时也要走主题兜底（见上面 group 标题那条注释） */
+            {
+                unsigned tfg = cgw_theme_text(w->app);
+
+                SetTextColor(dc, (w->style.fg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.fg)
+                              : (tfg != CG_COLOR_NONE ? cgw_to_colorref(tfg) : GetSysColor(COLOR_WINDOWTEXT)));
+            }
             wchar_t *wt = cgw_wc_from_utf8(w->text);
             if (wt) { DrawTextW(dc, wt, -1, &tr, DT_LEFT | DT_TOP); free(wt); }
             SelectObject(dc, oldf);
