@@ -15,7 +15,7 @@
   "styles": {
     "title":   { "font": "Microsoft YaHei UI", "size": 13, "bold": true },
     "sub":     { "font": "Microsoft YaHei UI", "size": 9 },
-    "panel":   { "font": "Microsoft YaHei UI", "size": 10, "fg": "#E8E2F0", "bg": "#1A191F" },
+    "panel":   { "font": "Microsoft YaHei UI", "size": 10 },
     "oncard":  { "font": "Microsoft YaHei UI", "size": 10, "fg": "#CFC7DB" },
     "log":     { "font": "Consolas", "size": 10, "fg": "#CDE8C6", "bg": "#0E1116" },
     "input":   { "font": "Microsoft YaHei UI", "size": 10, "fg": "#E8E2F0", "bg": "#26242C" },
@@ -62,8 +62,8 @@
       "type": "group",
       "rect": { "x": 14, "y": 72, "w": 632, "h": 444 },
       "text": "日志视图",
-      "style": { "use": "panel", "bg": "#121117" },
-      "hint": "「命名 + 局部覆盖」形态：先取 styles.panel，再用这里写了的字段盖上去。写死的深色底在任何主题下都保持深色",
+      "style": "panel",
+      "hint": "「命名样式继承」：直接取 styles.panel。这里**不**写死颜色，所以分组框的底色与文字色都跟着主题走（浅色下自动变浅）—— 这正是「深色只改默认值」那条口径的意思",
       "children": [
         {
           "id": "edt_log",

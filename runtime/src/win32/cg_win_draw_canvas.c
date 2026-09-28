@@ -262,7 +262,14 @@ static void draw_ring_text(HDC dc, const cg_widget_t *w, const RECT *rc)
     oldf = (HFONT)SelectObject(dc, f ? f : (HFONT)GetStockObject(DEFAULT_GUI_FONT));
     swprintf(text, 32, L"%d%%", (val - w->vmin) * 100 / span);
     SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, GetSysColor(COLOR_WINDOWTEXT));
+    /* 中心文字也要跟随主题：圆环的轨道走的是中性灰兜底（cg_skin.c 的 cg_skin_neutral），
+     * 这里原先直接取系统字色 —— 深色下就是"深底黑字"，几乎看不见（2026-09-28 用户手动
+     * 检查例程时发现）。与图表中心文字同一套口径：深色用主题兜底的浅字，浅色保持系统字色 */
+    {
+        unsigned tfg = cgw_theme_text(w->app);
+
+        SetTextColor(dc, tfg != CG_COLOR_NONE ? cgw_to_colorref(tfg) : GetSysColor(COLOR_WINDOWTEXT));
+    }
     DrawTextW(dc, text, -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     SelectObject(dc, oldf);
 }
