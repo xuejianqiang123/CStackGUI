@@ -20,7 +20,6 @@
 
 /* ------------------------------------------------------------ 剪贴板 / 外部程序 / 时间 */
 
-/** @brief 取剪贴板文本（没有返回 NULL；用完 cg_free） */
 /**
  * @brief 取剪贴板文本
  * @return char * 堆串，用完 cg_free；剪贴板里没有文本（或打不开剪贴板）返回 NULL
@@ -44,7 +43,6 @@ char *cg_clip_get_text(void)
     return out;
 }
 
-/** @brief 写剪贴板文本；成功返回 0 */
 /**
  * @brief 写剪贴板文本
  * @param text 要写进去的 UTF-8 文本；NULL 直接失败
@@ -82,7 +80,6 @@ int cg_clip_set_text(const char *text)
     return ok;
 }
 
-/** @brief 用系统默认程序打开文件/文件夹/网址；成功返回 0 */
 /**
  * @brief 用系统默认程序打开文件 / 文件夹 / 网址
  * @param path_or_url 目标路径或 URL（UTF-8）；NULL 直接失败
@@ -101,7 +98,6 @@ int cg_shell_open(const char *path_or_url)
     return ((INT_PTR)r > 32) ? 0 : -1;
 }
 
-/** @brief 启动外部程序；wait=1 返回其退出码（启动失败 -1），wait=0 返回 0 */
 /**
  * @brief 启动外部程序
  * @param cmd_line 命令行（UTF-8，可带参数）；NULL 直接失败
@@ -147,7 +143,6 @@ unsigned long cg_now_ms(void)
     return (unsigned long)GetTickCount64();
 }
 
-/** @brief 当前时间字符串；fmt 传 NULL 用 "2026-09-21 02:33:53" */
 /**
  * @brief 当前时间字符串
  * @param fmt strftime 格式串（如 "%Y-%m-%d"）；NULL 或空串用 "%Y-%m-%d %H:%M:%S"
@@ -166,7 +161,6 @@ char *cg_time_now(const char *fmt)
 
 /* ------------------------------------------------------------ 注册表 */
 
-/** @brief 读 HKCU 下的字符串值；没有返回 def 的副本 */
 /**
  * @brief 读 HKCU 下的字符串值
  * @param subkey 子键路径（如 "Software\\Foo"）；NULL 时直接走回退
@@ -200,7 +194,6 @@ char *cg_reg_read(const char *subkey, const char *name, const char *def)
     return out ? out : cg_str_dup(def);
 }
 
-/** @brief 写 HKCU 下的字符串值（没有就新建）；成功返回 0 */
 /**
  * @brief 写 HKCU 下的字符串值（没有就新建）
  * @param subkey 子键路径；NULL 直接失败
@@ -240,7 +233,6 @@ int cg_reg_write(const char *subkey, const char *name, const char *value)
  * 而"取 MAC 地址"要 iphlpapi（实测确实没在链接表里），按"不引入新链接库"的约束不做。
  */
 
-/** @brief 读环境变量（UTF-8）；没有这个变量返回 NULL */
 /**
  * @brief 读环境变量（UTF-8）
  * @param name 变量名（不区分大小写）；NULL 或空串返回 NULL
@@ -282,7 +274,6 @@ char *cg_env(const char *name)
     return out;
 }
 
-/** @brief 读环境变量当整数；没有 / 不合法 / 溢出都返回 fallback */
 /**
  * @brief 读环境变量当十进制整数
  * @param name 变量名
@@ -309,7 +300,6 @@ int cg_env_int(const char *name, int fallback)
 #define PROCESSOR_ARCHITECTURE_ARM64 12     /* 老 MinGW 头文件里没这个宏 */
 #endif
 
-/** @brief 1 = 这台机器是 64 位 Windows */
 /**
  * @brief 判断这台机器是不是 64 位 Windows
  * @return int 1 = 是（AMD64 / IA64 / ARM64）；0 = 不是
@@ -337,7 +327,6 @@ typedef struct {
     WCHAR szCSDVersion[128];
 } cg_osver_t;
 
-/** @brief 操作系统可读名，形如 "Windows 10 (10.0.19045)"；失败返回 NULL */
 /**
  * @brief 取操作系统可读名，形如 "Windows 10 (10.0.19045)"
  * @return char * 堆串，用完 cg_free；取不到系统符号或版本查询失败返回 NULL
@@ -378,7 +367,6 @@ char *cg_sys_version(void)
                          (unsigned long)vi.dwBuildNumber);
 }
 
-/** @brief 取路径所在磁盘的剩余 / 总容量（字节）；成功返回 1 */
 /**
  * @brief 取路径所在磁盘的剩余 / 总容量（字节）
  * @param path 该盘上任意路径（UTF-8，如 "C:\\logs"）；NULL 或空串直接失败
@@ -406,7 +394,6 @@ int cg_disk_space(const char *path, unsigned long long *free_bytes, unsigned lon
     return 1;
 }
 
-/** @brief 按可执行文件名查进程是否在跑（大小写不敏感）；返回 1 / 0 */
 /**
  * @brief 按可执行文件名查进程是否在跑（大小写不敏感）
  * @param exe_name 可执行文件名（如 "Foo.exe"，只比文件名不含路径）；NULL 或空串算没在跑

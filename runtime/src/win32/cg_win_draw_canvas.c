@@ -15,7 +15,6 @@ typedef struct { cg_app_t *app; cg_widget_t *w; } image_ctx_t;
  */
 static void image_body(HDC mem, const RECT *rc, void *vctx);
 
-/** 图片控件：按控件大小 StretchBlt，缺图时画占位框 */
 /**
  * @brief 图片控件的自绘窗口过程，按控件大小 StretchBlt，缺图时画占位框
  * @param hwnd 本控件窗口
@@ -66,7 +65,6 @@ static LRESULT CALLBACK ImageProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-/** @brief 注册图片控件的自绘窗口类（整进程一次） */
 /**
  * @brief 注册图片控件的自绘窗口类（整进程一次）
  * @return void 无返回值
@@ -128,7 +126,6 @@ void cgw_paint_buffered(HDC dc, const RECT *rc,
     DeleteDC(mem);
 }
 
-/** @brief 图片的一帧：位图按控件大小拉伸，缺图时画占位框 + 文件名/占位文字 */
 /**
  * @brief 图片的一帧：位图按控件大小拉伸，缺图时画占位框 + 文件名/占位文字
  * @param app 应用对象（取背后配色）
@@ -204,7 +201,6 @@ static void image_body(HDC mem, const RECT *rc, void *vctx)
  */
 static void draw_ring_text(HDC dc, const cg_widget_t *w, const RECT *rc);  /* 定义在下面 */
 
-/** @brief 圆环的一帧：底色/轨道/进度弧（GDI+ 抗锯齿）+ 中心百分比 */
 /**
  * @brief 圆环的一帧：底色/轨道/进度弧（GDI+ 抗锯齿）+ 中心百分比
  * @param mem 内存位图 DC
@@ -224,7 +220,6 @@ static void ring_body(HDC mem, const RECT *rc, void *vctx)
     }
 }
 
-/** @brief 进度条的一帧：浅灰圆角轨道 + 主题紫填充 */
 /**
  * @brief 进度条的一帧：浅灰圆角轨道 + 主题紫填充
  * @param mem 内存位图 DC
@@ -272,7 +267,6 @@ static void draw_ring_text(HDC dc, const cg_widget_t *w, const RECT *rc)
     SelectObject(dc, oldf);
 }
 
-/** @brief 圆环进度控件窗口过程（自绘，无交互） */
 /**
  * @brief 圆环进度控件窗口过程（自绘，无交互）
  * @param hwnd 本控件窗口
@@ -306,7 +300,6 @@ static LRESULT CALLBACK RingProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-/** @brief 注册圆环进度的自绘窗口类（整进程一次） */
 /**
  * @brief 注册圆环进度的自绘窗口类（整进程一次）
  * @return void 无返回值
@@ -360,7 +353,6 @@ static LRESULT CALLBACK ProgressProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-/** @brief 注册进度条的自绘窗口类（整进程一次） */
 /**
  * @brief 注册进度条的自绘窗口类（整进程一次）
  * @return void 无返回值
@@ -384,7 +376,6 @@ void cgw_register_progress_class(void)
  * cg_canvas_* 命令把每笔记录在 w->ops 里，WM_PAINT 按序回放。
  * 坐标是逻辑像素（跟 .cgui 同一套），绘制时按 DPI 缩放。
  */
-/** @brief 画板坐标：逻辑像素 -> 物理像素（与控件布局同一套缩放） */
 /**
  * @brief 画板坐标：逻辑像素 -> 物理像素（与控件布局同一套缩放）
  * @param w 画板控件（取其 DPI 缩放系数）
@@ -464,7 +455,6 @@ static void draw_canvas(HDC dc, cg_widget_t *w, const RECT *rc)
     }
 }
 
-/** @brief 画板控件窗口过程：自绘 + 左键抬起派发 click（双击由运行时合成） */
 /**
  * @brief 画板控件窗口过程：自绘 + 左键抬起派发 click（双击由运行时合成）
  * @param hwnd 本控件窗口
@@ -509,7 +499,6 @@ static LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-/** @brief 注册画板的自绘窗口类（整进程一次） */
 /**
  * @brief 注册画板的自绘窗口类（整进程一次）
  * @return void 无返回值

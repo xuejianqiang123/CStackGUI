@@ -39,7 +39,6 @@ static COLORREF term_col(const cg_app_t *app, int kind)
     }
 }
 
-/** @brief 把一行文字（带颜色）追加到 RichEdit 末尾 */
 /**
  * @brief 把一行文字（带颜色）追加到 RichEdit 末尾
  * @param h 目标 RichEdit
@@ -96,7 +95,6 @@ static void term_push_line(HWND h, const char *text, COLORREF col)
     free(wt);
 }
 
-/** @brief terminal 的行 -> 原生控件（增量追加；裁剪或清空后整体重灌） */
 /**
  * @brief terminal 的行 -> 原生控件（增量追加；裁剪或清空后整体重灌）
  * @param h 终端 RichEdit
@@ -142,7 +140,6 @@ static void sync_terminal(HWND h, cg_widget_t *w)
     SendMessageW(h, EM_SCROLLCARET, 0, 0);      /* 自动滚到底 */
 }
 
-/** @brief 多行编辑框滚到最底部：把插入点移到末尾再 EM_SCROLLCARET */
 /**
  * @brief 多行编辑框滚到最底部：把插入点移到末尾再 EM_SCROLLCARET
  * @param w edit 控件（非 edit 或无原生窗口时为空操作）
@@ -160,7 +157,6 @@ void cg_edit_scroll_end(cg_widget_t *w)
     SendMessageW(h, EM_SCROLLCARET, 0, 0);                  /* 滚到插入点 */
 }
 
-/** 标签页当前显示第几页时，某个子控件该不该出现 */
 /**
  * @brief 标签页当前显示第几页时，某个子控件该不该出现
  * @param w 子控件（看其 parent 是否为 tabs 以及它自己的 page）
@@ -173,7 +169,6 @@ static int page_visible(const cg_widget_t *w)
     return w->page == p->value;
 }
 
-/** 按 page / visible 规则应用单个控件的显隐（sync_widget_body 与切页共用） */
 /**
  * @brief 按 page / visible 规则应用单个控件的显隐（与切页共用）
  * @param w 目标控件（数值框有两个原生窗口时同进同退）
@@ -214,7 +209,6 @@ void cgw_sync_tabs_pages(cg_widget_t *tabs)
     }
 }
 
-/** 重建树：逻辑下标 -> HTREEITEM 的映射存在 w->item_map 里 */
 /**
  * @brief 重建树：逻辑下标 -> 节点句柄的映射存在控件里
  * @param h 目标 TreeView
@@ -262,7 +256,6 @@ static void build_tree(HWND h, cg_widget_t *w)
     InvalidateRect(h, NULL, TRUE);
 }
 
-/** @brief 表格行图标：把图片缩到 imagelist 的格子尺寸再放进去，返回下标，失败 -1 */
 /**
  * @brief 把图片缩到 imagelist 格子尺寸后加进去（表格行图标用）
  * @param w 所属控件（解析图片相对路径用）
@@ -308,7 +301,6 @@ int cgw_imagelist_add_file(cg_widget_t *w, HIMAGELIST il, const char *path, int 
     return idx;
 }
 
-/** 惰性建表格的 imagelist（行图标用），建好就挂到 LVSIL_SMALL 上 */
 /**
  * @brief 惰性建表格的 imagelist（行图标用），建好就挂到小图标位上
  * @param h 目标 ListView
@@ -326,7 +318,6 @@ HIMAGELIST cgw_table_imagelist(HWND h, cg_widget_t *w)
     return (HIMAGELIST)w->imglist;
 }
 
-/** 重建表格：列 + 行 */
 /**
  * @brief 重建表格：列 + 行
  * @param h 目标 ListView
@@ -428,7 +419,6 @@ static void build_table(HWND h, cg_widget_t *w)
     InvalidateRect(h, NULL, TRUE);
 }
 
-/** 重建标签页标签 + 按当前页决定子控件显隐 */
 /**
  * @brief 重建标签页标签 + 按当前页决定子控件显隐
  * @param h 目标 Tab
@@ -458,7 +448,6 @@ static void build_tabs(HWND h, cg_widget_t *w)
     }
 }
 
-/** 状态栏：按段数均分，最后一段吃掉余量 */
 /**
  * @brief 状态栏：按段数均分，最后一段吃掉余量
  * @param h 目标状态栏
@@ -487,7 +476,6 @@ static void build_status(HWND h, cg_widget_t *w)
     }
 }
 
-/** 图片 / 图标按钮 / 按钮（背景图）：按需加载，换图时释放旧位图 */
 /**
  * @brief 图片 / 图标按钮 / 按钮（背景图）：按需加载，换图时释放旧位图
  * @param w 控件（比对源路径与已加载的位图，按需重载并记失败标记）
@@ -517,7 +505,6 @@ static void sync_bitmap(cg_widget_t *w)
     }
 }
 
-/** browser 只在创建时认一次地址，换地址就整个重建（省掉一套 COM 调用） */
 /**
  * @brief browser 只在创建时认一次地址，换地址就整个重建（省掉一套 COM 调用）
  * @param w browser 控件（销毁旧窗口后按新地址重建，并补挂子类 / tooltip / 显隐 / 可点）
@@ -595,7 +582,6 @@ int cgw_hwnd_text_is(HWND h, const wchar_t *wt)
     return same;
 }
 
-/** @brief 把控件逻辑状态同步到原生控件（位置/文字/字体/条目/值/显隐），不做防重入 */
 /**
  * @brief 把控件逻辑状态同步到原生控件（位置 / 文字 / 字体 / 条目 / 值 / 显隐），不做防重入
  * @param w 控件（无原生句柄或应用时直接返回）

@@ -25,7 +25,6 @@ static const char *k_doc1 =
     "{\"widgets\":[{\"id\":\"cht\",\"type\":\"chart\",\"value\":4,"
     "\"rect\":{\"x\":0,\"y\":0,\"w\":200,\"h\":120}}]}";
 
-/** @brief 解析文档 + 建控件树；成功返回 1、失败返回 0 */
 /**
  * @brief 解析文档 + 建控件树
  * @param app 待初始化的应用
@@ -49,7 +48,6 @@ static int build_app(cg_app_t *app, const char *json)
     return 1;
 }
 
-/** @brief 收尾：先放控件（它们会回写节点），再放文档 */
 /**
  * @brief 收尾：先放控件（它们会回写节点），再放文档
  * @param app 要释放的应用
@@ -67,7 +65,6 @@ static void free_app(cg_app_t *app)
     cg_doc_release(&app->doc);
 }
 
-/** @brief 把某系列的点读出来拼成字符串，便于一眼比对（"1,2,3"） */
 /**
  * @brief 把某系列的点读出来拼成字符串，便于一眼比对
  * @param w 目标图表控件
@@ -89,7 +86,6 @@ static void dump_series(cg_widget_t *w, int series, char *out, size_t size)
     }
 }
 
-/** @brief 基本 push 与"窗口满了丢最老的" */
 /**
  * @brief 基本推点与"窗口满了丢最老的"
  * @return void 无返回值
@@ -138,7 +134,6 @@ static void test_chart_push(void)
     free_app(&app);
 }
 
-/** @brief 多系列：各推各的、互不串行 */
 /**
  * @brief 多系列：各推各的、互不串行
  * @return void 无返回值
@@ -195,7 +190,6 @@ static void test_chart_multi(void)
     free_app(&app);
 }
 
-/** @brief clear / 改窗口 / 加系列：缓冲重建后的计数必须干净 */
 /**
  * @brief 清空 / 改窗口点数 / 加系列：缓冲重建后的计数必须干净
  * @return void 无返回值
@@ -260,7 +254,6 @@ static void test_chart_rebuild(void)
     free_app(&app);
 }
 
-/** @brief 非 chart 控件上调用要被忽略（类型守卫生效） */
 /**
  * @brief 非图表控件上调用要被忽略（类型守卫生效）
  * @return void 无返回值

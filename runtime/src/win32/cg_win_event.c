@@ -17,7 +17,6 @@ int g_win_in_notify = 0;
  */
 cg_app_t *g_win_app = NULL;
 
-/** @brief 鼠标消息的按键组合 -> 1=Ctrl 2=Shift 4=Alt（与 cg_win_main.c 的窗口级口径一致） */
 /**
  * @brief 鼠标消息的按键组合 -> 功能键状态（与窗口级同一口径）
  * @param wp 鼠标消息的附加参数（按键位）
@@ -32,7 +31,6 @@ static int widget_mods_from_mouse(WPARAM wp)
     return m;
 }
 
-/** @brief 键盘消息的按键组合 -> 1=Ctrl 2=Shift 4=Alt */
 /**
  * @brief 键盘消息的按键组合 -> 功能键状态
  * @return int 1=Ctrl 2=Shift 4=Alt 的按位组合
@@ -322,7 +320,6 @@ LRESULT CALLBACK cgw_FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     return DefSubclassProc(hwnd, msg, wp, lp);
 }
 
-/** @brief 给控件挂统一子类（焦点事件 / 通知转发 / 评分分页按点判定） */
 /**
  * @brief 给控件挂统一子类（焦点事件 / 通知转发 / 评分分页按点判定）
  * @param h 要挂子类的控件窗口
@@ -338,7 +335,6 @@ void cgw_subclass_for_events(HWND h)
  * TTF_SUBCLASS 让 tooltip 自己接管鼠标转发，不需要任何额外消息处理。
  * 文本用 LPSTR_TEXTCALLBACK 现取，cg_widget_set_hint 改完立即生效。
  */
-/** @brief 把控件注册成 tooltip 的一个 tool（文本走 LPSTR_TEXTCALLBACK 现取） */
 /**
  * @brief 把控件注册成工具提示的一个条目（文本按需回取）
  * @param tooltip 整窗那个工具提示控件窗口
@@ -357,7 +353,6 @@ void cgw_tooltip_add_for(HWND tooltip, HWND forw)
     SendMessageW(tooltip, TTM_ADDTOOLW, 0, (LPARAM)&ti);
 }
 
-/** @brief hint 变化后同步 tooltip：按需新增 / 删除 / 更新 tool */
 /**
  * @brief 悬停提示变了之后同步工具提示：按需新增 / 删除 / 更新条目
  * @param w 目标控件
@@ -386,7 +381,6 @@ void cg_win_set_hint(cg_widget_t *w)
     }
 }
 
-/** @brief 重设时钟控件的 Win32 定时器（period=0 即停止；id 复用 ctrl_id） */
 /**
  * @brief 重设时钟控件的系统定时器（周期为 0 即停止）
  * @param w 目标控件

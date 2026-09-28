@@ -36,7 +36,6 @@ static void cb_count_a(void *user) { (void)user; s_fires_a++; }
  */
 static void cb_count_b(void *user) { (void)user; s_fires_b++; }
 
-/** @brief 标准用法：回调里把自己再挂一次（serialterm 的轮询就是这种写法） */
 /**
  * @brief 标准用法：回调里把自己再挂一次（串口示例的轮询就是这种写法）
  * @param user 用户数据，这里当应用令牌用（重挂时原样传回）
@@ -51,7 +50,6 @@ static void cb_rearm(void *user)
 
 /* ------------------------------------------------------------ 套件 */
 
-/** @brief 到点才触发、没到点不触发、kill 了绝不触发 */
 /**
  * @brief 到点才触发、没到点不触发、注销了绝不触发
  * @return void 无返回值
@@ -90,7 +88,6 @@ static void test_timer_basic(void)
     cg_test_ok("NULL kill 不崩", 1);
 }
 
-/** @brief 回调里重挂：本轮绝不能再触发（回归：串口助手一开就未响应的那个死循环） */
 /**
  * @brief 回调里重挂：本轮绝不能再触发（回归：串口助手一开就未响应的那个死循环）
  * @return void 无返回值
@@ -159,7 +156,6 @@ static void test_timer_kill_in_tick(void)
     cg_timers_clear(APP_A);     /* 收尾 */
 }
 
-/** @brief 多应用隔离：tick 只推进自己的，clear 也只清自己的 */
 /**
  * @brief 多应用隔离：推进只推自己的，清理也只清自己的
  * @return void 无返回值

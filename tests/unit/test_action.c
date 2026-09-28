@@ -17,7 +17,6 @@
 
 /* ------------------------------------------------------------ 快捷键解析 */
 
-/** @brief 能认的写法：大小写、顺序、重复、空白 */
 /**
  * @brief 能认的写法：大小写、顺序、重复、空白
  * @return void 无返回值
@@ -62,7 +61,6 @@ static void test_accel_parse_ok(void)
     cg_test_int("越界参数不崩（out 传 NULL）", cg_accel_parse("Ctrl+S", NULL), 1);
 }
 
-/** @brief 不能认的写法：**尤其是裸字母/数字**（那会抢走输入框的按键） */
 /**
  * @brief 不能认的写法：**尤其是裸字母 / 数字**（那会抢走输入框的按键）
  * @return void 无返回值
@@ -94,7 +92,6 @@ static void test_accel_parse_bad(void)
                                "AAAAAAAAAAAAAAAAAAAAAAA", &a), 0);
 }
 
-/** @brief 规范化显示：修饰键顺序固定、具名键用规范名 */
 /**
  * @brief 规范化显示：修饰键顺序固定、具名键用规范名
  * @return void 无返回值
@@ -148,7 +145,6 @@ static const char *k_doc =
     "  ]\n"
     "}\n";
 
-/** @brief 在文档的动作表里按名字找一个（顺序无关，改测试数据不会连带改断言） */
 /**
  * @brief 在文档的动作表里按名字找一个（顺序无关，改测试数据不会连带改断言）
  * @param doc 要查的动作表所在的文档
@@ -164,7 +160,6 @@ static const cg_action_t *action_by_name(const cg_doc_t *doc, const char *name)
     return NULL;
 }
 
-/** @brief 动作字段的解析：写成什么、缺省是什么 */
 /**
  * @brief 动作字段的解析：写成什么、缺省是什么
  * @return void 无返回值
@@ -228,7 +223,6 @@ static void test_action_parse(void)
     cg_doc_free(doc);
 }
 
-/** @brief 边界：空名、重名、缺 handler、actions 不是对象 */
 /**
  * @brief 边界：空名、重名、缺 handler、actions 不是对象
  * @return void 无返回值
@@ -288,7 +282,6 @@ static char s_last_action[64];
 static int  s_save_calls;
 static int  s_grid_calls;
 
-/** @brief on_save 的动作回调：self 恒为主窗口伪控件 */
 /**
  * @brief 保存动作的回调：self 恒为主窗口伪控件
  * @param self 触发回调的控件（动作回调里是主窗口伪控件）
@@ -308,7 +301,6 @@ static void on_save(cg_widget_t *self, cg_event_t ev, void *user)
     snprintf(s_last_action, sizeof(s_last_action), "%s", name ? name : "(NULL)");
 }
 
-/** @brief on_grid 的动作回调 */
 /**
  * @brief 表格动作的回调（只记账，看它有没有被误触发）
  * @param self 触发回调的控件
@@ -328,7 +320,6 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND_END
 };
 
-/** @brief 解析文档 + 建控件树 + 建动作表；失败返回 -1 */
 /**
  * @brief 解析文档 + 建控件树 + 建动作表
  * @param app 待初始化的应用（内嵌文档、控件树与动作表都在这里）
@@ -354,7 +345,6 @@ static int build_app(cg_app_t *app, const char *json)
     return 0;
 }
 
-/** @brief 收尾：动作表自己持有一份字符串，要和控件一起收 */
 /**
  * @brief 收尾：动作表自己持有一份字符串，要和控件一起收
  * @param app 要释放的应用
@@ -374,7 +364,6 @@ static void free_app(cg_app_t *app)
     cg_doc_release(&app->doc);
 }
 
-/** @brief 动作表构建：accel 归一化、发号、初始状态 */
 /**
  * @brief 动作表构建：快捷键归一化、发号、初始状态
  * @return void 无返回值
@@ -489,7 +478,6 @@ static const char *k_bad_doc =
     "  ]\n"
     "}\n";
 
-/** @brief 错配置：五类都要记账（自检据此非 0 退出），但界面不能崩、也不能被悄悄改 */
 /**
  * @brief 错配置：五类都要记账（自检据此非 0 退出），但界面不能崩、也不能被悄悄改
  * @return void 无返回值

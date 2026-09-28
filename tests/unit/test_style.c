@@ -16,7 +16,6 @@
 #include <stdio.h>
 #include <string.h>
 
-/** @brief 解析一段 .cgui 文本；失败直接断言失败并返回 NULL */
 /**
  * @brief 解析一段 .cgui 文本（失败时打一行说明）
  * @param json 待解析的 .cgui 文本
@@ -31,7 +30,6 @@ static cg_doc_t *parse(const char *json)
     return doc;
 }
 
-/** @brief 取顶层第 idx 个控件（越界返回 NULL） */
 /**
  * @brief 取顶层第 idx 个控件
  * @param doc 已解析的文档
@@ -44,7 +42,6 @@ static cg_node_t *kid(cg_doc_t *doc, size_t idx)
     return doc->root->children[idx];
 }
 
-/** @brief 样式表 + 三种引用形态 + 合并顺序（内联优先） */
 /**
  * @brief 样式表 + 三种引用形态 + 合并顺序（内联优先）
  * @return void 无返回值
@@ -134,7 +131,6 @@ static void test_style_forms(void)
     cg_doc_free(doc);
 }
 
-/** @brief 子控件里的引用也要生效（递归解析到整棵树） */
 /**
  * @brief 子控件里的引用也要生效（递归解析到整棵树）
  * @return void 无返回值
@@ -165,7 +161,6 @@ static void test_style_nested(void)
     cg_doc_free(doc);
 }
 
-/** @brief app.dark 三态与垃圾值 */
 /**
  * @brief 深色标志三态与垃圾值
  * @return void 无返回值

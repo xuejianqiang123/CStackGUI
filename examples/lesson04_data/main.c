@@ -122,7 +122,6 @@ static void note_sel(const char *fmt, ...)
 
 /* ------------------------------------------------------------ tabs：装页面的容器 */
 
-/** @brief 切页签：四页分别是列表框 / 树 / 表格 / 图表，子控件按 .cgui 的 "page" 自动显隐 */
 /**
  * @brief 切页签：四页分别是列表框 / 树 / 表格 / 图表，子控件按 .cgui 的 page 自动显隐
  * @param self 标签页控件
@@ -145,7 +144,6 @@ static void on_tab_data_select(cg_widget_t *self, cg_event_t ev, void *user)
 
 /* ------------------------------------------------------------ 列表框 */
 
-/** @brief 选中项变了：cg_widget_value() = 选中第几项（0 起），没选中是 -1 */
 /**
  * @brief 选中项变了：控件 value = 选中第几项（0 起），没选中是 -1
  * @param self 列表框控件
@@ -166,7 +164,6 @@ static void on_lst_items_select(cg_widget_t *self, cg_event_t ev, void *user)
     refresh_status(app);
 }
 
-/** @brief 「加一条」：cg_widget_list_addf() 直接带格式化，省掉 snprintf 再 add 一步 */
 /**
  * @brief 「加一条」：带格式化的追加接口直接拼串，省掉先 snprintf 再 add 一步
  * @param self 被点的按钮
@@ -187,7 +184,6 @@ static void on_btn_list_add_click(cg_widget_t *self, cg_event_t ev, void *user)
     refresh_status(app);
 }
 
-/** @brief 「清空」：个数要先记下来，清完再问就是 0 了 */
 /**
  * @brief 「清空」：个数要先记下来，清完再问就是 0 了
  * @param self 被点的按钮
@@ -211,7 +207,6 @@ static void on_btn_list_clear_click(cg_widget_t *self, cg_event_t ev, void *user
 
 /* ------------------------------------------------------------ 树 */
 
-/** @brief 树上选中了某个节点：cg_tree_selected() = 节点下标，文字用 cg_tree_selected_text() */
 /**
  * @brief 树上选中了某个节点：取选中下标，文字用取选中节点文字的接口
  * @param self 树控件
@@ -233,7 +228,6 @@ static void on_tre_dir_select(cg_widget_t *self, cg_event_t ev, void *user)
     refresh_status(app);
 }
 
-/** @brief 节点被展开：运行时会把"被操作的节点"设成当前选中，所以这里问得到是哪一个 */
 /**
  * @brief 节点被展开：运行时会把"被操作的节点"设成当前选中，所以这里问得到是哪一个
  * @param self 树控件
@@ -251,7 +245,6 @@ static void on_tre_dir_expand(cg_widget_t *self, cg_event_t ev, void *user)
     refresh_status(cg_app_of(self));
 }
 
-/** @brief 节点被折叠：展开与折叠是两个事件，写成两个回调对照着看更清楚 */
 /**
  * @brief 节点被折叠：展开与折叠是两个事件，写成两个回调对照着看更清楚
  * @param self 树控件
@@ -269,7 +262,6 @@ static void on_tre_dir_collapse(cg_widget_t *self, cg_event_t ev, void *user)
     refresh_status(cg_app_of(self));
 }
 
-/** @brief 「加节点」：parent 传当前选中节点，没选中时 cg_tree_selected() 正好是 -1 = 加在根上 */
 /**
  * @brief 「加节点」：父节点传当前选中节点，没选中时取到的正好是 -1 = 加在根上
  * @param self 被点的按钮
@@ -291,7 +283,6 @@ static void on_btn_tree_add_click(cg_widget_t *self, cg_event_t ev, void *user)
     refresh_status(app);
 }
 
-/** @brief 「全展开」：cg_tree_expand(树, 节点下标, 1)，节点下标从 0 数到 count-1 */
 /**
  * @brief 「全展开」：逐个节点调展开接口，节点下标从 0 数到个数减一
  * @param self 被点的按钮
@@ -315,7 +306,6 @@ static void on_btn_tree_all_click(cg_widget_t *self, cg_event_t ev, void *user)
 
 /* ------------------------------------------------------------ 表格 */
 
-/** @brief 表格选中行变了：cg_table_selected() = 行号，单元格用 cg_table_cell(row, col) */
 /**
  * @brief 表格选中行变了：取选中行号，单元格用取单元格的接口
  * @param self 表格控件
@@ -346,7 +336,6 @@ static void on_tbl_data_select(cg_widget_t *self, cg_event_t ev, void *user)
     refresh_status(app);
 }
 
-/** @brief 勾选列的行状态变了（.cgui 里 table 要开 check） */
 /**
  * @brief 勾选列的行状态变了（.cgui 里 table 要开 check）
  * @param self 表格控件
@@ -374,7 +363,6 @@ static void on_tbl_data_check(cg_widget_t *self, cg_event_t ev, void *user)
     refresh_status(app);
 }
 
-/** @brief 「加一行」：cells 的顺序 = 列的顺序，不足的列运行时按空串补齐 */
 /**
  * @brief 「加一行」：单元格数组的顺序 = 列的顺序，不足的列运行时按空串补齐
  * @param self 被点的按钮
@@ -400,7 +388,6 @@ static void on_btn_row_add_click(cg_widget_t *self, cg_event_t ev, void *user)
     refresh_status(app);
 }
 
-/** @brief 「清空」表格：cg_table_clear() 只清行，列头还在 */
 /**
  * @brief 「清空」表格：只清行，列头还在
  * @param self 被点的按钮
@@ -442,7 +429,6 @@ static void on_sp_main_release(cg_widget_t *self, cg_event_t ev, void *user)
 
 /* ------------------------------------------------------------ 日志区（terminal） */
 
-/** @brief 「清空日志」：cg_term_clear() 清屏，然后自己再写一行"清完了" */
 /**
  * @brief 「清空日志」：先清屏，然后自己再写一行"清完了"
  * @param self 被点的按钮

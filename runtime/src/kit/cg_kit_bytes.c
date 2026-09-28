@@ -17,7 +17,6 @@
 
 #include <string.h>
 
-/** @brief 原地反转；len ≤ 1 或 data 为 NULL 时什么都不做 */
 /**
  * @brief 原地反转一段字节
  * @param data 待反转的缓冲区（就在它上面改）；NULL 时什么都不做
@@ -38,7 +37,6 @@ void cg_bytes_reverse(void *data, int len)
     }
 }
 
-/** @brief 取一段（count 传 -1 = 取到底）；返回写出的字节数 */
 /**
  * @brief 取一段字节切片
  * @param data 源缓冲；NULL 直接失败
@@ -62,7 +60,6 @@ int cg_bytes_slice(const void *data, int len, int from, int count, void *out, in
     return count;
 }
 
-/** @brief 找子串；返回下标，没找到 / 参数非法 / needle 为空返回 -1 */
 /**
  * @brief 在缓冲里找子串
  * @param data 源缓冲；NULL 直接失败
@@ -87,7 +84,6 @@ int cg_bytes_find(const void *data, int len, const void *needle, int nlen, int f
     return -1;
 }
 
-/** @brief 从 offset 读 16 位（0..65535）；越界 / 参数非法返回 -1 */
 /**
  * @brief 从 offset 读一个 16 位无符号整数
  * @param data 源缓冲；NULL 直接失败
@@ -105,7 +101,6 @@ int cg_bytes_get_u16(const void *data, int len, int offset, int big_endian)
                       : ((d[offset + 1] << 8) | d[offset]);
 }
 
-/** @brief 从 offset 读 32 位；越界 / 参数非法返回 -1（用 long long，见头文件的理由） */
 /**
  * @brief 从 offset 读一个 32 位无符号整数
  * @param data 源缓冲；NULL 直接失败
@@ -131,7 +126,6 @@ long long cg_bytes_get_u32(const void *data, int len, int offset, int big_endian
     return (long long)v;
 }
 
-/** @brief 把 16 位写进 out 的 offset 处；1 = 成功，0 = 越界（什么都不写） */
 /**
  * @brief 把 16 位写进 out 的 offset 处
  * @param out 目标缓冲；NULL 直接失败
@@ -156,7 +150,6 @@ int cg_bytes_put_u16(void *out, int out_size, int offset, unsigned v, int big_en
     return 1;
 }
 
-/** @brief 把 32 位写进 out 的 offset 处；1 = 成功，0 = 越界（什么都不写） */
 /**
  * @brief 把 32 位写进 out 的 offset 处
  * @param out 目标缓冲；NULL 直接失败

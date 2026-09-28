@@ -5,7 +5,6 @@
  */
 #include "cg_win_internal.h"
 
-/** 图标按钮：把 src 图片按比例居中画在按钮里（没有图就画个占位框） */
 /**
  * @brief 把图标按钮的图片按比例居中画进按钮，没图时画个占位框
  * @param w 图标按钮控件（图片取自它的位图字段，底色取样式或背后色）
@@ -72,7 +71,6 @@ static void draw_icon_button(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
  * 画什么由各自的状态决定，和 switch 一个路数。
  */
 
-/** @brief 取控件前景色；style.fg 未设置时用 fallback */
 /**
  * @brief 取控件前景色，未设置时返回给定兜底色
  * @param w 目标控件
@@ -84,7 +82,6 @@ static unsigned widget_fg_or(const cg_widget_t *w, unsigned fallback)
     return (w->style.fg != CG_COLOR_NONE) ? w->style.fg : fallback;
 }
 
-/** 颜色选择：整个按钮就是一块当前颜色，边上勾一圈边框 */
 /**
  * @brief 把颜色选择控件画成一块当前颜色并勾一圈边框
  * @param w 颜色选择控件（值为 0xRRGGBB，未设时用默认紫）
@@ -100,7 +97,6 @@ static void draw_color_swatch(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
     FrameRect(dis->hDC, &dis->rcItem, (HBRUSH)GetStockObject(GRAY_BRUSH));
 }
 
-/** 徽章：圆角小圆片 + 文字，底色用 style.bg（没设用品牌红） */
 /**
  * @brief 把徽章画成胶囊形圆角底加居中文字
  * @param w 徽章控件（文字取自它，底色取样式，未设用品牌红）
@@ -128,7 +124,6 @@ static void draw_badge(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
     }
 }
 
-/** 标签片：圆角底 + 同色系边框 + 文字，像网页里的 tag */
 /**
  * @brief 把标签片画成圆角底、同色系描边加居中文字
  * @param w 标签片控件（文字、底色、描边取自它与样式）
@@ -162,7 +157,6 @@ static void draw_tag(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
     }
 }
 
-/** 评分：★☆ 按值画，样式字体没给就用默认大小 */
 /**
  * @brief 按当前值画出实心与空心星形的评分
  * @param w 评分控件（星数由量程给出、当前值在 value、字号取样式）
@@ -218,7 +212,6 @@ static void draw_rate(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
     }
 }
 
-/** 分页：<  页码  >，点两侧翻页（点击判定在 cgw_FocusProc） */
 /**
  * @brief 画出分页的左右翻页符号与"当前页 / 总页数"
  * @param w 分页控件（当前页在 value、页区间在量程）
@@ -246,7 +239,6 @@ static void draw_pagination(cg_widget_t *w, const DRAWITEMSTRUCT *dis)
     }
 }
 
-/** WM_DRAWITEM：自绘控件统一分发（绘制本体在 cg_skin.c / 各 draw_* 函数） */
 /**
  * @brief 按控件类型把自绘绘制转发给对应皮肤或本文件的绘制函数
  * @param app 应用对象，用来按控件句柄反查控件

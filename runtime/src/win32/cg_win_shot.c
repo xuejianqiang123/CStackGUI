@@ -32,7 +32,6 @@ static const unsigned char k_png_clsid[16] = {
     0x9A, 0x73, 0x00, 0x00, 0xF8, 0x1E, 0xF3, 0x2E,
 };
 
-/** @brief 把一个位图存成 PNG（截图与剪贴板图片共用这一条路）；成功 1，失败 0 */
 /**
  * @brief 把一个位图存成 PNG（截图与剪贴板图片共用这一条路）
  * @param bmp 待保存的位图；只读使用，不接管所有权
@@ -114,7 +113,6 @@ done:
     return ok;
 }
 
-/** @brief 把整个窗口存成 PNG（含标题栏）；可用运行时 API 里最常用的那个 */
 /**
  * @brief 把整个窗口存成 PNG（含标题栏）
  * @param app 所属应用；取其主窗口

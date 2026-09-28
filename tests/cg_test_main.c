@@ -129,7 +129,6 @@ void cg_test_note(const char *text)
     if (!cg_test_quiet) printf("  ---- %s\n", text);
 }
 
-/** @brief 套件名是否匹配 --grep 的子串（ASCII 忽略大小写） */
 /**
  * @brief 套件名是否匹配名字过滤的子串（ASCII 忽略大小写）
  * @param name 套件名
@@ -184,7 +183,6 @@ static void run_one(const cg_test_suite_t *s)
 #endif
 }
 
-/** @brief 按过滤结果跑一遍全部套件，返回跑了的套件数 */
 /**
  * @brief 按过滤结果跑一遍全部套件
  * @param grep 名字子串过滤条件；NULL 表示全都跑

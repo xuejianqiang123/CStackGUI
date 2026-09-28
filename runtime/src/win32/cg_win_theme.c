@@ -29,7 +29,6 @@
 /** SetWindowTheme 的函数型；取不到就是 NULL（见文件头"不动链接命令"） */
 typedef HRESULT (WINAPI *set_window_theme_fn)(HWND, LPCWSTR, LPCWSTR);
 
-/** @brief 取 SetWindowTheme（进程内一次；不新增链接依赖） */
 /**
  * @brief 取"设置窗口主题"那个系统函数（进程内一次）
  * @return set_window_theme_fn 取到的函数指针；取不到时为 NULL
@@ -75,7 +74,6 @@ static preferred_app_mode_fn g_pref_mode;
 static allow_dark_fn         g_allow_dark;
 static refresh_policy_fn     g_refresh_policy;
 
-/** @brief 取那三个未公开导出，并把进程切到"允许深色"（只做一次） */
 /**
  * @brief 取那三个未公开导出，并把进程切到"允许深色"（只做一次）
  * @return void 无返回值
@@ -96,7 +94,6 @@ static void dark_opt_in(void)
     if (g_refresh_policy) g_refresh_policy();
 }
 
-/** @brief 读系统的"应用深色"设置；读不到 / 值不认识都按浅色 */
 /**
  * @brief 读系统的"应用深色"设置
  * @return int 1 = 系统当前是深色；0 = 浅色或读不到（读不到 / 值不认识都按浅色）
@@ -118,7 +115,6 @@ int cgw_theme_system_dark(void)
     return dark;
 }
 
-/** @brief 窗口底色：深色是深面；否则 doc.bg，没设就用系统面色（与深色之前的行为一致） */
 /**
  * @brief 窗口底色：深色是深面，否则用文档里设的底色（没设就用系统面色）
  * @param app 应用对象，可为 NULL
@@ -131,7 +127,6 @@ unsigned cgw_theme_window_bg(const cg_app_t *app)
     return GetSysColor(COLOR_BTNFACE) & 0x00FFFFFFu;
 }
 
-/** @brief 卡片没设底色时自己填的面色（深色下一并变深，否则卡片里会是浅色方块） */
 /**
  * @brief 卡片没设底色时自己填的面色（深色下一并变深，否则卡片里会是浅色方块）
  * @param app 应用对象，可为 NULL
@@ -142,7 +137,6 @@ unsigned cgw_theme_card_face(const cg_app_t *app)
     return (app && app->dark) ? CG_DARK_SURFACE_2 : (GetSysColor(COLOR_BTNFACE) & 0x00FFFFFFu);
 }
 
-/** @brief 无显式前景色时的文字色；浅色返回 CG_COLOR_NONE = 别动（保持系统默认字色） */
 /**
  * @brief 无显式前景色时的文字色
  * @param app 应用对象，可为 NULL
@@ -157,7 +151,6 @@ unsigned cgw_theme_text(const cg_app_t *app)
  *  自己定义这个常量，免得为了一个消息号把 richedit.h 拖进来。 */
 #define CG_EM_SETBKGNDCOLOR (WM_USER + 67)
 
-/** @brief 让一个控件的原生窗口跟随当前主题（建控件时调一次；换主题时对全部控件再调一遍） */
 /**
  * @brief 让一个控件的原生窗口跟随当前主题（建控件时调一次；换主题时对全部控件再调一遍）
  * @param w 目标控件，可为 NULL
@@ -193,7 +186,6 @@ void cgw_theme_widget(cg_widget_t *w)
     }
 }
 
-/** @brief 定下"现在是深色吗"（app.dark 的 "auto" 在这里解析成实际值） */
 /**
  * @brief 定下"现在是深色吗"（配置里的"自动"在这里解析成实际值）
  * @param app 应用对象
@@ -213,7 +205,6 @@ void cgw_theme_init(cg_app_t *app)
     dark_opt_in();
 }
 
-/** @brief 把当前主题应用到窗口与全部控件（换背景刷、重设系统控件主题、整窗重画） */
 /**
  * @brief 把当前主题应用到窗口与全部控件（换背景刷、重设系统控件主题、整窗重画）
  * @param app 应用对象
@@ -243,7 +234,6 @@ void cgw_theme_apply(cg_app_t *app)
     if (h) RedrawWindow(h, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
 }
 
-/** @brief 运行时切换深色（`.cgui` 的 `app.dark` 是加载期的；这个是给程序里改的） */
 /**
  * @brief 运行时切换深色（配置里的值只在加载期读一次；这个是给程序里改的）
  * @param app 应用对象，可为 NULL
@@ -258,7 +248,6 @@ int cg_theme_set_dark(cg_app_t *app, int on)
     return 1;
 }
 
-/** @brief 现在是深色吗（`--selftest` 没有窗口也答得出：读 app->dark） */
 /**
  * @brief 现在是深色吗（自检没有窗口也答得出）
  * @param app 应用对象，可为 NULL

@@ -18,7 +18,6 @@ static const char *k_doc =
     "\"widgets\":[{\"id\":\"term\",\"type\":\"terminal\","
     "\"rect\":{\"x\":0,\"y\":0,\"w\":360,\"h\":240}}]}";
 
-/** @brief 解析文档 + 建控件树；成功返回 1、失败返回 0 */
 /**
  * @brief 解析文档 + 建控件树
  * @param app 回填的应用结构
@@ -42,7 +41,6 @@ static int build_app(cg_app_t *app, const char *json)
     return 1;
 }
 
-/** @brief 收尾：先放控件（它们会回写节点），再放文档 */
 /**
  * @brief 收尾：先放控件（它们会回写节点），再放文档
  * @param app 待释放的应用
@@ -60,7 +58,6 @@ static void free_app(cg_app_t *app)
     cg_doc_release(&app->doc);
 }
 
-/** @brief 第 i 行去掉方向标记后的文字（越界返回空串） */
 /**
  * @brief 第 i 行去掉方向标记后的文字
  * @param w 终端控件
@@ -75,7 +72,6 @@ static const char *line_text(cg_widget_t *w, int i)
     return (tag >= CG_TERM_RX && tag <= CG_TERM_SYS) ? s + 1 : s;
 }
 
-/** @brief 第 i 行的方向标记；返回 0 表示没有标记（不该发生） */
 /**
  * @brief 第 i 行的方向标记
  * @param w 终端控件
@@ -88,7 +84,6 @@ static int line_dir(cg_widget_t *w, int i)
     return (unsigned char)w->items[i][0];
 }
 
-/** @brief 基本写入：一行一条、方向标记、自动滚到底不算（那是后端的事） */
 /**
  * @brief 基本写入：一行一条、方向标记（自动滚到底是后端的事）
  * @return void 无返回值
@@ -120,7 +115,6 @@ static void test_term_write(void)
     free_app(&app);
 }
 
-/** @brief 文本模式：控制字符变点、中文不被搅坏、UTF-8 多字节保留 */
 /**
  * @brief 文本模式：控制字符变点、中文不被搅坏、多字节序列保留
  * @return void 无返回值
@@ -161,7 +155,6 @@ static void test_term_text_mode(void)
     free_app(&app);
 }
 
-/** @brief HEX 模式 */
 /**
  * @brief 十六进制模式：两个一组空格分开
  * @return void 无返回值
@@ -192,7 +185,6 @@ static void test_term_hex_mode(void)
     free_app(&app);
 }
 
-/** @brief 时间戳开关（存的是控件的 checked 字段） */
 /**
  * @brief 时间戳开关（存的是控件的勾选字段）
  * @return void 无返回值
@@ -222,7 +214,6 @@ static void test_term_timestamp(void)
     free_app(&app);
 }
 
-/** @brief 一段数据里带换行：要切成多行（串口/网络是常态） */
 /**
  * @brief 一段数据里带换行：要切成多行（串口 / 网络是常态）
  * @return void 无返回值
@@ -256,7 +247,6 @@ static void test_term_split_lines(void)
     free_app(&app);
 }
 
-/** @brief 行数上限：超了从最老的丢 */
 /**
  * @brief 行数上限：超了从最老的丢
  * @return void 无返回值
@@ -293,7 +283,6 @@ static void test_term_max_lines(void)
     free_app(&app);
 }
 
-/** @brief 存文件：不该把方向标记写进去 */
 /**
  * @brief 存文件：不该把方向标记写进去
  * @return void 无返回值

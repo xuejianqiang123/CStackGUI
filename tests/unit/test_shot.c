@@ -42,7 +42,6 @@ static void test_shot_contract(void)
     }
 }
 
-/** @brief 剪贴板图片的接口契约（真机出图见 build\clipprobe\：剪贴板放一张图 → 存出的 PNG 逐像素一致） */
 /**
  * @brief 剪贴板图片的接口契约
  * @return void 无返回值

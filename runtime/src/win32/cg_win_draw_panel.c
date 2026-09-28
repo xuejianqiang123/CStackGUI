@@ -90,7 +90,6 @@ static void panel_draw_group(cg_app_t *app, HDC dc, cg_widget_t *w, const RECT *
 /** @brief 双缓冲回调参数 */
 typedef struct { cg_app_t *app; cg_widget_t *w; } panel_ctx_t;
 
-/** @brief group/box 一帧适配器：画进内存位图 */
 /**
  * @brief group / box 一帧适配器：画进内存位图
  * @param mem 内存位图 DC（双缓冲的离屏 DC）
@@ -104,7 +103,6 @@ static void panel_group_body(HDC mem, const RECT *rc, void *vctx)
     panel_draw_group(c->app, mem, c->w, rc);
 }
 
-/** @brief 画卡片/形状：先铺底（清四角），再圆角/椭圆/矩形描边，卡片带标题 */
 /**
  * @brief 画卡片 / 形状：先铺底（清四角），再按格式描边，卡片带标题
  * @param app 所属应用（DPI 缩放、字体、背后取色）
@@ -180,7 +178,6 @@ static void panel_draw_card_shape(cg_app_t *app, HDC dc, cg_widget_t *w, const R
     }
 }
 
-/** @brief card/shape 一帧适配器：画进内存位图 */
 /**
  * @brief card / shape 一帧适配器：画进内存位图
  * @param mem 内存位图 DC（双缓冲的离屏 DC）
@@ -194,7 +191,6 @@ static void panel_card_body(HDC mem, const RECT *rc, void *vctx)
     panel_draw_card_shape(c->app, mem, c->w, rc);
 }
 
-/** @brief 面板窗口过程（group/box/card/shape）：通知上浮主窗口 + card/shape 自绘 */
 /**
  * @brief 面板窗口过程（group / box / card / shape）：通知上浮主窗口 + card / shape 自绘
  * @param hwnd 本控件窗口
@@ -264,7 +260,6 @@ LRESULT CALLBACK cgw_PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-/** @brief 注册面板窗口类（能装子控件的自绘底板，整进程一次） */
 /**
  * @brief 注册面板窗口类（能装子控件的自绘底板，整进程一次）
  * @return void 无返回值
@@ -292,7 +287,6 @@ void cgw_register_panel_class(void)
 static int s_split_origin;   /* 按下时鼠标的屏幕坐标（竖条看 x，横条看 y） */
 static int s_split_dragged;  /* 这次拖动真的动过分隔条吗（松手要不要报 release） */
 
-/** @brief 分隔条一帧适配器：画进内存位图（清背后 + 线 + 握点） */
 /**
  * @brief 分隔条一帧适配器：画进内存位图（清背后 + 线 + 握点）
  * @param mem 内存位图 DC（双缓冲的离屏 DC）
@@ -332,7 +326,6 @@ static void splitter_body(HDC mem, const RECT *rc, void *vctx)
     }
 }
 
-/** @brief 分隔条窗口过程：拖动改两侧面板尺寸，松手派发一次 release */
 /**
  * @brief 分隔条窗口过程：拖动改两侧面板尺寸，松手派发一次 release
  * @param hwnd 本控件窗口
@@ -417,7 +410,6 @@ static LRESULT CALLBACK SplitterProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-/** @brief 注册分隔条的自绘窗口类（整进程一次） */
 /**
  * @brief 注册分隔条的自绘窗口类（整进程一次）
  * @return void 无返回值

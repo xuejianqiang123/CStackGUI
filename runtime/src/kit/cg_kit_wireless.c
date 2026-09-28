@@ -113,7 +113,6 @@ static int                g_bt_ready;
  */
 static unsigned long long addr_of_bytes(const unsigned char *b);
 
-/** @brief 取 WLAN 那批符号（进程内一次）；取不到返回 0 */
 /**
  * @brief 取 WLAN 那批符号（进程内一次）
  * @return int 1 必需符号齐备（可选的 WlanScan 看 g_wlan_scan）；0 打不开 wlanapi.dll 或缺符号
@@ -478,7 +477,6 @@ int cg_ble_radio_info(int idx, cg_ble_radio_t *out)
     return -1;                               /* idx 越界 */
 }
 
-/** @brief 枚举"已知设备"（已配对 / 记得过的），共用一个实现 */
 /**
  * @brief 枚举"已知设备"（已配对 / 记得过的），共用一个实现
  * @param one 出口：命中第 idx 个时写入该设备的原始信息，没命中就不动它
@@ -665,7 +663,6 @@ int cg_ble_uuid16_str(unsigned short uuid16, char *out, int out_size)
     return (n == 36 && n < out_size) ? n : -1;
 }
 
-/** @brief 把一个字符当十六进制数字解（不是就返回 -1） */
 /**
  * @brief 把一个字符当十六进制数字解（不是就返回 -1）
  * @param c 待解的字符（'0'~'9' / 'a'~'f' / 'A'~'F'）
@@ -741,7 +738,6 @@ int cg_ble_uuid16_parse(const char *text, unsigned short *out16)
     return -1;
 }
 
-/** @brief 把文本 UUID 归一成"小写、去掉短横线/大括号/0x"的形式；放不下返回 -1 */
 /**
  * @brief 把文本 UUID 归一成"小写、去掉短横线/大括号/0x"的形式；放不下返回 -1
  * @param text 待归一的文本 UUID；空指针或含非十六进制字符都算非法

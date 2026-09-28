@@ -5,7 +5,6 @@
  */
 #include "cg_win_internal.h"
 
-/** 菜单按钮：点击时在按钮下方弹出菜单，选中项直接派发（TPM_RETURNCMD 省掉消息路由） */
 /**
  * @brief 菜单按钮：点击时在按钮下方弹出菜单，选中项直接派发
  * @param app 所属应用；用于前置窗口与前后的防重入状态
@@ -159,7 +158,6 @@ static cg_widget_t *bar_menu_of(cg_app_t *app)
     return NULL;
 }
 
-/** @brief 按客户区尺寸重算窗口大小（补上菜单栏占掉的高度） */
 /**
  * @brief 按客户区尺寸重算窗口大小（补上菜单栏占掉的高度）
  * @param app 所属应用；提供文档逻辑尺寸与主窗口
@@ -219,7 +217,6 @@ void cg_win_menu_rebuild(cg_widget_t *w)
     DrawMenuBar(h);
 }
 
-/** 工具栏按钮：没有图标，用「文字池 + BTNS_SHOWTEXT」做纯文字按钮 */
 /**
  * @brief 工具栏按钮：没有图标，用「文字池 + 显示文字」做纯文字按钮
  * @param h 工具栏原生窗口；先清空再按行表重建按钮

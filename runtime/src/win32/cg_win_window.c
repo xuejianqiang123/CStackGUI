@@ -97,7 +97,6 @@ static int accel_to_win(const cg_accel_t *k, BYTE *fVirt, WORD *vk)
     return 1;
 }
 
-/** @brief 按动作表建加速键表（没有带快捷键的动作时是空操作） */
 /**
  * @brief 按动作表建加速键表（没有带快捷键的动作时是空操作）
  * @param app 应用对象（动作表取自应用，句柄存进后端状态）
@@ -132,7 +131,6 @@ void cgw_accel_build(cg_app_t *app)
     }
 }
 
-/** @brief 销毁加速键表（幂等、NULL 安全） */
 /**
  * @brief 销毁加速键表（幂等、NULL 安全）
  * @param app 应用对象（无窗口或无表时为空操作）
@@ -149,7 +147,6 @@ void cgw_accel_destroy(cg_app_t *app)
 
 /* ------------------------------------------------------------ 后端入口 */
 
-/** @brief 后端初始化：DPI、公共控件、类注册、主窗口、tooltip、定时器、按树序建控件 */
 /**
  * @brief 后端初始化：DPI、公共控件、类注册、主窗口、菜单/加速键、tooltip、定时器、按树序建控件
  * @param app 应用对象（读文档建窗，句柄与状态写回应用）
@@ -433,7 +430,6 @@ int cgw_win_init(cg_app_t *app)
     return 0;
 }
 
-/** @brief 消息循环（IsDialogMessage 处理 Tab/回车导航），quit 置位即退出 */
 /**
  * @brief 消息循环（IsDialogMessage 处理 Tab/回车导航），quit 置位即退出
  * @param app 应用对象
@@ -469,7 +465,6 @@ static int win_run(cg_app_t *app)
     return 0;
 }
 
-/** @brief 后端清理：杀定时器、关窗口、停 GDI+、释放字体缓存 */
 /**
  * @brief 后端清理：杀定时器、关窗口、停 GDI+、释放字体缓存
  * @param app 应用对象（后端状态为空时直接返回）
@@ -533,7 +528,6 @@ static void win_shutdown(cg_app_t *app)
     app->natives = NULL;
 }
 
-/** @brief 改主窗口标题（UTF-8 -> UTF-16） */
 /**
  * @brief 改主窗口标题（UTF-8 -> UTF-16）
  * @param app 应用对象
@@ -552,7 +546,6 @@ static void win_set_title(cg_app_t *app, const char *title)
  * 没有窗口（--selftest）时全部空转，业务代码不用自己判。
  */
 
-/** @brief 主窗口句柄；没有窗口返回 NULL（窗口类 API 的统一守卫） */
 /**
  * @brief 主窗口句柄；没有窗口返回 NULL（窗口类 API 的统一守卫）
  * @param app 应用对象（可为 NULL）
@@ -563,7 +556,6 @@ static HWND win_hwnd_of(const cg_app_t *app)
     return (app && app->hwnd) ? (HWND)app->hwnd : NULL;
 }
 
-/** @brief 移动窗口到屏幕坐标 x,y */
 /**
  * @brief 移动窗口到屏幕坐标 x,y
  * @param app 应用对象
@@ -578,7 +570,6 @@ void cg_win_set_pos(cg_app_t *app, int x, int y)
     SetWindowPos(h, NULL, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-/** @brief 改窗口客户区尺寸（width/height 是逻辑像素，和 .cgui 里同一套单位） */
 /**
  * @brief 改窗口客户区尺寸（width/height 是逻辑像素，和 .cgui 里同一套单位）
  * @param app 应用对象
@@ -608,7 +599,6 @@ void cg_win_set_size(cg_app_t *app, int width, int height)
                  SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-/** @brief 把窗口移到当前显示器工作区正中 */
 /**
  * @brief 把窗口移到当前显示器工作区正中
  * @param app 应用对象
@@ -630,7 +620,6 @@ void cg_win_center(cg_app_t *app)
                  0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-/** @brief 显示（show!=0）或隐藏窗口 */
 /**
  * @brief 显示或隐藏窗口
  * @param app 应用对象
@@ -643,7 +632,6 @@ void cg_win_show(cg_app_t *app, int show)
     if (h) ShowWindow(h, show ? SW_SHOW : SW_HIDE);
 }
 
-/** @brief 最小化 / 最大化 / 还原；cmd 传 "min" / "max" / "normal" */
 /**
  * @brief 最小化 / 最大化 / 还原
  * @param app 应用对象
@@ -659,7 +647,6 @@ void cg_win_set_state(cg_app_t *app, const char *cmd)
     else                                    ShowWindow(h, SW_RESTORE);
 }
 
-/** @brief 总在最前（on!=0）或取消置顶 */
 /**
  * @brief 总在最前或取消置顶
  * @param app 应用对象
@@ -674,7 +661,6 @@ void cg_win_set_topmost(cg_app_t *app, int on)
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 }
 
-/** @brief 换窗口图标（.ico 路径按 cgw_resolve_asset 找）；传 NULL 还原系统默认图标 */
 /**
  * @brief 换窗口图标（.ico 路径按资源查找规则解析）
  * @param app 应用对象
@@ -703,7 +689,6 @@ void cg_win_set_icon(cg_app_t *app, const char *ico_path)
     }
 }
 
-/** @brief 建/改托盘图标：ico_path 传 NULL 用窗口图标，tip 传 NULL 用窗口标题 */
 /**
  * @brief 建 / 改托盘图标
  * @param app 应用对象
@@ -757,7 +742,6 @@ void cg_tray_set(cg_app_t *app, const char *ico_path, const char *tip)
     if (owned && ic) DestroyIcon(ic);   /* 外壳已拷走图标，我们这张可以放了 */
 }
 
-/** @brief 摘掉托盘图标 */
 /**
  * @brief 摘掉托盘图标
  * @param app 应用对象（没有托盘图标时为空操作）
@@ -776,7 +760,6 @@ void cg_tray_remove(cg_app_t *app)
     st->tray_on = 0;
 }
 
-/** @brief 气泡提示（托盘图标已有时才有效） */
 /**
  * @brief 气泡提示（托盘图标已有时才有效）
  * @param app 应用对象

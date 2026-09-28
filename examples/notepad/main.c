@@ -34,7 +34,6 @@ typedef struct {
 
 static biz_t s_biz;
 
-/** @brief 把字符串当十进制整数读（不引 stdlib.h，业务代码只用 cg_ 与标准 C 字符串） */
 /**
  * @brief 把字符串当十进制整数读（不引 stdlib.h，业务代码只用框架接口与标准 C 字符串）
  * @param s 待解析的字符串，可有前导空白，读到第一个非数字就停；传 NULL 按空串处理
@@ -49,7 +48,6 @@ static int to_int(const char *s)
     return v;
 }
 
-/** @brief 这段字节是不是合法 UTF-8（拿来判断"老 GBK 文件"） */
 /**
  * @brief 这段字节是不是合法 UTF-8（拿来判断"老 GBK 文件"）
  * @param s 待检查的字节串，以 '\0' 结尾，所有权不转移
@@ -74,7 +72,6 @@ static int looks_like_utf8(const char *s)
     return 1;
 }
 
-/** @brief 统计字数（按 UTF-8 字符）与行数 */
 /**
  * @brief 统计字数（按 UTF-8 字符）与行数
  * @param t 要统计的文本，传 NULL 按空串处理
@@ -95,7 +92,6 @@ static void count_text(const char *t, int *chars, int *lines)
     *lines = l;
 }
 
-/** @brief 刷新标题与状态栏（任何改动之后都要调一次） */
 /**
  * @brief 刷新标题与状态栏（任何改动之后都要调一次）
  * @param app 应用
@@ -123,7 +119,6 @@ static void refresh(cg_app_t *app)
     }
 }
 
-/** @brief 把内容写进文件 + 记住它（新建/打开/保存共用） */
 /**
  * @brief 把编辑框内容写进文件并记住当前路径（保存 / 另存为共用）
  * @param app 应用
@@ -147,7 +142,6 @@ static void save_to(cg_app_t *app, const char *path)
     refresh(app);
 }
 
-/** @brief 读文件进编辑框（UTF-8 直接显示；看着像 GBK 就转一下） */
 /**
  * @brief 读文件进编辑框（UTF-8 直接显示；看着像 GBK 就转一下）
  * @param app 应用
@@ -181,7 +175,6 @@ static void open_path(cg_app_t *app, const char *path)
     refresh(app);
 }
 
-/** @brief 把窗口尺寸写进配置（只在真有尺寸、有配置文件时才写） */
 /**
  * @brief 把窗口尺寸写进配置（只在真有尺寸、有配置文件时才写）
  * @return void 无返回值
@@ -201,7 +194,6 @@ static void save_win_size(void)
     cg_free(sh);
 }
 
-/** @brief 问路径后保存（没有当前路径时才弹「另存为」） */
 /**
  * @brief 问路径后保存：有当前路径就直接写盘，否则弹「另存为」
  * @param app 应用
@@ -226,7 +218,6 @@ static void save_ask(cg_app_t *app, cg_widget_t *self, int force_dialog)
 
 /* ------------------------------------------------------------ 事件回调 */
 
-/** @brief 启动钩子：恢复上次的文件与窗口大小（这些只在这里能做） */
 /**
  * @brief 启动钩子：恢复上次的文件与窗口大小（这些只在这里能做）
  * @param app 应用

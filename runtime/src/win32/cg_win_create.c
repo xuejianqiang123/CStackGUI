@@ -5,7 +5,6 @@
  */
 #include "cg_win_internal.h"
 
-/** 按原生窗口反查控件：数值框（edit + 调节器）这类一个控件有两个 HWND，按 ctrl id 找会漏 */
 /**
  * @brief 按原生窗口反查控件（数值框这类一个控件有两个窗口，按控件 id 找会漏）
  * @param app 所属应用；在它的控件链表里查
@@ -23,7 +22,6 @@ cg_widget_t *cgw_widget_by_hwnd(cg_app_t *app, HWND h)
 
 /* ------------------------------------------------------------ 控件创建 */
 
-/** @brief 控件的原生父窗口（顶层控件挂主窗口，容器子控件挂容器） */
 /**
  * @brief 控件的原生父窗口（顶层控件挂主窗口，容器子控件挂容器）
  * @param app 所属应用；提供主窗口句柄
@@ -36,7 +34,6 @@ HWND cgw_parent_hwnd_of(const cg_app_t *app, const cg_widget_t *w)
     return (HWND)w->parent->native;
 }
 
-/** @brief 给单个控件建原生窗口（menu/timer 除外），含子控件拼装与初始同步 */
 /**
  * @brief 给单个控件建原生窗口（菜单 / 时钟 / 串口组件除外），含子控件拼装与初始同步
  * @param w 目标控件；成功时它的原生句柄字段被填充
@@ -181,7 +178,6 @@ void cgw_create_native(cg_widget_t *w)
     cgw_theme_widget(w);
 }
 
-/** 递归建原生控件：父先于子 */
 /**
  * @brief 递归建原生控件：父先于子
  * @param parent 子树根控件；NULL 直接返回
@@ -197,7 +193,6 @@ void cgw_create_native_tree(cg_widget_t *parent)
     }
 }
 
-/** @brief 销毁控件的原生窗口并释放后端资源（位图 / imagelist / 映射表） */
 /**
  * @brief 销毁控件的原生窗口并释放后端资源（位图 / 图标列表 / 映射表）
  * @param w 目标控件；返回后其原生句柄与位图句柄均清空

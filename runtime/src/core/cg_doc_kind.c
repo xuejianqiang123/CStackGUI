@@ -97,7 +97,6 @@ static const cg_kind_info_t k_kinds[] = {
 
 #define K_KIND_COUNT (sizeof(k_kinds) / sizeof(k_kinds[0]))
 
-/** @brief 某个控件类型支不支持这个事件 */
 /**
  * @brief 某个控件类型支不支持这个事件
  * @param type 控件类型名（"button"/"edit"...）
@@ -111,7 +110,6 @@ int cg_kind_supports_event(const char *type, cg_event_t ev)
     return (ki->events & CG_EV_BIT(ev)) != 0;
 }
 
-/** @brief 某个控件类型支持的事件名列表，写成 "click/dblclick" 便于报错时提示 */
 /**
  * @brief 列出某控件类型支持的事件名（"click/dblclick" 形式），报错时提示用
  * @param kind 控件类型枚举

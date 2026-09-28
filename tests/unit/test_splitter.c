@@ -40,7 +40,6 @@ static const char *k_col_doc =
     "  ]\n"
     "}\n";
 
-/** @brief 解析文档 + 建控件树；**成功返回 1、失败返回 0**（调用点都写成 if (build_app(...))） */
 /**
  * @brief 解析文档 + 建控件树
  * @param app 回填的应用结构
@@ -64,7 +63,6 @@ static int build_app(cg_app_t *app, const char *json)
     return 1;
 }
 
-/** @brief 收尾：先放控件（它们会回写节点），再放文档 */
 /**
  * @brief 收尾：先放控件（它们会回写节点），再放文档
  * @param app 待释放的应用
@@ -82,7 +80,6 @@ static void free_app(cg_app_t *app)
     cg_doc_release(&app->doc);
 }
 
-/** @brief p3 的右边界：总尺寸守恒时它必须一直贴在 600 */
 /**
  * @brief 第三块的右边界：总尺寸守恒时它必须一直贴在设计右边缘
  * @param app 待查询的应用
@@ -94,7 +91,6 @@ static long long right_edge(cg_app_t *app)
     return p3 ? (long long)(p3->x + p3->w) : -1;
 }
 
-/** @brief 基本拖动：撑开前一块、中间只平移、最后一块吃掉余量 */
 /**
  * @brief 基本拖动：撑开前一块、中间只平移、最后一块吃掉余量
  * @return void 无返回值
@@ -133,7 +129,6 @@ static void test_splitter_drag(void)
     free_app(&app);
 }
 
-/** @brief 只影响相邻两块 + 夹到最小尺寸（每段都从干净的布局开始，避免互相污染期望值） */
 /**
  * @brief 只影响相邻两块 + 夹到最小尺寸（每段都从干净的布局开始，避免互相污染期望值）
  * @return void 无返回值
@@ -187,7 +182,6 @@ static void test_splitter_clamp(void)
     free_app(&app);
 }
 
-/** @brief 上下分行（format = row）：同一套逻辑换个轴 */
 /**
  * @brief 上下分行：同一套逻辑换个轴
  * @return void 无返回值
@@ -214,7 +208,6 @@ static void test_splitter_rows(void)
     free_app(&app);
 }
 
-/** @brief 结构不允许时的兜底：不该崩、也不该乱动 */
 /**
  * @brief 结构不允许时的兜底：不该崩、也不该乱动
  * @return void 无返回值

@@ -17,7 +17,6 @@
 #include <string.h>
 #include <stdio.h>
 
-/** @brief 地址是不是 "AA:BB:CC:DD:EE:FF" 这个形状（17 字符 + 5 个冒号） */
 /**
  * @brief 地址是不是 "AA:BB:CC:DD:EE:FF" 这个形状（17 字符 + 5 个冒号）
  * @param a 待检查的地址串

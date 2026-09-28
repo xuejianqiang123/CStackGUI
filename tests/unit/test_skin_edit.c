@@ -15,7 +15,6 @@
 #include <windows.h>
 #include <stdio.h>
 
-/** 用指定字号建一个雅黑字体（负高 = 按 em 取，和 cgw_font_for 同口径） */
 /**
  * @brief 用指定字号建一个雅黑字体（负高 = 按 em 取，与被测代码同口径）
  * @param em_px 字号（像素，内部按其负值建字体）
@@ -29,7 +28,6 @@ static HFONT mk_font(int em_px)
                        L"Microsoft YaHei UI");
 }
 
-/** 屏幕上量这个字体的行高（独立实现，不经过被测代码） */
 /**
  * @brief 屏幕上量这个字体的行高（独立实现，不经过被测代码）
  * @param f 待测量的字体
@@ -50,7 +48,6 @@ static int font_height(HFONT f)
     return th;
 }
 
-/** 建一个 240x40 的单行 EDIT（不显示），挂上皮肤子类；失败返回 NULL */
 /**
  * @brief 建一个 240x40 的单行输入框（不显示），挂上皮肤子类
  * @param app 控件所属的应用
@@ -71,7 +68,6 @@ static HWND mk_edit(cg_app_t *app, cg_widget_t *w)
     return h;
 }
 
-/** 问一次 WM_NCCALCSIZE，返回让出来的上边距（客户区顶 - 窗口顶） */
 /**
  * @brief 问一次非客户区计算，返回让出来的上边距（客户区顶 - 窗口顶）
  * @param h 待查询的编辑框窗口
@@ -86,7 +82,6 @@ static int query_pad(HWND h)
     return rc.top;
 }
 
-/** 期望的上边距：边框 + (客户高 - 文字高)/2（与 cg_skin_edit.c 同一套整数算术） */
 /**
  * @brief 期望的上边距：边框 + (客户高 - 文字高) / 2（与被测代码同一套整数算术）
  * @param text_h 文字行高（像素）
@@ -97,7 +92,6 @@ static int expect_pad(int text_h)
     return CG_EDIT_BORDER + (40 - 2 * CG_EDIT_BORDER - text_h) / 2;
 }
 
-/** @brief pad 必须按控件自己的字体算，且换字号后跟着重算 */
 /**
  * @brief 上边距必须按控件自己的字体算，且换字号后跟着重算
  * @return void 无返回值
@@ -145,7 +139,6 @@ static void test_edit_vcenter(void)
 
 CG_TEST_SUITE("输入框皮肤：单行垂直居中", test_edit_vcenter);
 
-/** @brief 多行编辑框滚到底：cg_edit_scroll_end 把插入点移到末尾（串口监视器要这个） */
 /**
  * @brief 多行编辑框滚到底：把插入点移到末尾（串口监视器要这个）
  * @return void 无返回值
@@ -194,7 +187,6 @@ CG_TEST_SUITE("编辑框：滚到底", test_edit_scroll_end);
  * 建真多行 EDIT -> 灌日志 -> 滚到底 -> 强制画完 -> 逐行扫客户区像素，
  * 统计"非白像素横贯整行"的行（正常文本行字间有空隙，覆盖率到不了 80%）。 */
 
-/** 像素算不算背景（白/近白） */
 /**
  * @brief 像素算不算背景（白 / 近白）
  * @param c 待判定的颜色
@@ -266,7 +258,6 @@ static int scan_solid_lines(HWND h, const char *tag)
     return lines;
 }
 
-/** 建一个 800x400 的多行 EDIT（带滚动条）；skin=1 时挂皮肤子类 */
 /**
  * @brief 建一个 800x400 的多行输入框（带滚动条）
  * @param app 控件所属的应用
@@ -288,7 +279,6 @@ static HWND mk_edit_multi(cg_app_t *app, cg_widget_t *w, int skin)
     return h;
 }
 
-/** 灌 n 行 ESP 风格日志（\r\n 结尾，和真机一致），滚到底并强制画完 */
 /**
  * @brief 灌 n 行日志风格的文本（行尾换行，和真机一致），滚到底并强制画完
  * @param h 目标多行编辑框
@@ -366,7 +356,6 @@ static void stream_lines(HWND h, int rounds, int scan_every)
     cg_test_int("流式灌入后无实心线", bad, 0);
 }
 
-/** 复现/回归：多行编辑框灌日志滚动后，内容区不得出现横贯实心线 */
 /**
  * @brief 复现 / 回归：多行编辑框灌日志滚动后，内容区不得出现横贯实心线
  * @return void 无返回值

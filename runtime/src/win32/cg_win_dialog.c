@@ -10,7 +10,6 @@
  * 这些都要摸 Win32 句柄，所以住在后端文件里，但对外是普通 C 函数。
  */
 
-/** @brief 弹对话框时的属主窗口：优先父控件，退回主窗口 */
 /**
  * @brief 弹对话框时的属主窗口：优先父控件，退回主窗口
  * @param parent 定位用的控件，可为 NULL
@@ -22,7 +21,6 @@ static HWND dialog_owner(const cg_widget_t *parent)
     return (parent && parent->app && parent->app->hwnd) ? (HWND)parent->app->hwnd : NULL;
 }
 
-/** filter 写法沿用网页习惯 "文本|*.txt|全部|*.*"，转成 Win32 要的双 0 分隔 */
 /**
  * @brief 把网页习惯的过滤器串转成文件对话框要的双 NUL 分隔宽串
  * @param filter UTF-8 过滤器串，如 "文本|*.txt|全部|*.*"，可为 NULL / 空

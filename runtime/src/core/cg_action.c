@@ -56,7 +56,6 @@ static const struct {
     { "Down",     CG_ACCEL_DOWN },
 };
 
-/** 不区分大小写的整串比较（"Ctrl" / "ctrl" / "CTRL" 都认） */
 /**
  * @brief 不区分大小写的整串比较（"Ctrl" / "ctrl" / "CTRL" 都认）
  * @param a 参与比较的字符串；NULL 视为不相等
@@ -76,7 +75,6 @@ static int eqi(const char *a, const char *b)
     return *a == '\0' && *b == '\0';
 }
 
-/** 去掉首尾空白，返回指向 buf 内部的起点 */
 /**
  * @brief 去掉首尾空白，返回指向缓冲内部的起点
  * @param buf 就地修改的缓冲（末尾空白被写成 '\0'）
@@ -125,7 +123,6 @@ static int accel_key_of(const char *tok)
     return CG_ACCEL_NONE;
 }
 
-/** F1-F24：**唯一允许不带修饰键**的键（裸 Esc/Delete/字母都会被它抢走输入框的按键） */
 /**
  * @brief 这个键是不是 F1-F24
  * @param key 键值
@@ -188,7 +185,6 @@ int cg_accel_parse(const char *accel, cg_accel_t *out)
     return 1;
 }
 
-/** 键值 -> 显示名（F1 / A / PageUp…）；不认识返回 0 */
 /**
  * @brief 键值 -> 显示名（F1 / A / PageUp…）
  * @param key 键值

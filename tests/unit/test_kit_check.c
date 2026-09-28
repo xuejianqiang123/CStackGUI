@@ -23,7 +23,6 @@
  * 顺手漏一个就等于给整套测试加了一个假阳性。
  */
 
-/** @brief 与 build\hash-vectors.mjs 里同一个确定性生成器：第 i 字节 = 'a' + (i % 26) */
 /**
  * @brief 与构建脚本里同一个确定性生成器：第 i 字节 = 'a' + (i % 26)
  * @param buf 输出缓冲
@@ -37,7 +36,6 @@ static void fill_pattern(char *buf, int n)
     for (i = 0; i < n; i++) buf[i] = (char)('a' + (i % 26));
 }
 
-/** @brief 断言 cg_hash(文本) 等于期望值 */
 /**
  * @brief 断言"文本的摘要"等于期望值
  * @param what 这条断言在说什么
@@ -56,7 +54,6 @@ static void hash_eq_str(const char *what, const char *data, int len,
     cg_free(got);
 }
 
-/** @brief 断言 cg_hash(模式串(n)) 等于期望值 —— 这些期望值由 Node/OpenSSL 派生 */
 /**
  * @brief 断言"模式串的摘要"等于期望值 —— 这些期望值由构建脚本用 OpenSSL 派生
  * @param algo 算法名
@@ -77,7 +74,6 @@ static void hash_eq(const char *algo, int n, const char *want)
     cg_free(got);
 }
 
-/** @brief 只问"这个算法名认不认/能不能算出来" */
 /**
  * @brief 只问"这个算法名认不认 / 能不能算出来"
  * @param data 待算的字节
@@ -94,7 +90,6 @@ static int hash_ok(const char *data, int len, const char *algo)
     return ok;
 }
 
-/** @brief CRC32：公开检验值 + 几条性质 */
 /**
  * @brief CRC32：公开检验值 + 几条性质
  * @return void 无返回值
@@ -114,7 +109,6 @@ static void test_crc32(void)
     cg_test_int("同内容两次一致", cg_crc32("abc", 3) == cg_crc32("abc", 3), 1);
 }
 
-/** @brief CRC16/Modbus：公开检验值 + 整帧自校验性质 */
 /**
  * @brief CRC16/Modbus：公开检验值 + 整帧自校验性质
  * @return void 无返回值
@@ -151,7 +145,6 @@ static void test_crc16(void)
 
 /* ------------------------------------------------------------ 哈希（摘要） */
 
-/** @brief 公开向量：RFC 1321（MD5）与 FIPS 180-1/2/4（SHA-1/256/512） */
 /**
  * @brief 公开向量：RFC 1321（MD5）与 FIPS 180-1/2/4（SHA-1/256/512）
  * @return void 无返回值
@@ -225,7 +218,6 @@ static void test_hash_block_edges(void)
             "bccd11cc97fe9e36bbcb3ae75d6d7a0dc2e60e0022c579e87c3ee2e3ffaf65cc");
 }
 
-/** @brief 算法名、错误路径，以及"文件分块读"与"一次算"必须同值 */
 /**
  * @brief 算法名、错误路径，以及"文件分块读"与"一次算"必须同值
  * @return void 无返回值

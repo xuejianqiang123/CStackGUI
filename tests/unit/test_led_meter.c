@@ -65,7 +65,6 @@ static void free_app(cg_app_t *app)
     cg_doc_release(&app->doc);
 }
 
-/** @brief 从 .cgui 读进来的字段（形状、周期、文字） */
 /**
  * @brief 从 .cgui 读进来的字段（形状、周期、文字）
  * @return void 无返回值
@@ -106,7 +105,6 @@ static void test_led_parse(void)
     free_app(&app);
 }
 
-/** @brief 闪烁相位：按周期前后半周期翻转（这是最容易错、也最看不出来的地方） */
 /**
  * @brief 闪烁相位：按周期前后半周期翻转（这是最容易错、也最看不出来的地方）
  * @return void 无返回值
@@ -153,7 +151,6 @@ static void test_led_blink(void)
     free_app(&app);
 }
 
-/** @brief 颜色与类型守卫 */
 /**
  * @brief 颜色设置与类型守卫
  * @return void 无返回值
@@ -183,7 +180,6 @@ static void test_led_color_guard(void)
     free_app(&app);
 }
 
-/** @brief 表盘角度：值 -> 角度（arc 270° / half 180°，超量程夹取） */
 /**
  * @brief 表盘角度：值 -> 角度（弧表 270°、半表 180°，超量程夹取）
  * @return void 无返回值
@@ -225,7 +221,6 @@ static void test_meter_angle(void)
     free_app(&app);
 }
 
-/** @brief 表盘取值与类型守卫 */
 /**
  * @brief 表盘取值与类型守卫
  * @return void 无返回值

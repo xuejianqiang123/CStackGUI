@@ -58,7 +58,6 @@ static int bind_is_value_kind(const cg_widget_t *w)
     return cg_widget_is_numedit(w);   /* 数值输入框：value 是真相 */
 }
 
-/** @brief 勾选语义：bind 时抄 checked 的控件 */
 /**
  * @brief 勾选语义：绑定时要抄勾选态的控件
  * @param type 控件类型名；NULL 当作不是
@@ -69,7 +68,6 @@ static int bind_is_check_kind(const char *type)
     return type && (!strcmp(type, "checkbox") || !strcmp(type, "radio") || !strcmp(type, "switch"));
 }
 
-/** @brief 列表类控件的 value 是条目下标：可以超出 min/max，取值时不能夹 */
 /**
  * @brief 列表类控件的值是不是"条目下标"（可超出量程，取值时不能夹）
  * @param type 控件类型名；NULL 当作不是
@@ -100,7 +98,6 @@ static int bind_is_text_kind(const cg_widget_t *w)
     return 0;
 }
 
-/** @brief 把目标控件的文字换掉（同时回写文档节点），没变返回 0 */
 /**
  * @brief 把目标控件的文字换掉（同时回写文档节点），没变返回 0
  * @param dst 目标控件
@@ -120,7 +117,6 @@ static int bind_set_text(cg_widget_t *dst, const char *text)
     return 1;
 }
 
-/** @brief 把目标控件的值换掉（同时回写文档节点），没变返回 0 */
 /**
  * @brief 把目标控件的值换掉（同时回写文档节点），没变返回 0
  * @param dst 目标控件
@@ -136,7 +132,6 @@ static int bind_set_value(cg_widget_t *dst, int v)
     return 1;
 }
 
-/** @brief 把目标控件的勾选状态换掉（同时回写文档节点），没变返回 0 */
 /**
  * @brief 把目标控件的勾选状态换掉（同时回写文档节点），没变返回 0
  * @param dst 目标控件

@@ -14,7 +14,6 @@
 #include <string.h>
 #include <wchar.h>      /* wcsrchr / _snwprintf */
 
-/** @brief 取 %LOCALAPPDATA%（UTF-8）；拿不到写空串 */
 /**
  * @brief 取本机用户数据目录（UTF-8）；拿不到写空串
  * @param out 输出缓冲；写 UTF-8 路径，保证以 NUL 结尾
@@ -31,7 +30,6 @@ static void diag_localappdata(char *out, int out_size)
     cgw_utf8_into(wbuf, out, out_size);   /* 宽->窄转换统一在 cg_win_util.c */
 }
 
-/** @brief 取路径的文件名部分（兼容 \\ 与 /） */
 /**
  * @brief 取路径的文件名部分（兼容反斜杠与斜杠）
  * @param path 待切分的路径（窄字符）；调用方保证非空
@@ -45,7 +43,6 @@ static const char *diag_base(const char *path)
     return s1 ? s1 + 1 : path;
 }
 
-/** @brief 未处理异常：写日志 + 弹一次，然后让进程照常结束 */
 /**
  * @brief 未处理异常：写日志 + 弹一次，然后让进程照常结束
  * @param ep 异常上下文；提供异常码、出错地址与访问冲突参数
@@ -108,7 +105,6 @@ static LONG WINAPI diag_on_crash(EXCEPTION_POINTERS *ep)
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
-/** @brief 弹一个阻塞式错误框（UTF-8 入参）。给 core 用的致命错误出口 */
 /**
  * @brief 弹一个阻塞式错误框（UTF-8 入参）；给运行时内核用的致命错误出口
  * @param title 标题栏文字（UTF-8）；NULL 时用 "CStackGUI"
@@ -127,7 +123,6 @@ void cg_fatal_dialog(const char *title, const char *text)
     free(wb);
 }
 
-/** @brief 启动诊断：定位日志文件、必要时轮转、装异常兜底、记一行启动信息 */
 /**
  * @brief 启动诊断：定位日志文件、必要时轮转、装异常兜底、记一行启动信息
  * @return void 无返回值

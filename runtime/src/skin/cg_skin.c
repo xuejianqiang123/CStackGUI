@@ -88,7 +88,6 @@ static unsigned int sk_argb(unsigned char a, unsigned rgb)
     return ((unsigned int)a << 24) | (rgb & 0xFFFFFFu);
 }
 
-/** 0xRRGGBB -> COLORREF（GDI 文本用） */
 /**
  * @brief 0xRRGGBB 转成 GDI 的 COLORREF
  * @param rgb 颜色 0xRRGGBB
@@ -99,7 +98,6 @@ static COLORREF sk_colorref(unsigned rgb)
     return RGB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
 }
 
-/** 把颜色按系数变亮/变暗（f<1 变暗，f>1 变亮） */
 /**
  * @brief 把颜色按系数变亮 / 变暗
  * @param c 颜色 0xRRGGBB
@@ -120,7 +118,6 @@ static unsigned sk_shade(unsigned c, float f)
     return (unsigned)((r << 16) | (g << 8) | b);
 }
 
-/** 相对亮度（0..1），用于决定文字黑/白 */
 /**
  * @brief 相对亮度（0..1），用于决定文字黑 / 白
  * @param c 颜色 0xRRGGBB
@@ -134,7 +131,6 @@ static float sk_luminance(unsigned c)
     return 0.2126f * r + 0.7152f * g + 0.0722f * b;
 }
 
-/** UTF-8 -> UTF-16（MultiByteToWideChar，CP_UTF8） */
 /**
  * @brief UTF-8 转 UTF-16（含结尾 0）
  * @param s UTF-8 字符串；可传 NULL
@@ -153,7 +149,6 @@ static wchar_t *sk_to_wcs(const char *s)
     return buf;
 }
 
-/** 往 GDI+ Path 里加一个圆角矩形（四角用圆弧） */
 /**
  * @brief 往已有的 GDI+ Path 里追加一个圆角矩形（四角用圆弧）
  * @param p 目标路径（不接管所有权）
@@ -551,7 +546,6 @@ void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
     }
 }
 
-/** M3 开关：右侧胶囊轨道 + 白色圆钮，规格对齐画布（track 2:1、钮内缩 3px） */
 /**
  * @brief 画开关：右侧胶囊轨道 + 白色圆钮
  * @param w 开关控件（读 checked / enabled / hot / pressed / text 与应用的缩放）
@@ -680,7 +674,6 @@ void cg_skin_draw_switch(cg_widget_t *w, HDC hdc, const RECT *rc)
     }
 }
 
-/** M3 复选/单选：圆角方框 + 勾，或圆环 + 实心点；圆角与禁用态都按状态走 */
 /**
  * @brief 自绘复选 / 单选：圆角方框 + 白勾，或圆环 + 实心点
  * @param app 应用（取缩放，并用绘制项里的控件句柄反查控件）
@@ -803,7 +796,6 @@ void cg_skin_draw_check(cg_app_t *app, const DRAWITEMSTRUCT *dis)
     }
 }
 
-/** 滑块 NM_CUSTOMDRAW：把轨道和滑块画成 M3 圆角；返回给 WM_NOTIFY 的 CDRF 标志 */
 /**
  * @brief 滑块自绘通知：把轨道和滑块画成圆角，返回给通知消息的标志
  * @param app 应用（取明暗，中性灰轨道跟它走）

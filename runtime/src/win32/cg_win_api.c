@@ -7,7 +7,6 @@
 
 /* ------------------------------------------------------------ 画板 */
 
-/** 类型检查：canvas 的绘制命令只能用在 canvas 上 */
 /**
  * @brief 类型检查：画板的绘制命令只能用在 canvas 上
  * @param w 待检查控件（类型名必须等于 "canvas" 才通过）
@@ -22,7 +21,6 @@ static int canvas_ok(const cg_widget_t *w, const char *who)
     return 0;
 }
 
-/** @brief 给画板追加一条绘制命令并触发重绘（容量不够倍增扩容） */
 /**
  * @brief 给画板追加一条绘制命令并触发重绘
  * @param w canvas 控件；命令追加进它的绘制记录

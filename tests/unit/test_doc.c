@@ -67,7 +67,6 @@ static const cg_node_t *child_by_id(const cg_node_t *parent, const char *id)
     return NULL;
 }
 
-/** @brief 窗口属性与控件树的骨架 */
 /**
  * @brief 窗口属性与控件树的骨架
  * @return void 无返回值
@@ -141,7 +140,6 @@ static void test_doc_skeleton(void)
     cg_doc_free(doc);
 }
 
-/** @brief events 对象 -> 按事件枚举下标存的回调名 */
 /**
  * @brief events 对象 -> 按事件枚举下标存的回调名
  * @return void 无返回值
@@ -182,7 +180,6 @@ static void test_doc_events(void)
     }
 }
 
-/** @brief 结构化内容：items / nodes / columns / rows */
 /**
  * @brief 结构化内容：条目 / 节点 / 列 / 行
  * @return void 无返回值
@@ -246,7 +243,6 @@ static void test_doc_structured(void)
     cg_doc_free(doc);
 }
 
-/** @brief 状态字段与"越界值修正"：这些自动修正决定了界面不会出现非法状态 */
 /**
  * @brief 状态字段与"越界值修正"：这些自动修正决定了界面不会出现非法状态
  * @return void 无返回值
@@ -300,7 +296,6 @@ static void test_doc_state_clamp(void)
     }
 }
 
-/** @brief 能省的字段都省掉时的兜底行为（手写小 .cgui 会用到） */
 /**
  * @brief 能省的字段都省掉时的兜底行为（手写小 .cgui 会用到）
  * @return void 无返回值
@@ -343,7 +338,6 @@ static void test_doc_defaults(void)
     cg_doc_free(doc);
 }
 
-/** @brief 坏文档必须报错，并且给出能定位的原因 */
 /**
  * @brief 坏文档必须报错，并且给出能定位的原因
  * @return void 无返回值
@@ -393,7 +387,6 @@ static void test_doc_errors(void)
     }
 }
 
-/** @brief cg_doc_dump 之前只有 --selftest 走过，这里单独盯一下 */
 /**
  * @brief 文档打印之前只有自检走过，这里单独盯一下
  * @return void 无返回值
@@ -477,7 +470,6 @@ static void test_doc_legacy_alias(void)
     cg_doc_free(doc);
 }
 
-/** @brief 串口组件（serial）：字段解析、缺省回退、越界修正 */
 /**
  * @brief 串口组件：字段解析、缺省回退、越界修正
  * @return void 无返回值

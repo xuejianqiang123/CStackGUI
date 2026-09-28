@@ -22,7 +22,6 @@ void cgw_win_emit(cg_app_t *app, cg_event_t ev)
     g_win_in_notify = 0;
 }
 
-/** @brief 鼠标消息的按键组合 -> 1=Ctrl 2=Shift 4=Alt（对齐「功能键状态」） */
 /**
  * @brief 鼠标消息的按键组合 -> 功能键状态
  * @param wp 鼠标消息的附加参数；低字含按键位
@@ -37,7 +36,6 @@ static int mods_from_mouse(WPARAM wp)
     return m;
 }
 
-/** @brief 键盘消息的按键组合 -> 1=Ctrl 2=Shift 4=Alt */
 /**
  * @brief 键盘消息的按键组合 -> 功能键状态
  * @return int 1=Ctrl 2=Shift 4=Alt 的按位组合；0 = 无修饰键
@@ -51,7 +49,6 @@ static int mods_from_key(void)
     return m;
 }
 
-/** @brief 把鼠标消息的客户区坐标与按键状态写进窗口伪控件（回调里读 cg_event_x/y/keys） */
 /**
  * @brief 把鼠标消息的客户区坐标与按键状态写进窗口伪控件
  * @param app 所属应用；其窗口伪控件被写入坐标与按键状态
@@ -137,7 +134,6 @@ static void tray_callback(cg_app_t *app, HWND hwnd, WPARAM wp, LPARAM lp)
     cgw_win_emit(app, CG_EVENT_TRAY);
 }
 
-/** @brief 主窗口过程：命令/通知分派、自绘、配色、DPI、时钟、窗口事件、关闭流程 */
 /**
  * @brief 主窗口过程：命令 / 通知分派、自绘、配色、DPI、时钟、窗口事件、关闭流程
  * @param hwnd 主窗口句柄

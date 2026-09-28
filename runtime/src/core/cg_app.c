@@ -17,7 +17,6 @@ const cg_backend_t *cg_backend_active = NULL;
  * 否则用户看到的就是"双击 exe 什么都没发生"。自检（allow_ui=0）只写日志不弹窗。 */
 static char s_fatal[1024];
 
-/** @brief 往 s_fatal 追加一段（截断安全） */
 /**
  * @brief 往致命错误缓冲里追加一段（截断安全）
  * @param fmt printf 风格格式串，其后是它的参数
@@ -34,7 +33,6 @@ static void fatal_add(const char *fmt, ...)
     va_end(ap);
 }
 
-/** @brief 报一个致命错误：写日志；allow_ui 时弹窗（附日志文件位置） */
 /**
  * @brief 报一个致命错误：写日志；允许界面时弹窗（并附日志文件位置）
  * @param allow_ui 非 0 = 允许弹窗；0 = 只写日志（自检模式）
@@ -98,7 +96,6 @@ const char *cg_app_info(const cg_app_t *app, const char *key)
  *   3) 标准布局但名字不同  build\..\apps\hello\<原文件名>
  */
 
-/** @brief 取路径的文件名部分（兼容 \\ 和 /） */
 /**
  * @brief 取路径的文件名部分（兼容反斜杠与斜杠）
  * @param path 路径（UTF-8）
@@ -112,7 +109,6 @@ static const char *path_base(const char *path)
     return s1 ? s1 + 1 : path;
 }
 
-/** @brief 取路径的目录部分（无目录时写 "."；不带末尾分隔符，盘符根 "C:\\" 除外） */
 /**
  * @brief 取路径的目录部分
  * @param path 路径
@@ -291,7 +287,6 @@ static int app_open(cg_app_t *app, const cg_app_desc_t *desc, int allow_ui)
     return 0;
 }
 
-/** @brief 关闭应用：清定时器、关后端、断开文档、释放全部控件 */
 /**
  * @brief 关闭应用：清定时器、关后端、断开文档、释放全部控件
  * @param app 应用
@@ -320,7 +315,6 @@ static void app_close(cg_app_t *app)
     app->widgets = NULL;
 }
 
-/** @brief 建窗口 + 消息循环，返回进程退出码 */
 /**
  * @brief 建窗口 + 跑消息循环，结束后释放全部资源
  * @param desc 启动参数
@@ -385,7 +379,6 @@ typedef struct {
     int unresolved;
 } selftest_stat_t;
 
-/** @brief 递归走控件树，对每个绑了回调的事件做一次合成触发并统计 */
 /**
  * @brief 递归走控件树，对每个绑了回调的事件做一次合成触发并统计
  * @param app 所属应用
@@ -436,7 +429,6 @@ static void selftest_walk(cg_app_t *app, cg_widget_t *w, selftest_stat_t *st, in
     for (size_t i = 0; i < w->nchildren; i++) selftest_walk(app, w->children[i], st, depth);
 }
 
-/** @brief 不开窗的自检：解析 .cgui、打印控件树、对每个绑定了回调的控件合成一次事件 */
 /**
  * @brief 不开窗的自检：解析 .cgui、打印控件树、合成触发全部回调
  * @param desc 启动参数（同 cg_app_run）

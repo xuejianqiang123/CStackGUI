@@ -8,7 +8,6 @@
 /* ------------------------------------------------------------ 事件映射 */
 
 
-/** 把编辑框里的当前文字读回控件模型 */
 /**
  * @brief 把编辑框里的当前文字读回控件模型
  * @param w 目标控件，文本写回它的文字字段（并去掉回车）
@@ -41,7 +40,6 @@ void cgw_pull_edit_text(cg_widget_t *w, HWND hwnd)
     free(buf);
 }
 
-/** 真正的映射：原生通知 -> CStackGUI 事件。cmd_id 是 WM_COMMAND 的 LOWORD。 */
 /**
  * @brief 把原生通知归一成框架事件并派发
  * @param app 所属应用
@@ -212,7 +210,6 @@ void cgw_notify_body(cg_app_t *app, cg_widget_t *w, HWND hwnd, int code, int cmd
     (void)app;
 }
 
-/** WM_NOTIFY：标签页 / 树 / 表格 / 微调 的富通知都从这条路进来 */
 /**
  * @brief 富通知入口：把标签页 / 树 / 表格 / 微调 / 月历 / 日期时间的通知派发成事件
  * @param app 所属应用

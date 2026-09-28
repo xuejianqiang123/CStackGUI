@@ -25,7 +25,6 @@
 /** 单行最长多少字符（一次 write 粘进来一坨巨长数据时兜底） */
 #define CG_TERM_MAX_LINE 1024
 
-/** @brief 时间戳 "HH:MM:SS"（和 cg_log 的写法一致：秒级够看间隔） */
 /**
  * @brief 时间戳 "HH:MM:SS"（秒级够看间隔）
  * @param buf 输出缓冲
@@ -41,7 +40,6 @@ static void term_stamp(char *buf, size_t size)
     snprintf(buf, size, "--:--:--");
 }
 
-/** @brief 方向标记 -> 行首那三个字符的记号 */
 /**
  * @brief 方向标记 -> 行首那三个字符的记号
  * @param dir 行方向标记；其它值当 CG_TERM_SYS 处理
@@ -56,7 +54,6 @@ static const char *term_dir_tag(int dir)
     }
 }
 
-/** @brief 当前是不是 HEX 显示模式（.cgui 的 format == "hex"） */
 /**
  * @brief 当前是不是 HEX 显示模式（.cgui 的 format == "hex"）
  * @param w terminal 控件
@@ -107,7 +104,6 @@ static void term_format_payload(const cg_widget_t *w, const unsigned char *data,
     }
 }
 
-/** @brief 组装一行（首字节 = 方向标记，其余是给人看的文字）；调用方 free */
 /**
  * @brief 组装一行（首字节 = 方向标记，其余是给人看的文字）
  * @param w terminal 控件（读 checked 决定要不要加时间戳）
@@ -213,7 +209,6 @@ void cg_term_write(cg_widget_t *w, int dir, const void *data, int len)
     cg_widget_sync(w);
 }
 
-/** @brief 清空终端 */
 /**
  * @brief 清空终端
  * @param w terminal 控件
@@ -231,7 +226,6 @@ void cg_term_clear(cg_widget_t *w)
     cg_widget_sync(w);
 }
 
-/** @brief 切 HEX / 文本显示（只影响**之后**写入的行，已经显示的不动） */
 /**
  * @brief 切 HEX / 文本显示（只影响**之后**写入的行，已经显示的不动）
  * @param w terminal 控件
@@ -249,7 +243,6 @@ void cg_term_set_hex(cg_widget_t *w, int on)
     }
 }
 
-/** @brief 当前是不是 HEX 模式 */
 /**
  * @brief 当前是不是 HEX 模式
  * @param w terminal 控件
@@ -260,7 +253,6 @@ int cg_term_hex(const cg_widget_t *w)
     return w && term_is_hex(w);
 }
 
-/** @brief 每行前面要不要带 [HH:MM:SS]（存的是控件的 checked 字段） */
 /**
  * @brief 每行前面要不要带 [HH:MM:SS]（存的是控件的 checked 字段）
  * @param w terminal 控件
@@ -272,7 +264,6 @@ void cg_term_set_timestamp(cg_widget_t *w, int on)
     cg_widget_set_checked(w, on ? 1 : 0);
 }
 
-/** @brief 最多保留多少行（超了从最老的丢；0 或负数 = 恢复默认 500） */
 /**
  * @brief 最多保留多少行（超了从最老的丢）
  * @param w terminal 控件
@@ -286,7 +277,6 @@ void cg_term_set_max_lines(cg_widget_t *w, int lines)
     if (w->node) w->node->value = w->value;
 }
 
-/** @brief 当前有多少行 */
 /**
  * @brief 当前有多少行
  * @param w terminal 控件

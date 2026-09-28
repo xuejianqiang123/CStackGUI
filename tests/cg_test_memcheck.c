@@ -53,7 +53,6 @@ char *__real__strdup(const char *s);
 /** 当前存活块数：分配 +1，释放 -1（free(NULL) 不算，与分配侧对称） */
 static long s_live;
 
-/** @brief 当前存活堆块数（供测试运行器逐套件取快照） */
 /**
  * @brief 当前存活堆块数（供测试运行器逐套件取快照）
  * @return int 当前存活的堆块数

@@ -22,7 +22,6 @@ static const COLORREF k_chart_colors[8] = {
     RGB(0x00, 0x6B, 0x6B), RGB(0x8C, 0x4A, 0x4A),
 };
 
-/** @brief 值 -> 绘图区里的 y 像素（超范围按边界裁剪，所以越界数据不会画出框） */
 /**
  * @brief 值 -> 绘图区里的 y 像素
  * @param w 图表控件（取量程上下限）
@@ -41,7 +40,6 @@ static int chart_map_y(const cg_widget_t *w, int v, int top, int bottom)
     return bottom - (int)((long long)(v - w->vmin) * (bottom - top) / range);
 }
 
-/** @brief 第 i 个点落在哪一列（右对齐：最新一个点在最右边） */
 /**
  * @brief 第 i 个点落在哪一列（右对齐：最新一个点在最右边）
  * @param i 点序号（0 是最早的点）
@@ -55,7 +53,6 @@ static int chart_column(int i, int fill, int pw)
     return (pw - 1) - (int)((long long)(fill - 1 - i) * (pw - 1) / (fill - 1));
 }
 
-/** @brief 画一个系列（折线或柱） */
 /**
  * @brief 画一个系列（折线或柱）
  * @param dc 目标 DC
@@ -149,7 +146,6 @@ static void chart_draw_series(HDC dc, const cg_widget_t *w, int series,
     }
 }
 
-/** @brief 画整个图表：底、网格、边框、各系列、范围文字、图例 */
 /**
  * @brief 画整个图表：底、网格、边框、各系列、范围文字、图例
  * @param app 所属应用（字体、背后取色、主题中性色）
@@ -264,7 +260,6 @@ static void chart_paint(cg_app_t *app, cg_widget_t *w, HDC dc, const RECT *rc)
 /** @brief 图表双缓冲回调参数 */
 typedef struct { cg_app_t *app; cg_widget_t *w; } chart_ctx_t;
 
-/** @brief 图表一帧适配器：整张画进内存位图 */
 /**
  * @brief 图表一帧适配器：整张画进内存位图
  * @param mem 内存位图 DC（双缓冲的离屏 DC）
@@ -278,7 +273,6 @@ static void chart_body(HDC mem, const RECT *rc, void *vctx)
     chart_paint(c->app, c->w, mem, rc);
 }
 
-/** @brief 图表窗口过程（自绘，纯显示；没绑任何事件） */
 /**
  * @brief 图表窗口过程（自绘，纯显示；没绑任何事件）
  * @param hwnd 本控件窗口
@@ -320,7 +314,6 @@ static LRESULT CALLBACK ChartProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-/** @brief 注册图表的自绘窗口类（整进程一次） */
 /**
  * @brief 注册图表的自绘窗口类（整进程一次）
  * @return void 无返回值

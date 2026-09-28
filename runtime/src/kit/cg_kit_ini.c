@@ -14,7 +14,6 @@
  * 读取时键名/节名不区分大小写；写入时保留文件里其它内容（只动目标那一行）。
  */
 
-/** @brief 取下一行（就地写 NUL，跳过 \r\n）；没有更多返回 NULL */
 /**
  * @brief 取下一行（就地写 NUL，跳过行尾换行）
  * @param text 整个文本缓冲（行尾会被就地改成 NUL）；NULL 返回 NULL
@@ -37,7 +36,6 @@ static char *kit_next_line(char *text, size_t *pos)
     return start;
 }
 
-/** @brief 是节头就返回名字起点并写 *len（**不修改 line**）；不是返回 NULL */
 /**
  * @brief 是节头就返回名字起点并写出长度（**不修改 line**）
  * @param line 一行文本
@@ -57,7 +55,6 @@ static const char *kit_section_name(const char *line, size_t *len)
     return p + 1;
 }
 
-/** @brief line 是不是 [section] 这一节（忽略大小写） */
 /**
  * @brief 判断 line 是不是 [section] 这一节（忽略大小写）
  * @param line 一行文本
@@ -78,7 +75,6 @@ static int kit_section_is(const char *line, const char *section)
     return 1;
 }
 
-/** @brief 命中 "key = ..." 就返回值指针（忽略键名大小写）；否则 NULL */
 /**
  * @brief 命中 "key = ..." 就返回值指针（忽略键名大小写）
  * @param line 一行文本（只读，不改动它）
@@ -103,7 +99,6 @@ static const char *kit_key_value(char *line, const char *key, size_t klen)
     return p;
 }
 
-/** @brief 读 INI 的一项；不存在返回 def 的副本 */
 /**
  * @brief 读 INI 的一项
  * @param path ini 文件路径（UTF-8）；NULL 直接走回退
@@ -147,7 +142,6 @@ char *cg_ini_read(const char *path, const char *section, const char *key, const 
     return out ? out : cg_str_dup(def);
 }
 
-/** @brief 往缓冲追加（带上限）；用于拼写出的 INI 文本 */
 /**
  * @brief 往缓冲追加字符串（带上限，放不下就截断）
  * @param buf 目标缓冲
@@ -166,7 +160,6 @@ static void kit_append(char *buf, size_t cap, size_t *len, const char *s)
     buf[*len] = '\0';
 }
 
-/** @brief 写 INI 的一项（保留文件其它内容）；成功返回 0 */
 /**
  * @brief 写 INI 的一项（保留文件其它内容，只动目标那一行）
  * @param path ini 文件路径（UTF-8）；文件不存在就当空文件；NULL 直接失败

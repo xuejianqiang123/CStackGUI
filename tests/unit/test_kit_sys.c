@@ -15,7 +15,6 @@
 
 #include <string.h>
 
-/** @brief 环境变量：精易那 34 条命令在 C 侧就是这一个函数 */
 /**
  * @brief 环境变量：那一大堆旧代码里的环境命令在 C 侧就是这一个函数
  * @return void 无返回值
@@ -57,7 +56,6 @@ static void test_env(void)
     cg_test_int("值不是数字 -> fallback（不是 0）", cg_env_int("PATH", 42), 42);
 }
 
-/** @brief 系统位数与版本串 */
 /**
  * @brief 系统位数与版本串
  * @return void 无返回值
@@ -79,7 +77,6 @@ static void test_sys(void)
     cg_free(v);
 }
 
-/** @brief 磁盘容量与进程存在性、本机 IP */
 /**
  * @brief 磁盘容量与进程存在性
  * @return void 无返回值

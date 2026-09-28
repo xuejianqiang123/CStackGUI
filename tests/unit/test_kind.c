@@ -13,7 +13,6 @@
 
 #include <string.h>
 
-/** @brief 枚举 ↔ 表项双向一致：每个 kind 都有行，且行的 kind 字段指回自己 */
 /**
  * @brief 枚举与表项双向一致：每个类型都有行，且行的枚举字段指回自己
  * @return void 无返回值
@@ -43,7 +42,6 @@ static void test_kind_table_covers_enum(void)
     }
 }
 
-/** @brief 类型名不重复：两行同名会让后一行成死代码（cgw_class_of 踩过这个坑） */
 /**
  * @brief 类型名不重复：两行同名会让后一行成死代码
  * @return void 无返回值
@@ -65,7 +63,6 @@ static void test_kind_names_unique(void)
     }
 }
 
-/** @brief 查不到的类型必须返回 NULL / "unknown"，不能瞎命中一行 */
 /**
  * @brief 查不到的类型必须返回 NULL / "unknown"，不能瞎命中一行
  * @return void 无返回值
@@ -80,7 +77,6 @@ static void test_kind_lookup_misses(void)
     cg_test_int("越界 kind 查不到事件表", cg_kind_info(CG_K_COUNT) == NULL, 1);
 }
 
-/** @brief 事件名表：双向可查、不重复、非法输入有兜底 */
 /**
  * @brief 事件名表：双向可查、不重复、非法输入有兜底
  * @return void 无返回值
@@ -103,7 +99,6 @@ static void test_event_names(void)
     cg_test_int("cg_event_from_name(\"没有的事件\") 返回 -1", cg_event_from_name("没有的事件"), -1);
 }
 
-/** @brief 事件位掩码 ↔ cg_kind_supports_event 必须完全一致（写错位就是"绑了不发"） */
 /**
  * @brief 事件位掩码与"类型支不支持这个事件"必须完全一致（写错位就是"绑了不发"）
  * @return void 无返回值
@@ -131,7 +126,6 @@ static void test_event_mask_consistency(void)
     cg_test_int("越界事件码一律不支持", cg_kind_supports_event("button", (cg_event_t)CG_EVENT_COUNT), 0);
 }
 
-/** @brief 有代表性的取值：类型表被误改时这里会先响 */
 /**
  * @brief 有代表性的取值：类型表被误改时这里会先响
  * @return void 无返回值

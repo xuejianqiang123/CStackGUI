@@ -21,7 +21,6 @@
 
 /* ------------------------------------------------------------ 环形缓冲 */
 
-/** @brief 建环/释放/计数，以及"空环取东西"这种边界 */
 /**
  * @brief 建环 / 释放 / 计数，以及"空环取东西"这种边界
  * @return void 无返回值
@@ -67,7 +66,6 @@ static void test_ring_basic(void)
     cg_test_ok("重复释放也没事", 1);
 }
 
-/** @brief 环绕：反复写取越过多圈，数据不能错位 */
 /**
  * @brief 环绕：反复写取越过多圈，数据不能错位
  * @return void 无返回值
@@ -100,7 +98,6 @@ static void test_ring_wrap(void)
     cg_ring_free(&r);
 }
 
-/** @brief 满了丢最老的：这是有意选定的策略，得钉住 */
 /**
  * @brief 满了丢最老的：这是有意选定的策略，得钉住
  * @return void 无返回值
@@ -142,7 +139,6 @@ static void test_ring_overflow(void)
 
 /* ------------------------------------------------------------ 串口 */
 
-/** @brief 参数校验与错误信息：没有句柄的那种失败 */
 /**
  * @brief 参数校验与错误信息：没有句柄的那种失败
  * @return void 无返回值
@@ -203,7 +199,6 @@ static void test_serial_params(void)
     cg_test_ok("以上失败路径全部没崩、没卡", 1);
 }
 
-/** @brief 用**文件句柄**走一遍真实的读线程 + 环形缓冲 + 取回 */
 /**
  * @brief 用**文件句柄**走一遍真实的读线程 + 环形缓冲 + 取回
  * @return void 无返回值
@@ -285,7 +280,6 @@ static void test_serial_data_path(void)
     cg_test_ok("关掉之后没崩", 1);
 }
 
-/** @brief 反复建/关：读线程的生命周期（关了之后再关、连着开关多次都不许挂） */
 /**
  * @brief 反复建 / 关：读线程的生命周期（关了之后再关、连着开关多次都不许挂）
  * @return void 无返回值

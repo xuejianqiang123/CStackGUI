@@ -15,7 +15,6 @@
 #include <stdio.h>
 #include <string.h>
 
-/** @brief 等接收缓冲里攒够 want 字节（最多等 ms 毫秒）；返回 1 = 等到了 */
 /**
  * @brief 等接收缓冲里攒够 want 字节（最多等 ms 毫秒）
  * @param n 要轮询的网口句柄
@@ -34,7 +33,6 @@ static int wait_rx(cg_net_t *n, int want, int ms)
     return 0;
 }
 
-/** @brief 在 3 个候选端口里挑一个能监听的（避免和别的东西撞端口） */
 /**
  * @brief 在 3 个候选端口里挑一个能监听的（避免和别的东西撞端口）
  * @param port_out 回填真正监听成功的端口号
@@ -56,7 +54,6 @@ static cg_net_t *listen_any(int *port_out)
     return NULL;
 }
 
-/** @brief 参数校验与错误路径（不需要对端） */
 /**
  * @brief 参数校验与错误路径（不需要对端）
  * @return void 无返回值
@@ -112,7 +109,6 @@ static void test_net_params(void)
     }
 }
 
-/** @brief 回环端到端：监听 -> 连接 -> 接受 -> 双向收发 -> 掉线信号 */
 /**
  * @brief 回环端到端：监听 -> 连接 -> 接受 -> 双向收发 -> 掉线信号
  * @return void 无返回值
@@ -184,7 +180,6 @@ static void test_net_loopback(void)
     cg_test_ok("整条链路关干净了", 1);
 }
 
-/** @brief 反复建/关：读线程与套接字的生命周期（也顺带让 memcheck 看泄漏） */
 /**
  * @brief 反复建 / 关：读线程与套接字的生命周期（也顺带让 memcheck 看泄漏）
  * @return void 无返回值
@@ -213,7 +208,6 @@ static void test_net_lifecycle(void)
     cg_test_ok("20 轮开关没有崩、没有卡死", ok && port);
 }
 
-/** @brief UDP：开端口、参数校验、以及"流那套 API 在 UDP 上明确拒绝" */
 /**
  * @brief UDP：开端口、参数校验、以及"流那套 API 在 UDP 上明确拒绝"
  * @return void 无返回值
@@ -250,7 +244,6 @@ static void test_udp_open(void)
     }
 }
 
-/** @brief UDP 回环：**报文边界与来源地址都得原样保住**（这套拉取式 API 存在的理由） */
 /**
  * @brief UDP 回环：**报文边界与来源地址都得原样保住**（这套拉取式 API 存在的理由）
  * @return void 无返回值

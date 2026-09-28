@@ -44,7 +44,6 @@ static const char *k_doc =
     "  ]\n"
     "}\n";
 
-/** @brief 解析文档 + 建控件树 + 应用 .cgui 里的绑定；失败返回 -1 */
 /**
  * @brief 解析文档 + 建控件树 + 应用 .cgui 里的绑定
  * @param app 待初始化的应用
@@ -69,7 +68,6 @@ static int build_app(cg_app_t *app, const char *json)
     return 0;
 }
 
-/** @brief 收尾：先放控件（它们会回写节点），再放文档 */
 /**
  * @brief 收尾：先放控件（它们会回写节点），再放文档
  * @param app 要释放的应用
@@ -90,7 +88,6 @@ static void free_app(cg_app_t *app)
 /** 目标控件被绑定同步时应保持沉默：这个计数必须一直是 0 */
 static int s_sw_changes;
 
-/** @brief switch 的 change 回调：只记账，用来看绑定有没有越界触发回调 */
 /**
  * @brief 开关的 change 回调：只记账，用来看绑定有没有越界触发回调
  * @param self 触发回调的控件
@@ -106,7 +103,6 @@ static void on_sw_change(cg_widget_t *self, cg_event_t ev, void *user)
     s_sw_changes++;
 }
 
-/** @brief bind 字段的解析：写成什么、缺省是什么 */
 /**
  * @brief bind 字段的解析：写成什么、缺省是什么
  * @return void 无返回值
@@ -152,7 +148,6 @@ static void test_bind_parse(void)
     cg_doc_free(doc);
 }
 
-/** @brief 启动时的第一次对齐：目标控件跟上源的初值 */
 /**
  * @brief 启动时的第一次对齐：目标控件跟上源的初值
  * @return void 无返回值
@@ -185,7 +180,6 @@ static void test_bind_apply_all(void)
     free_app(&app);
 }
 
-/** @brief 变化传播：API 赋值 与 后端派发两条路都要同步 */
 /**
  * @brief 变化传播：API 赋值与后端派发两条路都要同步
  * @return void 无返回值
@@ -254,7 +248,6 @@ static void test_bind_propagate(void)
     free_app(&app);
 }
 
-/** @brief 运行时 API：cg_bind（不用 .cgui 也能绑），顺便盯参数校验 */
 /**
  * @brief 运行时绑定 API（不用 .cgui 也能绑），顺便盯参数校验
  * @return void 无返回值

@@ -205,7 +205,6 @@ static int sk_edit_text_height(HWND hwnd)
     return th;
 }
 
-/** 重算整块尺寸 + 圆角区域；多行输入框顺带把客户区往里缩一点 */
 /**
  * @brief 重算整块尺寸 + 圆角区域；多行输入框顺带把客户区往里缩一点
  * @param hwnd 输入框窗口；按它的窗口矩形更新子类数据并重设圆角区域

@@ -37,7 +37,6 @@ static char *dup_or_null(const char *s)
     return dup_str(s);
 }
 
-/** @brief 读文件到堆内存（UTF-8 原文），失败返回 NULL */
 /**
  * @brief 读一个文件到堆内存
  * @param path 文件路径
@@ -72,7 +71,6 @@ char *cg_read_file(const char *path)
 
 static const char *const k_align_names[] = { "left", "center", "right" };
 
-/** @brief 恢复成"什么都没写"的默认值 */
 /**
  * @brief 恢复成"什么都没写"的默认值
  * @param st 目标样式；整体清零（size 0 = 用系统 UI 字体，fg/bg 无色）
@@ -172,7 +170,6 @@ static void style_overlay(const cj_val_t *o, cg_style_t *st, unsigned *mask)
     }
 }
 
-/** @brief 按名字找命名样式；没有返回 NULL（找不到**不报错**，按"没有 use"处理） */
 /**
  * @brief 按名字找命名样式
  * @param styles 命名样式表
@@ -410,7 +407,6 @@ static void tree_items_free(cg_item_t **items, size_t n)
     free(items);
 }
 
-/** 表格列："columns": [{ "title": "姓名", "w": 120 }] */
 /**
  * @brief 把表格的 `columns` 数组解析成列数组
  * @param arr JSON 数组
@@ -444,7 +440,6 @@ static cg_col_t *parse_columns(const cj_val_t *arr, size_t *count)
     return out;
 }
 
-/** 表格行："rows": [["张三","18"], ["李四","20"]] */
 /**
  * @brief 把表格的 `rows` 数组解析成二维字符串数组（各行按最宽的一行补齐）
  * @param arr JSON 数组
@@ -934,7 +929,6 @@ cg_doc_t *cg_doc_parse(const char *json, char *err, size_t errsz)
     return doc;
 }
 
-/** @brief 释放文档内容，但 doc 本身（可能嵌在别的结构里，或是栈变量）不动 */
 /**
  * @brief 释放文档内容（doc 本身不动 —— 它可能内嵌在应用结构里，或是栈变量）
  * @param doc 目标文档；可传 NULL（内容清空后本身仍可复用）
@@ -974,7 +968,6 @@ void cg_doc_release(cg_doc_t *doc)
     memset(doc, 0, sizeof(*doc));
 }
 
-/** @brief 释放内容并释放 doc 本身 */
 /**
  * @brief 释放文档内容并释放 doc 本身（只给解析函数的返回值用）
  * @param doc 解析函数返回的文档；可传 NULL
@@ -1044,7 +1037,6 @@ static void dump_node(const cg_node_t *n, FILE *out, int depth)
     for (size_t i = 0; i < n->nchildren; i++) dump_node(n->children[i], out, depth + 1);
 }
 
-/** @brief 以缩进树的形式打印到 out（自检 / 排查用） */
 /**
  * @brief 把整份文档树打印到 out
  * @param doc 文档

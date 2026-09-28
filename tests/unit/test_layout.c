@@ -20,7 +20,6 @@
 
 #include <stdlib.h>
 
-/** @brief 造一个 box（省得每处写五行） */
 /**
  * @brief 造一个布局盒（省得每处写五行）
  * @param x 初始左边界
@@ -38,7 +37,6 @@ static cg_layout_box_t mk(int x, int y, int w, int h, int g)
     return b;
 }
 
-/** @brief 没人吃余量：一个像素都不许动 */
 /**
  * @brief 没人吃余量：一个像素都不许动
  * @return void 无返回值
@@ -76,7 +74,6 @@ static void test_no_grow(void)
     cg_test_int("  另一个拿剩下的 1", b[1].h, 61);
 }
 
-/** @brief 竖向三段（`[日志区 | 分隔条 | 发送区]` 的形状）：只有一条带吃余量，后面整体下移 */
 /**
  * @brief 竖向三段（日志区 / 分隔条 / 发送区 的形状）：只有一条带吃余量，后面整体下移
  * @return void 无返回值
@@ -103,7 +100,6 @@ static void test_vertical_stack(void)
     cg_test_int("横向：发送区 w 不变", b[2].w, 700);
 }
 
-/** @brief 同一条带（左右并排）：各自填满，谁也不推谁 —— 这是写测试时揪出来的真错 */
 /**
  * @brief 同一条带（左右并排）：各自填满，谁也不推谁 —— 这是写测试时揪出来的真错
  * @return void 无返回值
@@ -137,7 +133,6 @@ static void test_same_band(void)
     cg_test_int("  且它被推下去 10", b[1].y, 50);
 }
 
-/** @brief 余数不许丢：三条带权重相同、变化量除不尽时，最后一个把余数全吃了 */
 /**
  * @brief 余数不许丢：三条带权重相同、变化量除不尽时，最后一个把余数全吃了
  * @return void 无返回值
@@ -160,7 +155,6 @@ static void test_remainder(void)
     cg_test_int("第 3 条被推到 26", b[2].y, 26);
 }
 
-/** @brief 横向生长：右边兄弟被推走但自己不变宽 */
 /**
  * @brief 横向生长：右边兄弟被推走但自己不变宽
  * @return void 无返回值
@@ -200,7 +194,6 @@ static void test_horizontal(void)
     cg_test_int("竖向：右边也变高", b[1].h, 150);
 }
 
-/** @brief 缩小、以及"回到设计尺寸就完全回到设计坐标" */
 /**
  * @brief 缩小、以及"回到设计尺寸就完全回到设计坐标"
  * @return void 无返回值
