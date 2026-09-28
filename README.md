@@ -408,6 +408,8 @@ CStackGUI\
     logfilter\                 日志过滤器（大日志关键字过滤 + 行号表 + 导出，说清"整读 + 32 MB 上限"的能力边界）
     dataview\                  数据浏览器（大 CSV 分页浏览：只索引不复制、界面只渲染当前页、排序 / 统计 / 导出）
     envsnap\                   环境快照（懒加载的树：展开才采集 + 环境变量与用户数据目录 + 导出 / 复制）
+    htmlreport\                HTML 报告器（CSV → 离线可看的 HTML：内嵌 CSS / 无 JavaScript / 单元格转义；网页控件预览 + 系统浏览器兜底）
+    framedec\                  帧协议解析器（自定义帧：切帧 / 三种校验 / 解码，噪声与残帧都给明确结论）
   apps\                        你自己的工程（画布导出的默认位置）
     README.md                  这个目录是干嘛的
   build-runtime.bat            编译运行时库
