@@ -17,7 +17,7 @@
     "sub":     { "font": "Microsoft YaHei UI", "size": 9 },
     "panel":   { "font": "Microsoft YaHei UI", "size": 10 },
     "oncard":  { "font": "Microsoft YaHei UI", "size": 10 },
-    "log":     { "font": "Consolas", "size": 10, "fg": "#CDE8C6", "bg": "#0E1116" },
+    "log":     { "font": "Consolas", "size": 10 },
     "input":   { "font": "Microsoft YaHei UI", "size": 10 },
     "primary": { "bg": "#7C5CD6", "radius": 8 },
     "ghost":   { "bg": "#2E2B36", "fg": "#E8E2F0", "radius": 8 },
