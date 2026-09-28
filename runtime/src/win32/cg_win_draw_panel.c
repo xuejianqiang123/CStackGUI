@@ -29,8 +29,10 @@ static void panel_draw_group(cg_app_t *app, HDC dc, cg_widget_t *w, const RECT *
      * 2026-09-24 曾试过改成"透出背后"，实测与画布不一致，已回退。
      * 用户如想要"标题完全在框内、不骑线"的另一种风格，需要画布与运行时一起改。 */
     unsigned title_bg = bg;
+    /* 边框色也要跟随主题：原来写死画布的中灰 --outline-strong，深色窗口里就是一圈亮描边
+     * （2026-09-28 用户手动检查发现："深色下分组框看着不对"）。浅色沿用原值、深色走皮肤的深色描边 */
     COLORREF penc = (w->style.fg != CG_COLOR_NONE) ? cgw_to_colorref(w->style.fg)
-                                                   : RGB(0x79, 0x74, 0x7E);   /* 画布 --outline-strong */
+                                                   : cgw_to_colorref(cg_skin_neutral(app, 0x79747Eu, 0x49454Fu));
 
     if (inset < 1) inset = 1;
     top = has_title ? cgw_scale_px(app, 8) : inset;   /* 顶边线：有标题就让出一条给标题 */
