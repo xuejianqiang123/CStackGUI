@@ -492,7 +492,8 @@ static void preview_selected(cg_app_t *app)
  *       一开箱目录是空的，点「枚举文件」得到 0 个，价值就没机会展示（用户反馈）。造的 4 个文件
  *       对应真实工控场景：GBK+CRLF 的报警记录、GBK+LF 的参数表、GBK 的设备清单，外加一个
  *       **纯 ASCII 对照**（它会判"无需转换"，把"纯 ASCII 谁都合法"这条边界也一并演示）。
- *       源码里的文本是 UTF-8，落盘前用 cg_utf8_to_gbk 转成 GBK 字节 —— 所以造出来的是真 GBK 文件
+ *       源码里的文本是 UTF-8，落盘前用 cg_utf8_to_gbk 转成 GBK 字节 —— 所以造出来的是真 GBK 文件。
+ *       同名文件**绝不覆盖**（撞上的可能是用户的真文件），跳过并报出来
  */
 static void make_samples(cg_app_t *app)
 {
@@ -528,7 +529,11 @@ static void make_samples(cg_app_t *app)
         char *gbk  = cg_utf8_to_gbk(k_samples[i].text);      /* UTF-8 源码 -> GBK 字节 */
         char *path = cg_path_join(dir, k_samples[i].name);
 
-        if (!gbk || !path || cg_file_write_bytes(path, gbk, (int)strlen(gbk)) != 0) {
+        if (path && cg_file_exists(path)) {      /* **绝不覆盖同名文件**：这按钮只是个"造素材"的入口，
+                                                    撞上的很可能是用户的真文件（本示例转换时也从不覆盖） */
+            fail++;
+            note(app, CG_TERM_SYS, "  %s：已存在，跳过（不覆盖）。", k_samples[i].name);
+        } else if (!gbk || !path || cg_file_write_bytes(path, gbk, (int)strlen(gbk)) != 0) {
             fail++;
             note(app, CG_TERM_SYS, "  %s：写不进去（目录可能不存在），跳过。", k_samples[i].name);
         } else {
