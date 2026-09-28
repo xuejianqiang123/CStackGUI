@@ -1,0 +1,173 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "文件核对工具",
+    "width": 900,
+    "height": 640,
+    "bg": "#F3EDF7",
+    "info": {
+      "product": "CStackGUI 文件核对工具",
+      "desc": "固件 / 镜像发布核对：两个文件的大小与五种摘要比对 + 逐字节差异定位 + 报告导出",
+      "version": "1.0.0.0",
+      "author": "CStackGUI"
+    },
+    "events": { "close": "on_close", "size": "on_window_size", "drop": "on_files_drop" }
+  },
+  "widgets": [
+    {
+      "id": "sb_main",
+      "type": "statusbar",
+      "rect": { "x": 0, "y": 616, "w": 900, "h": 24 },
+      "items": ["就绪", "A：未选", "B：未选"]
+    },
+    {
+      "id": "grp_top",
+      "type": "group",
+      "rect": { "x": 8, "y": 8, "w": 884, "h": 380 },
+      "grow": 1,
+      "text": "文件槽与摘要",
+      "children": [
+        {
+          "id": "lab_a",
+          "type": "label",
+          "rect": { "x": 16, "y": 30, "w": 60, "h": 22 },
+          "text": "文件 A"
+        },
+        {
+          "id": "edt_a_path",
+          "type": "edit",
+          "rect": { "x": 80, "y": 28, "w": 700, "h": 24 },
+          "style": { "font": "Microsoft YaHei UI", "size": 9 }
+        },
+        {
+          "id": "btn_a_pick",
+          "type": "button",
+          "rect": { "x": 788, "y": 27, "w": 84, "h": 26 },
+          "text": "选择文件...",
+          "hint": "打开系统文件对话框，把选中的文件填进文件 A",
+          "events": { "click": "on_pick_a_click" }
+        },
+        {
+          "id": "lab_b",
+          "type": "label",
+          "rect": { "x": 16, "y": 62, "w": 60, "h": 22 },
+          "text": "文件 B"
+        },
+        {
+          "id": "edt_b_path",
+          "type": "edit",
+          "rect": { "x": 80, "y": 60, "w": 700, "h": 24 },
+          "style": { "font": "Microsoft YaHei UI", "size": 9 }
+        },
+        {
+          "id": "btn_b_pick",
+          "type": "button",
+          "rect": { "x": 788, "y": 59, "w": 84, "h": 26 },
+          "text": "选择文件...",
+          "hint": "把选中的文件填进文件 B",
+          "events": { "click": "on_pick_b_click" }
+        },
+        {
+          "id": "led_verdict",
+          "type": "led",
+          "rect": { "x": 16, "y": 96, "w": 24, "h": 24 },
+          "value": 0,
+          "text": ""
+        },
+        {
+          "id": "lab_verdict",
+          "type": "label",
+          "rect": { "x": 48, "y": 96, "w": 824, "h": 26 },
+          "text": "还没比对 —— 选好两个文件后点「开始比对」",
+          "style": { "size": 12, "bold": true }
+        },
+        {
+          "id": "btn_cmp",
+          "type": "button",
+          "rect": { "x": 16, "y": 130, "w": 110, "h": 30 },
+          "text": "开始比对",
+          "hint": "比大小与 SHA256，给出「一致 / 不一致」结论与状态灯",
+          "events": { "click": "on_compare_click" }
+        },
+        {
+          "id": "btn_diff",
+          "type": "button",
+          "rect": { "x": 132, "y": 130, "w": 110, "h": 30 },
+          "text": "找差异",
+          "hint": "逐字节比对，差异最多列 200 条；超过 4 MB 只提示比摘要",
+          "events": { "click": "on_diff_click" }
+        },
+        {
+          "id": "btn_copy",
+          "type": "button",
+          "rect": { "x": 248, "y": 130, "w": 140, "h": 30 },
+          "text": "复制报告",
+          "hint": "把大小 / 五种摘要 / 结论复制到剪贴板",
+          "events": { "click": "on_copy_click" }
+        },
+        {
+          "id": "btn_export",
+          "type": "button",
+          "rect": { "x": 394, "y": 130, "w": 120, "h": 30 },
+          "text": "导出报告",
+          "hint": "把报告写成 UTF-8 文本文件",
+          "events": { "click": "on_export_click" }
+        },
+        {
+          "id": "btn_clear",
+          "type": "button",
+          "rect": { "x": 520, "y": 130, "w": 110, "h": 30 },
+          "text": "清空",
+          "hint": "清掉两个文件槽、结论、差异表格与日志",
+          "events": { "click": "on_clear_click" }
+        },
+        {
+          "id": "lab_log",
+          "type": "label",
+          "rect": { "x": 16, "y": 168, "w": 500, "h": 20 },
+          "text": "日志（每行一条：大小 / MD5 / SHA1 / SHA256 / SHA512 / CRC32 与结论）"
+        },
+        {
+          "id": "term_log",
+          "type": "terminal",
+          "rect": { "x": 16, "y": 190, "w": 852, "h": 174 },
+          "checked": true,
+          "value": 800
+        }
+      ]
+    },
+    {
+      "id": "sp_main",
+      "type": "splitter",
+      "format": "row",
+      "rect": { "x": 8, "y": 392, "w": 884, "h": 6 },
+      "hint": "上下拖动：上面那块变大，差异表让位",
+      "events": { "release": "on_sp_main_release" }
+    },
+    {
+      "id": "grp_diff",
+      "type": "group",
+      "rect": { "x": 8, "y": 402, "w": 884, "h": 210 },
+      "text": "差异偏移（最多列出 200 条）",
+      "children": [
+        {
+          "id": "lab_diff_hint",
+          "type": "label",
+          "rect": { "x": 16, "y": 26, "w": 852, "h": 20 },
+          "text": "点「找差异」后，两文件不同的偏移列在这里：偏移 / 文件 A 的字节 / 文件 B 的字节。"
+        },
+        {
+          "id": "tbl_diff",
+          "type": "table",
+          "rect": { "x": 16, "y": 50, "w": 852, "h": 146 },
+          "columns": [
+            { "title": "偏移", "w": 240 },
+            { "title": "文件 A 的字节", "w": 200 },
+            { "title": "文件 B 的字节", "w": 200 }
+          ],
+          "events": { "select": "on_tbl_diff_select" }
+        }
+      ]
+    }
+  ]
+}

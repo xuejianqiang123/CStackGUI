@@ -400,6 +400,8 @@ CStackGUI\
     netterm\                   网络调试助手（TCP/UDP + 终端日志 + 角色切换）
     darkterm\                  深色主题示例（app.dark + 命名样式 + 运行时切换主题）
     modbus\                    Modbus/TCP 上位机（cg_modbus_* 拼帧解帧 + cg_frame_* 切帧 + mock-slave.mjs 模拟从站）
+    hextool\                   进制与校验工具箱（HEX/文本互转 + 大小端 + CRC16/CRC32/MD5/SHA + Base64/URL + 报文组装）
+    filecheck\                 文件核对工具（两个文件的大小与五种摘要比对 + 逐字节差异定位 + 报告导出）
   apps\                        你自己的工程（画布导出的默认位置）
     README.md                  这个目录是干嘛的
   build-runtime.bat            编译运行时库
