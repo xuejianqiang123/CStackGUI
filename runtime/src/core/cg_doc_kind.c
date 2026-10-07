@@ -96,6 +96,20 @@ static const cg_kind_info_t k_kinds[] = {
       CG_EV_MOUSEDOWN | CG_EV_MOUSEUP | CG_EV_DBLCLICK | CG_EV_RDOWN | CG_EV_RUP |
       CG_EV_MOUSEMOVE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS |
       CG_EV_KEYDOWN | CG_EV_KEYUP | CG_EV_CHAR | CG_EV_WHEEL | CG_EV_DROP },
+    /* 对话框：一个独立顶层窗口（多窗体，契约见 docs/CGUI-FORMAT.md 第 4 节的 dialog 行）。
+     *   - text = 窗口标题；rect = 窗口位置尺寸（默认居中于主窗口）；children = 窗口里的控件；
+     *   - 事件掩码是 window 行的**子集**：复用主窗口那套窗口过程，能触发的都保留了；
+     *     ready/firstactivate/idle 是"整个应用启动/泵"级别的事、tray 要 per-窗口托盘图标、
+     *     drop 要对对话框 HWND 调 DragAcceptFiles —— 这五个对话框都没有，先不承诺
+     *     （monthcal 的教训：不承诺不触发的）。cg_dialog_open 落地（T1.2）时逐个核对，
+     *     该补的**两边一起补**（文档/画布/掩码三方对账，门禁会立刻抓不一致）。
+     *   - 原生在打开时才建（懒建）：cgw_create_native / cgw_create_native_tree 对它整棵跳过。 */
+    { "dialog",     CG_K_DIALOG,     1, 360, 240, "",
+      CG_EV_CLOSE | CG_EV_CLOSEQUERY | CG_EV_DESTROY | CG_EV_MOVE | CG_EV_SIZE |
+      CG_EV_ACTIVATE | CG_EV_DEACTIVATE | CG_EV_SHOW | CG_EV_HIDE |
+      CG_EV_MOUSEDOWN | CG_EV_MOUSEUP | CG_EV_DBLCLICK | CG_EV_RDOWN | CG_EV_RUP |
+      CG_EV_MOUSEMOVE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS |
+      CG_EV_KEYDOWN | CG_EV_KEYUP | CG_EV_CHAR | CG_EV_WHEEL },
 };
 
 #define K_KIND_COUNT (sizeof(k_kinds) / sizeof(k_kinds[0]))

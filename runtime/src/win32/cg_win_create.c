@@ -41,6 +41,12 @@ HWND cgw_parent_hwnd_of(const cg_app_t *app, const cg_widget_t *w)
  */
 void cgw_create_native(cg_widget_t *w)
 {
+    /* 对话框是一个**独立顶层窗口**：它的原生（连同整个子树）在 cg_dialog_open 打开时才建，
+     * 启动时绝不建 —— 否则对话框里的控件会全冒进主窗口。
+     * 这里只拦"单个控件"；启动路径的整棵子树跳过在 cgw_create_native_tree（谁先拦到都一样，
+     * 两处都写是因为 cg_widget_add 动态加控件只走本函数，拦不住树递归）。 */
+    if (!strcmp(w->type, "dialog")) return;
+
     cg_app_t *app = w->app;
     HWND parent = cgw_parent_hwnd_of(app, w);
     HWND h;
@@ -188,6 +194,10 @@ void cgw_create_native_tree(cg_widget_t *parent)
     if (!parent) return;
     for (size_t i = 0; i < parent->nchildren; i++) {
         cg_widget_t *c = parent->children[i];
+        /* 对话框子树**整棵**跳过：它自己连同里面的控件都是打开对话框时才建原生
+         * （否则启动时这批控件会被挂进主窗口 —— T1.1 之前的行为，正是要避免的）。
+         * 子树的建/销毁在 cg_dialog_open / cg_dialog_close（T1.2）。 */
+        if (!strcmp(c->type, "dialog")) continue;
         cgw_create_native(c);
         cgw_create_native_tree(c);
     }

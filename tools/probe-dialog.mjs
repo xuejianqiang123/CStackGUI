@@ -72,8 +72,18 @@ if (!exe) {
   const out = `${r.stdout || ""}${r.stderr || ""}`.trim();
   console.log(`\n运行时 ${path.relative(root, exe)} --selftest：exit=${r.status}`);
   console.log(out.split("\n").slice(0, 6).map((l) => `  ${l}`).join("\n"));
-  ok("[运行时] 基线：今天读不进带 dialog 的 .cgui", r.status !== 0, `exit=${r.status}`);
+  /* T1.1 起：运行时能解析 dialog（作为容器进树，children 归它）。
+   * exit 仍可能是 5 —— fixture 的回调没登记在 main.exe 的 BIND 表里，那是 BIND 侧的事，
+   * T1.2 会用带绑定的真工程验 open/close。这里判的是**解析**：
+   * 不许再出现 unknown widget type，且树里要能看到 dialog 和它的孩子。 */
+  const noUnknown = !/unknown widget type/.test(out);
+  const inTree = /dialog #dlg_settings/.test(out) && /edt_port/.test(out);
+  ok(
+    "[运行时] dialog 能解析进树（T1.1）",
+    noUnknown && inTree,
+    noUnknown ? (inTree ? "树里可见 dialog 与它的子控件" : "解析过了但树里没看到 dialog 子树") : "仍在报 unknown widget type",
+  );
 }
 
-console.log(fails === 0 ? "\nPASS（画布不再静默丢数据；运行时的红基线仍在 —— 那正是 T1 要修的）" : `\n${fails} FAILED`);
+console.log(fails === 0 ? "\nPASS（画布不静默丢；运行时已能解析 dialog —— open/close 是 T1.2）" : `\n${fails} FAILED`);
 process.exitCode = fails === 0 ? 0 : 1;
