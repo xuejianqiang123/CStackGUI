@@ -1,0 +1,63 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "C++ 例程 · 数据与界面分开",
+    "width": 720,
+    "height": 520,
+    "bg": "#F3EDF7",
+    "events": { "ready": "on_app_ready" }
+  },
+  "widgets": [
+    { "id": "sb_main", "type": "statusbar", "rect": { "x": 0, "y": 496, "w": 720, "h": 24 },
+      "items": ["就绪", "数据：std::vector<std::string>", "C++17"] },
+
+    { "id": "lab_title", "type": "label", "rect": { "x": 16, "y": 16, "w": 688, "h": 26 },
+      "text": "C++ 例程：数据放 std::vector，界面只是它的镜子",
+      "style": { "size": 12, "bold": 1, "fg": "#1D1B20" } },
+
+    { "id": "lab_word", "type": "label", "rect": { "x": 16, "y": 60, "w": 48, "h": 24 }, "text": "词条" },
+    { "id": "edt_word", "type": "edit", "rect": { "x": 72, "y": 56, "w": 220, "h": 32 },
+      "hint": "打一个词，「加入」或直接按回车（submit 事件）都能加进去",
+      "events": { "submit": "on_edt_word_submit" } },
+
+    { "id": "btn_add", "type": "button", "rect": { "x": 304, "y": 56, "w": 80, "h": 32 },
+      "text": "加入", "hint": "book_.add()：空串和重复都不收",
+      "events": { "click": "on_btn_add_click" } },
+    { "id": "btn_sort", "type": "button", "rect": { "x": 392, "y": 56, "w": 80, "h": 32 },
+      "text": "排序", "hint": "std::sort，按字典序",
+      "events": { "click": "on_btn_sort_click" } },
+    { "id": "btn_reverse", "type": "button", "rect": { "x": 480, "y": 56, "w": 80, "h": 32 },
+      "text": "反转", "hint": "std::reverse，就地倒过来",
+      "events": { "click": "on_btn_reverse_click" } },
+    { "id": "btn_clear", "type": "button", "rect": { "x": 568, "y": 56, "w": 120, "h": 32 },
+      "text": "清空", "hint": "words_.clear()，界面跟着重画",
+      "events": { "click": "on_btn_clear_click" } },
+
+    { "id": "lab_lst", "type": "label", "rect": { "x": 16, "y": 104, "w": 420, "h": 24 },
+      "text": "listbox 列表（value = 选中下标，选中发 select）",
+      "style": { "size": 9, "fg": "#49454F" } },
+    { "id": "lst_words", "type": "listbox", "rect": { "x": 16, "y": 132, "w": 420, "h": 300 },
+      "items": [],
+      "hint": "条目由 C++ 侧的 std::vector 整份重画出来",
+      "events": { "select": "on_lst_words_select" } },
+
+    { "id": "lab_count", "type": "label", "rect": { "x": 452, "y": 132, "w": 252, "h": 24 },
+      "text": "共 0 条",
+      "hint": "std::accumulate / std::max_element 算出来的统计" },
+    { "id": "lab_pick", "type": "label", "rect": { "x": 452, "y": 164, "w": 252, "h": 24 },
+      "text": "选中：—",
+      "hint": "std::optional<std::string>：没选中就是 nullopt，不必靠空串猜" },
+
+    { "id": "sw_upper", "type": "switch", "rect": { "x": 452, "y": 200, "w": 200, "h": 32 },
+      "text": "显示成大写",
+      "hint": "std::transform + std::toupper；中文是 UTF-8 多字节，转不动也坏不了",
+      "events": { "change": "on_sw_upper_change" } },
+
+    { "id": "lab_note1", "type": "label", "rect": { "x": 16, "y": 444, "w": 688, "h": 22 },
+      "text": "按钮只改 std::vector，再由 render() 整份重画 —— 数据和界面是分开的。",
+      "style": { "size": 9, "fg": "#49454F" } },
+    { "id": "lab_note2", "type": "label", "rect": { "x": 16, "y": 466, "w": 688, "h": 22 },
+      "text": "回调是 extern \"C\" 的自由函数，转发到 Shell 单例：成员函数进不了绑定表。",
+      "style": { "size": 9, "fg": "#49454F" } }
+  ]
+}
