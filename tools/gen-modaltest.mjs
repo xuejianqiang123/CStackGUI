@@ -23,8 +23,8 @@ const dir = path.join(root, "build", NAME);
 
 const doc = emptyDoc();
 doc.app.title = "modal test";
-doc.app.width = 420;
-doc.app.height = 200;
+doc.app.width = 520;
+doc.app.height = 340;
 
 const lbl = makeNode("label", 16, 16);
 lbl.id = "lbl_hint";
@@ -64,16 +64,86 @@ btnOther.events = { click: "on_open_other" };
 const dlgOther = makeNode("dialog", 0, 0);
 dlgOther.id = "dlg_other";
 dlgOther.text = "Other";
-dlgOther.rect = { x: 40, y: 40, w: 260, h: 140 };
-dlgOther.children = [
+dlgOther.rect = { x: 40, y: 40, w: 340, h: 230 };
+/* 对话框里的 tabs（T4 可选项，此前从未验证）：两页各放一个**文字不同**的按钮，
+ * 探针靠"页 1 的显示 / 页 2 的隐藏"来证明切页真的换了页体 —— 光看页签高亮不算数
+ * （TCM_SETCURSEL 只换高亮，页体显隐是我们自己的 cgw_sync_tabs_pages 做的）。 */
+const tabsOther = makeNode("tabs", 12, 12);
+tabsOther.id = "tab_other";
+tabsOther.items = ["Page1", "Page2"];
+tabsOther.value = 0;
+tabsOther.rect = { x: 12, y: 12, w: 300, h: 150 };
+tabsOther.events = { select: "on_tabs_select" };
+tabsOther.children = [
   (() => {
-    const b = makeNode("button", 90, 80);
+    const b = makeNode("button", 24, 44);
+    b.id = "btn_p1";
+    b.text = "OnP1";
+    b.page = 0;
+    return b;
+  })(),
+  (() => {
+    const b = makeNode("button", 24, 44);
+    b.id = "btn_p2";
+    b.text = "OnP2";
+    b.page = 1;
+    return b;
+  })(),
+];
+dlgOther.children = [
+  tabsOther,
+  (() => {
+    const b = makeNode("button", 130, 178);
     b.id = "btn_other_ok";
     b.text = "OK";
     b.events = { click: "on_other_ok" };
     return b;
   })(),
 ];
+
+/* **对照**用的 tabs：摆在主窗口里。同一套驱动方式，主窗口能切、对话框不能切，
+ * 才说明是对话框的问题；两个都切不动，那就是探针的驱动方式不对（不是产品问题）。 */
+const tabsMain = makeNode("tabs", 16, 170);
+tabsMain.id = "tab_main";
+tabsMain.items = ["Page1", "Page2"];
+tabsMain.value = 0;
+tabsMain.rect = { x: 16, y: 170, w: 300, h: 140 };
+tabsMain.children = [
+  (() => {
+    const b = makeNode("button", 24, 44);
+    b.id = "btn_m1";
+    b.text = "OnM1";
+    b.page = 0;
+    return b;
+  })(),
+  (() => {
+    const b = makeNode("button", 24, 44);
+    b.id = "btn_m2";
+    b.text = "OnM2";
+    b.page = 1;
+    return b;
+  })(),
+];
+
+const btnTabs = makeNode("button", 264, 128);
+btnTabs.id = "btn_open_tabs";
+btnTabs.text = "OpenTabs";
+btnTabs.events = { click: "on_open_tabs" };
+
+/* 切页的两个驱动口。为什么不在探针里直接点页签：
+ *   ① 真实鼠标输入在本环境注入不了（SendInput 点按钮都没反应，实测 dialog=0）；
+ *   ② TCM_SETCURSEL 按 MSDN **不发** TCN_SELCHANGE，只换页签高亮，我们收不到。
+ * 所以改在**进程内**照真实点击的顺序模拟：原生先换选中项，再把 TCN_SELCHANGE 发给父窗口 ——
+ * 走的正是点击会走的那条路（对话框过程 → cgw_notify_common → 查控件 → 换页体 → 派发 select）。 */
+const btnSelMain = makeNode("button", 380, 170);
+btnSelMain.id = "btn_sel_main";
+btnSelMain.text = "SelMain";
+btnSelMain.events = { click: "on_sel_main" };
+
+const btnSelDlg = makeNode("button", 380, 208);
+btnSelDlg.id = "btn_sel_dlg";
+btnSelDlg.text = "SelDlg";
+btnSelDlg.events = { click: "on_sel_dlg" };
 
 /* 对话框：独立顶层窗口。按钮文字用 ASCII —— 探针（.ps1 按 ANSI 读）要按文字找它们 */
 const dlg = makeNode("dialog", 0, 0);
@@ -86,7 +156,10 @@ dlg.children = [
   (() => { const b = makeNode("button", 216, 120); b.id = "btn_cancel"; b.text = "Cancel"; b.events = { click: "on_cancel" }; return b; })(),
 ];
 
-doc.widgets = [lbl, btn, btnNm, btnNm2, btnIdle, btnOther, dlg, dlgOther];
+doc.widgets = [
+  lbl, btn, btnNm, btnNm2, btnIdle, btnOther, btnTabs, btnSelMain, btnSelDlg,
+  tabsMain, dlg, dlgOther,
+];
 
 const files = generateC(doc, NAME);
 fs.mkdirSync(dir, { recursive: true });
@@ -100,6 +173,10 @@ const impl = `/**
 #include "${NAME}_ui_events.h"
 
 #include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+#include <windows.h>
+#include <commctrl.h>
 
 static FILE *lg = NULL;
 
@@ -249,6 +326,168 @@ void on_other_ok(cg_widget_t *self, cg_event_t ev, void *user)
     (void)ev;
     (void)user;
     cg_dialog_close(self, 1);
+}
+
+/**
+ * @brief "OpenTabs" 的点击：打开**带 tabs 的**那个对话框（非模态，便于探针随后驱动）
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据
+ * @return void 回调无返回值
+ */
+void on_open_tabs(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    FILE *f;
+    (void)ev;
+    (void)user;
+
+    f = fopen("result.log", "a");
+    if (!f) return;
+    fprintf(f, "tabs result=%d\\n", cg_dialog_open_nonmodal(cg_find(app, "dlg_other")));
+    fclose(f);
+}
+
+/**
+ * @brief 对话框里 tabs 的 select：证明 TCN_SELCHANGE **走到了我们手里**
+ *        （页体显隐是另一回事，由探针按窗口可见性判）
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据
+ * @return void 回调无返回值
+ */
+void on_tabs_select(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    FILE *f;
+    (void)ev;
+    (void)user;
+
+    f = fopen("result.log", "a");
+    if (!f) return;
+    fprintf(f, "tabsel=%d\\n", cg_tabs_selected(self));
+    fclose(f);
+}
+
+/**
+ * @brief 按「类名 + 标题」找顶层窗口（EnumWindows 实现）
+ * @param cls 类名
+ * @param title 窗口标题
+ * @return HWND 命中的窗口；没有返回 NULL
+ * @note 不用 FindWindowW：真机实测它在**本进程内**按类名查自己刚注册的窗口会返回 NULL
+ *       （而 EnumWindows 能枚举到同一个窗口、外部进程的 FindWindowW 也能找到）——
+ *       原因未查明，但结论明确：拿不准的查找方式不用于验证，换已被证明可靠的那条。
+ */
+struct find_win_ctx {
+    const wchar_t *cls;
+    const wchar_t *title;
+    HWND hit;
+};
+
+static BOOL CALLBACK find_win_proc(HWND h, LPARAM lp)
+{
+    struct find_win_ctx *c = (struct find_win_ctx *)(intptr_t)lp;
+    wchar_t cls[64], txt[64];
+    GetClassNameW(h, cls, 64);
+    GetWindowTextW(h, txt, 64);
+    if (!c->hit && wcscmp(cls, c->cls) == 0 && wcscmp(txt, c->title) == 0) c->hit = h;
+    return TRUE;
+}
+
+static HWND find_toplevel(const wchar_t *cls, const wchar_t *title)
+{
+    struct find_win_ctx c;
+    c.cls = cls;
+    c.title = title;
+    c.hit = NULL;
+    EnumWindows(find_win_proc, (LPARAM)(intptr_t)&c);
+    return c.hit;
+}
+
+/**
+ * @brief 照**真实点击**的顺序制造一次切页：原生先换选中项，再把 TCN_SELCHANGE 发给父窗口
+ * @param win_class 目标顶层窗口的类名（CStackGUIMain / CStackGUIDialog）
+ * @param win_title 目标顶层窗口的标题
+ * @return void 无返回值
+ * @note 探针没法直接点页签（本环境注入不了真实输入；TCM_SETCURSEL 又按 MSDN 不发通知），
+ *       所以在进程内补齐"控件本来会做的那件事"：消息与真实点击完全同构，
+ *       父窗口（主窗口或对话框）收到的就是同一条 WM_NOTIFY。
+ *       只用 Win32（EnumWindows / FindWindowEx）拿句柄 —— cg_widget_t 是不透明类型，
+ *       业务代码不许戳内部（摸 native 会编译失败，这是契约在保护我们）。
+ */
+static void fake_selchange(const wchar_t *win_class, const wchar_t *win_title)
+{
+    HWND win = find_toplevel(win_class, win_title);
+    HWND tab, parent;
+    NMHDR nm;
+
+    if (!win) return;
+    tab = FindWindowExW(win, NULL, L"SysTabControl32", NULL);
+    if (!tab) return;
+    SendMessageW(tab, TCM_SETCURSEL, 1, 0);    /* 原生换到第 1 页（这一步不发通知） */
+    memset(&nm, 0, sizeof(nm));
+    nm.hwndFrom = tab;
+    nm.idFrom = (UINT_PTR)GetDlgCtrlID(tab);
+    nm.code = TCN_SELCHANGE;
+    parent = GetParent(tab);
+    SendMessageW(parent, WM_NOTIFY, 0, (LPARAM)&nm);
+}
+
+/**
+ * @brief 定时器回调：真正执行模拟切页
+ * @param w 窗口（NULL，线程定时器）
+ * @param m 消息
+ * @param id 定时器 id：1 = 主窗口的 tabs，2 = 对话框里的 tabs
+ * @param t 时间（未使用）
+ * @return void 无返回值
+ * @note **为什么经由定时器**：按钮回调运行在事件派发栈里，防重入锁（g_win_in_notify）
+ *       是挂着的 —— 这时发的嵌套 WM_NOTIFY 会被 cgw_notify_common 开头静默丢掉
+ *       （第一版就在这里栽了：两处切页都没反应）。SetTimer(NULL,…) 的回调由消息泵在
+ *       **空闲时**调，锁是放开的 —— 时序与真实点击一致（真实点击也不在任何派发栈里）。
+ *       "泵里放行嵌套事件"的先例：模态泵与菜单泵都是先把锁存起来清零再进。
+ */
+static VOID CALLBACK sel_timer_proc(HWND w, UINT m, UINT_PTR id, DWORD t)
+{
+    (void)w;
+    (void)m;
+    (void)t;
+    KillTimer(NULL, id);
+    if (id == 1) fake_selchange(L"CStackGUIMain", L"modal test");
+    else fake_selchange(L"CStackGUIDialog", L"Other");
+}
+
+/**
+ * @brief "SelMain" 的点击：主窗口里那个 tabs 切到第 1 页（基线对照）
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据
+ * @return void 回调无返回值
+ * @note 主窗口基线走**公共 API**：cg_widget_set_value 对 tabs 会连页体一起切
+ *       （cg_win_sync.c 的 sync 分支：TCM_SETCURSEL + cgw_sync_tabs_pages）。
+ *       不走 fake_selchange 的原因：EnumWindows 在本进程内找主窗口的时机不稳定
+ *       （对话框那次能找到、主窗口这次找不到，原因未查明）——基线只验证
+ *       "主窗口里的页体切换是好的"，API 路径足够；通知管线由对话框那条路验证。
+ */
+void on_sel_main(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    (void)ev;
+    (void)user;
+    cg_widget_set_value(cg_find(app, "tab_main"), 1);
+}
+
+/**
+ * @brief "SelDlg" 的点击：**对话框里**那个 tabs 切到第 1 页
+ * @param self 触发事件的控件
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据
+ * @return void 回调无返回值
+ */
+void on_sel_dlg(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)self;
+    (void)ev;
+    (void)user;
+    SetTimer(NULL, 2, 30, sel_timer_proc);
 }
 `;
 fs.writeFileSync(path.join(dir, `${NAME}_ui_events.c`), impl, "utf8");

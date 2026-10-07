@@ -5,18 +5,21 @@
  *   phase1   点 OK        -> 期望 result=1，顺带读回 edt_port 的值（A3/A4）
  *   phase2   等重开 + WM_CLOSE -> 期望 result=0（"直接关掉"那条路）
  *   phase3   点 OpenNM    -> 非模态（T4）：立即返回 + owner 保持可用 + OK 关闭
+ *   phase4   错误路径（T4 收尾）：同一节点重复 open / 全局单槽守卫 / 空关不崩
+ *   phase5   对话框里的 tabs（T4 可选项）：页体切换 + select 事件，主窗口基线对照
  *   全程结束主窗口必须还活着（A5）。
  *
- * 入库位置说明：tools\ 下（build\ 整个不入库）——它是多窗体与深色皮肤两轮的**永久回归**：
- * 27 项断言（模态 A1~A5 + 非模态 A6）。别把它放 build\：那个目录会被清，
+ * 入库位置说明：tools\ 下（build\ 整个不入库）——它是多窗体与深色皮肤的**永久回归**：
+ * 模态 A1~A5 + 非模态 A6 + 错误路径 A7 + 对话框 tabs A8。别把它放 build\：那个目录会被清，
  * 清完这些真机证据就只剩文档里的一段散文。
  *
  * 复跑（夹具由 tools\gen-modaltest.mjs 生成）：
- *   gcc tools\probe-modal.c -o build\probe-modal.exe -luser32
+ *   gcc tools\probe-modal.c -o build\probe-modal.exe -luser32 -lcomctl32
  *   node designer\electron\cgbuild.mjs build\modaltest
  *   cd build\modaltest && ..\probe-modal.exe
  */
 #include <windows.h>
+#include <commctrl.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -46,7 +49,7 @@ static void wait_gone(HWND h)
 
 int main(void)
 {
-    HWND main, dlg, btn, ok;
+    HWND main, dlg, dlg2, tab, p1, p2, btn, ok;
     wchar_t title[128];
     LONG style;
     FILE *f;
@@ -59,6 +62,13 @@ int main(void)
     ck("main window found", main != NULL);
     if (!main) return 1;
     ck("pre-open owner enabled", IsWindowEnabled(main) != 0);
+
+    /* 关于驱动方式（实测，别再绕一遍）：
+     *   - SendInput 真鼠标输入**在本环境无效** —— 拿它点 OpenNM 按钮，对话框根本不弹
+     *     （dialog=0），点页签同样没反应；落点是对的（WindowFromPoint 就是页签本身）。
+     *   - TCM_SETCURSEL 按 MSDN **不发** TCN_SELCHANGE，只会换页签高亮，我们收不到通知。
+     * 所以切页一律由夹具在**进程内**照点击的顺序模拟（见 gen-modaltest.mjs 的 fake_selchange），
+     * 探针只负责 BM_CLICK 按钮 + 看窗口可见性。 */
 
     /* 点 Open（BM_CLICK 直发到按钮） */
     btn = FindWindowExW(main, NULL, L"BUTTON", L"Open");
@@ -160,6 +170,66 @@ int main(void)
         wait_gone(dlg);
     }
 
+    /* ---- 基线对照：主窗口里的 tabs ----
+     *  判据不看页签高亮（TCM_SETCURSEL 自己会换），看**页体**：切页后页 1 隐藏 / 页 2 显示
+     *  —— 那是我们自己的 cgw_sync_tabs_pages 做的。 */
+    tab = FindWindowExW(main, NULL, L"SysTabControl32", NULL);
+    ck("baseline: tab control exists in the main window", tab != NULL);
+    if (tab) {
+        p1 = FindWindowExW(tab, NULL, L"BUTTON", L"OnM1");
+        p2 = FindWindowExW(tab, NULL, L"BUTTON", L"OnM2");
+        if (!p1) p1 = FindWindowExW(main, NULL, L"BUTTON", L"OnM1");
+        if (!p2) p2 = FindWindowExW(main, NULL, L"BUTTON", L"OnM2");
+        ck("baseline: both page controls found", p1 != NULL && p2 != NULL);
+        if (p1 && p2) {
+            btn = FindWindowExW(main, NULL, L"BUTTON", L"SelMain");
+            ck("baseline: SelMain button found", btn != NULL);
+            if (btn) PostMessageW(btn, BM_CLICK, 0, 0);
+            Sleep(400);
+            ck("baseline: switching tabs in the MAIN window swaps the page body",
+               IsWindowVisible(p1) == 0 && IsWindowVisible(p2) != 0);
+        }
+    }
+
+    /* ---- phase5：对话框里的 tabs（T4 可选项，此前从未真机验证）----
+     *  判据不看页签高亮（TCM_SETCURSEL 自己会换），看**页体**：
+     *  页 1 的按钮显示 / 页 2 的隐藏，切页后反过来 —— 那是我们自己的
+     *  cgw_sync_tabs_pages 做的，也是"通知有没有走到我们手里"的硬证据。 */
+    btn = FindWindowExW(main, NULL, L"BUTTON", L"OpenTabs");
+    ck("OpenTabs button found", btn != NULL);
+    if (btn) PostMessageW(btn, BM_CLICK, 0, 0);
+    dlg2 = wait_for(L"CStackGUIDialog", L"Other");
+    ck("A8 tabs dialog opened", dlg2 != NULL);
+    if (dlg2) {
+        tab = FindWindowExW(dlg2, NULL, L"SysTabControl32", NULL);
+        ck("A8 tab control exists inside the dialog", tab != NULL);
+        if (tab) {
+            /* 页内控件有的挂在 tab 窗口下、有的挂在对话框下，两处都找一遍 */
+            p1 = FindWindowExW(tab, NULL, L"BUTTON", L"OnP1");
+            p2 = FindWindowExW(tab, NULL, L"BUTTON", L"OnP2");
+            if (!p1) p1 = FindWindowExW(dlg2, NULL, L"BUTTON", L"OnP1");
+            if (!p2) p2 = FindWindowExW(dlg2, NULL, L"BUTTON", L"OnP2");
+            ck("A8 page-1 control found", p1 != NULL);
+            ck("A8 page-2 control found", p2 != NULL);
+            if (p1 && p2) {
+                ck("A8 initially page 1 shown, page 2 hidden",
+                   IsWindowVisible(p1) != 0 && IsWindowVisible(p2) == 0);
+                /* 驱动方式见文件头的注释：本环境注入不了真实鼠标输入，TCM_SETCURSEL 又不发
+                 * TCN_SELCHANGE —— 所以由夹具在**进程内**照点击的顺序模拟（SelDlg 按钮），
+                 * 对话框过程收到的 WM_NOTIFY 与真实点击完全同构。 */
+                btn = FindWindowExW(main, NULL, L"BUTTON", L"SelDlg");
+                ck("A8 SelDlg button found", btn != NULL);
+                if (btn) PostMessageW(btn, BM_CLICK, 0, 0);
+                Sleep(400);
+                ck("A8 switching tabs inside a dialog swaps the page body",
+                   IsWindowVisible(p1) == 0 && IsWindowVisible(p2) != 0);
+            }
+        }
+        ok = FindWindowExW(dlg2, NULL, L"BUTTON", L"OK");
+        if (ok) PostMessageW(ok, BM_CLICK, 0, 0);
+        wait_gone(dlg2);
+    }
+
     /* 等日志写完（alive= 是最后一行） */
     for (i = 0; i < 50; i++) {
         f = fopen("result.log", "r");
@@ -195,6 +265,10 @@ int main(void)
                 ck("A7 re-open on the SAME node refused (nm2 result=0)", strstr(line, "result=0") != NULL);
             if (strstr(line, "other"))
                 ck("A7 one-slot guard refused a second dialog node (other result=0)", strstr(line, "result=0") != NULL);
+            if (strstr(line, "tabsel="))
+                ck("A8 tabs select event reached us inside a dialog", strstr(line, "tabsel=1") != NULL);
+            if (strstr(line, "tabs result="))
+                ck("A8 tabs dialog opened (tabs result=1)", strstr(line, "result=1") != NULL);
             if (strstr(line, "idle_close"))
                 ck("A7 idle close did not crash (log written afterwards)", strstr(line, "done") != NULL);
         }
