@@ -209,3 +209,19 @@ A1→T1/T2 全程老文件回归 ｜ A2/A3→T1 截图 ｜ A4→T2 真机 ｜ A5
       改用 `cmd /v:on` 的 `!ERRORLEVEL!` 或 PowerShell 的 `$LASTEXITCODE`。
       另：改运行时源码后 `cgbuild` 会打印 `[ok]` 但**exe 时间戳可能没推进**（本轮实测库重编了、
       exe 没有），还原红测后必须看时间戳，不能只看横幅。
+- [x] P8 **F2-T4 可选项：`dialog` 里的 `tabs`（2026-10-08）**：T4 最后一块未验证拼图。
+      真机证据：modaltest 的第二个对话框装两页 tabs（各一个文字不同的按钮），探针按
+      **页体可见性**断言（页签高亮不算数）——初始页正确、切页后页体互换、`select` 事件
+      到达业务（result.log `tabsel=1`）；主窗口放同款 tabs 作基线。断言 37 → **51 项 ALL PASS**。
+      **驱动方式三次踩坑（全写进了探针/夹具注释，别再绕）**：
+      ① `TCM_SETCURSEL` 按 MSDN **不发** `TCN_SELCHANGE`——只换页签高亮，运行时收不到，
+      第一版探针红得毫无道理（测试错，不是产品错）；
+      ② 本环境注入不了真实鼠标输入（SendInput 点按钮都没反应），"真点页签"这条路真机覆盖不了；
+      ③ 进程内模拟通知必须**经定时器**发——按钮回调运行在派发栈里、防重入锁挂着，嵌套
+      WM_NOTIFY 会被 `cgw_notify_common` 开头静默丢掉（与模态泵/菜单泵"先清锁再进"同类问题）。
+      最终：对话框走进程内模拟通知（与真实点击同构：先 TCM_SETCURSEL 再发 TCN_SELCHANGE 给
+      父窗口），主窗口基线走公共 API（`cg_widget_set_value` 对 tabs 连页体一起切）。
+      **结论：tabs 在对话框里完整可用**（独立 HWND + 子树懒建 + 通知派发 + 页体显隐全链通）。
+      **遗留一个未解之谜（不影响结论）**：app 进程内 `FindWindowW` 按类名查自己刚注册的主窗口
+      返回 NULL，而 EnumWindows 能枚举到同一个窗口、外部进程的 FindWindowW 也能找到——
+      夹具查找已改走 EnumWindows，原因待查。
