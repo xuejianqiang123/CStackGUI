@@ -194,3 +194,18 @@ A1→T1/T2 全程老文件回归 ｜ A2/A3→T1 截图 ｜ A4→T2 真机 ｜ A5
       nm result=1 ✓）——全序列 **27 项 ALL PASS**（模态 A1~A5 回归 + 非模态 A6）。
       run-tests / check-format / probe-dialog 全绿；darkterm/gallery 重编换新库。
       **T4 后半（"引用另一个 .cgui"多文件组装）仍推后**——那是另一个契约 epic。
+- [x] P7 **F2-T4 收尾：非模态的错误路径（2026-10-08）**：探针加 phase4，守三条 ——
+      ① 同一个节点重复 open 被拒（`dlg->native 已存在`，nm2 result=0）；
+      ② **全局单槽守卫**：已开着一个时去开**另一个** dialog 节点（other result=0，且不许冒出第二个窗口）；
+      ③ 什么都没开时 `cg_dialog_close` 不崩、随后还能正常开（状态没写坏）。断言 27 → **37 项 ALL PASS**。
+      **红测**：拆掉 `any_dialog_open` 守卫 → ②的两条断言 FAIL（①照旧 PASS）。值得一记的是
+      **第一次红测没红**：我以为 nm2 测的是全局守卫，其实被更早的 `native 已存在` 分支拦下了 ——
+      于是给夹具补了**第二个**对话框节点才测到真正的守卫。
+      **同轮修掉的门禁假阴性**：`check-comments` 用裸子串匹配 `@brief`，注释正文里提到这四个字
+      也算命中（红测时正踩到：故意删掉 @brief 那行却在括号里写了"去掉 @brief"，门禁仍报 0）——
+      改为只认**行首 tag**，2020 个函数仍 0 违规。
+      **同轮纠偏的测量方法**：`cmd /c "... & echo %ERRORLEVEL%"` 里的 `%ERRORLEVEL%` 是**解析期展开**，
+      历次 `TESTS_EXIT=0` / `BAT_EXIT=0` 都是假证据（真证据一直是 `[ok]`/`[fail]` 文本行）——
+      改用 `cmd /v:on` 的 `!ERRORLEVEL!` 或 PowerShell 的 `$LASTEXITCODE`。
+      另：改运行时源码后 `cgbuild` 会打印 `[ok]` 但**exe 时间戳可能没推进**（本轮实测库重编了、
+      exe 没有），还原红测后必须看时间戳，不能只看横幅。
