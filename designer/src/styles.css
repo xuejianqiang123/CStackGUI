@@ -522,6 +522,21 @@ input.narrow {
   pointer-events: none;
   z-index: 40;
 }
+/* 调色板拖入的幽灵预览：真实控件外观跟手 + 虚线落点框。
+   z-index 压过普通控件与框选层，低于主选框手柄；pointer-events:none
+   让指针事件继续走 window 监听，预览自身不参与命中。 */
+.drop-ghost {
+  position: absolute;
+  z-index: 45;
+  pointer-events: none;
+  opacity: 0.62;
+  outline: 1.5px dashed var(--seed);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.drop-ghost .widget {
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+}
 /* 多选里的「次要选中」：细虚线；主选框仍是 .selected 的实线粗框，主次一眼可分 */
 .widget.selected-2 {
   outline: 1px dashed var(--seed);
@@ -613,13 +628,9 @@ input.narrow {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.titlebar-size {
-  margin-left: auto;
-  flex: 0 0 auto;
-  font-variant-numeric: tabular-nums;
-}
 /* 窗口控制按钮（对应 app 的 controlBox / minimizeBox / maximizeBox） */
 .titlebar-controls {
+  margin-left: auto;
   flex: 0 0 auto;
   display: flex;
   align-items: center;

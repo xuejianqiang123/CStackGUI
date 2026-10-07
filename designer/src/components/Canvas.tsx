@@ -84,6 +84,9 @@ type DragState =
 
 const HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const;
 
+/** 幽灵预览用的空选中集：复用同一实例，别在渲染里每帧 new 一个 */
+const EMPTY_SELECT: ReadonlySet<string> = new Set();
+
 /** 拖动/框选共用的最小位移：低于它算「点一下」，不改坐标、不压历史 */
 const DRAG_MIN = 3;
 
@@ -105,8 +108,12 @@ export default function Canvas(props: Props) {
     onDismissExternal,
   } = props;
   const stageRef = useRef<HTMLDivElement>(null);
+  /** 客户区矩形（框选与调色板落点都用它换算）：stage 矩形包含标题栏 + 菜单栏，口径差一截 */
+  const clientRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState>({ kind: "none" });
   const [snapLines, setSnapLines] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] });
+  /** 调色板拖入的幽灵预览位置（客户区逻辑像素）：拖动全程跟手显示 */
+  const [dropPos, setDropPos] = useState<{ x: number; y: number } | null>(null);
 
   /** 主选框：实线外框 + 8 个缩放手柄。多选时只有它有手柄，免得一屏都是握点 */
   const primaryId = selectedIds.length > 0 ? selectedIds[selectedIds.length - 1] : null;
@@ -361,13 +368,18 @@ export default function Canvas(props: Props) {
   }, [drag, doc, zoom, snapOn, onApply, onBeginHistory, onSelect, onSelectMany]);
 
   /* -------------------------------------------------- 调色板拖入 */
+  /* 拖动全程画幽灵预览（真实控件外观跟手 + 虚线落点框），松手才落位 ——
+     之前只在 pointerup 建控件，拖动过程画布上毫无反馈，控件是松手那一刻"蹦出来"的。
+     坐标换算用**客户区**矩形（框选同款口径）：stage 矩形包含标题栏 + 菜单栏，
+     用它算出的落点整体偏下一个标题栏高度，控件会落在指针下方（顺带修掉）。 */
   useEffect(() => {
     if (!pendingDrop) return;
-    const place = (clientX: number, clientY: number) => {
-      const rect = stageRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const px = (clientX - rect.left) / zoom;
-      const py = (clientY - rect.top) / zoom;
+    const at = (clientX: number, clientY: number) => {
+      const rect = clientRef.current?.getBoundingClientRect();
+      if (!rect) return null;
+      return { x: (clientX - rect.left) / zoom, y: (clientY - rect.top) / zoom };
+    };
+    const place = (px: number, py: number) => {
       const target = containerAt(doc, px, py);
       const base = target ? absRect(doc, target) : { x: 0, y: 0 };
       const node = makeNode(pendingDrop, snap(px - base.x - 40, 4, snapOn), snap(py - base.y - 16, 4, snapOn));
@@ -388,10 +400,42 @@ export default function Canvas(props: Props) {
       onSelect(node.id);
       onDropDone();
     };
-    const onUp = (e: PointerEvent) => place(e.clientX, e.clientY);
+    const onMove = (e: PointerEvent) => setDropPos(at(e.clientX, e.clientY));
+    const onUp = (e: PointerEvent) => {
+      const p = at(e.clientX, e.clientY);
+      setDropPos(null);
+      if (p) place(p.x, p.y);
+    };
+    window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, { once: true });
-    return () => window.removeEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      setDropPos(null);
+    };
   }, [pendingDrop, doc, zoom, snapOn, onApply, onBeginHistory, onSelect, onDropDone]);
+
+  /* 幽灵预览节点：种子只建一次（makeNode 内部递增 id，渲染里反复建会每帧换 id） */
+  const dropGhost = useMemo(() => {
+    if (!pendingDrop) return null;
+    const n = makeNode(pendingDrop, 0, 0);
+    n.id = "__drop_preview";
+    return n;
+  }, [pendingDrop]);
+
+  /* 预览落点 = 松手后的真实落点（同一套 containerAt + snap + 偏移），所见即所得。
+     w/h 兜底一个最小可视尺寸：menu 没有矩形（0×0），全按种子尺寸画会什么都看不见。 */
+  const ghostRect = useMemo(() => {
+    if (!dropGhost || !dropPos) return null;
+    const target = containerAt(doc, dropPos.x, dropPos.y);
+    const base = target ? absRect(doc, target) : { x: 0, y: 0 };
+    return {
+      x: base.x + snap(dropPos.x - base.x - 40, 4, snapOn),
+      y: base.y + snap(dropPos.y - base.y - 16, 4, snapOn),
+      w: Math.max(dropGhost.rect.w, 60),
+      h: Math.max(dropGhost.rect.h, 24),
+    };
+  }, [dropGhost, dropPos, doc, snapOn]);
 
   const parentOfSelected = selected ? findParent(doc, selected.id) : null;
   /* 窗口只能有一根菜单栏，和运行时一样只认第一个 */
@@ -506,9 +550,6 @@ export default function Canvas(props: Props) {
                   <span className="titlebar-icon" />
                 )}
                 <span className="titlebar-text">{app.title}</span>
-                <span className="titlebar-size">
-                  {app.width}×{app.height}
-                </span>
                 {sysmenu ? (
                   <span className="titlebar-controls" title="窗口控制按钮（跟随「控制按钮 / 最小化 / 最大化」属性）">
                     {app.minimizeBox !== false ? <span className="tb-btn" title="最小化按钮">–</span> : null}
@@ -539,7 +580,7 @@ export default function Canvas(props: Props) {
                 {!menuNode.nodes?.length ? <span className="muted small">菜单栏（还没有菜单项）</span> : null}
               </div>
             ) : null}
-            <div className="client-area" onPointerDown={startMarquee}>
+            <div className="client-area" ref={clientRef} onPointerDown={startMarquee}>
               {showGrid && <div className="grid-layer" style={{ backgroundSize: "16px 16px" }} />}
               {doc.widgets.map((n) => (
                 <WidgetView
@@ -561,6 +602,24 @@ export default function Canvas(props: Props) {
 
               {/* 框选矩形：客户区坐标系，和控件同一套 */}
               {marqueeRect ? <div className="marquee" style={marqueeRect} /> : null}
+
+              {/* 调色板拖入的幽灵预览：真实控件外观跟手，虚线框标出松手后的落点。
+                  pointer-events:none —— 预览不参与命中，指针事件继续走 window 监听。 */}
+              {dropGhost && ghostRect ? (
+                <div
+                  className="drop-ghost"
+                  style={{ left: ghostRect.x, top: ghostRect.y, width: ghostRect.w, height: ghostRect.h }}
+                >
+                  <WidgetView
+                    doc={doc}
+                    node={dropGhost}
+                    depth={0}
+                    selected={EMPTY_SELECT}
+                    primaryId={null}
+                    onPointerDown={() => {}}
+                  />
+                </div>
+              ) : null}
 
               {/* 选中框画在客户区坐标系里，和控件同一套坐标。
                   多选时**只有主选框**带 8 个手柄；其余选中项由 WidgetView 的

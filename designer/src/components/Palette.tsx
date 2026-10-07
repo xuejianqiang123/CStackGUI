@@ -38,6 +38,9 @@ export default function Palette({ onAdd, onStartDrop }: Props) {
                   title={k.container ? `${k.label}（容器，可容纳子控件）` : k.label}
                   onPointerDown={(e) => {
                     dragRef.current = { type: k.type, x: e.clientX, y: e.clientY };
+                    /* 鼠标指针没有隐式捕获：不 capture，指针一出按钮 move/up 就收不到，
+                       快速一拖 onStartDrop 不触发、松手也不加控件（点了像没反应）。 */
+                    e.currentTarget.setPointerCapture(e.pointerId);
                   }}
                   onPointerUp={(e) => {
                     const started = dragRef.current;
