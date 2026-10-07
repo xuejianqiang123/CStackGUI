@@ -112,6 +112,54 @@ int main(void)
     ck("A6 nonmodal dialog closed via cg_dialog_close", IsWindow(dlg) == 0);
     ck("A6 main alive after nonmodal close", IsWindow(main) != 0);
 
+    /* ---- phase4：错误路径（T4 收尾）----
+     *  4a 已经开着一个非模态时**再开一次** —— 守卫必须拒绝（nm2 result=0），
+     *     而且原来那个**不许被顶掉**（还在、主窗口也没被禁用）
+     *  4b 什么都没开时 cg_dialog_close —— 不许崩，且随后还能正常开（状态没写坏） */
+    btn = FindWindowExW(main, NULL, L"BUTTON", L"OpenNM");
+    PostMessageW(btn, BM_CLICK, 0, 0);
+    dlg = wait_for(L"CStackGUIDialog", L"Port Setup");
+    ck("A7 nonmodal reopened for the error-path round", dlg != NULL);
+    if (!dlg) return 1;
+
+    btn = FindWindowExW(main, NULL, L"BUTTON", L"OpenNM2");
+    ck("OpenNM2 button found", btn != NULL);
+    if (btn) PostMessageW(btn, BM_CLICK, 0, 0);
+    Sleep(400);   /* 给被拒的那次 open 留出写日志的时间 */
+    ck("A7 the already-open dialog survived the refused open", IsWindow(dlg) != 0);
+    ck("A7 a refused open must not disable the owner", IsWindowEnabled(main) != 0);
+
+    /* 4a-2：去开**另一个**对话框节点 —— 这才是"同一时间只支持一个"的全局守卫
+     *       （对同一个节点重复 open 会被更早的 `native 已存在` 分支拦下，测不到它） */
+    btn = FindWindowExW(main, NULL, L"BUTTON", L"OpenOther");
+    ck("OpenOther button found", btn != NULL);
+    if (btn) PostMessageW(btn, BM_CLICK, 0, 0);
+    Sleep(400);
+    ck("A7 one-slot guard: no second dialog window appeared",
+       FindWindowW(L"CStackGUIDialog", L"Other") == NULL);
+    ck("A7 the first dialog survived the refused second node", IsWindow(dlg) != 0);
+
+    /* 关掉它，回到"什么都没开"的状态，再走 4b */
+    ok = FindWindowExW(dlg, NULL, L"BUTTON", L"OK");
+    if (ok) PostMessageW(ok, BM_CLICK, 0, 0);
+    wait_gone(dlg);
+
+    btn = FindWindowExW(main, NULL, L"BUTTON", L"CloseIdle");
+    ck("CloseIdle button found", btn != NULL);
+    if (btn) PostMessageW(btn, BM_CLICK, 0, 0);
+    Sleep(400);
+    ck("A7 main alive after closing an idle dialog", IsWindow(main) != 0);
+
+    btn = FindWindowExW(main, NULL, L"BUTTON", L"OpenNM");
+    PostMessageW(btn, BM_CLICK, 0, 0);
+    dlg = wait_for(L"CStackGUIDialog", L"Port Setup");
+    ck("A7 can still open after the idle close (state not corrupted)", dlg != NULL);
+    if (dlg) {
+        ok = FindWindowExW(dlg, NULL, L"BUTTON", L"OK");
+        if (ok) PostMessageW(ok, BM_CLICK, 0, 0);
+        wait_gone(dlg);
+    }
+
     /* 等日志写完（alive= 是最后一行） */
     for (i = 0; i < 50; i++) {
         f = fopen("result.log", "r");
@@ -141,8 +189,14 @@ int main(void)
                 ck("A3 phase2 result=0 (WM_CLOSE path)", strstr(line, "result=0") != NULL);
             if (strstr(line, "alive="))
                 ck("A5 main window still alive", strstr(line, "alive=1") != NULL);
-            if (strstr(line, "nm"))
+            if (strstr(line, "nm result="))
                 ck("A6 nm result=1 (nonmodal opened)", strstr(line, "result=1") != NULL);
+            if (strstr(line, "nm2"))
+                ck("A7 re-open on the SAME node refused (nm2 result=0)", strstr(line, "result=0") != NULL);
+            if (strstr(line, "other"))
+                ck("A7 one-slot guard refused a second dialog node (other result=0)", strstr(line, "result=0") != NULL);
+            if (strstr(line, "idle_close"))
+                ck("A7 idle close did not crash (log written afterwards)", strstr(line, "done") != NULL);
         }
         fclose(f);
     } else {
