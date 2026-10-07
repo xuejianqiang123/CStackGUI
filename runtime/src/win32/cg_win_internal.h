@@ -513,6 +513,13 @@ void cgw_create_native_tree(cg_widget_t *parent);
  * @return void 无返回值
  */
 void cgw_destroy_native(cg_widget_t *w);
+/**
+ * @brief 递归销毁子树的原生窗口并释放后端资源（cgw_create_native_tree 的反向）
+ * @param parent 子树根控件；NULL 直接返回
+ * @return void 无返回值
+ * @note 模态对话框关闭时用它收子树：逐个清句柄，不留野指针
+ */
+void cgw_destroy_native_tree(cg_widget_t *parent);
 
 /* ---------------- cg_win_sync.c：状态同步 ---------------- */
 
@@ -621,12 +628,12 @@ void cgw_tooltip_add_for(HWND tooltip, HWND forw);
 /* ---------------- cg_win_main.c：主窗口过程 ---------------- */
 
 /**
- * @brief 向"代表主窗口"的伪控件派发一个窗口级事件
- * @param app 应用
+ * @brief 向"代表某个窗口"的控件派发一个窗口级事件
+ * @param win 窗口事件宿主：主窗口是 __window 伪控件，模态对话框是 dialog 节点自己
  * @param ev 窗口级事件类型（READY / SIZE / CLOSE ...）
  * @return void 无返回值
  */
-void cgw_win_emit(cg_app_t *app, cg_event_t ev);
+void cgw_win_emit(cg_widget_t *win, cg_event_t ev);
 /**
  * @brief 主窗口过程：创建 / 通知 / 绘制 / 配色 / DPI / 定时器 / 窗口事件 / 关闭处理
  * @param hwnd 主窗口
@@ -636,6 +643,19 @@ void cgw_win_emit(cg_app_t *app, cg_event_t ev);
  * @return LRESULT 交给 DefWindowProc 或自行处理的结果
  */
 LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+
+/* ---------------- cg_win_modal.c：模态子窗体（多窗体） ---------------- */
+
+/**
+ * @brief 收掉模态对话框子树的原生（销毁 + 释放后端资源 + 清句柄）
+ * @param app 应用
+ * @param dlg dialog 节点（它自己的 native 正在销毁中，这里只收子树）
+ * @return void 无返回值
+ * @note 在对话框的 WM_DESTROY 里调：此刻子窗口还活着，可以逐个收干净；
+ *       不收的话 win_shutdown 会对着一堆已销毁的句柄再 DestroyWindow 一遍。
+ *       顺序：先发 destroy 给宿主（业务还能读子控件收尾），再收原生 —— 反了就拿不到值。
+ */
+void cgw_dialog_teardown(cg_app_t *app, cg_widget_t *dlg);
 
 /* ---------------- cg_win_menu.c：菜单与工具栏 ---------------- */
 

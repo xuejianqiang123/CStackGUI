@@ -339,6 +339,27 @@ void cg_win_set_topmost(cg_app_t *app, int on);
  */
 void cg_win_set_icon(cg_app_t *app, const char *ico_path);
 
+/* ------------------------------------------------------------ 模态对话框 */
+
+/**
+ * @brief 打开一个模态对话框（.cgui 里 type 为 "dialog" 的节点）
+ * @param dlg 对话框控件：cg_find(app, "对话框id") 拿到；必须是 dialog 类型
+ * @return int 1 = 回调里 cg_dialog_close(self, 1) 过；0 = 取消 / Esc / 直接关掉 / 没开成
+ * @note 模态期间主窗口被禁用，Esc 等于取消。对话框里控件的 id 仍在整个应用的
+ *       命名空间里 —— open 返回后用 cg_find 直接读值（"确定后取 edit 的内容"就是这条路径）。
+ *       同一时间只能开一个：已经开着时再调直接返回 0。
+ */
+int  cg_dialog_open(cg_widget_t *dlg);
+
+/**
+ * @brief 关闭当前打开的模态对话框（在对话框自己的回调里调）
+ * @param self 触发事件的控件；对话框自己或它里面的控件都行
+ * @param result 交给 cg_dialog_open 返回值的结果（1 = 确定，0 = 取消）
+ * @return void 无返回值
+ * @note 内部走 WM_CLOSE：close / closequery 回调照常触发，cg_cancel_close 仍能拦下不关
+ */
+void cg_dialog_close(cg_widget_t *self, int result);
+
 /* ---- 深色模式 ----
  * .cgui 的 `app.dark` 写 `true` / `"auto"`（跟随系统）/ 不写（浅色）就能定下启动配色；
  * 这两个函数是给**程序里**改的。

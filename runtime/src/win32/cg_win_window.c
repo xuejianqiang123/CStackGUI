@@ -423,7 +423,7 @@ int cgw_win_init(cg_app_t *app)
 
     /* 创建完毕：控件都建好了、窗口还没显示出来之前派发，
      * 回调里可以调窗口/控件 API（也因此 首次激活 排在它后面）。 */
-    cgw_win_emit(app, CG_EVENT_READY);
+    cgw_win_emit(app->window, CG_EVENT_READY);
 
     ShowWindow(hwnd, app->doc.visible ? SW_SHOW : SW_HIDE);
     UpdateWindow(hwnd);
@@ -458,7 +458,7 @@ static int win_run(cg_app_t *app)
                 DispatchMessageW(&msg);
             }
         } else {
-            cgw_win_emit(app, CG_EVENT_IDLE);
+            cgw_win_emit(app->window, CG_EVENT_IDLE);
             WaitMessage();   /* 睡到有消息为止；下一个心跳靠 WM_TIMER 叫醒 */
         }
     }

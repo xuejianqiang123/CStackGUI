@@ -67,6 +67,6 @@ void cgw_win_drop(cg_app_t *app, HDROP hdrop)
     cg_log(CG_LOG_INFO, "文件拖入：%d 个（第一个：%s）", cg_drop_count(app), app->drop_files[0]);
 
     /* 派发期间清单有效；回调返回后立刻收掉（业务要留就自己拷） */
-    cgw_win_emit(app, CG_EVENT_DROP);
+    cgw_win_emit(app->window, CG_EVENT_DROP);
     cg_app_drop_put(app, NULL, 0);
 }

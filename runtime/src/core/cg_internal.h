@@ -337,6 +337,12 @@ struct cg_app {
     int          bad_actions;
     /** close 回调里调 cg_cancel_close() 会把这里置 1，窗口就不关了 */
     int          close_cancel;
+    /** 当前打开的模态对话框（多窗体，实现见 cg_win_modal.c）；NULL = 没开。
+     *  T1 只支持一次一个：已经开着时再 open 直接返回 0。
+     *  窗口过程靠它分辨"这条消息属于主窗口还是对话框"（见 cgw_MainProc 开头的 host 解析）。 */
+    cg_widget_t *modal_dlg;
+    /** cg_dialog_open 的返回值：对话框回调里 cg_dialog_close(self, 1) 置 1，其余为 0 */
+    int          modal_result;
 
     char        *cgui_path;  /* 实际用到的 .cgui 路径（可能是自动找到的） */
     char        *cgui_dir;   /* 它所在目录：image 的相对路径按这里解释 */

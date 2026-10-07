@@ -8,17 +8,17 @@
 /* ------------------------------------------------------------ 窗口级事件支撑 */
 
 /**
- * @brief 给窗口伪控件派发窗口级事件
- * @param app 所属应用；取其窗口伪控件
+ * @brief 给"窗口事件宿主"派发一个窗口级事件
+ * @param win 宿主控件：主窗口是 __window 伪控件，模态对话框是 dialog 节点自己
  * @param ev 事件（就绪 / 尺寸 / 激活 / 按键……）
  * @return void 无返回值
  * @note 和控件通知共用同一个防重入标志：回调里再触发窗口消息不会套娃
  */
-void cgw_win_emit(cg_app_t *app, cg_event_t ev)
+void cgw_win_emit(cg_widget_t *win, cg_event_t ev)
 {
-    if (!app || !app->window || g_win_in_notify) return;
+    if (!win || g_win_in_notify) return;
     g_win_in_notify = 1;
-    cg_dispatch(app->window, ev);
+    cg_dispatch(win, ev);
     g_win_in_notify = 0;
 }
 
@@ -50,15 +50,16 @@ static int mods_from_key(void)
 }
 
 /**
- * @brief 把鼠标消息的客户区坐标与按键状态写进窗口伪控件
- * @param app 所属应用；其窗口伪控件被写入坐标与按键状态
+ * @brief 把鼠标消息的客户区坐标与按键状态写进窗口宿主控件
+ * @param win 宿主控件（主窗口的 __window 或对话框节点）
+ * @param app 所属应用；取 DPI 缩放
  * @param wp 鼠标消息的附加参数；低字含按键位
  * @param lp 鼠标消息的附加参数；低 / 高字为物理像素坐标，内部折回逻辑像素
- * @return void 无返回值（无伪控件时直接返回）
+ * @return void 无返回值（无宿主时直接返回）
  */
-static void fill_mouse(cg_app_t *app, WPARAM wp, LPARAM lp)
+static void fill_mouse(cg_widget_t *win, cg_app_t *app, WPARAM wp, LPARAM lp)
 {
-    cg_widget_t *w = app ? app->window : NULL;
+    cg_widget_t *w = win;
     int sc = (app && app->scale > 0) ? app->scale : 100;
     if (!w) return;
     /* 坐标对业务是**逻辑像素**（与 .cgui、控件坐标同一套）：消息给的是物理像素，
@@ -131,7 +132,7 @@ static void tray_callback(cg_app_t *app, HWND hwnd, WPARAM wp, LPARAM lp)
     }
 
     if (w) w->ev_action = action;
-    cgw_win_emit(app, CG_EVENT_TRAY);
+    cgw_win_emit(app->window, CG_EVENT_TRAY);   /* 托盘是主窗口的资源，宿主恒为 __window */
 }
 
 /**
@@ -145,6 +146,11 @@ static void tray_callback(cg_app_t *app, HWND hwnd, WPARAM wp, LPARAM lp)
 LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     cg_app_t *app = (cg_app_t *)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+    /* 本窗口的"窗口事件宿主"：主窗口是 __window 伪控件，模态对话框是 dialog 节点自己。
+     * 两个顶层窗口共用这一个过程 —— 控件派发（cgw_notify_from / cg_widget_by_ctrl_id）
+     * 按 HWND/ctrl_id 在 app 上查，本来就不看宿主；只有窗口级事件要认宿主。 */
+    cg_widget_t *win = NULL;
+    if (app) win = ((HWND)app->hwnd == hwnd) ? app->window : app->modal_dlg;
 
     switch (msg) {
     case WM_CREATE: {
@@ -345,27 +351,30 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     }
     /* ---- 窗口级事件：原生窗口消息派发给 __window（「启动窗口」事件表） ---- */
     case WM_MOVE:
-        if (app && app->window) {
+        if (win) {
             RECT r;
             GetWindowRect(hwnd, &r);
-            app->window->ev_x = r.left;    /* 位置被改变：窗口在屏幕上的左上角 */
-            app->window->ev_y = r.top;
+            win->ev_x = r.left;    /* 位置被改变：窗口在屏幕上的左上角 */
+            win->ev_y = r.top;
         }
-        cgw_win_emit(app, CG_EVENT_MOVE);
+        cgw_win_emit(win, CG_EVENT_MOVE);
         break;
     case WM_SIZE:
-        if (app && app->window) {
+        if (win) {
             /* 尺寸被改变：新的客户区宽高 —— **逻辑像素**（与 .cgui 同一套单位）。
              * 这样业务在 size 回调里读到的 w×h 可以原样回喂 cg_win_set_size()，
              * 缩放屏上也不会差 1.x 倍。 */
             int sc = (app->scale > 0) ? app->scale : 100;
-            app->window->ev_x = (int)(short)LOWORD(lp) * 100 / sc;
-            app->window->ev_y = (int)(short)HIWORD(lp) * 100 / sc;
+            win->ev_x = (int)(short)LOWORD(lp) * 100 / sc;
+            win->ev_y = (int)(short)HIWORD(lp) * 100 / sc;
         }
         /* 先按 .cgui 的 grow 重排（改的是控件的逻辑坐标），**再**派发 size 事件 ——
-         * 这样业务在 size 回调里读到的控件坐标已经是对的了。 */
-        if (app && app->window) cgw_layout_apply(app, app->window->ev_x, app->window->ev_y);
-        cgw_win_emit(app, CG_EVENT_SIZE);
+         * 这样业务在 size 回调里读到的控件坐标已经是对的了。
+         * 只对主窗口做：cgw_layout_apply 写死排 app->window 的孩子，对话框是固定框
+         * （没有可拉的 WM_SIZE），不拦的话它的 WM_SIZE 会拿自己的尺寸把主窗口的
+         * 孩子（尤其带 grow 的）重排歪。 */
+        if (app && win == app->window) cgw_layout_apply(app, win->ev_x, win->ev_y);
+        cgw_win_emit(win, CG_EVENT_SIZE);
         break;
     case WM_ACTIVATE: {
         int active = (LOWORD(wp) != WA_INACTIVE);
@@ -373,92 +382,92 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             cg_win_state_t *wst = (cg_win_state_t *)app->natives;
             if (wst && !wst->activated) {
                 wst->activated = 1;
-                cgw_win_emit(app, CG_EVENT_FIRSTACTIVATE);
+                cgw_win_emit(win, CG_EVENT_FIRSTACTIVATE);
             }
         }
-        cgw_win_emit(app, active ? CG_EVENT_ACTIVATE : CG_EVENT_DEACTIVATE);
+        cgw_win_emit(win, active ? CG_EVENT_ACTIVATE : CG_EVENT_DEACTIVATE);
         break;
     }
     case WM_SHOWWINDOW:
-        cgw_win_emit(app, wp ? CG_EVENT_SHOW : CG_EVENT_HIDE);
+        cgw_win_emit(win, wp ? CG_EVENT_SHOW : CG_EVENT_HIDE);
         break;
     case WM_SETFOCUS:
-        cgw_win_emit(app, CG_EVENT_GOTFOCUS);
+        cgw_win_emit(win, CG_EVENT_GOTFOCUS);
         break;
     case WM_KILLFOCUS: {
         /* 焦点只是挪到本窗口的某个控件上不算"窗口失去焦点"，
          * 否则 Tab 一下用户就收到一次失焦事件。 */
         HWND nf = (HWND)wp;
         if (nf && IsChild(hwnd, nf)) break;
-        cgw_win_emit(app, CG_EVENT_LOSTFOCUS);
+        cgw_win_emit(win, CG_EVENT_LOSTFOCUS);
         break;
     }
     case WM_LBUTTONDOWN:
-        fill_mouse(app, wp, lp);
-        cgw_win_emit(app, CG_EVENT_MOUSEDOWN);
+        fill_mouse(win, app, wp, lp);
+        cgw_win_emit(win, CG_EVENT_MOUSEDOWN);
         break;
     case WM_LBUTTONUP:
-        fill_mouse(app, wp, lp);
-        cgw_win_emit(app, CG_EVENT_MOUSEUP);
+        fill_mouse(win, app, wp, lp);
+        cgw_win_emit(win, CG_EVENT_MOUSEUP);
         break;
     case WM_LBUTTONDBLCLK:
-        fill_mouse(app, wp, lp);
-        cgw_win_emit(app, CG_EVENT_DBLCLICK);
+        fill_mouse(win, app, wp, lp);
+        cgw_win_emit(win, CG_EVENT_DBLCLICK);
         break;
     case WM_RBUTTONDOWN:
-        fill_mouse(app, wp, lp);
-        cgw_win_emit(app, CG_EVENT_RDOWN);
+        fill_mouse(win, app, wp, lp);
+        cgw_win_emit(win, CG_EVENT_RDOWN);
         break;
     case WM_RBUTTONUP:
-        fill_mouse(app, wp, lp);
-        cgw_win_emit(app, CG_EVENT_RUP);
+        fill_mouse(win, app, wp, lp);
+        cgw_win_emit(win, CG_EVENT_RUP);
         break;
     case WM_MOUSEMOVE:
-        fill_mouse(app, wp, lp);
-        cgw_win_emit(app, CG_EVENT_MOUSEMOVE);
+        fill_mouse(win, app, wp, lp);
+        cgw_win_emit(win, CG_EVENT_MOUSEMOVE);
         break;
     case WM_MOUSEWHEEL:
-        if (app && app->window) {
+        if (win) {
             /* 滚轮消息的坐标是屏幕坐标，先换成客户区；MK_ 位在 wParam 低字 */
             POINT pt;
             pt.x = (int)(short)LOWORD(lp);
             pt.y = (int)(short)HIWORD(lp);
             ScreenToClient(hwnd, &pt);
-            app->window->ev_x = pt.x;
-            app->window->ev_y = pt.y;
-            app->window->ev_keys = mods_from_mouse(LOWORD(wp));
-            app->window->ev_delta = (int)(short)HIWORD(wp);
+            win->ev_x = pt.x;
+            win->ev_y = pt.y;
+            win->ev_keys = mods_from_mouse(LOWORD(wp));
+            win->ev_delta = (int)(short)HIWORD(wp);
         }
-        cgw_win_emit(app, CG_EVENT_WHEEL);
+        cgw_win_emit(win, CG_EVENT_WHEEL);
         break;
     case WM_KEYDOWN:
     case WM_SYSKEYDOWN:
-        if (app && app->window) {
-            app->window->ev_key = (int)wp;
-            app->window->ev_keys = mods_from_key();
+        if (win) {
+            win->ev_key = (int)wp;
+            win->ev_keys = mods_from_key();
         }
-        cgw_win_emit(app, CG_EVENT_KEYDOWN);
+        cgw_win_emit(win, CG_EVENT_KEYDOWN);
         break;
     case WM_KEYUP:
     case WM_SYSKEYUP:
-        if (app && app->window) {
-            app->window->ev_key = (int)wp;
-            app->window->ev_keys = mods_from_key();
+        if (win) {
+            win->ev_key = (int)wp;
+            win->ev_keys = mods_from_key();
         }
-        cgw_win_emit(app, CG_EVENT_KEYUP);
+        cgw_win_emit(win, CG_EVENT_KEYUP);
         break;
     case WM_CHAR:
-        if (app && app->window) app->window->ev_key = (int)wp;
-        cgw_win_emit(app, CG_EVENT_CHAR);
+        if (win) win->ev_key = (int)wp;
+        cgw_win_emit(win, CG_EVENT_CHAR);
         break;
     case CG_TRAY_CALLBACK:
         tray_callback(app, hwnd, wp, lp);
         return 0;
     case WM_CLOSE: {
-        if (app && app->window) {
+        if (win) {
             app->close_cancel = 0;
-            cg_dispatch(app->window, CG_EVENT_CLOSE);       /* 可否被关闭 */
-            cg_dispatch(app->window, CG_EVENT_CLOSEQUERY);  /* 窗口可否被关闭（同一时机） */
+            cg_dispatch(win, CG_EVENT_CLOSE);       /* 可否被关闭 */
+            cg_dispatch(win, CG_EVENT_CLOSEQUERY);  /* 窗口可否被关闭（同一时机） */
             /* 回调里调了 cg_cancel_close() 就先别关（"还有没保存的东西"那种） */
             if (app->close_cancel && !app->quit) return 0;
         }
@@ -466,8 +475,19 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     }
     case WM_DESTROY:
-        cgw_win_emit(app, CG_EVENT_DESTROY);
-        PostQuitMessage(0);
+        if ((HWND)app->hwnd == hwnd) {
+            /* 主窗口没了：进程退出。**只有这里才 PostQuitMessage** ——
+             * 对话框也走这个过程，它销毁时只结束自己的模态泵（关对话框退出整个应用
+             * 是多窗体之前的老行为，A5 要治的就是它） */
+            cgw_win_emit(win, CG_EVENT_DESTROY);
+            PostQuitMessage(0);
+        } else if (win) {
+            /* 对话框销毁：先把 destroy 派给宿主（业务还能在回调里读子控件收尾），
+             * 再收子树的原生 —— 顺序反了业务就拿不到值。modal_dlg 置 NULL 即泵的退出条件 */
+            cgw_win_emit(win, CG_EVENT_DESTROY);
+            cgw_dialog_teardown(app, win);
+            app->modal_dlg = NULL;
+        }
         return 0;
     case WM_SYSCOMMAND:
         /* **Alt 组合的加速键会以 WM_SYSCOMMAND 回来**（TranslateAccelerator 的规矩：

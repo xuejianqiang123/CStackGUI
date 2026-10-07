@@ -242,3 +242,18 @@ void cgw_destroy_native(cg_widget_t *w)
         w->native = NULL;
     }
 }
+
+/**
+ * @brief 递归销毁子树的原生窗口并释放后端资源（cgw_create_native_tree 的反向）
+ * @param parent 子树根控件；NULL 直接返回
+ * @return void 无返回值
+ * @note 模态对话框关闭时用它收子树：逐个清句柄，不留野指针
+ *      （win_shutdown 只在进程退出时按 app->widgets 统一释放，对不上动态生死的子树）
+ */
+void cgw_destroy_native_tree(cg_widget_t *parent)
+{
+    size_t i;
+    if (!parent) return;
+    for (i = 0; i < parent->nchildren; i++) cgw_destroy_native_tree(parent->children[i]);
+    cgw_destroy_native(parent);
+}
