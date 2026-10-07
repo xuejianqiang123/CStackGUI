@@ -10,6 +10,9 @@
  *   4) 每个具名参数各有一行 @param <名字>（未命名参数与可变参数 ... 不算）
  *   5) 有 @return
  *
+ * 判定口径补充（2026-10-08）：上面说的 tag 一律指**行首 tag**（可带 `/**`、`*` 与缩进）。
+ * 用裸子串匹配会漏判——注释正文里提到 "@brief" 这几个字也算命中，格式写错了照样通过。
+ *
  * 用法：
  *   node tools\check-comments.mjs             列出不合规的函数（按待整改数排序）
  *   node tools\check-comments.mjs gate        全部合规 exit 0，否则 exit 1
@@ -200,16 +203,23 @@ function indexFunctions(src) {
       }
     }
     const doc = docStart >= 0 ? lines.slice(docStart, k + 1).join('\n') : null;
-    const paramTags = doc ? [...doc.matchAll(/@param\s+([A-Za-z_]\w*)/g)].map(x => x[1]) : [];
+    /* 只认"行首 tag"（可带 `/**`、`*` 与缩进）。旧写法是裸子串匹配 `@brief`：
+       注释正文里提到 "@brief" 这几个字也算命中，格式写错了照样判通过 ——
+       2026-10-08 做红测时正踩到这个假阴性（故意删掉 @brief 那一行，却在括号里
+       写了"故意去掉 @brief"，门禁仍报 0 待整改）。 */
+    const TAG = /^[ \t]*(?:\/\*+|\*)?[ \t]*@(\w+)/gm;
+    const paramTags = doc
+      ? [...doc.matchAll(/^[ \t]*(?:\/\*+|\*)?[ \t]*@param[ \t]+([A-Za-z_]\w*)/gm)].map(x => x[1])
+      : [];
     const problem = [];
     if (!doc) problem.push('无注释');
     else {
-      const tags = [...doc.matchAll(/@(\w+)/g)].map(x => x[1]).filter(t => t !== 'file' && t !== 'details');
+      const tags = [...doc.matchAll(TAG)].map(x => x[1]).filter(t => t !== 'file' && t !== 'details');
       if (tags[0] !== 'brief') problem.push('首个 tag 不是 @brief');
-      if (!/@brief/.test(doc)) problem.push('缺 @brief');
+      if (!tags.includes('brief')) problem.push('缺 @brief');
       for (const p of named) if (!paramTags.includes(p)) problem.push(`缺 @param ${p}`);
       if (paramTags.length > named.length) problem.push(`@param 多出（签名 ${named.length} 个）`);
-      if (!/@return/.test(doc)) problem.push('缺 @return');
+      if (!tags.includes('return')) problem.push('缺 @return');
     }
     fns.push({ line: i + 1, name, kind, problem });
   }
