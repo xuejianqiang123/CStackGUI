@@ -285,18 +285,29 @@ function coerceStyles(raw: unknown): Record<string, CgStyle> | undefined {
   return Object.keys(out).length ? out : undefined;
 }
 
+/** 画布不认识的控件类型：整份文件都读不得。抛出来由 parseDoc 收成 error 字符串。 */
+class UnknownKindError extends Error {}
+
 function coerceNode(raw: unknown, index: number): CgNode | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
   /* 老类型名自动升级：multiedit / spinner 已合并进 edit（2026-09-22）。
-     映射必须和运行时 cg_doc.c 的 parse_node 完全一致 —— 否则老 .cgui 在画布上会被
-     下面那句兜底静默降级成 label（结构和事件全丢，还不报错）。 */
+     映射必须和运行时 cg_doc.c 的 parse_node 完全一致。 */
   let rawType = typeof o.type === "string" ? o.type : "";
   const aliasMulti = rawType === "multiedit";
   const aliasSpin = rawType === "spinner";
   if (aliasMulti || aliasSpin) rawType = "edit";
-  const type = KIND_MAP[rawType] ? rawType : "label";
-  const info = KIND_MAP[type];
+  /* 认不出来的类型**不兜底降级**（这里原来是 `KIND_MAP[t] ? t : "label"`）：
+   *   - 运行时对未知类型是**整份文件加载失败**（cg_doc.c：unknown widget type "x"），
+   *     所以这份文件本来就跑不起来 —— 降级成 label 救不回任何东西；
+   *   - 而 label 不是容器，`children` 会连**整棵子树**一起被丢掉，用户打开再保存就是永久删除
+   *     （2026-10-07 实测：带 dialog 节点的 .cgui 在画布上"读进来了、节点被静默丢了"，
+   *      见 tools\probe-dialog.mjs）。
+   * 所以跟运行时同口径：不给读，并把话说清楚。多窗体 epic 会让这种文件真的出现
+   * （新画布写的 + 旧画布打开的），热重载也让外部编辑器/AI 写进来的文件成为一等场景。 */
+  const info = KIND_MAP[rawType];
+  if (!info) throw new UnknownKindError(typeof o.type === "string" ? o.type : "(缺少 type)");
+  const type = rawType;
   const flat = { x: o.x, y: o.y, w: o.w, h: o.h } as Record<string, unknown>;
   const rectSource = (o.rect as unknown) ?? flat;
   const node: CgNode = {
@@ -503,10 +514,26 @@ export function parseDoc(text: string): { doc?: CgDoc; error?: string } {
   if (info) appOut.info = info;
   if (winEvents) appOut.events = winEvents;
 
+  /* 未知控件类型判死整份文件（与运行时同口径）。不能"只丢那一个节点"接着编辑：
+     丢节点 = 用户下次保存就永久删掉了它，而且不会有任何提示。 */
+  let widgets: CgNode[];
+  try {
+    widgets = o.widgets.map((w, i) => coerceNode(w, i)).filter((w): w is CgNode => w !== null);
+  } catch (e) {
+    if (e instanceof UnknownKindError) {
+      return {
+        error:
+          `不认识的控件类型「${e.message}」：可能是更新版的画布（或手写）写出来的，` +
+          `运行时同样会拒绝整份文件。为避免把你的界面改坏，画布不打开它。`,
+      };
+    }
+    throw e;
+  }
+
   const doc: CgDoc = {
     cgui: 1,
     app: appOut,
-    widgets: o.widgets.map((w, i) => coerceNode(w, i)).filter((w): w is CgNode => w !== null),
+    widgets,
   };
   const actions = coerceActions(o.actions);
   if (actions) doc.actions = actions;
