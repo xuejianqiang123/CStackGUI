@@ -109,6 +109,13 @@ echo   layer contract (core / win32 / skin / kit)
 node tools\check-layers.mjs
 if errorlevel 1 exit /b 1
 
+rem 画布主进程（designer\electron\*.mjs）此前没有任何语法门禁：tsc 只看 .ts、
+rem vite build 只打渲染进程。2026-10-07 实测 —— 一句块注释里写错一个字符对，
+rem 注释被提前闭合，画布重新打包后开机即崩，而当时所有门禁都是绿的。
+echo   electron main process syntax
+node tools\check-electron.mjs
+if errorlevel 1 exit /b 1
+
 echo   app config: exe version info (examples\gallery\gallery.rc)
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$exe='examples\gallery\gallery.exe'; if (-not (Test-Path $exe)) { Write-Host '[fail] gallery.exe missing - run build-all first'; exit 1 }; $v=(Get-Item $exe).VersionInfo; $want='CStackGUI ' + [char]0x63A7 + [char]0x4EF6 + [char]0x9648 + [char]0x5217 + [char]0x5BA4; if ($v.FileVersion -ne '0.1.0.0' -or $v.OriginalFilename -ne 'gallery.exe' -or $v.ProductName -ne $want) { Write-Host ('[fail] gallery.exe version info mismatch -> FileVersion=' + $v.FileVersion + ' ProductName=' + $v.ProductName + ' OriginalFilename=' + $v.OriginalFilename); exit 1 }; Write-Host ('  gallery.exe: ' + $v.ProductName + ' ' + $v.FileVersion)"
 if errorlevel 1 exit /b 1
