@@ -559,10 +559,17 @@ HBRUSH cgw_ctlcolor_brush(cg_app_t *app, WPARAM wp, LPARAM lp)
         return cgw_brush_for(w->style.bg);
     }
     /* 没设背景色：标签 / 链接 / 分割线默认透明，透出"背后"的颜色
-     * （要底色就在属性里设「背景色」；edit 类由系统画白底，不动它） */
+     * （要底色就在属性里设「背景色」） */
     if (cgw_is_t(w, "label") || cgw_is_t(w, "link") || cgw_is_t(w, "separator")) {
         SetBkMode(dc, TRANSPARENT);
         return transparent_bg_for(app, child);
+    }
+    /* edit 类没设 bg：浅色交系统白底；深色给深底——白底上浅字看不见（深色皮肤 T1）。
+     * 只拦 edit 家族；combo/listbox 等其它原生控件不动（平台边界，见 SDD）。 */
+    if (app->dark && cgw_is_t(w, "edit")) {
+        SetBkColor(dc, RGB(0x1D, 0x1B, 0x20));   /* CG_DARK_SURFACE_2（cg_win_theme.c） */
+        SetBkMode(dc, OPAQUE);
+        return cgw_brush_for(0x1D1B20u);
     }
     return NULL;
 }

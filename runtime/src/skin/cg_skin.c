@@ -427,13 +427,15 @@ void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
     has_border = 0;
     border = 0;
     if (disabled) {
+        /* 禁用态的灰原本写死浅色系 —— 深底上一块发亮的浅灰（深色皮肤 T1）。
+         * 文字色直接复用 sk_default_text 的禁用分支（深色 0x6E6E72 有先例）。 */
         if (filled) {
-            fill = 0xE2E2E4u;
-            textcol = 0x9A9A9Eu;
+            fill = cg_skin_neutral(w->app, 0xE2E2E4u, 0x2E2B33u);
+            textcol = sk_default_text(w, 1);
         } else {
-            fill = 0xECECEEu;
-            border = 0xDCDCDEu; has_border = 1;
-            textcol = 0x9A9A9Eu;
+            fill = cg_skin_neutral(w->app, 0xECECEEu, 0x2E2B33u);
+            border = cg_skin_neutral(w->app, 0xDCDCDEu, 0x49454Fu); has_border = 1;
+            textcol = sk_default_text(w, 1);
         }
     } else if (filled) {
         /* 实心主题色按钮：文字按底色亮度自动黑/白 */

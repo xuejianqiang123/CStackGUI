@@ -184,6 +184,12 @@ void cgw_theme_widget(cg_widget_t *w)
                          app->dark ? (LPARAM)cgw_to_colorref(CG_DARK_SURFACE_2) : 0);
         }
     }
+    /* 输入框的边框带补底色（s->bg）是建控件时缓存的，换主题要重算一遍，
+     * 否则切深浅后边框带还是旧底、和客户区两截对不上（深色皮肤 T1；
+     * 客户区那半走 WM_CTLCOLOR 的深色分支，cg_win_ctl.c）。 */
+    if (cgw_is_t(w, "edit")) {
+        cg_skin_edit_retheme(w);
+    }
 }
 
 /**

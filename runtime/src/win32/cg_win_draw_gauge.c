@@ -340,8 +340,8 @@ static void meter_body(HDC dc, const RECT *rc, int s, void *vctx)
                        : cgw_brush_for(cg_win_behind_rgb(ctx->app, (void *)w->native)));
     if (r < 12 * s) return;                    /* 太小了画出来只是噪点，干脆不画 */
 
-    /* 底弧（灰、细） */
-    pen = CreatePen(PS_SOLID, s, RGB(0xB4, 0xB0, 0xBB));
+    /* 底弧（灰、细）——中性灰跟随主题（深色皮肤 T1，下同：刻度/指针/帽） */
+    pen = CreatePen(PS_SOLID, s, cgw_to_colorref(cg_skin_neutral(ctx->app, 0xB4B0BBu, 0x3D3945u)));
     old = SelectObject(dc, pen);
     meter_arc(dc, cx, cy, r, from, sweep, 48);
     SelectObject(dc, old);
@@ -357,7 +357,7 @@ static void meter_body(HDC dc, const RECT *rc, int s, void *vctx)
     }
 
     /* 刻度：11 条等分短线 */
-    pen = CreatePen(PS_SOLID, s, RGB(0x9A, 0x96, 0xA2));
+    pen = CreatePen(PS_SOLID, s, cgw_to_colorref(cg_skin_neutral(ctx->app, 0x9A96A2u, 0x49454Fu)));
     old = SelectObject(dc, pen);
     for (i = 0; i <= 10; i++) {
         POINT a, b;
@@ -370,8 +370,8 @@ static void meter_body(HDC dc, const RECT *rc, int s, void *vctx)
     SelectObject(dc, old);
     DeleteObject(pen);
 
-    /* 指针（圆心 -> 0.78r）+ 圆心小圆帽 */
-    pen = CreatePen(PS_SOLID, 2 * s, RGB(0x49, 0x45, 0x4F));
+    /* 指针（圆心 -> 0.78r）+ 圆心小圆帽：深底上原深灰不可见，深色翻成亮字色（T1 新定值） */
+    pen = CreatePen(PS_SOLID, 2 * s, cgw_to_colorref(cg_skin_neutral(ctx->app, 0x49454Fu, 0xE6E0E9u)));
     old = SelectObject(dc, pen);
     {
         POINT b;
@@ -382,7 +382,7 @@ static void meter_body(HDC dc, const RECT *rc, int s, void *vctx)
     SelectObject(dc, old);
     DeleteObject(pen);
     {
-        HBRUSH  br = CreateSolidBrush(RGB(0x49, 0x45, 0x4F));
+        HBRUSH  br = CreateSolidBrush(cgw_to_colorref(cg_skin_neutral(ctx->app, 0x49454Fu, 0xE6E0E9u)));
         HGDIOBJ ob = SelectObject(dc, br);
         HGDIOBJ op = SelectObject(dc, GetStockObject(NULL_PEN));
         Ellipse(dc, cx - 4 * s, cy - 4 * s, cx + 4 * s, cy + 4 * s);

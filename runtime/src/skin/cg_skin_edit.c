@@ -54,6 +54,21 @@ typedef struct {
 } sk_edit_sub_t;
 
 /**
+ * @brief 输入框的"边框带补底"色：写了 style.bg 听用户的，否则浅色交系统、深色跟主题
+ * @param w 输入框控件
+ * @return COLORREF 底色
+ * @note 边框带（sk_edit_fill_edge）与客户区（WM_CTLCOLOR 的深色分支，cg_win_ctl.c）
+ *       共用这一套值 —— 两处不同值就会出现"边框带一截、客户区一截"。
+ */
+static COLORREF sk_edit_bg_color(const cg_widget_t *w)
+{
+    if (w->style.bg != CG_COLOR_NONE)
+        return RGB((w->style.bg >> 16) & 0xFF, (w->style.bg >> 8) & 0xFF, w->style.bg & 0xFF);
+    /* 深色给 SURFACE_2（与 WM_CTLCOLOR 深色分支同值）；浅色仍是系统窗口色 */
+    return (w->app && w->app->dark) ? RGB(0x1D, 0x1B, 0x20) : GetSysColor(COLOR_WINDOW);
+}
+
+/**
  * @brief 沿边框带画一圈圆角线
  * @param dc 目标设备上下文；线画在它上面
  * @param s 输入框子类数据；提供整块尺寸与圆角半径
@@ -417,6 +432,30 @@ void cg_skin_edit_rescale(cg_widget_t *w)
 }
 
 /**
+ * @brief 主题切换后刷新输入框的缓存底色（深色皮肤 T1）
+ * @param w 输入框控件
+ * @return void 无返回值（没有子类数据时什么也不做）
+ * @details s->bg 是建控件时算好缓存的，换主题不会自己变；这里只重算这一个值并让
+ *          非客户区重画（WM_NCPAINT 重走 sk_edit_fill_edge 就用上了新底色）。
+ *          客户区那半由 WM_CTLCOLOR 的深色分支负责（cg_win_ctl.c），两处同值才对得上。
+ */
+void cg_skin_edit_retheme(cg_widget_t *w)
+{
+    HWND          hw;
+    DWORD_PTR     ref = 0;
+    sk_edit_sub_t *s;
+
+    if (!w) return;
+    hw = (HWND)w->native;
+    if (!hw) return;
+    if (!GetWindowSubclass(hw, sk_edit_sub, 1, &ref) || !ref) return;
+    s = (sk_edit_sub_t *)ref;
+    s->bg = sk_edit_bg_color(w);
+    SetWindowPos(hw, NULL, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+}
+
+/**
  * @brief 给输入框挂皮肤子类：算圆角 / 边框带 / 箭头占位，设边距并强制一次布局
  * @param w edit 控件；无原生窗口时直接返回
  * @return void 无返回值（子类数据分配失败时什么也不做）
@@ -452,9 +491,7 @@ void cg_skin_apply_edit(cg_widget_t *w)
      * 有了它，WM_NCCALCSIZE 才能把右边这列从客户区让出去。 */
     s->arrow = (w->spin && !multiline) ? (CG_EDIT_SPIN_W * scale / 100) : 0;
     if (s->arrow > 0 && s->arrow < 12) s->arrow = 12;
-    s->bg = (w->style.bg != CG_COLOR_NONE)
-              ? RGB((w->style.bg >> 16) & 0xFF, (w->style.bg >> 8) & 0xFF, w->style.bg & 0xFF)
-              : GetSysColor(COLOR_WINDOW);
+    s->bg = sk_edit_bg_color(w);
 
     sk_edit_resize(hw, s);   /* 初始尺寸 + 圆角区域 */
     /* 左右留边距：文字别怼到圆角边框上（边框在客户区外，垂直居中见 WM_NCCALCSIZE）。
