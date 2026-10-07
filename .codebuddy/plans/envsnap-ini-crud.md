@@ -65,6 +65,21 @@
 INI 清单格式落地：`[分组]` 节 + `变量名=备注`；启动自动载入、缺省按内置清单生成；
 导入INI / 添加 / 删除 / 修改 / 查询五个回调，改动即存回当前 ini；自检零磁盘副作用。
 
+## 第二轮（2026-10-08 追加）：添加/修改改为一表单一次提交
+
+用户反馈：添加是三段弹框（每次确认都弹新窗），体验差 —— 要求一次性显示全部、一次性提交。
+
+- 做法：`.cgui` 加 `dlg_edit`（type=dialog，三个 edit + 红字提示行 + 确定/取消），添加与修改共用；
+  `cg_dialog_open` 模态打开，`show` 回调里给焦点，确定时一次性读三个字段、校验、落盘；
+  **校验不过只改框内提示行、不关框**（原来是消息框 + 重走流程）。
+- 验证：`build\probe-envsnap-dialog.ps1`（PostMessage BM_CLICK 驱动，纯 ASCII）实测
+  ① 填三格 → 确定 → 框关且 ini 出现 `[ZZTEST]` / `DEMO_VAR=FORM_OK`；
+  ② 重复名 → 框保持打开（红字提示，见 build\envsnap-dialog-dup.png）；
+  ③ 取消 → 框关。自检 26 控件 / 13 回调 / 五项 0；check-format 全过。
+- 踩坑：用 `SendMessage` 发 BM_CLICK 不触发（且 cg_dialog_open 会在模态泵里阻塞调用方），
+  必须 `PostMessage`（与项目自己的 tools\probe-modal.c 一致）。
+
 ## 遗留
-- 模态输入框的键鼠探针实测未做（真机手检：加/删/改/查 + 挪组）。
+- 「修改」路径的真机驱动未做（要先用鼠标点中树里的变量节点）；与「添加」共用同一张表单、
+  同一段 apply→rebuild→close 顺序，风险低，留给真机手检。
 - 运行时 `cg_win_modal.c` 有一个既有的 unused-variable 警告，不属于本任务改动面，未动。
