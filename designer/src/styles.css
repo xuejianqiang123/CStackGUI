@@ -1554,6 +1554,21 @@ input.narrow {
   border-radius: 5px;
   background: linear-gradient(to bottom, var(--outline-strong) 0 18%, transparent 18%);
 }
+/* 角上的「模态」小徽章：一眼认出它是独立窗口，又不挡子控件的选中与编辑
+   （用整块遮罩会把画布变成"只能看不能改"，与画布的职责相悖） */
+.dlg-badge {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  z-index: 1;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--seed);
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  pointer-events: none;
+}
 .glyph-shape {
   border: 1.5px solid var(--outline-strong);
   border-radius: 6px;

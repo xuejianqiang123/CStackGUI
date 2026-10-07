@@ -152,6 +152,8 @@ function cleanNode(node: CgNode): CgNode {
   if (node.auto === true) out.auto = true;
   if (node.multi === true) out.multi = true;
   if (node.check === true) out.check = true;
+  /* dialog：缺省居中不写；只有"不居中"才落盘（同一句"缺省不写"的口径） */
+  if (node.center === false) out.center = false;
   /* 数值框（edit + 调节器）：value 是真相、文本由它派生，所以值/范围/文本一起写出去。
    * edit 本身不是 ranged 控件（上面那段会跳过 min/max），漏了这三行运行时夹取范围
    * 就永远是缺省的 0~100，而且显示的还是空的。 */

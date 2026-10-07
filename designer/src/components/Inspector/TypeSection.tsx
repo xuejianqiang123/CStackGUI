@@ -32,6 +32,25 @@ export default function TypeSection({ node, patch }: TypeSectionProps) {
           <span className="muted small">毫秒，0 = 停</span>
         </Row>
       ) : null}
+      {node.type === "dialog" ? (
+        /* 多窗体：对话框是独立窗口，"打开时居中"是它为数不多的窗口级属性。
+           缺省居中（勾着）；不勾则运行时按 rect.x/y 摆 —— 屏幕坐标，与窗口属性的 x/y 同一口径，
+           所以画布上拖到哪儿，运行时就出现在哪儿。 */
+        <Row
+          label="打开时居中"
+          hint="模态打开时居中于主窗口。不勾选则用 左边/顶边（屏幕坐标，与窗口属性的 x/y 同一口径）"
+        >
+          <input
+            type="checkbox"
+            checked={node.center !== false}
+            onChange={(e) =>
+              patch((n) => {
+                n.center = e.target.checked ? undefined : false;
+              })
+            }
+          />
+        </Row>
+      ) : null}
       {node.type === "serial" ? (
         <>
           <Row label="端口名">

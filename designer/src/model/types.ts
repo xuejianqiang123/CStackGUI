@@ -162,6 +162,10 @@ export type CgNode = {
   /** 表格 */
   columns?: CgColumn[];
   rows?: string[][];
+  /** dialog：打开时是否居中于主窗口（缺省 true，"缺省不写"）。
+   *  false 时 rect.x/y 按**屏幕坐标**解释（与 app.x/y 同一口径）——
+   *  画布上拖到的位置即运行时位置。运行时读它在 cg_win_modal.c。 */
+  center?: boolean;
   children?: CgNode[];
 };
 

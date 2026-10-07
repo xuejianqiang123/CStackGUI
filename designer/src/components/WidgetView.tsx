@@ -649,6 +649,12 @@ export default function WidgetView({ node, depth, selected, primaryId, onPointer
         </div>
       ) : null}
 
+      {node.type === "dialog" ? (
+        /* 多窗体的画布提示：这是个独立窗口，运行时模态打开。角上一枚小徽章 ——
+           不用整块遮罩：画布还要能选中、编辑它的子控件。 */
+        <span className="dlg-badge">模态</span>
+      ) : null}
+
       {node.type === "tabs" && (node.children?.length ?? 0) > kids.length ? (
         <span className="tabs-more" title="其他页的控件在运行时切页后才显示">
           +{(node.children?.length ?? 0) - kids.length}

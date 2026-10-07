@@ -358,6 +358,9 @@ function coerceNode(raw: unknown, index: number): CgNode | null {
   if (o.auto === true) node.auto = true;
   if (o.multi === true) node.multi = true;
   if (o.check === true) node.check = true;
+  /* dialog 的居中开关：缺省居中（与运行时 cj_bool 的缺省 1 一致），只有明确写 false 才不居中 ——
+     旧文件没这个字段，零行为变化 */
+  if (o.center === false) node.center = false;
   /* edit 的输入框行为：只收合法档位，其余一律当没填（旧文件 / 手写脏值都读得进来） */
   if (o.multiline === true) node.multiline = true;
   const scroll = Number(o.scroll);
