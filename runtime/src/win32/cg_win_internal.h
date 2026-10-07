@@ -657,6 +657,15 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
  */
 void cgw_dialog_teardown(cg_app_t *app, cg_widget_t *dlg);
 
+/**
+ * @brief 按 HWND 找打开着的 dialog 节点（非模态对话框没有 modal_dlg 快路径）
+ * @param app 应用
+ * @param hwnd 目标顶层窗口
+ * @return cg_widget_t* 命中的 dialog 节点；没有返回 NULL
+ * @note 全树 O(n)，只在 WM_CLOSE / WM_DESTROY 这类低频消息里调，别放进逐消息的路径。
+ */
+cg_widget_t *cgw_dialog_by_hwnd(cg_app_t *app, HWND hwnd);
+
 /* ---------------- cg_win_menu.c：菜单与工具栏 ---------------- */
 
 /**

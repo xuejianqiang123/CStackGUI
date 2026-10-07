@@ -127,6 +127,56 @@ void cgw_dialog_teardown(cg_app_t *app, cg_widget_t *dlg)
     dlg->native = NULL;   /* 对话框自己的 HWND 正在销毁中，置空别再碰 */
 }
 
+/** 递归找 native == hwnd 的 dialog 节点（cgw_dialog_by_hwnd 的实现） */
+static cg_widget_t *dialog_by_hwnd_walk(cg_widget_t *w, HWND hwnd)
+{
+    size_t i;
+    if (!w) return NULL;
+    if (w->type && strcmp(w->type, "dialog") == 0 && (HWND)w->native == hwnd) return w;
+    for (i = 0; w->children && i < w->nchildren; i++) {
+        cg_widget_t *hit = dialog_by_hwnd_walk(w->children[i], hwnd);
+        if (hit) return hit;
+    }
+    return NULL;
+}
+
+/**
+ * @brief 按 HWND 找打开着的 dialog 节点（非模态对话框没有 modal_dlg 快路径可用）
+ * @param app 应用
+ * @param hwnd 目标顶层窗口
+ * @return cg_widget_t* 命中的 dialog 节点；没有返回 NULL
+ * @note 全树 O(n)，只在 WM_CLOSE / WM_DESTROY 这类低频消息里调，别放进逐消息的路径。
+ */
+cg_widget_t *cgw_dialog_by_hwnd(cg_app_t *app, HWND hwnd)
+{
+    if (!app || !hwnd) return NULL;
+    return dialog_by_hwnd_walk(app->window, hwnd);
+}
+
+/** 找一个还开着（native 非空）的 dialog 节点 —— "同一时间只支持一个"的守卫用 */
+static cg_widget_t *any_open_dialog_walk(cg_widget_t *w)
+{
+    size_t i;
+    if (!w) return NULL;
+    if (w->type && strcmp(w->type, "dialog") == 0 && w->native) return w;
+    for (i = 0; w->children && i < w->nchildren; i++) {
+        cg_widget_t *hit = any_open_dialog_walk(w->children[i]);
+        if (hit) return hit;
+    }
+    return NULL;
+}
+
+/**
+ * @brief 现在有没有任何对话框开着（模态或非模态）——"同一时间只支持一个"的守卫
+ * @param app 应用
+ * @return int 1 = 有；0 = 没有
+ */
+static int any_dialog_open(cg_app_t *app)
+{
+    if (app->modal_dlg) return 1;
+    return any_open_dialog_walk(app->window) != NULL;
+}
+
 /**
  * @brief 打开模态对话框（公共 API，语义见 cstackgui.h）
  * @param dlg dialog 节点
@@ -143,8 +193,8 @@ int cg_dialog_open(cg_widget_t *dlg)
     app = dlg->app;
     owner = (HWND)app->hwnd;
     if (!owner || !app->natives) return 0;      /* 窗口还没建（回调时序不对） */
-    if (app->modal_dlg) {
-        fprintf(stderr, "[cstackgui] 已有一个模态对话框开着，本次 open 忽略（同一时间只支持一个）\n");
+    if (any_dialog_open(app)) {
+        fprintf(stderr, "[cstackgui] 已有一个对话框开着（模态或非模态），本次 open 忽略（同一时间只支持一个）\n");
         return 0;
     }
     if (dlg->native) {
@@ -207,7 +257,16 @@ void cg_dialog_close(cg_widget_t *self, int result)
 
     if (!app) return;
     dlg = app->modal_dlg;
-    if (!dlg) return;
+    if (!dlg) {
+        /* 非模态对话框也走这里：self 沿父链核对到哪个 dialog，就关哪个（result 无返回值语义，忽略） */
+        for (w = self; w && !(w->type && strcmp(w->type, "dialog") == 0); w = w->parent) {
+        }
+        if (w && w->native) {
+            PostMessageW((HWND)w->native, WM_CLOSE, 0, 0);
+            return;
+        }
+        return;
+    }
     /* self 必须是对话框自己或它的子控件：沿父链核对，别的控件调不动它 */
     for (w = self; w && w != dlg; w = w->parent) {
     }
@@ -219,4 +278,34 @@ void cg_dialog_close(cg_widget_t *self, int result)
     /* 走 WM_CLOSE：close/closequery 回调照常触发（cg_cancel_close 还能拦下不关），
      * 销毁发生在泵里而不是回调栈中间 —— 回调返回后控件还活着 */
     PostMessageW((HWND)dlg->native, WM_CLOSE, 0, 0);
+}
+
+/**
+ * @brief 打开一个非模态对话框（公共 API，语义见 cstackgui.h）
+ * @param dlg dialog 节点
+ * @return int 1 = 已打开（立即返回，不等关闭）；0 = 没开成
+ * @note 与模态共用 dialog_create_native（独立 HWND + 子树懒建）；区别是**不禁用主窗口、
+ *       不进内层泵** —— 对话框活在主泵里，生命周期到 WM_DESTROY 为止。
+ *       非模态没有返回值语义（cg_dialog_close 的 result 对它无意义）。
+ */
+int cg_dialog_open_nonmodal(cg_widget_t *dlg)
+{
+    cg_app_t *app;
+
+    if (!dlg || !dlg->app) return 0;
+    app = dlg->app;
+    if (!app->hwnd || !app->natives) return 0;  /* 窗口还没建（回调时序不对） */
+    if (any_dialog_open(app)) {
+        fprintf(stderr, "[cstackgui] 已有一个对话框开着（模态或非模态），本次 open 忽略（同一时间只支持一个）\n");
+        return 0;
+    }
+    if (dlg->native) {
+        fprintf(stderr, "[cstackgui] 对话框 %s 已经开着\n", dlg->id ? dlg->id : "-");
+        return 0;
+    }
+    if (dialog_create_native(dlg) != 0) return 0;
+
+    /* 非模态：不禁用主窗口、不进泵 —— ShowWindow 完立即返回，对话框活在主消息循环里 */
+    ShowWindow((HWND)dlg->native, SW_SHOW);
+    return 1;
 }

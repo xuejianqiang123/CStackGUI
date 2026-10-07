@@ -360,6 +360,17 @@ int  cg_dialog_open(cg_widget_t *dlg);
  */
 void cg_dialog_close(cg_widget_t *self, int result);
 
+/**
+ * @brief 打开一个**非模态**对话框：立即返回，主窗口保持可用
+ * @param dlg 对话框控件：cg_find(app, "对话框id") 拿到；必须是 dialog 类型
+ * @return int 1 = 已打开；0 = 没开成（同一时间只支持一个对话框，模态或非模态合计）
+ * @note 非模态没有返回值语义——结果靠回调（close/destroy）或 cg_find 读控件值。
+ *       关闭走 cg_dialog_close() 或对话框的关闭钮，close/closequery/destroy 照常触发。
+ *       与模态共用同一套地基（独立 HWND + 子树懒建）；边界：非模态对话框的**窗口级**
+ *       move/size/activate 等事件 v1 不派发（控件级事件与关闭路径不受影响）。
+ */
+int  cg_dialog_open_nonmodal(cg_widget_t *dlg);
+
 /* ---- 深色模式 ----
  * .cgui 的 `app.dark` 写 `true` / `"auto"`（跟随系统）/ 不写（浅色）就能定下启动配色；
  * 这两个函数是给**程序里**改的。

@@ -464,6 +464,9 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         tray_callback(app, hwnd, wp, lp);
         return 0;
     case WM_CLOSE: {
+        /* 非模态对话框没有 modal_dlg 快路径：按 HWND 反查（低频消息，O(n) 可接受）。
+         * 查到了才有 close/closequery 回调——查不到就是普通顶层窗口，直接销毁。 */
+        if (!win) win = cgw_dialog_by_hwnd(app, hwnd);
         if (win) {
             app->close_cancel = 0;
             cg_dispatch(win, CG_EVENT_CLOSE);       /* 可否被关闭 */
@@ -481,12 +484,16 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
              * 是多窗体之前的老行为，A5 要治的就是它） */
             cgw_win_emit(win, CG_EVENT_DESTROY);
             PostQuitMessage(0);
-        } else if (win) {
-            /* 对话框销毁：先把 destroy 派给宿主（业务还能在回调里读子控件收尾），
-             * 再收子树的原生 —— 顺序反了业务就拿不到值。modal_dlg 置 NULL 即泵的退出条件 */
-            cgw_win_emit(win, CG_EVENT_DESTROY);
-            cgw_dialog_teardown(app, win);
-            app->modal_dlg = NULL;
+        } else {
+            /* 对话框销毁：模态的有 modal_dlg 快路径；非模态按 HWND 反查（T4）。
+             * 先把 destroy 派给宿主（业务还能在回调里读子控件收尾），再收子树的原生 ——
+             * 顺序反了业务就拿不到值。modal_dlg 置 NULL 即模态泵的退出条件。 */
+            if (!win) win = cgw_dialog_by_hwnd(app, hwnd);
+            if (win) {
+                cgw_win_emit(win, CG_EVENT_DESTROY);
+                cgw_dialog_teardown(app, win);
+                if (win == app->modal_dlg) app->modal_dlg = NULL;
+            }
         }
         return 0;
     case WM_SYSCOMMAND:
