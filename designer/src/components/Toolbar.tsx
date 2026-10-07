@@ -87,7 +87,7 @@ export default function Toolbar(p: Props) {
         <button
           disabled={p.publishing || p.running}
           onClick={p.onPublish}
-          title="发布：保存 → release 编译 → 把界面并进 exe，得到一个独立 exe（publish\\ 下）。对方双击就能跑，不需要 .cgui、不需要任何其他文件"
+          title="发布：保存 → release 编译 → 界面在编译时编进 exe，产物就是工程目录里那个独立 exe（.cgui 旁边）。对方拿走一个文件双击就能跑，不需要 .cgui"
         >
           {p.publishing ? "发布中…" : "⇪ 发布"}
         </button>

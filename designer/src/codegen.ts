@@ -276,7 +276,8 @@ ${
  * @details 编译：本目录要放在 CStackGUI 项目的 apps\\ 下，然后在项目根目录跑
  *          build-app.bat ${base}
  *          产物：apps\\${base}\\${base}.exe —— 单个 exe，无运行库依赖，双击就能跑。
- *          界面的两份来源见下面 embedded_cgui() 的说明。
+ *          界面查找顺序（运行时）：exe 旁边的同名 .cgui → exe 内嵌的界面资源
+ *          （编译时由 build-app 把 .cgui 作为 PE 资源编进去）。
  */
 #include "${base}_ui_events.h"
 
@@ -288,33 +289,8 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND_END
 };
 
-/* ==================== 用户代码（重新导出时这一段原样保留） ====================
- * 全局变量、辅助函数写在这里。别删这两行标记 —— 画布重新导出 main.c 时靠它们
- * 把这段内容搬过去。业务逻辑请写在 ${base}_ui_events.c 里（那份文件也永不覆盖）。
- * ==================== 用户代码结束 ==================== */
-
-/* 界面原文（编译时由 ${base}_cgui.c 内嵌进 exe） */
-extern const char *const k_cgui_text;
-
 /**
- * @brief exe 旁边没有 ${cguiFile} 时，回退到编译时内嵌的界面
- * @return const char * 内嵌界面原文；旁边有同名 .cgui 时返回 NULL（让运行时去读文件）
- * @note 这个顺序是故意的：
- *       - 发布给别人（只有一个 exe）→ 走内嵌那份，双击就能跑；
- *       - 自己调试 → 把改过的 .cgui 放到 exe 旁边，立刻生效，不必重新编译。
- */
-static const char *embedded_cgui(void)
-{
-    char *dir = cg_app_dir();
-    char *p = cg_path_join(dir, "${cguiFile}");
-    long long size = p ? cg_file_size(p) : -1;
-    cg_free(p);
-    cg_free(dir);
-    return size > 0 ? NULL : k_cgui_text;
-}
-
-/**
- * @brief 程序入口：组装启动参数（绑定表、界面来源、--selftest 分支）
+ * @brief 程序入口：组装启动参数（绑定表、自动找 .cgui、--selftest 分支）
  * @param argc 参数个数
  * @param argv 命令行参数（可带 .cgui 路径或 --selftest）
  * @return int 进程退出码（0 正常）
@@ -322,53 +298,26 @@ static const char *embedded_cgui(void)
 int main(int argc, char **argv)
 {
     cg_app_desc_t desc;
-    int selftest = (argc > 1 && strcmp(argv[1], "--selftest") == 0);
-    /* 命令行点名了界面文件就用它（build-all.bat 的自检就是这么传的） */
-    const char *explicit_path = selftest ? ((argc > 2) ? argv[2] : NULL)
-                                         : ((argc > 1) ? argv[1] : NULL);
 
     memset(&desc, 0, sizeof(desc));
     desc.bindings = k_bindings;
     desc.dblclick_suppress_click = 0;   /* 1 = 双击时不再回调 click */
     desc.auto_locate_cgui = 1;          /* 双击 exe 也能跑：自动去 exe 附近找 .cgui */
-    if (!explicit_path) desc.cgui_text = embedded_cgui();
-
-    desc.cgui_path = explicit_path ? explicit_path : "${cguiFile}";
 
     /* --selftest：不开窗口，只校验 .cgui 能否解析、事件名是否都登记过 */
-    if (selftest) return cg_app_selftest(&desc);
+    if (argc > 1 && strcmp(argv[1], "--selftest") == 0) {
+        desc.cgui_path = (argc > 2) ? argv[2] : "${cguiFile}";
+        return cg_app_selftest(&desc);
+    }
+
+    desc.cgui_path = (argc > 1) ? argv[1] : "${cguiFile}";
     return cg_app_run(&desc);
 }
 `;
 
-  /* 界面原文按字节内嵌。用字节数组而不是字符串字面量：.cgui 是 UTF-8、含中文与
-     引号/反斜杠，字面量既要转义、又受源文件编码（-finput-charset）影响；字节数组
-     逐字节等价，任何编译器/任何代码页下都不会读出偏差。末尾补一个 0，方便当 C 串用。 */
-  const cguiBytes = Array.from(new TextEncoder().encode(serializeDoc(doc)));
-  const cguiRows: string[] = [];
-  for (let i = 0; i < cguiBytes.length; i += 16) {
-    cguiRows.push(`    ${cguiBytes.slice(i, i + 16).map((b) => `0x${b.toString(16).padStart(2, "0")},`).join(" ")}`);
-  }
-  const cguiC = `/**
- * @file    ${base}_cgui.c
- * @brief   界面文件 ${cguiFile} 的原文，编译进 exe（单文件发布用）
- * @details 由 CStackGUI 画布生成，**请勿手改** —— 改界面请回画布改后重新导出。
- *          用字节数组而不是字符串字面量：.cgui 是 UTF-8、含中文与引号/反斜杠，
- *          字面量既要转义又受源文件编码影响；字节数组逐字节等价，不会读出偏差。
- *          末尾多一个 0，方便当 C 字符串用；长度按实际字节数算，不含这个 0。
- *          用法见 main.c 的 embedded_cgui()：exe 旁边没有 ${cguiFile} 时才用它。
- */
-const unsigned char k_cgui_bytes[] = {
-${cguiRows.join("\n")}
-    0x00
-};
-
-/** 界面原文指针（C 字符串，UTF-8，以 0 结尾） */
-const char *const k_cgui_text = (const char *)k_cgui_bytes;
-
-/** 界面原文长度（字节，不含结尾的 0） */
-const unsigned int k_cgui_len = ${cguiBytes.length}u;
-`;
+  /* 界面**不**往工程里生成 C 源码：单文件发布改成"把 .cgui 作为 PE 资源编进 exe"
+     （见 designer\electron\cgbuild.mjs），运行时在所有文件位置都找不到时才读它。
+     这样手写工程（examples/*）也能单文件发布，工程目录也不会多出几百 KB 的数组文件。 */
 
   /* 导出的 build.bat 与仓库里手写的 bat 同一套规则（见 tools\bat-utf8.ps1）：UTF-8 无 BOM
      + CRLF，开头一段纯 ASCII 前导先切代码页、再把同一个文件在新进程里重跑一遍。cmd 解析
@@ -419,8 +368,6 @@ call "%CSTACKGUI_HOME%build-app.bat" "%~dp0."
     { name: `${base}_ui_events.h`, content: header },
     { name: `${base}_ui_events.c`, content: stubs },
     { name: "main.c", content: mainC },
-    /* 界面原文（编译进 exe）：发布时把 x.exe 与 x.cgui 合成一个 exe，对方双击就能跑 */
-    { name: `${base}_cgui.c`, content: cguiC },
     /* 与画布「保存」同一套序列化（cleanNode 去默认值字段），保证导出即保存、两者字节一致 */
     { name: cguiFile, content: serializeDoc(doc) },
     /* 程序图标 + 版本信息：build-app.bat 见到这个 rc 就用它，版本信息不再是通用的 */
