@@ -118,6 +118,15 @@ void cg_skin_edit_fit_spin(cg_widget_t *w);
  */
 void cg_skin_edit_rescale(cg_widget_t *w);
 
+/**
+ * @brief 主题切换后刷新输入框的缓存底色（深色跟随主题）
+ * @param w 输入框控件
+ * @return void 无返回值（没有子类数据时什么也不做）
+ * @details `s->bg` 是建控件时算好缓存的（边框带补底用），换主题不会自己变 ——
+ *          本函数只重算这一个值并让非客户区重画，供 `cgw_theme_widget()` 调用（深色皮肤 T1）。
+ */
+void cg_skin_edit_retheme(cg_widget_t *w);
+
 /** 输入框边框宽度：客户区四边各让出这么多，圆角边框画在客户区**之外**。
  *  这样控件自己重绘（选中文字 / 滚动 / 光标闪烁）永远盖不掉边框——
  *  否则双击选中时会出现"边框缺口"。EM_SETMARGINS 用 CG_EDIT_TEXT_MARGIN，
