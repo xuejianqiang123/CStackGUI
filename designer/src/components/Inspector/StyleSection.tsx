@@ -15,6 +15,7 @@ import {
   inlineStyle,
   normalizeStyle,
   resolveStyle,
+  roleColor,
   type CgAlign,
   type CgDoc,
   type CgNode,
@@ -23,7 +24,6 @@ import {
   type CgStyleRef,
 } from "../../model";
 import { Row, type Patch } from "./PanelUi";
-import { roleColor } from "../WidgetView";
 
 /** 字体选择器候选： Windows 常见字体，label 用中文名好认，value 写进 .cgui */
 const FONT_CHOICES: { label: string; value: string }[] = [

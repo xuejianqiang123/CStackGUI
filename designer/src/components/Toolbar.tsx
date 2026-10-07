@@ -22,6 +22,8 @@ type Props = {
   onOpenActions: () => void;
   /** 「样式」对话框：管理命名样式（字体/颜色字段），控件用 style 引用它 */
   onOpenStyles: () => void;
+  /** 「色彩角色」对话框：管理 roles{}（深浅两份语义色），颜色字段用 @引用 */
+  onOpenRoles: () => void;
   running: boolean;
   onRun: () => void;
   publishing: boolean;
@@ -72,6 +74,12 @@ export default function Toolbar(p: Props) {
           title="样式：一条命名样式（字体 / 字号 / 颜色 / 圆角），控件用 style 引用它（“style”: “名字” 或 { use: “名字”, ...覆盖 }）"
         >
           样式
+        </button>
+        <button
+          onClick={p.onOpenRoles}
+          title="色彩角色：一个语义色的浅色 / 深色两份值，颜色字段写 “@名字” 引用——切主题全套跟着走"
+        >
+          色彩
         </button>
       </div>
 

@@ -12,6 +12,7 @@ import InfoDialog from "./components/InfoDialog";
 import LayerTree from "./components/LayerTree";
 import NewProjectDialog from "./components/NewProjectDialog";
 import Palette from "./components/Palette";
+import RolesDialog from "./components/RolesDialog";
 import StyleDialog from "./components/StyleDialog";
 import SupportPanel from "./components/SupportPanel";
 import Toolbar from "./components/Toolbar";
@@ -93,6 +94,8 @@ export default function App() {
   const [actionsOpen, setActionsOpen] = useState(false);
   /** 「样式」对话框开关（工具栏按钮打开）：管理顶层 styles{}（命名样式） */
   const [stylesOpen, setStylesOpen] = useState(false);
+  /** 「色彩角色」对话框开关：管理顶层 roles{}（深浅两份语义色，颜色字段 @引用） */
+  const [rolesOpen, setRolesOpen] = useState(false);
   /** 外部把 .cgui 改了、但画布有未保存改动时挂在这里：底部出通知条问一句，绝不自动覆盖 */
   const [external, setExternal] = useState<CgDoc | null>(null);
   /** 「新建工程」模板选择对话框 */
@@ -572,6 +575,7 @@ export default function App() {
         return;
       }
       if (e.key === "Escape") {
+        setPendingDrop(null);   /* 拖入中按 Esc：中断拖入，幽灵预览不能残留 */
         setSelectedIds([]);
         return;
       }
@@ -691,6 +695,7 @@ export default function App() {
         onOpenInfo={() => setInfoOpen(true)}
         onOpenActions={() => setActionsOpen(true)}
         onOpenStyles={() => setStylesOpen(true)}
+        onOpenRoles={() => setRolesOpen(true)}
         onZoom={(z) => setZoom(clamp(z, 0.2, 3))}
         onToggleGrid={() => setShowGrid((v) => !v)}
         onToggleSnap={() => setSnapOn((v) => !v)}
@@ -954,6 +959,13 @@ rect = { x:${selected.rect.x}, y:${selected.rect.y}, w:${selected.rect.w}, h:${s
         open={stylesOpen}
         doc={doc}
         onClose={() => setStylesOpen(false)}
+        onBeginHistory={onBeginHistory}
+        onApply={onApply}
+      />
+      <RolesDialog
+        open={rolesOpen}
+        doc={doc}
+        onClose={() => setRolesOpen(false)}
         onBeginHistory={onBeginHistory}
         onApply={onApply}
       />

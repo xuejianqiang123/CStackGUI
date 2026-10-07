@@ -20,7 +20,7 @@
  * 新的随便改，旧的原样不动。
  */
 import { useState } from "react";
-import { countRefs, isSafeStyleName, renameStyleRefs, type CgDoc, type CgStyle } from "../model";
+import { countRefs, isSafeStyleName, renameStyleRefs, roleColor, type CgDoc, type CgStyle } from "../model";
 import { Row } from "./Inspector/PanelUi";
 
 type Props = {
@@ -47,10 +47,14 @@ function nextStyleName(styles: Record<string, CgStyle>): string {
 type CardProps = {
   name: string;
   style: CgStyle;
+  /** 角色色解析（@引用 → 当前模式的具体色）要用整份文档 */
+  doc: CgDoc;
   /** 全部样式名（判重名用；自己也在里面，同名会走「没改」分支提前返回） */
   taken: Set<string>;
   /** 有多少个控件引用着这条样式（0 = 没人引用，改名或删除都不影响任何控件） */
   refCount: number;
+  /** 角色名清单（doc.roles 的键）：文字色/背景色可以写 "@角色" 跟随主题深浅 */
+  roleNames: string[];
   onRename: (to: string) => void;
   onPatch: (patch: Partial<CgStyle>) => void;
   onRemove: () => void;
@@ -59,7 +63,7 @@ type CardProps = {
 
 /** 一条样式 = 一张卡片。字段每改一下就落盘（和「动作」「程序配置」同一套手感），
  *  只有样式名是失焦/回车才提交。 */
-function StyleCard({ name, style, taken, refCount, onRename, onPatch, onRemove, onDuplicate }: CardProps) {
+function StyleCard({ name, style, doc, taken, refCount, roleNames, onRename, onPatch, onRemove, onDuplicate }: CardProps) {
   const [draft, setDraft] = useState(name);
 
   /* 空名字 / 重名当场标红（不必等失焦，契约要求"空名字当场标红"） */
@@ -138,11 +142,25 @@ function StyleCard({ name, style, taken, refCount, onRename, onPatch, onRemove, 
         </label>
       </Row>
 
-      <Row label="文字色" hint="前景色；留空 = 跟随系统（或运行时缺省色）">
+      <Row label="文字色" hint="前景色；留空 = 跟随系统（或运行时缺省色）。也可选角色让它跟随主题深浅">
+        <select
+          className="input narrow"
+          value={style.fg?.startsWith("@") ? style.fg : ""}
+          title="选「字面色」用旁边的取色器；选角色则颜色跟随主题深浅"
+          onChange={(e) => onPatch(e.target.value ? { fg: e.target.value } : { fg: undefined })}
+        >
+          <option value="">字面色</option>
+          {roleNames.map((r) => (
+            <option key={r} value={`@${r}`}>
+              @{r}
+            </option>
+          ))}
+        </select>
         <input
           className="input color"
           type="color"
-          value={style.fg ?? "#1d1b20"}
+          disabled={!!style.fg?.startsWith("@")}
+          value={roleColor(doc, style.fg) ?? "#1d1b20"}
           onChange={(e) => onPatch({ fg: e.target.value })}
         />
         <button className="mini" onClick={() => onPatch({ fg: undefined })}>
@@ -150,11 +168,25 @@ function StyleCard({ name, style, taken, refCount, onRename, onPatch, onRemove, 
         </button>
       </Row>
 
-      <Row label="背景色" hint="底色；留空 = 透明 / 跟随系统（不透明白色请显式选色）">
+      <Row label="背景色" hint="底色；留空 = 透明 / 跟随系统（不透明白色请显式选色）。也可选角色跟随主题深浅">
+        <select
+          className="input narrow"
+          value={style.bg?.startsWith("@") ? style.bg : ""}
+          title="选「字面色」用旁边的取色器；选角色则颜色跟随主题深浅"
+          onChange={(e) => onPatch(e.target.value ? { bg: e.target.value } : { bg: undefined })}
+        >
+          <option value="">字面色</option>
+          {roleNames.map((r) => (
+            <option key={r} value={`@${r}`}>
+              @{r}
+            </option>
+          ))}
+        </select>
         <input
           className="input color"
           type="color"
-          value={style.bg ?? "#ffffff"}
+          disabled={!!style.bg?.startsWith("@")}
+          value={roleColor(doc, style.bg) ?? "#ffffff"}
           onChange={(e) => onPatch({ bg: e.target.value })}
         />
         <button className="mini" onClick={() => onPatch({ bg: undefined })}>
@@ -307,8 +339,10 @@ export default function StyleDialog({ open, doc, onClose, onBeginHistory, onAppl
                 key={name}
                 name={name}
                 style={styles[name]}
+                doc={doc}
                 taken={taken}
                 refCount={refCountOf(name)}
+                roleNames={Object.keys(doc.roles ?? {})}
                 onRename={(to) => renameStyle(name, to)}
                 onPatch={(p) => patchStyle(name, p)}
                 onRemove={() => removeStyle(name)}

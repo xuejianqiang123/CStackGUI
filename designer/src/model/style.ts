@@ -101,3 +101,22 @@ export function normalizeStyle(style: CgStyleValue | undefined): CgStyleValue | 
 /** 便捷判断：这个节点有没有写自己的 style（任何形态）。 */
 export const hasOwnStyle = (node: CgNode): boolean =>
   typeof node.style === "string" ? !!node.style.trim() : !!node.style && Object.keys(node.style).length > 0;
+
+/** "@角色引用" → 当前模式下的具体色（深色皮肤 G1/T3）。
+ *  非 @ 原样返回（字面色）；角色/槽缺失返回 undefined（= 当没写，调用方退回缺省色）。
+ *  模式：doc.app.dark 显式值定；"auto"/缺省读系统偏好（matchMedia）——只在取色瞬间读一次，
+ *  系统主题变化不触发重渲染（画布 A7 是静态对齐；Node 探针没有 window，当浅色）。 */
+export function roleColor(doc: CgDoc | undefined, ref: string | undefined): string | undefined {
+  if (!ref) return undefined;
+  if (!ref.startsWith("@") || ref.length < 2) return ref;
+  const role = doc?.roles?.[ref.slice(1)];
+  if (!role) return undefined;                        /* 角色不存在 = 当没写 */
+  const mode = doc?.app?.dark;                        /* 深浅开关在 app 上 */
+  const dark =
+    mode === true
+      ? true
+      : mode === false
+        ? false
+        : typeof window !== "undefined" && !!window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+  return (dark ? role.dark : role.light) || undefined;   /* 槽没写 = 当没写 */
+}

@@ -6,7 +6,7 @@
  *
  * 「程序配置」（版本信息 / 作者 / 图标）在顶部工具条的对话框里，这里不再重复给入口。
  */
-import { BORDER_LABEL, CURSORS, type CgApp, type CgBorder, type CgDoc } from "../model";
+import { BORDER_LABEL, CURSORS, roleColor, type CgApp, type CgBorder, type CgDoc } from "../model";
 
 type Props = {
   doc: CgDoc;
@@ -149,11 +149,26 @@ export default function WindowPanel({ doc, onBeginHistory, onApply, onPickIcon }
       />
 
       <div className="insp-section">外观</div>
-      <Row label="底色" hint="窗口背景色；控件透明处透出的就是它">
+      <Row label="底色" hint="窗口背景色；控件透明处透出的就是它。也可选角色跟随主题深浅">
+        <select
+          className="input narrow"
+          value={app.bg?.startsWith("@") ? app.bg : ""}
+          title="选「字面色」用旁边的取色器；选角色则颜色跟随主题深浅"
+          onFocus={onBeginHistory}
+          onChange={(e) => onApply((d) => { d.app.bg = e.target.value || "#F3EDF7"; })}
+        >
+          <option value="">字面色</option>
+          {Object.keys(doc.roles ?? {}).map((r) => (
+            <option key={r} value={`@${r}`}>
+              @{r}
+            </option>
+          ))}
+        </select>
         <input
           className="input color"
           type="color"
-          value={app.bg}
+          disabled={!!app.bg?.startsWith("@")}
+          value={roleColor(doc, app.bg) ?? "#f3edf7"}
           onFocus={onBeginHistory}
           onChange={(e) => onApply((d) => { d.app.bg = e.target.value; })}
         />

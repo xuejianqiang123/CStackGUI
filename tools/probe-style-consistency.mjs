@@ -15,7 +15,7 @@
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseDoc, serializeDoc, resolveStyle } from "../build/modeljs/model.js";
+import { parseDoc, serializeDoc, resolveStyle, countRefs, renameRoleRefs } from "../build/modeljs/model.js";
 
 let fails = 0;
 const ok = (name, cond, extra = "") => {
@@ -102,6 +102,32 @@ const text1 = JSON.stringify(doc1, null, 2);
     ok("往返一次后 roles{} 仍在", p2.doc?.roles?.accent?.light === "#6750A4");
     ok("往返一次后 styles 的 @引用仍在", p2.doc?.styles?.themed?.bg === "@danger");
     ok("往返一次后 app.bg 的 @引用仍在", p2.doc?.app?.bg === "@surface");
+  }
+}
+
+/* ================= 3. 角色引用计数与改名连带（G1 编辑闭环） ================= */
+{
+  const p = parseDoc(text1);
+  if (!p.doc) {
+    ok("角色计数：文档能解析", false);
+  } else {
+    const refs = countRefs(p.doc);
+    /* text1：app.bg=@surface（1 处）+ w_ref.fg=@accent（1 处）+ w_refmix.fg=@danger（1 处）+
+       命名样式 themed.fg/bg=@accent/@danger（样式表里的引用**也数**——renameRoleRefs 会改到它们，
+       影响面显示必须同口径，否则「未被引用」却改名动了样式表，自相矛盾） */
+    ok("accent 的引用点 = 2（w_ref.fg + themed.fg）", refs.roles.get("accent") === 2, String(refs.roles.get("accent")));
+    ok("danger 的引用点 = 2（w_refmix.fg + themed.bg）", refs.roles.get("danger") === 2, String(refs.roles.get("danger")));
+    ok("surface 的引用点 = 1（app.bg）", refs.roles.get("surface") === 1, String(refs.roles.get("surface")));
+
+    const renamed = renameRoleRefs(p.doc, "accent", "brand");
+    ok("改名返回改了 2 处（控件 fg + 命名样式 fg）", renamed === 2, String(renamed));
+    ok("控件引用跟着改", p.doc.widgets.find((n) => n.id === "w_ref")?.style.fg === "@brand");
+    ok("命名样式里的引用跟着改", p.doc.styles?.themed?.fg === "@brand");
+    ok("别的角色不受影响", p.doc.widgets.find((n) => n.id === "w_refmix")?.style.fg === "@danger");
+
+    const roundtrip = parseDoc(serializeDoc(p.doc));
+    ok("改名后往返：@brand 仍在", roundtrip.doc?.widgets.find((n) => n.id === "w_ref")?.style.fg === "@brand");
+    ok("改名后往返：旧名不再出现", !/\"@accent\"/.test(serializeDoc(p.doc)));
   }
 }
 

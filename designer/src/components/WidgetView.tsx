@@ -4,22 +4,8 @@
  * 所以这里刻意用平实的原生风格，而不是网页风格。
  */
 import type { CSSProperties } from "react";
-import { eventLabel, resolveStyle, isNumEdit, CG_EVENTS, type CgDoc, type CgNode, type CgStyle } from "../model";
+import { eventLabel, resolveStyle, roleColor, isNumEdit, CG_EVENTS, type CgDoc, type CgNode, type CgStyle } from "../model";
 import { useImage, type Preview } from "../imagecache";
-
-/** @角色引用 → 当前模式下的具体色；非 @ 原样（字面色）；角色/槽缺失 → undefined（当没写）。
- *  模式：app.dark 显式值定，"auto"/缺省读系统偏好（matchMedia）—— 只在取色瞬间读一次，
- *  系统主题变化不触发重渲染（A7 是静态对齐，契约 §1.1 的"深色不预览"指的不是这个）。 */
-export const roleColor = (doc: CgDoc, ref: string | undefined): string | undefined => {
-  if (!ref) return undefined;
-  if (!ref.startsWith("@") || ref.length < 2) return ref;
-  const role = doc.roles?.[ref.slice(1)];
-  if (!role) return undefined;                       /* 角色不存在 = 当没写 */
-  const mode = doc.app?.dark;                        /* 深浅开关在 app 上（画布模型没有 doc.dark） */
-  const dark =
-    mode === true ? true : mode === false ? false : !!window.matchMedia?.("(prefers-color-scheme: dark)").matches;
-  return (dark ? role.dark : role.light) || undefined;   /* 槽没写 = 当没写 */
-};
 
 /** 画布渲染**解析后的样式**：命名样式打底、内联覆盖（resolveStyle 与运行时
  *  resolve_named_styles 同一套语义）。控件写了 "style": "log"，画布上就该是 log 的
@@ -635,6 +621,7 @@ export default function WidgetView({ doc, node, depth, selected, primaryId, onPo
      也别改成运行时那种完全不可见。 */
   return (
     <div
+      data-node-id={node.id}
       className={[
         "widget",
         `widget-${node.type}`,
