@@ -101,6 +101,28 @@ T1 完成后"深色不完整"的 README/契约口径要按事实改。
 
 - [x] P0 地基调研（本文件 §0，证据行齐全）
 - [x] P1 PRD：本文件（三条决策按推荐定案，说"继续"进 SDD）
-- [ ] P2 SDD：契约形状（roles{}/@引用的字段表）、T1 的破相控件清单、T2 的结构体与求值函数签名
-- [ ] P3 实现 T1 → T2 → T3（每片独立验收）
-- [ ] P4 文档落账：CGUI-FORMAT（roles 章节 + 深色边界改写）、README §1.3 销账
+- [x] P2 SDD：`.codebuddy/plans/roles-dark-sdd.md`（T1 对照表 + edit 双拦截 + T2 结构/求值 + T3 接线点）
+- [x] P3a **T1 内置皮肤深色化（2026-10-07，`6f8c67d`）**：按钮禁用态 / meter / 无底色 edit 跟随主题；
+      审计工程深浅截图验收（A2/A3）；契约与 README 深色口径按事实改写
+- [x] P3b **T2 角色运行时（2026-10-07，`d52428e`）**：roles{} + @引用 + 主题钩子求值 + test_roles.c
+      四套件（A4 真机深浅截图 / A5 单测）
+- [x] P3c **T3 画布（2026-10-08，`f21e466`）**：模型接 roles（往返无损）+ @ 渲染按模式取色 +
+      StyleSection 角色下拉 + 往返门禁探针（A6/A7/A8）
+- [x] P4 文档落账：CGUI-FORMAT §2.2.2 roles 章节 + §1 顶层键表 + 深色边界两轮改写；README §1.3 销账
+
+### 验收对账（A1~A8，PRD §3）
+
+| # | 结果 | 证据 |
+|---|---|---|
+| A1 老文件零变化 | Converged | 全程未动老文件；无 roles/无 @ 的文档解析与渲染走原路径；5 个往返 + run-tests 全绿 |
+| A2 G2 深色破相修复 | Converged | 审计工程 BEFORE/AFTER 截图：禁用按钮 / meter 指针 / 无底色 edit 全部修复 |
+| A3 G2 浅色零变化 | Converged | 浅色变体截图逐控件与既有浅色皮肤一致；改动全在 dark 分支 / neutral 对的 dark 槽 |
+| A4 角色深浅各取对应值 | Converged | 审计工程三个 @控件（文字 ×2 + 按钮底）深浅截图各取对应槽；切换即时生效（apply 钩子） |
+| A5 容错 | Converged | test_roles.c：@不存在 = 当没写 + 失效计数 WARN；值非法 = 槽跳过；两槽全缺的条目跳过 |
+| A6 画布往返不丢 | Converged | 红证：colorOf 修复前 @ 静默丢、roles{} 整表消失；修复后探针全绿 + 往返门禁 roles/@ 恒等 |
+| A7 画布按模式显示 | Converged | 深浅两态画布截图：@控件各取对应槽（auto 读系统偏好，静态对齐） |
+| A8 一致性 | Converged | `tools\probe-style-consistency.mjs`：契约文字独立实现对拍 resolveStyle + @/roles 往返，全绿 |
+
+**epic 收敛**。切片：T1（G2 皮肤深色化）→ T2（G1 角色运行时）→ T3（G1 画布），T4（terminal/chart
+内置色挂角色）**有意推后**。遗留（SDD §7 P3c 记录）：StyleDialog / WindowPanel 的角色下拉与
+roles 表编辑器未做（手改 .cgui + 热重载可用）；`app.dark` 变化不触发画布重渲染（静态对齐边界）。

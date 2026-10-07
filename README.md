@@ -124,7 +124,9 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
   工具栏，以及 `slider` 的**画布底**（槽跟随了，但控件底由原生 trackbar 画，实测改不动）；
   按钮 / 勾选 / 开关这类自绘控件**底色跟着深、品牌色填充不跟**（仍是 M3 浅紫 —— 有意为之，
   画在它上面的文字也就不跟着变浅）；自己写了 `fg`/`bg` 的控件一律保持原样 ——
-  **写死颜色的控件要深浅两套值**，等色彩角色系统（规划中）；菜单 / 列表 / 树是平台边界。
+  **写死颜色的控件要深浅两套值**，用**色彩角色**解决：`roles{}` 定义深浅两份值、
+  颜色字段写 `"@角色名"` 引用，深浅切换全套跟着走（见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md) 2.2.2）；
+  菜单 / 列表 / 树是平台边界。
   见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md) 1.1.1。
 - **截图**：`cg_win_screenshot()` / `cg_widget_screenshot()` 把整个窗口或某个控件存成 **PNG** ——
   走 `PrintWindow`，所以窗口被挡住、不在前台也拿得到正确内容；现场出问题时一键取证贴进工单
