@@ -870,7 +870,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `tag` | 标签片 | 否 | 72×28 | `标签` | `click` | `BUTTON` 自绘 |
 | `rate` | 评分 | 否 | 140×32 | — | `change` | `BUTTON` 自绘五角星（星数 = `max-min`，上限 10）|
 | `pagination` | 分页 | 否 | 180×32 | — | `change` | `BUTTON` 自绘（页数 = `max-min+1`）|
-| `dialog` | 对话框 | **是** | 360×240 | — | `close`、`closequery`、`destroy`、`move`、`size`、`activate`、`deactivate`、`show`、`hide`、鼠标三件套（`mousedown` / `mouseup` / `dblclick` / `rdown` / `rup` / `mousemove`）、`gotfocus`、`lostfocus`、`keydown`、`keyup`、`char`、`wheel` | **独立顶层窗口**（多窗体）：`text` 是窗口标题、`rect` 是窗口位置尺寸（`center` 缺省 `true` = 打开时居中于主窗口；写 `false` 则按 `rect.x`/`rect.y` **屏幕坐标**摆，与 `app.x`/`app.y` 同一口径）、`children` 是窗口里的控件（坐标相对对话框客户区）。原生在 `cg_dialog_open` 打开时才建（懒建），模态时主窗口被禁用；返回 0 = 取消/Esc，1 = `cg_dialog_close(self, 1)` |
+| `dialog` | 对话框 | **是** | 360×240 | — | `close`、`closequery`、`destroy`、`move`、`size`、`activate`、`deactivate`、`show`、`hide`、鼠标三件套（`mousedown` / `mouseup` / `dblclick` / `rdown` / `rup` / `mousemove`）、`gotfocus`、`lostfocus`、`keydown`、`keyup`、`char`、`wheel` | **独立顶层窗口**（多窗体）：`text` 是窗口标题、`rect` 是窗口位置尺寸（`center` 缺省 `true` = 打开时居中于主窗口；写 `false` 则按 `rect.x`/`rect.y` **屏幕坐标**摆，与 `app.x`/`app.y` 同一口径）、`children` 是窗口里的控件（坐标相对对话框客户区）。原生在 `cg_dialog_open` 打开时才建（懒建），模态时主窗口被禁用；返回 0 = 取消/Esc，1 = `cg_dialog_close(self, 1)`。`cg_dialog_open_nonmodal` 开**非模态**：立即返回、主窗口保持可用，无返回值语义（关闭走 `cg_dialog_close` 或关闭钮，close/closequery/destroy 照常触发）；同一时间只支持一个对话框（模态或非模态合计），非模态对话框的窗口级 move/size/activate 事件不派发（控件级与关闭路径不受影响） |
 
 > 上表的事件列与 `k_kinds[].events` 位掩码一一对应（`node tools\check-examples.mjs --docs` 会逐行回校）。
 > 鼠标 / 键盘那种"一整类"的写在行内括号里；某类控件不该有的事件，运行时与自检都会明确报出来。

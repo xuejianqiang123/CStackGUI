@@ -183,3 +183,14 @@ A1→T1/T2 全程老文件回归 ｜ A2/A3→T1 截图 ｜ A4→T2 真机 ｜ A5
       tsc / vite / 一致性探针 / probe-dialog / check-format 全绿。
       **未做**：RolesDialog 的截图验收（镜像 StyleDialog 的成熟模式，结构靠 tsc 保证）；
       Canvas.tsx / tree.ts 的未提交改动是所有者并行工作，未纳入本片提交。
+- [x] P6 **F2-T4 前半：非模态子窗体（2026-10-08，`494b334`）**：加法式 API
+      `cg_dialog_open_nonmodal`（不动已交付的模态签名；同一时间一个对话框、模态或非模态合计——
+      `any_dialog_open` 守卫统一进两个 open）；非模态 = 不禁用主窗口、不进内层泵，生命周期到
+      WM_DESTROY；宿主解析：模态走 modal_dlg 快路径，非模态在 WM_CLOSE/WM_DESTROY
+      （低频消息）按 HWND 反查（`cgw_dialog_by_hwnd`，全树 O(n)）——**窗口级 move/size/activate
+      v1 不派发**（控件级与关闭路径不受影响，契约 dialog 行已写明）。
+      **验收**：modaltest 加 OpenNM 按钮 + `on_open_nm`，探针 phase3 六项
+      （打开即返 ✓ owner 保持可用 = A2 反命题 ✓ OK 走 cg_dialog_close 关闭 ✓ 主窗存活 ✓
+      nm result=1 ✓）——全序列 **27 项 ALL PASS**（模态 A1~A5 回归 + 非模态 A6）。
+      run-tests / check-format / probe-dialog 全绿；darkterm/gallery 重编换新库。
+      **T4 后半（"引用另一个 .cgui"多文件组装）仍推后**——那是另一个契约 epic。
