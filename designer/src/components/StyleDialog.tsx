@@ -296,8 +296,9 @@ export default function StyleDialog({ open, doc, onClose, onBeginHistory, onAppl
                 合并规则是<strong>内联优先</strong>；<code>use</code> 指向不存在的名字时按"没有命名样式"处理，不报错。
               </p>
               <p className="muted small">
-                引用点在「属性」面板的<strong>样式</strong>那一栏选。这里只编辑字段值，
-                <strong>不预览</strong>外观（画布不做样式实时预览）。
+                引用点在「属性」面板的<strong>样式</strong>那一栏选。这里改字段，画布上引用它的控件
+                <strong>立刻跟着变</strong>（画布按解析后的样式渲染 —— F6 起）；深色模式与系统控件的
+                真实效果仍要跑起来看。
               </p>
             </div>
           ) : (

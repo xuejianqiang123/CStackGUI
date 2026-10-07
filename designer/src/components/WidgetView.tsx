@@ -4,25 +4,25 @@
  * 所以这里刻意用平实的原生风格，而不是网页风格。
  */
 import type { CSSProperties } from "react";
-import { eventLabel, inlineStyle, isNumEdit, CG_EVENTS, type CgNode } from "../model";
+import { eventLabel, resolveStyle, isNumEdit, CG_EVENTS, type CgDoc, type CgNode, type CgStyle } from "../model";
 import { useImage, type Preview } from "../imagecache";
 
-/** 画布预览只吃**内联字段**（字符串形态的命名引用没有内联字段，返回 {}）：
- *  契约 §4 明确画布不做命名样式/深色的实时预览 —— 那等于把整套自绘皮肤在 Web 侧再实现一遍。 */
-const stOf = (node: CgNode) => inlineStyle(node.style);
-
-const fontOf = (node: CgNode): CSSProperties => {
-  const style = stOf(node);
-  const px = style.size ? `${style.size}pt` : "12px";
+/** 画布渲染**解析后的样式**：命名样式打底、内联覆盖（resolveStyle 与运行时
+ *  resolve_named_styles 同一套语义）。控件写了 "style": "log"，画布上就该是 log 的
+ *  字体颜色 —— 不然又造一类"画布上看到的不一样"。F6 第一刀（2026-10-07）把命名样式
+ *  从"不预览"里摘出来：resolveStyle 本就在模型层（属性面板在用），接线近乎零成本。
+ *  **深色仍不预览**（那才是"把整套自绘皮肤在 Web 侧再实现一遍"，契约 §1.1 有意为之）。 */
+const fontOf = (st: CgStyle): CSSProperties => {
+  const px = st.size ? `${st.size}pt` : "12px";
   return {
-    fontFamily: style.font ? `"${style.font}", "Microsoft YaHei UI", sans-serif` : '"Microsoft YaHei UI", sans-serif',
+    fontFamily: st.font ? `"${st.font}", "Microsoft YaHei UI", sans-serif` : '"Microsoft YaHei UI", sans-serif',
     fontSize: px,
-    fontWeight: style.bold ? 700 : 400,
-    color: style.fg ?? "#1D1B20",
+    fontWeight: st.bold ? 700 : 400,
+    color: st.fg ?? "#1D1B20",
   };
 };
 
-function inner(node: CgNode, img: Preview) {
+function inner(node: CgNode, img: Preview, st: CgStyle) {
   const value = node.value ?? 40;
   const min = node.min ?? 0;
   const max = node.max ?? 100;
@@ -30,7 +30,6 @@ function inner(node: CgNode, img: Preview) {
 
   switch (node.type) {
     case "button": {
-      const st = stOf(node);
       const skin: CSSProperties = {};
       if (img) {
         /* 背景图：运行时是 StretchBlt 整幅铺满 + 圆角裁切（cg_skin.c:472-476）。
@@ -66,7 +65,7 @@ function inner(node: CgNode, img: Preview) {
       /* 运行时 label 读 style.align 设 SS_LEFT/CENTER/RIGHT（cg_win_ctl.c:227-228），
          预览要一致。.ctl-label 是 flex，靠 justifyContent 才真对齐
          （text-align 落在匿名 flex 项上不生效）。 */
-      const al = stOf(node).align ?? "left";
+      const al = st.align ?? "left";
       return (
         <div
           className="ctl-label"
@@ -106,7 +105,7 @@ function inner(node: CgNode, img: Preview) {
           className={`ctl-edit${multi ? " ctl-edit-multi" : ""}${
             node.border ? ` ctl-edit-b${node.border}` : ""
           }`}
-          style={{ textAlign: stOf(node).align ?? "left", position: "relative" }}
+          style={{ textAlign: st.align ?? "left", position: "relative" }}
           title={bits.length ? `输入框：${bits.join(" · ")}` : undefined}
         >
           {node.spin ? (
@@ -489,7 +488,7 @@ function inner(node: CgNode, img: Preview) {
       /* 灯只有三态，画布上直接照着画：0 灭（灰）/ 1 亮（style.fg 或缺省绿）/ 2 闪。
          闪的可视化就用"亮色 + 虚线边框"，不真做动画 —— 编辑时画面一直晃太干扰。 */
       const state = Math.max(0, Math.min(2, Math.round(node.value ?? 0)));
-      const color = state === 0 ? "#CAC4D0" : stOf(node).fg || "#1B6E33";
+      const color = state === 0 ? "#CAC4D0" : st.fg || "#1B6E33";
       const lamp = (
         <span
           className={`led-lamp ${node.format === "square" ? "led-square" : "led-round"}`}
@@ -526,7 +525,7 @@ function inner(node: CgNode, img: Preview) {
       const r = 40;
       const startDeg = half ? 180 : 135;
       const sweepDeg = half ? 180 : 270;
-      const color = stOf(node).fg || "#6750A4";
+      const color = st.fg || "#6750A4";
       /* 角度按"y 轴向下"的屏幕坐标算：0° = 右，90° = 下，所以角度增大 = 顺时针 */
       const pt = (deg: number, radius: number) => {
         const a = (deg * Math.PI) / 180;
@@ -561,6 +560,8 @@ function inner(node: CgNode, img: Preview) {
 }
 
 type Props = {
+  /** 解析命名样式要用整份文档（styles{} 在顶层）—— F6 起画布按解析后的样式渲染 */
+  doc: CgDoc;
   node: CgNode;
   depth: number;
   /** 当前选中集（主选框也在里面）：这里只回答「选没选中」 */
@@ -570,23 +571,25 @@ type Props = {
   onPointerDown: (e: React.PointerEvent, node: CgNode) => void;
 };
 
-export default function WidgetView({ node, depth, selected, primaryId, onPointerDown }: Props) {
+export default function WidgetView({ doc, node, depth, selected, primaryId, onPointerDown }: Props) {
   /* 预览图必须在**任何提前 return 之前**取：下面就有 `if (node.type === "menu") return null;`，
      hook 放到它后面就成了条件调用 —— 而控件类型是能在「属性」面板里改的，一改就"Hooks 数量不一致"崩溃
      （和 Inspector 里那条注释记的是同一个坑）。 */
   const img = useImage(node.src);
+  /* 解析一次，整棵渲染共用：命名样式打底、内联覆盖（引用了不存在的名字 → effective
+     就是内联自己，与运行时"当没有 use"同一口径）。 */
+  const st = resolveStyle(doc, node.style).effective;
   const style: CSSProperties = {
     position: "absolute",
     left: node.rect.x,
     top: node.rect.y,
     width: node.rect.w,
     height: node.rect.h,
-    ...fontOf(node),
+    ...fontOf(st),
   };
-  const own = stOf(node);
-  if (own.bg) style.background = own.bg;
+  if (st.bg) style.background = st.bg;
   /* 外形框（shape）的圆角由 format 决定，不走通用的 style.radius（见下面的 shape 分支） */
-  if (own.radius && node.type !== "shape") style.borderRadius = own.radius;
+  if (st.radius && node.type !== "shape") style.borderRadius = st.radius;
 
   /* 外形框预览对齐运行时的三形态与配色（cgw_PanelProc 的 WM_PAINT，见 cg_win_draw_panel.c）：
      rect=直角 / roundrect=圆角（缺省 8px，可被 style.radius 覆盖）/ ellipse=椭圆（忽略 radius）。
@@ -594,8 +597,8 @@ export default function WidgetView({ node, depth, selected, primaryId, onPointer
      这是有意的：画布上"看得见才选得中"，实心填色会把窗口遮死、也没法点中它。 */
   if (node.type === "shape") {
     const fmt = node.format ?? "roundrect";
-    style.borderColor = own.fg ?? "#b4b0bb";
-    if (fmt === "roundrect" && own.radius) style.borderRadius = own.radius;
+    style.borderColor = st.fg ?? "#b4b0bb";
+    if (fmt === "roundrect" && st.radius) style.borderRadius = st.radius;
   }
 
   const bound = CG_EVENTS.filter((e) => node.events?.[e]);
@@ -632,13 +635,14 @@ export default function WidgetView({ node, depth, selected, primaryId, onPointer
       onPointerDown={(e) => onPointerDown(e, node)}
       title={`${node.type} #${node.id}`}
     >
-      {inner(node, img)}
+      {inner(node, img, st)}
 
       {isGroup && kids.length ? (
         <div className="group-body">
           {kids.map((c) => (
             <WidgetView
               key={c.id}
+              doc={doc}
               node={c}
               depth={depth + 1}
               selected={selected}

@@ -544,6 +544,7 @@ export default function Canvas(props: Props) {
               {doc.widgets.map((n) => (
                 <WidgetView
                   key={n.id}
+                  doc={doc}
                   node={n}
                   depth={0}
                   selected={selectedSet}
