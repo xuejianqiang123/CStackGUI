@@ -164,8 +164,11 @@ const RULES = [
        + "只认源码树布局的话，发布包自带的自检结构上永远过不去。",
   },
   {
-    scope: "file", file: "packaging/build-app.bat",
-    must: ["-luuid"],
+    // 2026-10-07：编译逻辑从 packaging\build-app.bat 搬到内核 tools\cgbuild.mjs
+    // （发布包那份现在只是转发到 CStackGUI.exe --build 的 ASCII 薄壳），
+    // 所以这条契约跟着指向内核 —— 它才是两份包真正共用的那一份。
+    scope: "file", file: "tools/cgbuild.mjs",
+    must: ["-luuid", "-lole32", "-loleaut32"],
     why: "发布版和源码版的链接库要一致：browser（WebBrowser 控件 = OLE/COM）需要 "
        + "-luuid -lole32 -loleaut32，少了它们在发布包里编带 browser 的工程会 undefined reference。",
   },

@@ -130,6 +130,8 @@ rem 开发工具：clangd 配置生成器 + 格式契约回归 + 截图
 if not exist release\tools mkdir release\tools
 copy /y packaging\check-format.bat release\tools\check-format.bat >nul
 copy /y tools\gen-cc.mjs release\tools\ >nul
+rem 编译内核：发布包的 build-app.bat 转发到 CStackGUI.exe --build，exe 用它来编译
+copy /y tools\cgbuild.mjs release\tools\ >nul
 copy /y tools\format-roundtrip.mjs release\tools\ >nul
 copy /y tools\shot.ps1 release\tools\ >nul
 rem cg_kit 冒烟测试也带上：发布包里那份预编译库要能真跑通文件/配置/编码

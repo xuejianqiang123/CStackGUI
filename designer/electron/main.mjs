@@ -3,14 +3,15 @@
  * 画布本身是纯前端（React），这里负责四件浏览器做不到的事：
  *   1. 读写磁盘上的 .cgui（真正的「打开/保存」，不是下载文件）
  *   2. 把生成的 C 骨架落到 apps/<name>/ 里
- *   3. F5 一键运行：调项目根的 build-app.bat 编译，再把 exe 跑起来
+ *   3. F5 一键运行：直接跑编译内核 tools\cgbuild.mjs，再把 exe 跑起来
+ *      （命令行下同一件事：CStackGUI.exe --build <工程>）
  *   4. 打开系统资源管理器定位产物
  */
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { existsSync, appendFileSync, readFileSync } from "node:fs";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -576,16 +577,28 @@ ipcMain.handle("run:buildAndLaunch", async (_e, { filePath }) => {
   if (!existsSync(path.join(appDir, "main.c"))) {
     return fail(`${appDir} 里没有 main.c。\n先点「导出 C 骨架」生成 C 代码，再运行。`);
   }
+  /* 编译内核必须在这个根里 —— 便携版指错了根时，给一句能照着做的话，
+   * 而不是让 spawn 失败后只显示一个退出码。 */
+  if (!existsSync(path.join(root, "tools", "cgbuild.mjs"))) {
+    return fail(`项目根 ${root} 里没有编译内核 tools\\cgbuild.mjs。\n用工具条的「定位项目根」选含 runtime\\、tools\\ 的那一层目录。`);
+  }
 
   runBusy = true;
-  send("run:output", { kind: "line", text: `$ build-app.bat ${name}` });
+  send("run:output", { kind: "line", text: `$ cgbuild ${name}` });
 
-  /* chcp 65001：让批处理里的中文输出走 UTF-8，渲染进程不用再转码 */
+  /* 直接用画布自带的 Node 跑编译内核 tools\cgbuild.mjs。
+   * 以前这里 spawn 的是 `cmd /d /s /c "chcp 65001 >nul & build-app.bat"`：
+   * chcp 与批处理挤在同一个 cmd 进程里，脚本自带的重入逻辑不生效，
+   * 在部分机器上中文行会被从多字节字符中间切断、后半段被当成命令执行。
+   * 走 Node 就没有代码页这一层，工程目录直接走命令行参数（不再用 CG_APP_DIR）。
+   * ELECTRON_RUN_AS_NODE=1：process.execPath 是 Electron 本体，不加这个会被
+   * 当成"用 electron 打开一个应用"，而不是"用 node 跑一个脚本"。 */
+  const kernel = path.join(root, "tools", "cgbuild.mjs");
   let exitCode = -1;
   await new Promise((resolve) => {
-    const child = spawn("cmd.exe", ["/d", "/s", "/c", "chcp 65001 >nul & build-app.bat"], {
+    const child = spawn(process.execPath, [kernel, appDir], {
       cwd: root,
-      env: { ...process.env, CG_APP_DIR: appDir },
+      env: { ...process.env, CSTACKGUI_HOME: root, ELECTRON_RUN_AS_NODE: "1" },
     });
     const push = (buf) => {
       for (const line of String(buf).split(/\r?\n/)) {
@@ -805,7 +818,36 @@ Menu.setApplicationMenu(
   ]),
 );
 
+/* ------------------------------------------------ 无窗口 CLI：--build
+ * CStackGUI.exe --build [工程名|路径] [--release]
+ * 发布包里的 build-app.bat 只是转发到这一条。编译逻辑仍然只有一份，
+ * 就在 tools\cgbuild.mjs；这里不建窗口、输出直连 stdout、按编译退出码退出，
+ * 所以命令行 / bat / CI 拿到的行为与画布 F5 完全一致。 */
+const buildCliArgs = (() => {
+  const i = process.argv.indexOf("--build");
+  return i < 0 ? null : process.argv.slice(i + 1);
+})();
+
 app.whenReady().then(() => {
+  if (buildCliArgs) {
+    /* 打包后 exe 就在发布包根（release\CStackGUI.exe），内核被 make-release.bat
+     * 拷到同级的 tools\ 下。开发态（electron .）的 execPath 指向 electron.exe，
+     * 那种情况直接 node tools\cgbuild.mjs。 */
+    const root = path.dirname(process.execPath);
+    const kernel = path.join(root, "tools", "cgbuild.mjs");
+    if (!existsSync(kernel)) {
+      process.stdout.write(`[fail] build kernel not found: ${kernel}\n`);
+      app.exit(1);
+      return;
+    }
+    const r = spawnSync(process.execPath, [kernel, ...buildCliArgs], {
+      stdio: "inherit",
+      cwd: root,
+      env: { ...process.env, CSTACKGUI_HOME: root, ELECTRON_RUN_AS_NODE: "1" },
+    });
+    app.exit(r.status ?? 1);
+    return;
+  }
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
