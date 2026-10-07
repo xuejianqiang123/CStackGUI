@@ -86,6 +86,9 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
   输入与选择 → 数值与指示 → 数据与日志 → 命令与图形 → 主窗口与窗口事件。每课只讲一个主题、
   **只出现本课主题的控件**、各用一屏摆齐、都能单独编译运行。
   **入门从这里开始**，路线图与逐课详解见 [examples\教学使用说明.md](examples/教学使用说明.md)。
+- `examples\cppdemo\` —— **C++ 例程**：同一个工程也能用 C++ 写（把源文件叫 `.cpp`，构建脚本自动换
+  `g++ -std=c++17` 并用 g++ 链接，`libstdc++` 静态收进 exe）。演示"数据放 `std::vector`、状态放对象、
+  回调 `extern "C"` 转发到单例"，`.cgui` / 绑定表 / `--selftest` 与 C 工程一字不差。
 - `examples\gallery\` —— **控件陈列室（三合一）**：顶层标签页分「基础闭环 / 控件陈列 / 新特性」
   三页，67 个控件、47 个回调，**讲"控件怎么用"**（当"控件字典"翻）。
 - `examples\notepad\` —— **真实小工具范例（记事本）**：菜单分发、脏标记、状态栏刷新、
@@ -197,9 +200,13 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
    导出骨架之后，事件行上的「**代码**」按钮会直接打开 `*_ui_events.c` 里对应那个函数
    （装了 VS Code 用 `code -g` 跳到行），不用自己翻文件找。
 4. **保存**：`Ctrl+S` 存成 `.cgui`（例如 `apps\myapp\myapp.cgui`）。
-5. **导出 C 骨架**：工具条「导出 C 骨架」→ 选 `apps\` 目录。生成 5 个文件：
+5. **导出骨架**：工具条「导出 C 骨架」→ 选 `apps\` 目录。生成 5 个文件：
    `<名字>.cgui`（画布产物）、`<名字>_ui_events.h/.c`（**.c 是你的代码，主要改它**）、
    `main.c`、`build.bat`。**重新导出不会覆盖你写过的 `_ui_events.c`**。
+   **首次导出**（目录里还没有骨架）会先问一句用 **C 还是 C++**：
+   C++ 给的是 `<名字>_ui_events.cpp` + `main.cpp`（MinGW-w64 自带 g++，编译脚本自动换
+   `g++ -std=c++17` 并用 g++ 链接）；已经导过的工程不再问 —— 同一个工程混两套源文件会
+   链接重复定义，要换语言请另建工程。
 6. **填逻辑、编译**：在项目根目录跑：
 
    ```bat
@@ -253,6 +260,7 @@ examples\notepad\notepad.exe --selftest examples\notepad\notepad.cgui  :: 真实
 tools\run-tests.bat                                              :: C 层单测（JSON/文档/类型表/事件表）+ cg_kit 冒烟
 tools\run-tests.bat --memcheck                                   :: 再叠一层堆泄漏记账（ld --wrap malloc/free）
 tools\check-format.bat                                           :: 格式契约回归 + 支持库表一致性 + bat 编码
+                                                                 :: （含 electron 语法 + 骨架语言判据 check-skeleton）
 tools\check-kit.bat                                              :: cg_kit 基础能力冒烟测试（已并入 run-tests）
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-utf8.ps1 -Mode fix
                                                                  :: 动过 .bat 之后跑：UTF-8 无 BOM + ASCII 前导，否则双击时注释被当命令跑
@@ -363,7 +371,7 @@ CStackGUI\
   designer\                    画布源码（Electron + React + TS）
     src\model.ts               .cgui 数据模型 + KIND_EVENTS 事件表（与 cg_doc.c 对应）
     src\supportlib.ts          「支持库」页签的数据：C API 中文索引（与 cstackgui.h 对齐）
-    src\codegen.ts             导出 C 骨架
+    src\codegen.ts             导出骨架（C / C++ 两套模板）
     electron\main.mjs          文件读写、导出、菜单、项目根记忆（便携版自动识别）
   runtime\                     C 运行时库
     include\cstackgui.h        业务代码唯一需要 include 的头
@@ -402,6 +410,7 @@ CStackGUI\
     lesson05_commands\         教学示例 05：命令与图形（菜单/工具栏/画板/外形/图片/网页）
     lesson06_window\           教学示例 06：主窗口与窗口事件（app.* 配置 / 26 种窗口事件 / 程序信息）
     教学使用说明.md             六课路线图 + 每课详解 + 通用知识（学这套示例先读它）
+    cppdemo\                   C++ 例程（main.cpp：STL 管数据 + 类管状态，构建自动走 g++）
     gallery\                   控件陈列室·三合一（gallery.cgui / main.c / assets\ / 产物）
     notepad\                   真实小工具范例：记事本（菜单/文件/配置/cg_kit 全套）
     serialterm\                串口助手（对标 XCOM：终端日志 + hex/时间戳/按帧 + 定时/多条发送 + 文件收发）
