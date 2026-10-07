@@ -43,6 +43,22 @@ function cguiFromArgv() {
   return "";
 }
 
+/** 编译内核的位置：发布包里就在根上（cgbuild.exe），源码树里在 build\ 下。
+ *  内核是纯 C（tools\cgbuild.c），只要有 MinGW 就能现编 —— **不依赖 Node**。 */
+function findKernel(root) {
+  return [path.join(root, "cgbuild.exe"), path.join(root, "build", "cgbuild.exe")].find(existsSync) || null;
+}
+async function ensureKernel(root) {
+  const found = findKernel(root);
+  if (found) return found;
+  const src = path.join(root, "tools", "cgbuild.c");
+  if (!existsSync(src)) return null;
+  if (!existsSync(path.join(root, "build"))) await fs.mkdir(path.join(root, "build"), { recursive: true });
+  const out = path.join(root, "build", "cgbuild.exe");
+  const r = spawnSync("gcc", ["-std=c11", "-O2", "-o", out, src], { stdio: "inherit", cwd: root });
+  return !r.error && r.status === 0 && existsSync(out) ? out : null;
+}
+
 /* ------------------------------------------------------ C 项目根目录
  * 画布需要知道 CStackGUI 这个 C 项目在哪，才能把导出的骨架放进 appS\<名字>\，
  * 也才能告诉用户「接着去项目根跑 build-app.bat」。
@@ -577,28 +593,31 @@ ipcMain.handle("run:buildAndLaunch", async (_e, { filePath }) => {
   if (!existsSync(path.join(appDir, "main.c"))) {
     return fail(`${appDir} 里没有 main.c。\n先点「导出 C 骨架」生成 C 代码，再运行。`);
   }
-  /* 编译内核必须在这个根里 —— 便携版指错了根时，给一句能照着做的话，
+  /* 内核源码必须在这个根里 —— 便携版指错了根时给一句能照着做的话，
    * 而不是让 spawn 失败后只显示一个退出码。 */
-  if (!existsSync(path.join(root, "tools", "cgbuild.mjs"))) {
-    return fail(`项目根 ${root} 里没有编译内核 tools\\cgbuild.mjs。\n用工具条的「定位项目根」选含 runtime\\、tools\\ 的那一层目录。`);
+  if (!existsSync(path.join(root, "tools", "cgbuild.c"))) {
+    return fail(`项目根 ${root} 里没有编译内核源码 tools\\cgbuild.c。\n用工具条的「定位项目根」选含 runtime\\、tools\\ 的那一层目录。`);
   }
 
   runBusy = true;
   send("run:output", { kind: "line", text: `$ cgbuild ${name}` });
 
-  /* 直接用画布自带的 Node 跑编译内核 tools\cgbuild.mjs。
+  /* 直接 spawn 编译内核 cgbuild.exe（由 tools\cgbuild.c 编出来的原生 exe）。
    * 以前这里 spawn 的是 `cmd /d /s /c "chcp 65001 >nul & build-app.bat"`：
    * chcp 与批处理挤在同一个 cmd 进程里，脚本自带的重入逻辑不生效，
    * 在部分机器上中文行会被从多字节字符中间切断、后半段被当成命令执行。
-   * 走 Node 就没有代码页这一层，工程目录直接走命令行参数（不再用 CG_APP_DIR）。
-   * ELECTRON_RUN_AS_NODE=1：process.execPath 是 Electron 本体，不加这个会被
-   * 当成"用 electron 打开一个应用"，而不是"用 node 跑一个脚本"。 */
-  const kernel = path.join(root, "tools", "cgbuild.mjs");
+   * 内核是 C 写的，所以**不依赖 Node** —— 客户只要装了 MinGW 就能编。
+   * 工程目录直接走命令行参数（不再用 CG_APP_DIR）。 */
+  const kernel = await ensureKernel(root);
+  if (!kernel) {
+    return fail(`编译内核编不出来：${path.join(root, "build", "cgbuild.exe")}\n` +
+      `装好 MinGW-w64（或设 MINGW 指向它的 bin 目录）再来一次。`);
+  }
   let exitCode = -1;
   await new Promise((resolve) => {
-    const child = spawn(process.execPath, [kernel, appDir], {
+    const child = spawn(kernel, [appDir], {
       cwd: root,
-      env: { ...process.env, CSTACKGUI_HOME: root, ELECTRON_RUN_AS_NODE: "1" },
+      env: { ...process.env, CSTACKGUI_HOME: root },
     });
     const push = (buf) => {
       for (const line of String(buf).split(/\r?\n/)) {
@@ -834,16 +853,16 @@ app.whenReady().then(() => {
      * 拷到同级的 tools\ 下。开发态（electron .）的 execPath 指向 electron.exe，
      * 那种情况直接 node tools\cgbuild.mjs。 */
     const root = path.dirname(process.execPath);
-    const kernel = path.join(root, "tools", "cgbuild.mjs");
+    const kernel = path.join(root, "cgbuild.exe");
     if (!existsSync(kernel)) {
       process.stdout.write(`[fail] build kernel not found: ${kernel}\n`);
       app.exit(1);
       return;
     }
-    const r = spawnSync(process.execPath, [kernel, ...buildCliArgs], {
+    const r = spawnSync(kernel, buildCliArgs, {
       stdio: "inherit",
       cwd: root,
-      env: { ...process.env, CSTACKGUI_HOME: root, ELECTRON_RUN_AS_NODE: "1" },
+      env: { ...process.env, CSTACKGUI_HOME: root },
     });
     app.exit(r.status ?? 1);
     return;

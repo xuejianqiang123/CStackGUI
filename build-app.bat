@@ -11,27 +11,48 @@ if not "%CG_CP: =%"=="65001" (
 )
 rem ---- UTF-8 content starts here: Chinese is fine below ----
 rem ============================================================
-rem  CStackGUI - thin shell. ALL build logic lives in the kernel:
-rem      tools\cgbuild.mjs          <- the ONE implementation
-rem  (canvas F5 and the release package call the same kernel.)
+rem  CStackGUI - thin shell. ALL build logic is in the kernel:
+rem      tools\cgbuild.c  ->  build\cgbuild.exe
+rem  (canvas F5, CStackGUI.exe --build and the release package all
+rem   call that same exe - there is still exactly ONE implementation.)
 rem
-rem  Why this file is ASCII-only: cmd decodes a .bat with the console
-rem  code page captured when cmd itself started. A UTF-8 Chinese line
-rem  then gets cut in the middle and its tail is executed as a command
-rem  ("'...' is not recognized as an internal or external command").
-rem  The kernel is Node, which is UTF-8 everywhere - so all Chinese
-rem  output lives there, and this file cannot be mis-decoded.
+rem  ASCII-only on purpose: cmd decodes a .bat with the console code
+rem  page captured when cmd started, so a UTF-8 Chinese line gets cut
+rem  in half and its tail runs as a command. No non-ASCII here means
+rem  nothing can be mis-decoded on a customer machine.
 rem
+rem  Requirements: MinGW-w64 only. No Node.js.
 rem  Usage: build-app.bat [project-name-or-path] [--release]
-rem  Needs: MinGW-w64 (gcc/ar/windres) and Node.js 18+
 rem ============================================================
 setlocal
-where node >nul 2>nul
-if errorlevel 1 (
-    echo [fail] node not found - the build kernel tools\cgbuild.mjs needs Node.js 18+.
-    echo        Install Node.js, then re-run. To build without this shell:
-    echo            node "%~dp0tools\cgbuild.mjs" %*
+set "KERN=%~dp0build\cgbuild.exe"
+set "SRC=%~dp0tools\cgbuild.c"
+
+rem 客户可能只装了 MinGW 而没把它加进 PATH —— 和内核用同一个默认值。
+if "%MINGW%"=="" set "MINGW=C:\mingw64\bin"
+set "PATH=%MINGW%;%PATH%"
+
+if not exist "%SRC%" (
+    echo [fail] missing %SRC%
     exit /b 1
 )
-node "%~dp0tools\cgbuild.mjs" %*
+
+rem Bootstrap: the kernel is plain C, so gcc can build it on any
+rem machine that has MinGW. Rebuild it when the source is newer.
+set "STALE="
+if not exist "%KERN%" set "STALE=1"
+if exist "%KERN%" for %%I in ("%SRC%") do for %%J in ("%KERN%") do if "%%~tI" GTR "%%~tJ" set "STALE=1"
+if defined STALE (
+    echo [boot] building the build kernel: %SRC%
+    gcc -std=c11 -O2 -o "%KERN%" "%SRC%"
+    if errorlevel 1 (
+        echo.
+        echo [fail] cannot build the kernel - gcc not found?
+        echo        Install MinGW-w64, or set MINGW to its bin dir:
+        echo            set MINGW=D:\mingw64\bin
+        exit /b 1
+    )
+)
+
+"%KERN%" %*
 exit /b %errorlevel%

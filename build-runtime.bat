@@ -12,21 +12,39 @@ if not "%CG_CP: =%"=="65001" (
 rem ---- UTF-8 content starts here: Chinese is fine below ----
 rem ============================================================
 rem  CStackGUI - thin shell. Builds ONLY the runtime library
-rem  (build\lib\libcstackgui.a). Real logic: tools\cgbuild.mjs
-rem  with --runtime-only. Kept ASCII-only on purpose - see the
-rem  comment header in build-app.bat for why.
+rem  (build\lib\libcstackgui.a). Real logic: tools\cgbuild.c
+rem  run with --runtime-only. ASCII-only on purpose - see the
+rem  header in build-app.bat for why.
 rem
 rem  You rarely need this by hand: every project build refreshes
 rem  the runtime library first.
 rem
-rem  Needs: MinGW-w64 (gcc/ar/windres) and Node.js 18+
+rem  Requirements: MinGW-w64 only. No Node.js.
 rem ============================================================
 setlocal
-where node >nul 2>nul
-if errorlevel 1 (
-    echo [fail] node not found - the build kernel tools\cgbuild.mjs needs Node.js 18+.
-    echo        To build by hand:  node "%~dp0tools\cgbuild.mjs" --runtime-only
+set "KERN=%~dp0build\cgbuild.exe"
+set "SRC=%~dp0tools\cgbuild.c"
+
+if "%MINGW%"=="" set "MINGW=C:\mingw64\bin"
+set "PATH=%MINGW%;%PATH%"
+
+if not exist "%SRC%" (
+    echo [fail] missing %SRC%
     exit /b 1
 )
-node "%~dp0tools\cgbuild.mjs" --runtime-only
+set "STALE="
+if not exist "%KERN%" set "STALE=1"
+if exist "%KERN%" for %%I in ("%SRC%") do for %%J in ("%KERN%") do if "%%~tI" GTR "%%~tJ" set "STALE=1"
+if defined STALE (
+    echo [boot] building the build kernel: %SRC%
+    gcc -std=c11 -O2 -o "%KERN%" "%SRC%"
+    if errorlevel 1 (
+        echo.
+        echo [fail] cannot build the kernel - gcc not found?
+        echo            set MINGW=D:\mingw64\bin
+        exit /b 1
+    )
+)
+
+"%KERN%" --runtime-only
 exit /b %errorlevel%
