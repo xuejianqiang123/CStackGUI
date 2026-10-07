@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("cstackgui", {
   pickImage: () => ipcRenderer.invoke("cgui:pickImage"),
   /** 读一张图给画布预览（返回 dataURL；路径按当前 .cgui 目录解析） */
   readImage: (payload) => ipcRenderer.invoke("cgui:readImage", payload),
+  exportPlan: (payload) => ipcRenderer.invoke("cgui:exportPlan", payload),
   exportC: (payload) => ipcRenderer.invoke("cgui:exportC", payload),
   buildAndRun: (payload) => ipcRenderer.invoke("run:buildAndLaunch", payload),
   publish: (payload) => ipcRenderer.invoke("publish:project", payload),

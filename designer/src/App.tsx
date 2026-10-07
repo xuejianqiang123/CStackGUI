@@ -9,6 +9,7 @@ import Canvas from "./components/Canvas";
 import EventPanel from "./components/EventPanel";
 import Inspector from "./components/Inspector";
 import InfoDialog from "./components/InfoDialog";
+import LangPickDialog from "./components/LangPickDialog";
 import LayerTree from "./components/LayerTree";
 import NewProjectDialog from "./components/NewProjectDialog";
 import Palette from "./components/Palette";
@@ -17,9 +18,9 @@ import StyleDialog from "./components/StyleDialog";
 import SupportPanel from "./components/SupportPanel";
 import Toolbar from "./components/Toolbar";
 import WindowPanel from "./components/WindowPanel";
-import { getBridge } from "./bridge";
+import { getBridge, type GenLang } from "./bridge";
 import { setImageBase } from "./imagecache";
-import { collectCallbacks, generateC, uniqueCallbackNames } from "./codegen";
+import { collectCallbacks, generateC, implFileName, uniqueCallbackNames } from "./codegen";
 import {
   absRect,
   clamp,
@@ -346,17 +347,55 @@ export default function App() {
     [bridge, filePath, lastExport, say],
   );
 
-  /** 导出 C 骨架。返回导出到哪（发布要拿这个结果去编译），取消返回 null。
+  /* 首次导出（工程目录里还没有骨架）时问一句用 C 还是 C++。
+   * 用 Promise + ref 收答案：点工具条是一次 await，中间插入一次用户选择最省事，
+   * 不必把后续导出动作拆成"选完再回调"两半。 */
+  const [langPickFor, setLangPickFor] = useState<string>("");
+  const langPickAnswer = useRef<((lang: GenLang | null) => void) | null>(null);
+  const askLang = useCallback(
+    (baseName: string) =>
+      new Promise<GenLang | null>((resolve) => {
+        langPickAnswer.current = resolve;
+        setLangPickFor(baseName);
+      }),
+    [],
+  );
+  const answerLang = useCallback((lang: GenLang | null) => {
+    setLangPickFor("");
+    langPickAnswer.current?.(lang);
+    langPickAnswer.current = null;
+  }, []);
+
+  /** 导出 C / C++ 骨架。返回导出到哪（发布要拿这个结果去编译），取消返回 null。
    *  工程名优先取**当前文件名**：.cgui 的文件名决定 exe 名与工程目录名
    *  （运行时默认就在 exe 旁边找同名 .cgui）。用窗口标题推会出事 ——
    *  "串口助手（cg_serial 示例）"会推成 cg_serial，导出的目录就与工程目录对不上，
-   *  后面编译的还是旧目录，等于什么都没更新。 */
+   *  后面编译的还是旧目录，等于什么都没更新。
+   *
+   *  语言只在**首次导出**时由用户选（`bridge.exportPlan` 回报目录里有没有骨架）；
+   *  已经有骨架时按磁盘现状走 —— 同一个工程里落下两套源文件 = 链接重复定义。 */
   const doExportC = useCallback(async (): Promise<{ dir: string; appName: string } | null> => {
     const fromFile = filePath ? (filePath.split(/[\\/]/).pop() ?? "").replace(/\.cgui$/i, "") : "";
     const baseName = suggestedBaseName(fromFile || docRef.current.app.title);
-    const files = generateC(docRef.current, baseName);
-    /* 带上当前文件路径：主进程好从文件位置向上认出真正的项目根（便携版画布尤甚） */
-    const res = await bridge.exportC({ baseName, files, filePath: filePath || undefined });
+    /* 带上当前文件路径：主进程好从文件位置向上认出真正的项目根（便携版画布尤甚）。
+       这一步只问不写：目录在哪、工程现在是 C 还是 C++。 */
+    const plan = await bridge.exportPlan({ baseName, filePath: filePath || undefined });
+    if (plan.canceled) return null;
+    let lang: GenLang = plan.lang || "c";
+    if (!plan.lang) {
+      const picked = await askLang(baseName);
+      if (!picked) return null;
+      lang = picked;
+    }
+    const files = generateC(docRef.current, baseName, lang);
+    /* dir 由 exportPlan 问出来了，带回去省掉第二次"导到哪" */
+    const res = await bridge.exportC({
+      baseName,
+      files,
+      filePath: filePath || undefined,
+      lang,
+      targetDir: plan.dir,
+    });
     if (res.canceled) return null;
     if (res.projectRoot) setProjectRoot(res.projectRoot);
     setLastExport({ dir: res.dir ?? "", appName: baseName });
@@ -368,17 +407,25 @@ export default function App() {
     }
     const skipped = res.skipped?.length ? `（跳过已存在的 ${res.skipped.join("、")}）` : "";
     /* 三句提醒都只在真的发生时出现，平时那一行还是原来那么短：
-     * 补了桩（用户得知道去哪个函数里写逻辑）/ 不再绑定但保留着（自己决定删不删）/ main.c 已不同步。 */
+     * 补了桩（用户得知道去哪个函数里写逻辑）/ 不再绑定但保留着（自己决定删不删）/ 入口文件已不同步。 */
     const added = res.addedCallbacks?.length
       ? `；已为新绑的 ${res.addedCallbacks.length} 个事件补上空函数：${res.addedCallbacks.join("、")}`
       : "";
     const unused = res.unusedCallbacks?.length
       ? `；画布上已不再绑定的 ${res.unusedCallbacks.join("、")} 保留在文件里（自己决定删不删）`
       : "";
-    const stale = res.staleMainC ? "；main.c 与新版样板已不同步（画布不覆盖它，怕抹掉你加的）" : "";
-    say(`已导出到 ${res.dir}${skipped}，接着去填 ${baseName}_ui_events.c${added}${unused}${stale}`);
+    const effLang: GenLang = res.lang ?? lang;
+    const implName = implFileName(baseName, effLang);
+    const entryName = effLang === "cpp" ? "main.cpp" : "main.c";
+    const stale = res.staleMainC ? `；${entryName} 与新版样板已不同步（画布不覆盖它，怕抹掉你加的）` : "";
+    /* "这次为什么没问语言"必须自己交代 —— 不然用户会以为选择界面坏了（2026-10-08 实测反馈）：
+       目录里已有骨架时按规则不问，直接沿用，但这句要说出来。 */
+    const reused = plan.lang
+      ? `；目录里已有 ${plan.lang === "cpp" ? "C++" : "C"} 骨架，沿用它所以没问语言（要换语言请另建工程）`
+      : "";
+    say(`已导出到 ${res.dir}${skipped}，接着去填 ${implName}${reused}${added}${unused}${stale}`);
     return { dir: res.dir ?? "", appName: baseName };
-  }, [bridge, docRef, say, filePath]);
+  }, [askLang, bridge, docRef, say, filePath]);
 
   const doLocateProject = useCallback(async () => {
     const res = await bridge.locateProject();
@@ -435,7 +482,8 @@ export default function App() {
     /* 发布必须**重新导出**一次 C：界面的正文是编译期作为 PE 资源编进 exe 的
      * （见 cgbuild.mjs）。不重导出，打进去的就是上次导出时的旧界面 ——
      * 这种"exe 里的界面跟画布上看到的不一样"最难查。
-     * 这一步**不会**碰用户写的代码：main.c 存在就跳过；<名字>_ui_events.c 只补缺的回调桩。 */
+     * 这一步**不会**碰用户写的代码：入口文件（main.c / main.cpp）存在就跳过；
+     * `<名字>_ui_events.{c,cpp}` 只补缺的回调桩。 */
     const exp = await doExportC();
     if (!exp) {
       say("发布前需要先导出 C 骨架");
@@ -933,6 +981,7 @@ rect = { x:${selected.rect.x}, y:${selected.rect.y}, w:${selected.rect.w}, h:${s
       ) : null}
 
       {runOpen ? <RunPanel lines={runLines} running={running} onClose={() => setRunOpen(false)} /> : null}
+      <LangPickDialog open={langPickFor !== ""} baseName={langPickFor} onPick={answerLang} onClose={() => answerLang(null)} />
       <NewProjectDialog
         open={newOpen}
         onClose={() => setNewOpen(false)}

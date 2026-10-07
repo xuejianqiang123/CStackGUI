@@ -5,7 +5,24 @@
  * 方便在没有 Electron 的机器上看画布。
  */
 export type SavePayload = { filePath?: string; text: string; suggestName?: string };
-export type ExportPayload = { baseName: string; files: { name: string; content: string }[]; filePath?: string };
+/** 骨架语言：C（main.c）还是 C++（main.cpp）。首次导出才有得选 —— 工程里已有骨架时按磁盘现状走。 */
+export type GenLang = "c" | "cpp";
+export type ExportPayload = {
+  baseName: string;
+  files: { name: string; content: string }[];
+  filePath?: string;
+  /** 这次按哪种语言生成（省得主进程再去猜 —— files 的文件名已经决定了） */
+  lang?: GenLang;
+  /** 目标目录：由 `exportPlan` 先问出来的，带上它就不再弹一次"导到哪" */
+  targetDir?: string;
+};
+/** 导出落点探测（真正写盘之前）：目录在哪、工程里现在用的是哪种语言 */
+export type ExportPlan = {
+  canceled: boolean;
+  dir?: string;
+  /** "" = 这个目录里还没有骨架（首次导出，该问用户选语言了）；否则是磁盘现状 */
+  lang?: GenLang | "";
+};
 export type ExportResult = {
   canceled: boolean;
   dir?: string;
@@ -13,6 +30,8 @@ export type ExportResult = {
   skipped?: string[];
   projectRoot?: string;
   appName?: string;
+  /** 这次实际用的语言（可能由磁盘现状决定而非入参）—— 渲染端拿它拼文件名做提示 */
+  lang?: GenLang;
   /** 这次导出为「新绑的事件」自动补上的空函数名。
    *  `<工程>_ui_events.c` 是"只补不改"的：缺的回调补桩、已有的原样留着（见 merge-events.mjs）。 */
   addedCallbacks?: string[];
@@ -44,6 +63,8 @@ export type Bridge = {
   /** 读一张图给画布预览（`button` / `iconbutton` / `image` 的 src、窗口图标）。
    *  路径由主进程按当前 `.cgui` 目录解析（与运行时同一个基准）；返回 dataURL 供 `<img>` 直接用。 */
   readImage: (p: { src: string }) => Promise<{ ok: boolean; path?: string; dataUrl?: string; tooBig?: boolean }>;
+  /** 导出前先问一句"导到哪 + 这个工程现在用的是哪种语言"（首次导出据此问用户选语言） */
+  exportPlan: (p: { baseName: string; filePath?: string }) => Promise<ExportPlan>;
   exportC: (p: ExportPayload) => Promise<ExportResult>;
   /** F5 一键运行：调项目根的 build-app.bat 编译，成功后把 exe 跑起来 */
   buildAndRun: (p: { filePath: string }) => Promise<RunResult>;
@@ -104,6 +125,7 @@ export function getBridge(): Bridge {
       pickIcon: () => api.pickIcon(),
       pickImage: () => api.pickImage(),
       readImage: (p) => api.readImage(p),
+      exportPlan: (p) => api.exportPlan(p),
       exportC: (p) => api.exportC(p),
       buildAndRun: (p) => api.buildAndRun(p),
       publish: (p) => api.publish(p),
@@ -147,6 +169,9 @@ export function getBridge(): Bridge {
     /* 浏览器模式读不到磁盘上的图（只有文件名，没有目录基准）：一律"读不到"，
        画布上会显示"保存后才能预览"那类提示，不会崩。 */
     readImage: async () => ({ ok: false }),
+    /* 浏览器模式读不到磁盘，自然认不出"工程里已经导出过什么"：一律当作首次导出，
+       渲染端会照常弹一次语言选择（选了才决定下载哪些文件）。 */
+    exportPlan: async () => ({ canceled: false, lang: "" }),
     exportC: async ({ baseName, files }) => {
       files.forEach((f, i) => setTimeout(() => download(f.name, f.content), i * 250));
       return { canceled: false, dir: `（浏览器模式：${baseName} 的 ${files.length} 个文件已逐个下载）`, written: files.map((f) => f.name) };

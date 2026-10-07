@@ -87,6 +87,14 @@ const guardName = (base: string) => `${sanitizeIdent(base).toUpperCase()}_UI_EVE
 
 export type GenFile = { name: string; content: string };
 
+/** 骨架语言：C 还是 C++（MinGW-w64 自带 g++，C++ 工程照样编出单个 exe） */
+export type GenLang = "c" | "cpp";
+
+/** 回调实现文件名（`<工程>_ui_events.c` / `.cpp`） */
+export const implFileName = (base: string, lang: GenLang) => `${base}_ui_events.${lang === "cpp" ? "cpp" : "c"}`;
+/** 入口文件名（`main.c` / `main.cpp`） */
+export const mainFileName = (lang: GenLang) => (lang === "cpp" ? "main.cpp" : "main.c");
+
 /** 回调名 -> 「控件id 的<事件中文名>」/「动作 xxx」描述（多处共用时列出全部） */
 function callbackBriefs(uses: CallbackUse[], actions: ActionUse[]): Record<string, string> {
   const byName: Record<string, string[]> = {};
@@ -195,8 +203,20 @@ END
   return { name: `${base}.rc`, content };
 }
 
-export function generateC(doc: CgDoc, baseName: string): GenFile[] {
+/**
+ * 生成一套 C / C++ 骨架。
+ * @param doc 界面文档
+ * @param baseName 工程名（导出目录名 = exe 名，必须是 ASCII 标识符）
+ * @param lang 语言：C 模板给 `.c` 三件套，C++ 模板给 `.cpp` 三件套（界面文件 / .rc / build.bat 两边一样）
+ * @returns 待落盘的文件清单
+ * @note 语言只在**首次导出**（工程目录里还没有骨架）时由用户选；之后一律沿用工程里已有的那套，
+ *       换语言会在同一个工程里落下两套源文件（`main.c` + `main.cpp`），链接就是重复定义。
+ */
+export function generateC(doc: CgDoc, baseName: string, lang: GenLang = "c"): GenFile[] {
   const base = sanitizeIdent(baseName);
+  const cpp = lang === "cpp";
+  const implFile = implFileName(base, lang);
+  const mainFile = mainFileName(lang);
   const cguiFile = baseName.endsWith(".cgui") ? baseName : `${baseName}.cgui`;
   const uses = collectCallbacks(doc);
   const actionUses = collectActionHandlers(doc);
@@ -216,20 +236,28 @@ export function generateC(doc: CgDoc, baseName: string): GenFile[] {
 * @return void 回调无返回值
 */`;
 
+  /* C / C++ 共用同一个头：函数的语言链接必须和定义处一致。
+     绑定表里的 cg_event_fn（cstackgui.h 里）声明在 extern "C" 块中，
+     所以不管是 C 工程还是 C++ 工程，回调都按 C 链接给出——这里也只是把 C 侧那句
+     "#ifdef __cplusplus" 如实写下来，纯 C 编译时它整段不存在。 */
   const header = `/**
  * @file    ${base}_ui_events.h
  * @brief   事件回调原型与绑定表（由 CStackGUI 画布生成，改事件绑定请回画布改后重新导出）
- * @details 界面文件: ${cguiFile}；业务逻辑写在 ${base}_ui_events.c 里
+ * @details 界面文件: ${cguiFile}；业务逻辑写在 ${implFile} 里
  */
 #ifndef ${guardName(base)}
 #define ${guardName(base)}
 
 #include "cstackgui.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* 回调原型：签名固定，不要改 */
 ${names.length ? names.map((n) => `${cbDoc(n)}\nvoid ${n}(cg_widget_t *self, cg_event_t ev, void *user);`).join("\n\n") : "/* 画布上还没有绑定任何事件 */"}
 
-/* 绑定表：main.c 里直接用，改事件名只需重新导出本文件 */
+/* 绑定表：${mainFile} 里直接用，改事件名只需重新导出本文件 */
 ${names.length ? `#define ${macroName(base)} \\\n${names.map((n) => `    CG_BIND("${n}", ${n}), \\`).join("\n")}` : `#define ${macroName(base)}`}
 
 /* 画布上声明的事件绑定清单（供人查对；运行时以 .cgui 为准）
@@ -240,22 +268,32 @@ ${uses.length ? uses.map((u) => ` *   ${u.widgetId.padEnd(18)} ${u.event.padEnd(
  * 一个动作的回调就是下面这些函数（self 是主窗口伪控件，用 cg_action_name(self) 认动作）
 ${actionUses.length ? actionUses.map((a) => ` *   ${a.action.padEnd(18)} ${(doc.actions?.[a.action]?.accel ?? "").padEnd(12)} -> ${a.name}`).join("\n") : " *   （空）"}
  */
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 #endif /* ${guardName(base)} */
 `;
 
   /* 一个回调的骨架函数体。动作回调没有"哪个控件、哪个事件"可打印，
-     改成打印被激活的动作名（这正是 cg_action_name 的用途）。 */
-  const stubFn = (n: string) =>
-    actionNames.has(n)
-      ? `${cbDoc(n)}\nvoid ${n}(cg_widget_t *self, cg_event_t ev, void *user)\n{\n    (void)ev;\n    (void)user;\n    printf("[%s] action=%s\\n", "${base}", cg_action_name(self));\n\n    /* TODO: 在这里写业务逻辑 */\n}\n`
-      : `${cbDoc(n)}\nvoid ${n}(cg_widget_t *self, cg_event_t ev, void *user)\n{\n    (void)user;\n    printf("[%s] widget=%s event=%s\\n", "${base}", cg_widget_id(self), cg_event_name(ev));\n\n    /* TODO: 在这里写业务逻辑 */\n}\n`;
+     改成打印被激活的动作名（这正是 cg_action_name 的用途）。
+     C++ 模板里函数前那句 extern "C" 不是装饰：绑定表要的是 C 函数指针
+     （cg_event_fn 声明在 cstackgui.h 的 extern "C" 块里），C++ 名字修饰过的函数放不进 CG_BIND。 */
+  const stubFn = (n: string) => {
+    const head = `${cbDoc(n)}\n${cpp ? "extern \"C\" " : ""}void ${n}(cg_widget_t *self, cg_event_t ev, void *user)\n{\n`;
+    return actionNames.has(n)
+      ? `${head}    (void)ev;\n    (void)user;\n    printf("[%s] action=%s\\n", "${base}", cg_action_name(self));\n\n    /* TODO: 在这里写业务逻辑 */\n}\n`
+      : `${head}    (void)user;\n    printf("[%s] widget=%s event=%s\\n", "${base}", cg_widget_id(self), cg_event_name(ev));\n\n    /* TODO: 在这里写业务逻辑 */\n}\n`;
+  };
 
   const stubs = `/**
-* @file    ${base}_ui_events.c
+* @file    ${implFile}
  * @brief   事件回调实现：业务逻辑写在这里
  * @details 这份文件是「你的代码」：重新导出**只补不改** —— 画布上新绑的事件会自动补上桩
- *          （不补的话 .h 里已经声明、main.c 的绑定表也引用了它，链接会 undefined reference），
+ *          （不补的话 .h 里已经声明、${mainFile} 的绑定表也引用了它，链接会 undefined reference），
  *          而你写过的任何一行都不会被动。
+${cpp ? " *          本工程是 **C++ 模板**：回调按 extern \"C\" 给出（绑定表要 C 函数指针，成员\n *          函数和 C++ 名字修饰的函数都放不进去）；函数体里照样能写 C++ —— std::string /\n *          std::vector / 类都行，参考 examples\\cppdemo。" : ""}
  *          每个回调都能拿到：
  *          self 触发事件的那个控件，用 cg_widget_text/cg_widget_checked/cg_widget_value 读它的状态
  *          ev   事件类型（一个函数只挂一个事件时可以直接忽略）
@@ -274,13 +312,13 @@ ${
     : `/* 画布上还没有绑定事件。在画布右侧「事件」页签里填上 C 函数名，再重新导出。 */\n`
 }`;
 
-  const mainC = `/* @generated-by-cstackgui:main.c —— 画布产物标记。
+  const mainHead = `/* @generated-by-cstackgui:${mainFile} —— 画布产物标记。
    这行的用处是让导出/编译脚本认出"这是画布生成的工程"（没有它的算手写工程：
    只同步 .cgui，代码一律不碰）。**注意：重新导出并不会覆盖这个文件**（怕抹掉你自己加的东西），
-   所以业务逻辑请写在 ${base}_ui_events.c 里 —— 那个文件重新导出时只会补上缺的空函数，
+   所以业务逻辑请写在 ${implFile} 里 —— 那个文件重新导出时只会补上缺的空函数，
    你写过的任何一行都不会被动。 */
 /**
- * @file    main.c
+ * @file    ${mainFile}
  * @brief   应用入口（由 CStackGUI 画布生成）
  * @details 编译：本目录要放在 CStackGUI 项目的 apps\\ 下，然后在项目根目录跑
  *          build-app.bat ${base}
@@ -289,7 +327,9 @@ ${
  *          （编译时由 build-app 把 .cgui 作为 PE 资源编进去）。
  */
 #include "${base}_ui_events.h"
+`;
 
+  const mainC = `${mainHead}
 #include <stdio.h>
 #include <string.h>
 
@@ -321,6 +361,38 @@ int main(int argc, char **argv)
 
     desc.cgui_path = (argc > 1) ? argv[1] : "${cguiFile}";
     return cg_app_run(&desc);
+}
+`;
+
+  /* C++ 版入口：和 C 版一一对齐（同一套 desc 字段、同一套界面查找顺序），
+     只是用 C++ 自己的写法 —— `desc{}` 清零、`std::string` 比命令行。
+     刻意不在这里示范 STL 用法：那是 examples\cppdemo 的事，入口越短越好懂。 */
+  const mainCpp = `${mainHead}
+#include <string>
+
+static const cg_binding_t k_bindings[] = {
+    ${macroName(base)}
+    CG_BIND_END
+};
+
+/**
+ * @brief 程序入口：组装启动参数（绑定表、自动找 .cgui、--selftest 分支）
+ * @param argc 参数个数
+ * @param argv 命令行参数（可带 .cgui 路径或 --selftest）
+ * @return int 进程退出码（0 正常）
+ */
+int main(int argc, char **argv)
+{
+    cg_app_desc_t desc{};                   /* C++ 的 {} 一次性把整个结构清零 */
+
+    desc.bindings = k_bindings;
+    desc.dblclick_suppress_click = 0;   /* 1 = 双击时不再回调 click */
+    desc.auto_locate_cgui = 1;          /* 双击 exe 也能跑：自动去 exe 附近找 .cgui */
+
+    /* --selftest：不开窗口，只校验 .cgui 能否解析、事件名是否都登记过 */
+    const bool selftest = argc > 1 && std::string(argv[1]) == "--selftest";
+    desc.cgui_path = (argc > (selftest ? 2 : 1)) ? argv[selftest ? 2 : 1] : "${cguiFile}";
+    return selftest ? cg_app_selftest(&desc) : cg_app_run(&desc);
 }
 `;
 
@@ -375,8 +447,8 @@ call "%CSTACKGUI_HOME%build-app.bat" "%~dp0."
 
   return [
     { name: `${base}_ui_events.h`, content: header },
-    { name: `${base}_ui_events.c`, content: stubs },
-    { name: "main.c", content: mainC },
+    { name: implFile, content: stubs },
+    { name: mainFile, content: cpp ? mainCpp : mainC },
     /* 与画布「保存」同一套序列化（cleanNode 去默认值字段），保证导出即保存、两者字节一致 */
     { name: cguiFile, content: serializeDoc(doc) },
     /* 程序图标 + 版本信息：build-app.bat 见到这个 rc 就用它，版本信息不再是通用的 */

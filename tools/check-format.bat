@@ -116,6 +116,12 @@ echo   electron main process syntax
 node tools\check-electron.mjs
 if errorlevel 1 exit /b 1
 
+rem 骨架语言判据（designer\electron\skeleton-lang.mjs）：首次导出问 C/C++ 这条规则的
+rem "不破坏既有骨架"承诺由它兜 —— 判据写坏、另一套源文件的写保护被绕过，这里立刻红。
+echo   skeleton language guard (C or C++, never both)
+node tools\check-skeleton.mjs
+if errorlevel 1 exit /b 1
+
 echo   app config: exe version info (examples\gallery\gallery.rc)
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$exe='examples\gallery\gallery.exe'; if (-not (Test-Path $exe)) { Write-Host '[fail] gallery.exe missing - run build-all first'; exit 1 }; $v=(Get-Item $exe).VersionInfo; $want='CStackGUI ' + [char]0x63A7 + [char]0x4EF6 + [char]0x9648 + [char]0x5217 + [char]0x5BA4; if ($v.FileVersion -ne '0.1.0.0' -or $v.OriginalFilename -ne 'gallery.exe' -or $v.ProductName -ne $want) { Write-Host ('[fail] gallery.exe version info mismatch -> FileVersion=' + $v.FileVersion + ' ProductName=' + $v.ProductName + ' OriginalFilename=' + $v.OriginalFilename); exit 1 }; Write-Host ('  gallery.exe: ' + $v.ProductName + ' ' + $v.FileVersion)"
 if errorlevel 1 exit /b 1

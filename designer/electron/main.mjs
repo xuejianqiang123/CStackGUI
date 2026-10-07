@@ -15,6 +15,13 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { build } from "./cgbuild.mjs";
 import { mergeEvents, callbackDiff } from "./merge-events.mjs";
+import {
+  skeletonLangOf,
+  resolveLang,
+  implFileName as implNameOf,
+  entryFileName as entryNameOf,
+  langWriteList,
+} from "./skeleton-lang.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEV_URL = process.env.CSTACKGUI_DEV_URL || "";
@@ -442,61 +449,110 @@ ipcMain.handle("cgui:save", async (_e, { filePath, text, suggestName }) => {
   }
 });
 
-ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
-  /* 和 run:buildAndLaunch 同一个道理：从当前文件位置向上找根优先，
-   * 避免便携版把 release\ 认成项目根、把骨架导到发布包里去。 */
+/* ------------------------------------------------------------ 导出落点
+ * 「导出」分两趟：先 exportPlan 问清楚"导到哪 + 这个工程现在用的是哪种语言"，
+ * 才轮到真正的 exportC 写盘。中间要插一次用户选择（首次导出选 C 还是 C++），
+ * 而"导到哪"的目录框只能弹一次 —— 第二趟带上 targetDir，就不至于让用户选两遍。 */
+
+/** codegen 会把工程名里的非法字符换成 '_' —— 主进程推文件名时用同一套口径才对得上 */
+const safePrefix = (s) => (s || "").replace(/[^0-9a-zA-Z_]/g, "_").replace(/^([0-9])/, "_$1");
+
+/** 这个目录里现在用的是哪种语言（"" = 首次导出）。判据与取舍见 skeleton-lang.mjs。 */
+const langOnDisk = (dir, prefix) => skeletonLangOf(prefix, (p) => existsSync(path.join(dir, p)));
+
+/** 导出目录：能自己认出来就别弹框（详见调用处的注释）；targetDir 优先（第二趟带来的） */
+async function resolveExportDir({ baseName, filePath, targetDir }) {
   const root =
     (filePath ? findProjectRootUpwards(path.dirname(path.resolve(filePath))) : "") || (await resolveProjectRoot());
   const appsDir = root ? path.join(root, "apps", baseName) : "";
 
+  if (targetDir) return { canceled: false, root, dir: targetDir };
+
   /* 目标目录能自己认出来就别弹框 —— 工程已经在那儿了（.cgui 就躺在工程目录里、
-   * 旁边有 main.c），每次导出/发布都问一遍"导到哪"是纯打扰；
+   * 旁边有 main.c / main.cpp），每次导出/发布都问一遍"导到哪"是纯打扰；
    * 「发布」尤其受不了：它本来就只是想把最新界面重新编进 exe，不该中断在选目录上。
    * 只有在真的认不出来时（新文档、目录里没有任何工程痕迹）才问。 */
   const here = filePath ? path.dirname(path.resolve(filePath)) : "";
-  let dir = "";
-  if (here && existsSync(path.join(here, "main.c"))) dir = here;                       // 原地就是工程目录
-  else if (here && path.basename(here).toLowerCase() === baseName.toLowerCase()) dir = here;
-
-  if (!dir) {
-    const res = await dialog.showOpenDialog(win, {
-      title: root
-        ? `导出 C 骨架到 apps/${baseName}（也可以选别的目录）`
-        : `导出 C 骨架：请选 CStackGUI 的 apps 目录（找不到项目根，导完还要手动编译）`,
-      defaultPath: appsDir || root || undefined,
-      properties: ["openDirectory", "createDirectory"],
-    });
-    if (res.canceled || !res.filePaths.length) return { canceled: true };
-    const chosen = res.filePaths[0];
-    // 用户可能选了 apps 这一层，或者选了自己想放的目录：两种都让结果落在 <chosen>/<baseName>
-    dir = path.basename(chosen).toLowerCase() === baseName.toLowerCase() ? chosen : path.join(chosen, baseName);
+  if (here && (existsSync(path.join(here, "main.c")) || existsSync(path.join(here, "main.cpp")))) {
+    return { canceled: false, root, dir: here };   // 原地就是工程目录
+  }
+  if (here && path.basename(here).toLowerCase() === baseName.toLowerCase()) {
+    return { canceled: false, root, dir: here };
   }
 
-  /* 这个目录是不是"手写工程"（main.c 不是画布产物）？
+  const res = await dialog.showOpenDialog(win, {
+    title: root
+      ? `导出骨架到 apps/${baseName}（也可以选别的目录）`
+      : `导出骨架：请选 CStackGUI 的 apps 目录（找不到项目根，导完还要手动编译）`,
+    defaultPath: appsDir || root || undefined,
+    properties: ["openDirectory", "createDirectory"],
+  });
+  if (res.canceled || !res.filePaths.length) return { canceled: true, root, dir: "" };
+  const chosen = res.filePaths[0];
+  // 用户可能选了 apps 这一层，或者选了自己想放的目录：两种都让结果落在 <chosen>/<baseName>
+  return {
+    canceled: false,
+    root,
+    dir: path.basename(chosen).toLowerCase() === baseName.toLowerCase() ? chosen : path.join(chosen, baseName),
+  };
+}
+
+ipcMain.handle("cgui:exportPlan", async (_e, { baseName, filePath }) => {
+  const plan = await resolveExportDir({ baseName, filePath, targetDir: "" });
+  if (plan.canceled) return { canceled: true };
+  const prefix = safePrefix(baseName);
+  return { canceled: false, dir: plan.dir, lang: langOnDisk(plan.dir, prefix) };
+});
+
+ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath, lang, targetDir }) => {
+  const plan = await resolveExportDir({ baseName, filePath, targetDir });
+  if (plan.canceled) return { canceled: true };
+  const dir = plan.dir;
+  const root = plan.root;
+
+  /* 文件名要与 codegen 对齐：优先按 `_ui_events.h` 的前缀推，推不出来再按工程名换算。 */
+  const headerName = files.find((f) => f.name.endsWith("_ui_events.h"))?.name ?? "";
+  const prefix = headerName ? headerName.replace(/_ui_events\.h$/i, "") : safePrefix(baseName);
+
+  /* 语言只在**首次导出**时由用户选（`cgui:exportPlan` 就是为问这一句而存在的往返）。
+     目录里已经躺着一份骨架时，一律以磁盘现状为准 —— 往 C 工程里再落一份 `main.cpp`
+     （或反过来）等于同一个工程两套入口：链接直接重复定义，而用户的业务代码可能写在另一份里。
+     传入的 lang 与现状不一致时**只记一行日志**，写什么仍由现状决定。 */
+  const existing = langOnDisk(dir, prefix);
+  if (existing && lang && lang !== existing) {
+    log("exportC", `[warn] 工程已是 ${existing} 骨架，忽略传入的 ${lang}（换语言请另建工程）`);
+  }
+  const effLang = resolveLang({ requested: lang, existing });
+  const implFile = implNameOf(prefix, effLang);
+  const mainFile = entryNameOf(effLang);
+
+  /* 这个目录是不是"手写工程"（main.c / main.cpp 不是画布产物）？
    * 判据只能是模板首行的机器标记：示例的 main.c 同样含 desc.auto_locate_cgui /
    * k_bindings 这些"看着像模板"的东西，靠内容猜会误判（踩过：darkterm 的回调被清空）。
    * 手写工程**只同步界面文件 .cgui**（那是画布自己的产物），代码一律不碰 ——
    * 往里塞 main.c / _ui_events.* / .rc / build.bat 不但污染目录，还会被一起编进 exe。
    * 与"单文件发布"无关：界面是编译期作为 PE 资源编进 exe 的（见 cgbuild.mjs）。 */
-  const mainPath = path.join(dir, "main.c");
+  const mainPath = path.join(dir, mainFile);
   const normEol = (s) => s.replace(/\r\n/g, "\n");
   const oldMain = existsSync(mainPath) ? await fs.readFile(mainPath, "utf8") : "";
   const handwritten = oldMain ? !/generated-by-cstackgui/.test(oldMain) : false;
 
   /* 事件头是每次导出都重写的纯生成物 → 它 = "画布上次导出时绑定了哪些回调"的权威快照。
-     导出前先读下来：老 .h 声明过、新 .h 里没有的名字，就是"画布上已不再绑定、而 .c 里还留着"的回调。 */
-  const headerName = files.find((f) => f.name.endsWith("_ui_events.h"))?.name ?? "";
-  const cName = files.find((f) => f.name.endsWith("_ui_events.c"))?.name ?? "";
+     导出前先读下来：老 .h 声明过、新 .h 里没有的名字，就是"画布上已不再绑定、而回调实现里还留着"的回调。 */
   const headerPath = headerName ? path.join(dir, headerName) : "";
-  const cPath = cName ? path.join(dir, cName) : "";
+  const cPath = existsSync(path.join(dir, implFile)) ? path.join(dir, implFile) : "";
   const oldHeader = headerPath && existsSync(headerPath) ? await fs.readFile(headerPath, "utf8") : "";
   const newHeader = headerName ? files.find((f) => f.name === headerName)?.content ?? "" : "";
 
-  /* main.c **永不覆盖**（见下），但"工程里那份已经和当前样板不同步"这件事得让用户知道 ——
+  /* 入口文件 **永不覆盖**（见下），但"工程里那份已经和当前样板不同步"这件事得让用户知道 ——
      否则画布改了样板，老工程永远拿不到，而且一点提示都没有。只比对、只提醒，绝不自动写。
-     换行符先归一：在编辑器里存过一手的 main.c 会被转成 CRLF，那不算"用户改过"。 */
-  const newMain = files.find((f) => f.name === "main.c")?.content ?? "";
+     换行符先归一：在编辑器里存过一手的入口文件会被转成 CRLF，那不算"用户改过"。 */
+  const newMain = files.find((f) => f.name === mainFile)?.content ?? "";
   const staleMainC = Boolean(oldMain) && !handwritten && normEol(oldMain) !== normEol(newMain);
+
+  /* 语言专属文件里不属于当前语言的那些（另一套 `<base>_ui_events.*` / `main.*`）
+     一个字节都不写 —— 判据收在 skeleton-lang.mjs，tools\check-skeleton.mjs 锁着它的行为。 */
+  const langSkip = new Set(langWriteList(prefix, effLang, files.map((f) => f.name)).skip);
 
   const written = [];
   const skipped = [];
@@ -506,22 +562,28 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
     await fs.mkdir(dir, { recursive: true });
     for (const f of files) {
       const target = path.join(dir, f.name);
+      /* 另一种语言的源文件：整个跳过。它是"这个目录对应哪门语言"的最后一道闸 ——
+       * 渲染端偶尔会先按默认语言生成一版 files 再送过来，光靠"那边已经商量好"不够保险。 */
+      if (langSkip.has(f.name)) {
+        skipped.push(f.name);
+        continue;
+      }
       if (handwritten && !f.name.endsWith(".cgui")) {
         skipped.push(f.name);
         continue;
       }
-      /* main.c 已是用户的资产：**已存在就不覆盖**。仓库里的示例是手写程序
+      /* 入口文件已是用户的资产：**已存在就不覆盖**。仓库里的示例是手写程序
        * （业务与回调就在 main.c 里），覆盖它等于把回调清空（2026-10-07 踩过：darkterm 按钮全部失效）。
        * 单文件发布也不依赖它 —— 界面是编译期作为 PE 资源编进 exe 的。 */
-      if (f.name === "main.c" && existsSync(target)) {
+      if (f.name === mainFile && existsSync(target)) {
         skipped.push(f.name);
         continue;
       }
-      /* <工程>_ui_events.c 不再整份跳过，改成"**只补不改**"：
-       * 缺的回调补桩 —— 不补的话 .h 里已经声明、main.c 的 BIND 表也引用了它，
+      /* <工程>_ui_events.{c,cpp} 不再整份跳过，改成"**只补不改**"：
+       * 缺的回调补桩 —— 不补的话 .h 里已经声明、入口的 BIND 表也引用了它，
        * 链接会直接 undefined reference；已有的原样留着，永不删用户的代码。
        * 合并结果与老文件完全一致时**连文件都不写**：mtime 不动，才不会触发无谓的重新编译。 */
-      if (f.name.endsWith("_ui_events.c") && existsSync(target)) {
+      if (f.name === implFile && existsSync(target)) {
         const merged = mergeEvents(await fs.readFile(target, "utf8"), f.content);
         if (merged.mode === "same") {
           skipped.push(f.name);
@@ -575,6 +637,8 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
     skipped,
     projectRoot: isProjectRoot(projectRootCache) ? projectRootCache : "",
     appName: baseName,
+    /* 渲染端拿它决定那句提示该说什么文件名（`${base}_ui_events.c` 还是 `.cpp`） */
+    lang: effLang,
     addedCallbacks,
     unusedCallbacks,
     staleMainC,
@@ -585,21 +649,23 @@ ipcMain.handle("app:reveal", (_e, target) => {
   if (target && existsSync(target)) shell.showItemInFolder(target);
 });
 
-/* 打开回调所在的 C 文件（画布「事件」页签里那个「代码」按钮）。
+/* 打开回调所在的源文件（画布「事件」页签里那个「代码」按钮）。
  *
  * 新手闭环最容易断在这里：绑完事件、导出骨架之后要"切到编辑器里找到那个空函数"。
- * 这里从 .cgui 路径推出工程目录 → 找 <名字>_ui_events.c → 搜索函数名所在行 →
- * 优先用 VS Code 的 `code -g 文件:行号` 直接跳过去，没装 VS Code 就用默认程序打开。 */
+ * 这里从 .cgui 路径推出工程目录 → 找 <名字>_ui_events.{c,cpp}（哪个在就开哪个）→
+ * 搜索函数名所在行 → 优先用 VS Code 的 `code -g 文件:行号` 直接跳过去，
+ * 没装 VS Code 就用默认程序打开。 */
 ipcMain.handle("cgui:openCallback", async (_e, { filePath, callback }) => {
   const target = filePath || currentFile;
   if (!target) {
-    return { ok: false, message: "先「导出 C 骨架」，画布才知道 C 文件在哪" };
+    return { ok: false, message: "先「导出 C 骨架」，画布才知道源文件在哪" };
   }
   const dir = path.dirname(target);
   const base = path.basename(target).replace(/\.cgui$/i, "");
-  const cfile = path.join(dir, `${base}_ui_events.c`);
+  const implName = langOnDisk(dir, base) === "cpp" ? `${base}_ui_events.cpp` : `${base}_ui_events.c`;
+  const cfile = path.join(dir, implName);
   if (!existsSync(cfile)) {
-    return { ok: false, message: `还没生成 ${base}_ui_events.c，先点工具条的「导出 C 骨架」` };
+    return { ok: false, message: `还没生成 ${implName}，先点工具条的「导出 C 骨架」` };
   }
 
   let line = 1;
@@ -626,9 +692,9 @@ ipcMain.handle("cgui:openCallback", async (_e, { filePath, callback }) => {
   if (!jumped) {
     const err = await shell.openPath(cfile);
     if (err) return { ok: false, message: `打不开 ${cfile}：${err}` };
-    return { ok: true, message: `已用默认程序打开 ${base}_ui_events.c` };
+    return { ok: true, message: `已用默认程序打开 ${implName}` };
   }
-  return { ok: true, message: `已打开 ${base}_ui_events.c${line > 1 ? ` 第 ${line} 行` : ""}` };
+  return { ok: true, message: `已打开 ${implName}${line > 1 ? ` 第 ${line} 行` : ""}` };
 });
 
 /** 选窗口图标（.ico）。尽量给出相对 .cgui 目录的路径（工程整体搬走也不失效）；
@@ -737,7 +803,7 @@ ipcMain.handle("cgui:pickImage", async () => {
  * 前提（渲染进程负责先保存）：
  *   1. .cgui 已经在磁盘上（有路径）
  *   2. 工程在项目根的 apps\ 或 examples\ 下（build-app.bat 只认这两处）
- *   3. 工程目录里有 main.c（导出过 C 骨架）
+ *   3. 工程目录里有 main.c 或 main.cpp（导出过骨架；C++ 工程是后者）
  */
 let runBusy = false;
 
@@ -817,8 +883,9 @@ ipcMain.handle("run:buildAndLaunch", async (_e, { filePath }) => {
     root = candidate;
   }
   const name = path.basename(appDir);
-  if (!existsSync(path.join(appDir, "main.c"))) {
-    return fail(`${appDir} 里没有 main.c。\n先点「导出 C 骨架」生成 C 代码，再运行。`);
+  /* C 工程是 main.c、C++ 工程是 main.cpp —— 两个都没有才是"还没导出过骨架" */
+  if (!existsSync(path.join(appDir, "main.c")) && !existsSync(path.join(appDir, "main.cpp"))) {
+    return fail(`${appDir} 里没有 main.c / main.cpp。\n先点「导出 C 骨架」生成代码，再运行。`);
   }
 
 
@@ -845,10 +912,10 @@ ipcMain.handle("run:buildAndLaunch", async (_e, { filePath }) => {
   }
 
   const exePath = path.join(appDir, `${name}.exe`);
-  /* 编译退出码为 0 不代表产物一定在（比如工程目录里没有 main.c 时链接的
+  /* 编译退出码为 0 不代表产物一定在（比如工程目录里没有入口源文件时链接的
    * 是别的目录）。spawn 一个不存在的 exe 会抛未捕获异常弹窗，先拦下来。 */
   if (!existsSync(exePath)) {
-    const msg = `编译没有生成 ${exePath}。\n请确认工程目录里有 main.c（点「导出 C 骨架」生成），目录里没有多余的旧产物。`;
+    const msg = `编译没有生成 ${exePath}。\n请确认工程目录里有 main.c / main.cpp（点「导出 C 骨架」生成），目录里没有多余的旧产物。`;
     send("run:output", { kind: "fail", code: exitCode });
     return fail(msg);
   }
@@ -898,8 +965,8 @@ ipcMain.handle("publish:project", async (_e, { filePath }) => {
     root = candidate;
   }
   const name = path.basename(appDir);
-  if (!existsSync(path.join(appDir, "main.c"))) {
-    return fail(`${appDir} 里没有 main.c。\n先点「导出 C 骨架」生成 C 代码，再发布。`);
+  if (!existsSync(path.join(appDir, "main.c")) && !existsSync(path.join(appDir, "main.cpp"))) {
+    return fail(`${appDir} 里没有 main.c / main.cpp。\n先点「导出 C 骨架」生成代码，再发布。`);
   }
 
   runBusy = true;
@@ -921,7 +988,7 @@ ipcMain.handle("publish:project", async (_e, { filePath }) => {
   }
   const exePath = path.join(appDir, `${name}.exe`);
   if (!existsSync(exePath)) {
-    return fail(`编译没有生成 ${exePath}，请确认工程目录里有 main.c。`);
+    return fail(`编译没有生成 ${exePath}，请确认工程目录里有 main.c / main.cpp。`);
   }
 
   /* 2) 发布产物就是**工程目录里那个 exe**（也就是 .cgui 旁边）：
