@@ -155,4 +155,16 @@ A1→T1/T2 全程老文件回归 ｜ A2/A3→T1 截图 ｜ A4→T2 真机 ｜ A5
       真机 A4：审计工程加 `roles` + 三个 @控件，深浅截图各取对应槽
       （accent 浅紫/深紫、danger 红/浅红、@按钮同拍）。**A4/A5 ✓**。
       run-tests `all checks passed` + check-format `BAT_EXIT=0`。
-- [ ] P3c T3 实现 + 往返与一致性探针（A6/A7）
+- [x] P3c **T3 落地（2026-10-08）**：T3.0 一致性探针（`tools\probe-style-consistency.mjs`，契约文字
+      独立实现对拍 resolveStyle——首跑抓到**探针自己把优先级写反**，修正后全绿；红证：parse 修复前
+      @ 被静默丢、roles{} 整表消失）→ T3.1 colorOf 放行 `@`（A6）→ **类型/parse/serialize 接 roles{}**
+      （SDD 原表漏了这项：画布模型根本没有 roles 字段，手写 roles 的文件打开再保存会被**整表静默删**，
+      比 @ 丢失更重——types/parse/serialize 三处补齐）→ T3.3 WidgetView 按模式取色
+      （`doc.app.dark` 显式值定模式，auto 读 matchMedia——首写误作 `doc.dark`，tsc 抓住）→
+      T3.4 角色下拉（StyleSection 文字/背景两行；**StyleDialog 与 WindowPanel 的下拉未做**，
+      见残留）→ T3.5 往返门禁加 roles/@ 探针（gallery 实测：roles 与 @引用恒等无损 +
+      `selftest OK`——运行时接受画布写出的带 roles 文件，契约闭环）。
+      **验收**：A6 ✓（红绿）A7 ✓（深浅两态画布截图，@ 控件各取对应槽）A8 ✓（对拍探针）。
+      run-tests / check-format / probe-dialog / 一致性探针全绿。
+      **残留**：StyleDialog / WindowPanel 的角色下拉、roles{} 表的画布编辑器（手改 .cgui +
+      热重载可用）、`doc.app.dark` 变化不触发画布重渲染（静态对齐的已知边界）。
