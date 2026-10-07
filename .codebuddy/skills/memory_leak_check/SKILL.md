@@ -1,10 +1,15 @@
 ---
 name: memory_leak_check
-description: 检测动态内存分配泄漏、堆碎片、内存越界、野指针、内存池滥用等问题。
+description: 检测动态内存分配泄漏、堆碎片、内存越界、野指针，以及句柄/GDI 对象未配对释放等问题。触发条件：改动涉及 malloc/free、句柄、GDI 对象、窗口生命周期，或 piv-review-changes 按领域路由到本技能时自动执行。
 auto_invoke: true
 allowed-tools: [ReadFile, GrepSearch]
 ---
 # 技能：内存泄漏与堆管理审查（专家级）
+
+> **本工程落地口径**：正文示例里的 `pvPortMalloc` / `heap_caps_malloc` / `esp_get_free_heap_size`
+> 是**上游模板残留**（无 FreeRTOS / 无 ESP32）。本工程是 Win32 桌面程序，**除堆之外还要管
+> 句柄与 GDI 对象**（`CreateFont`/`CreatePen`/`CreateBitmap` → `DeleteObject`，`GetDC` → `ReleaseDC`），
+> 这是本工程更高频的泄漏源。"禁止在中断里分配"在本工程对应"禁止在非 UI 线程里碰控件"。
 
 ## 触发条件
 识别到以下场景自动执行：
@@ -639,7 +644,7 @@ if (free_heap < 10240) {
 2. **成对出现**：一次分配对应一次释放
 3. **释放后置 `NULL`**：`free(ptr); ptr = NULL;`
 4. **优先级**：栈内存 > 静态内存 > 动态内存
-5. **禁止场景**：中断函数、高频函数（每秒调用 >100 次）
+5. **禁止场景**：非 UI 线程里碰控件、高频函数（每秒调用 >100 次）、窗口过程里每帧分配
 
 ### 内存释放原则
 1. **统一释放路径**：使用 `goto cleanup` 模式

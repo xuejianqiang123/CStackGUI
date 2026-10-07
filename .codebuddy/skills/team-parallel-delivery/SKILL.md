@@ -1,6 +1,7 @@
 ---
 name: team-parallel-delivery
 description: 用「按文件域切分的并行小团队」交付中等以上规模的需求 —— 我 own 关键路径，队友 own 外围域（画布/示例/文档），契约先行、逐条回执、按模块分批提交。触发条件：用户说"并行 / 多任务 / 开团队"、或一个需求同时落到多个互不重叠的目录（`runtime/` + `designer/` + `examples/` + `docs/`）、或交付面多于一个（新能力 + 示例 + 文档）时自动执行。
+auto_invoke: true
 argument-hint: [需求描述]
 ---
 
@@ -43,7 +44,8 @@ argument-hint: [需求描述]
   - 它**独占**的文件域 + 一张"**绝对不要碰**"清单（**尤其 `.codebuddy/memory/` —— 那是我的**）
   - "先读这些"清单：本项目 skill（`designer-modify` / `firmware_code_style`）+ 同类功能的最新实现（照它的密度与写法）
   - 逐字契约 + 上面那句"与代码不一致就报回来"
-  - 它自己要跑的门禁命令（`npx tsc --noEmit` + `npx vite build` / `build-app` + `--selftest` /
+  - 它自己要跑的门禁命令（`cd designer && npx tsc --noEmit && npx vite build` /
+    `build-app.bat <名字>` + `--selftest` /
     `node tools\check-support.mjs` / `tools\check-format.bat`）
   - 回报要求："改了哪些文件、各加了什么、验证的**实际输出**、**以及你不确定 / 没做到的地方**（如实说，别粉饰）"
   - "不要执行 git 提交"（提交统一由我做）

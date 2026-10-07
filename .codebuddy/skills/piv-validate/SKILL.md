@@ -13,7 +13,8 @@ argument-hint: [optional-validation-focus]
 
 > **本工程的验证入口是 `.bat`，不是 `idf.py`**。四条命令覆盖全部：
 > `build-all.bat`（编译 + 逐示例自检）、`tools\run-tests.bat`（C 层单测）、
-> `tools\check-format.bat`（跨端契约）、`npx tsc --noEmit && npx vite build`（画布）。
+> `tools\check-format.bat`（跨端契约）、`cd designer && npx tsc --noEmit && npx vite build`（画布）。
+> 写法以 `sop` §3「门禁命令表」为准 —— 表里没有的形态一律以表纠正。
 > 各有各的适用范围，见下面三级。
 
 ## 验证层级（从低到高，逐级通过）
@@ -62,8 +63,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-utf8.ps1 -Mode fix
 - **`--trace`**：开窗前打印一遍文档树（控件树 + 动作表 + 每行菜单），核对是不是你以为的那样。
 - **真机驱动**（GUI 程序唯一能证明"按键/点击真的发生了"的办法）：
   起真窗口 → 激活它 → 发键/鼠标事件 → **读回程序自己写出的文件**。
-  已验证可用的形态（本轮沉淀，脚本留在 `build\`，gitignore 内）：
-  `build\accel-verify.ps1` —— 起探针 → `SetForegroundWindow` + 等它真的成为前台 →
+  已验证可用的形态（脚本**现场写**进 `build\`，gitignore 内；仓库不提供现成探针）：
+  起探针 → `SetForegroundWindow` + 等它真的成为前台 →
   `SendKeys("^s")` / `{F10}{DOWN}{ENTER}` → 读 `hit.txt` 断言行数与内容；
   **先确认窗口真的在前台**，否则"加速键没生效"和"没测到"会被混为一谈。
   看外观用截图：`tools\shot.ps1`（PrintWindow 优先，不怕被别的窗口遮住）。

@@ -4,6 +4,9 @@
 > **2026-09-27 清理**：按本工程实际删掉 13 个用不到的技能（8 个纯固件审查、板子侧 `esp-idf-helper`、
 > 社区 3 个、输入侧压缩 `tokenzero`），技能 **41 → 28**；`settings.json` 的项目范围、`global-rule.md`
 > 的 §1~§3 与 §7 映射表、本文件、以及 5 个技能正文里的引用一并同步。
+> **2026-10-07 追加 v0.4**：新增 `sop` 总控（把散装的技能串成一条 SOP：**28 → 29**），
+> 落地 `.codebuddy/code-reviews/` 目录，并把各技能里"引用不存在的路径 / 14 项审查 / 缺 `cd designer` /
+> 固件模板残留"等口径问题一并纠正。
 >
 > **权威清单**：技能分类 / 触发条件 / 维护清单 → **`.codebuddy/skills/INDEX.md`**；
 > 强制规则 → **`.codebuddy/global-rule.md`**。本文件是**导读**，同一事实不在这里重复维护。
@@ -12,14 +15,15 @@
 
 ## 1. 这套配置是什么
 
-四类能力，共 **28 个技能**：
+五类能力，共 **30 个技能**：
 
 | 类 | 数量 | 作用 | 何时用到 |
 |---|---|---|---|
+| **总控** | 1 | ★ `sop`：三入口路由 + 八段流水线 + **对抗性闸门** + 唯一权威门禁命令表 + 收敛与中断恢复 | **任何开发类请求，先过它** |
 | 审查类 | 7 | 代码与界面质量门禁（由 `piv-review-changes` 按领域调用） | 写码后 / 提交前 |
 | 流程类（PIV 双循环） | 13 | 需求 → 提交的工作流 + 3 道门禁 | 每次开发 |
 | 本工程专属规程 | 1 | `designer-modify`：改画布的说明书 | 改 `designer/` 时 |
-| 约束与工具 | 6 | 压缩（caveman / ponytail）、思维准则、文件安全、真机实测、陌生库分析 | 始终生效 / 按需 |
+| 约束与工具 | 7 | 压缩（caveman / ponytail）、思维准则（本质 + **对抗**）、文件安全、真机实测、陌生库分析 | 始终生效 / 按需 |
 | 社区引入 | 1 | `wavedrom-gen`：时序描述 → 波形图 | 按需 |
 
 **硬门禁**（不过不提交，业务/文档改动也一样）：
@@ -29,8 +33,12 @@ build-all.bat                          :: 编译全部 + 逐示例自检
 tools\run-tests.bat [--memcheck]       :: C 层单测（切帧 / JSON / 文档 / 类型表 / 事件表 / kit 冒烟）
 tools\check-format.bat                 :: 跨端契约（分层 / 支持库表 / .cgui 字段 / bat 编码）
 node tools\check-examples.mjs --docs   :: 文档口径与代码一致
-npx tsc --noEmit && npx vite build     :: 改了画布（designer/）时叠这两条
+npx tsc --noEmit && npx vite build     :: 改了画布（designer/）时叠这两条（记得先 cd designer）
+node tools\check-skills.mjs            :: 改了 .codebuddy/skills\ 之后（check-format.bat 已含，可单独跑）
 ```
+
+> **命令写法以 `sop` §3「门禁命令表」为唯一出处** —— 别处出现不同形态（缺 `cd designer`、
+> `build-all` 不带 `.bat`、`tools/run-tests.bat` 用正斜杠）一律以该表纠正。
 
 > 改了 `.bat` 之后必须跑 `powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-utf8.ps1 -Mode fix`
 > （UTF-8 无 BOM + CRLF + ASCII 前导；详见 global-rule 开头）。
@@ -45,9 +53,11 @@ npx tsc --noEmit && npx vite build     :: 改了画布（designer/）时叠这�
 ├── global-rule.md       强制规则（唯一权威）
 ├── settings.json        AI 助手配置（autoInvokeSkill / strictMode / scopes / excludePaths …）
 ├── plans/               PIV 实现计划（入库）
+├── code-reviews/        提交前审查报告（入库；2026-10-07 补建，此前只在文档里被引用）
 ├── schemas/             产出物的 JSON Schema（现状见 §8）
-├── skills/              28 个技能
+├── skills/              30 个技能
 │   ├── INDEX.md         ★ 技能索引（分类 / 触发条件 / 维护清单）
+│   ├── sop/             ★ 总控：三入口路由 + 八段流水线 + 对抗性闸门 + 门禁命令表（先看它）
 │   ├── [审查类] 6 个 C 代码检查：buffer_overflow / communication_protocol / error_handling /
 │   │                firmware_code_style（本工程 C 规范）/ memory_leak / struct_best_practice
 │   ├── [流程类] 13 个：plan-create-prd / plan-architecture / piv-slice-epic / prime-codebase /
@@ -76,7 +86,8 @@ npx tsc --noEmit && npx vite build     :: 改了画布（designer/）时叠这�
 | §5.1 | caveman（常驻 full） | 回复压缩；代码/命令/路径/错误信息一字不改 |
 | §5.2 | ponytail（常驻 full） | 写码前走决策梯子；红线（缓冲区边界 / 资源释放 / 错误码 / 时序 / 协议一致性）不砍 |
 | §5.3 | safe-file-ops | 能不删就不删；删除攒成一次、给清单、只请求一次批准 |
-| §6 | PIV 工作流 | 内层循环强制走，门禁不许跳步 |
+| §5.4 | ★ `adversarial-thinking`（常驻，不可关） | 输出结论前**先攻击自己的结论**：验证缺陷真实存在、允许否掉自己、区分"修"与"观测"、对"不修"写理由 |
+| §6 | PIV 工作流（入口 `sop`） | 三入口路由 + 八段流水线，3 道门禁 + 4 道对抗闸门，不许跳步 |
 | §7 | 审查映射表 | 改动领域 → 调哪个审查技能（**7 行**，本工程适用） |
 | §8 | 强制执行模式 | `strictMode` 下违反规则的代码必须改完才能提交 |
 | §9 | 产出物管理规范 | 路径与命名规范（见 §7 表） |
@@ -236,9 +247,11 @@ AI 自动执行：
 - **加技能** → 用 `skills-create`（位置 / 命名 / frontmatter / 模板 / 质量要求都在它的 `SKILL.md` 里，本文件不重复）。
 - **改 / 删 / 改名技能** → 按 `skills/INDEX.md` 的**维护检查清单**逐条过：同步 INDEX（含顶部计数与日期）+ `global-rule.md`（§6 流程 / §7 映射）+ 本文件；跨技能引用不许留断链。
 - **产出物 Schema**（诚实说明）：`.codebuddy/schemas/` 下有 `implementation-plan.schema.json` 与
-  `review-report.schema.json`，但**目前没有任何工具自动校验**（`tools/` 里没有 validator），
-  实际是靠人和 AI 照它写。要用起来就得在 `piv-plan-implementation` / `piv-review-changes` 里接上校验步骤；
-  不打算用就该删掉 —— 别留着当摆设。
+  `review-report.schema.json`，但**没有任何工具自动校验**（`tools/` 里没有 validator）。
+  2026-10-07 的处置：不删、也不假装它生效 —— `sop` §2 把两个 schema 要求的字段**内联成每段的 DoD**
+  （计划要"验证方法 + 边界清单 + 回滚方式"、报告要"等级 + 位置 + 原理 + 修复示例"），
+  由人和 AI 按 DoD 写；schema 文件保留为**结构出处**。要真正机器化，就写一个 validator 接进
+  `tools\check-format.bat` —— 在那之前别把它算进门禁。
 
 ---
 
@@ -261,3 +274,5 @@ AI 自动执行：
 | 2026-09-22 | v0.2 设计品味 | 新增 `design-taste`（八套外部设计技能提炼后落到画布与 `.cgui` 两端）；`global-rule` §7 增加"界面观感 / 文案"一行 |
 | 2026-09-27 | v0.3 技能清理 | 删 13 个用不到的技能（**41 → 28**）：8 个纯固件审查、`esp-idf-helper`、社区 3 个、`tokenzero`；同步 INDEX / §7 映射表 / `settings.json` / 本文件 / 5 个技能正文；§1~§3 换成平台与资源规则 |
 | 2026-09-27 | v0.3 导读精简 | 本文件 681 → 约 300 行：去掉上游模板的"完善统计"话术、重复的 SKILL 模板、Q&A 骨架；改成本工程口径并补齐入库政策与 schema 现状 |
+| 2026-10-07 | v0.4 SOP 总控 | 新增 ★ `sop`（**28 → 29**）：单一入口 = 路由 + 七段流水线（每段带 DoD）+ 唯一权威门禁命令表 + 审查路由表 + 收尾沉淀 + 中断恢复；补建 `.codebuddy/code-reviews/`；纠正 10 类口径不一致（`npx tsc` 缺 `cd designer`、审查技能数 14→7、报告目录三套归一、`build\accel-verify.ps1` 断链、frontmatter 缺 `auto_invoke` / 触发条件）与固件模板残留（`esp_*` / `HAL_*` / 中断 DMA / 外设 / NVS 语境） |
+| 2026-10-07 | v0.5 对抗性思维 | 新增 ★ `adversarial-thinking`（**29 → 30**，常驻不可关，写入 global-rule §5.4）；`sop` 升级为三入口（建功能 / 修 bug / 评估想法）+ 八段（加 **P7 收敛**）+ **四道对抗性闸门** + 三角色审查；吸收 Spec Kit（独立入口、converge、诊断/修复/验证分离、"没有验证的修复不算修复"）与 vibe-coding-cn（计划三硬要求、进度留痕、新会话先读再动手、Debug 三件套） |

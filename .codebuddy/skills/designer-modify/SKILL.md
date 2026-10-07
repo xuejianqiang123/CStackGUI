@@ -1,6 +1,7 @@
 ---
 name: designer-modify
 description: 修改 CStackGUI 的 UI 设计器（designer/ —— Electron + React 19 + Vite + TS 的 .cgui 画布）。触发条件：改画布外观/面板/交互、给 .cgui 加字段、改事件绑定表、新增一种控件、改导出 C 骨架或 Electron IPC（打开/保存/导出/一键运行）时自动触发。先按「意图识别」把使用者的日常表述翻译成改动路线，再按清单执行。改 C 运行时（runtime/）不属于本技能，但两边共有约定见「跨端铁律」。
+auto_invoke: true
 argument-hint: [要改的东西，可以用日常语言，例如 "画布选中框太丑"、"想给控件加个提示"、"像 XX 软件那样能多选"]
 ---
 

@@ -50,7 +50,7 @@ argument-hint: [feature-description]
 执行 `piv-validate` skill 的工作流：
 
 - 编译 + 静态检查（`git diff --check`、`build-all.bat` 无新增警告；
-  改了画布再加 `npx tsc --noEmit` + `npx vite build`）
+  改了画布再加 `cd designer && npx tsc --noEmit && npx vite build`）
 - 行为验证（按计划的验证方法）
 - 边界/异常路径覆盖
 
@@ -63,7 +63,8 @@ argument-hint: [feature-description]
 执行 `piv-review-changes` skill 的工作流：
 
 - 对全部改动做通用技术审查
-- 按改动领域加载对应的嵌入式审查 skills（DMA/中断/协议/内存等 14 项）
+- 按改动领域加载对应的审查 skills（**7 个**，映射表见 `global-rule.md` §7 / `sop` §4；
+  本工程没有 MCU，没有 DMA/中断那一族）
 - 产出审查报告到 `.codebuddy/code-reviews/`
 
 发现需要修复的问题 → 回到步骤 3/4，修复并重验。

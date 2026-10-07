@@ -46,12 +46,10 @@
           "category": {
             "type": "string",
             "enum": [
-              "dma_cache", "interrupt", "buffer_overflow", "memory_leak",
-              "flash_storage", "communication_protocol", "peripheral_conflict",
-              "power_management", "rtos_task", "watchdog_timer", "stack_overflow",
-              "struct_best_practice", "error_handling", "code_style"
+              "buffer_overflow", "memory_leak", "communication_protocol",
+              "error_handling", "struct_best_practice", "code_style", "design_taste"
             ],
-            "description": "问题类别（对应审查 skill）"
+            "description": "问题类别（对应本工程现存的 7 个审查 skill；2026-09-27 删掉的固件类已移除，2026-10-07 同步）"
           },
           "file": { "type": "string", "description": "文件路径" },
           "location": { "type": "string", "description": "函数名或行号" },

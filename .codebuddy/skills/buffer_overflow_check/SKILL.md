@@ -1,10 +1,14 @@
 ---
 name: buffer_overflow_check
-description: 检测缓冲区溢出、数组越界、字符串操作越界、memcpy/strcpy/sprintf 等危险函数的边界安全。
+description: 检测缓冲区溢出、数组越界、字符串操作越界、memcpy/strcpy/sprintf 等危险函数的边界安全。触发条件：改动涉及缓冲区/字符串/memcpy/格式化输出，或 piv-review-changes 按领域路由到本技能时自动执行。
 auto_invoke: true
 allowed-tools: [ReadFile, GrepSearch]
 ---
 # 技能：缓冲区溢出与边界安全审查
+
+> **本工程落地口径**：正文示例里出现的 `ESP_LOGE` / `esp_err_t` 是**上游模板残留**（本工程是
+> Win32/GDI+ 桌面工具包，没有 ESP-IDF）。判据看**缺陷模式**（越界、整数溢出、返回值不判长度），
+> 不看示例里的 API 名；本工程对应的是 `cg_*` 接口、`cg_frame_*` 切帧、Win32 缓冲区与 `snprintf`。
 
 ## 触发条件
 - memcpy/memmove/memset 操作

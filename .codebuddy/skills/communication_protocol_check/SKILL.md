@@ -1,10 +1,15 @@
 ---
 name: communication_protocol_check
-description: 审查串口、SPI、I2C、WiFi、BLE、MQTT、HTTP 等通信协议的稳定性、超时处理、校验机制。
+description: 审查串口、TCP/UDP、帧协议（cg_frame_*）的稳定性、超时处理、校验机制、粘包切帧与重连。触发条件：改动涉及串口/网口收发或帧协议，或 piv-review-changes 按领域路由到本技能时自动执行。（本工程无 SPI/I2C/BLE/MQTT，那部分是上游模板残留。）
 auto_invoke: true
 allowed-tools: [ReadFile, GrepSearch]
 ---
 # 技能：通信协议与数据传输审查
+
+> **本工程落地口径**：正文示例里的 `uart_read_bytes` / `i2c_master_*` / `esp_wifi_*` /
+> `pdMS_TO_TICKS` 是**上游模板残留**。本工程的通信面是 `cg_serial_*`（串口）与 `cg_net_*`
+> （TCP/UDP），字节流一律按 `cg_frame_*` 切帧；"看门狗复位"这类后果在本工程对应"线程卡死 /
+> UI 无响应"。判据看**缺陷模式**（超时、粘包、字节序、重连），不看 API 名。
 
 ## ⚠️ 核心原则（对应 AI 评审第 8 层：通信协议与数据完整性）
 - **超时必须设置**：所有阻塞式接收必须设置超时，避免死等

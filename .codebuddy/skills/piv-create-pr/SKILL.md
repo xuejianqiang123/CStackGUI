@@ -38,7 +38,7 @@ argument-hint: [optional-pr-title]
 - <路径>：<改动说明>
 
 ## 验证情况
-- [ ] 编译通过（`build-all.bat`，无新增警告；改了画布再叠 `npx tsc --noEmit` + `npx vite build`）
+- [ ] 编译通过（`build-all.bat`，无新增警告；改了画布再叠 `cd designer && npx tsc --noEmit && npx vite build`）
 - [ ] 行为验证（<验证方式>：`--selftest` / `--trace` / 真机驱动，见 `piv-validate` 第 3 级）
 - [ ] 单测（`tools\run-tests.bat`；改了 `.cgui` 字段或控件类型叠 `tools\check-format.bat`）
 - [ ] AI 审查通过（`piv-review-changes` 产出的审查报告路径）

@@ -1,10 +1,15 @@
 ---
 name: error_handling_check
-description: 审查错误码处理、异常捕获、断言使用、日志记录、容错机制、故障恢复策略。
+description: 审查错误码处理、异常捕获、断言使用、日志记录、容错机制、故障恢复策略。触发条件：改动涉及错误码/断言/日志/回调失败路径，或 piv-review-changes 按领域路由到本技能时自动执行。
 auto_invoke: true
 allowed-tools: [ReadFile, GrepSearch]
 ---
 # 技能：错误处理与容错机制审查
+
+> **本工程落地口径**：正文示例里的 `ESP_ERROR_CHECK` / `HAL_StatusTypeDef` / `HAL_UART_Init`
+> 是**上游模板残留**。本工程的错误面是 `cg_*` 的返回码、回调失败路径、句柄与 GDI 对象释放、
+> 以及"复位外设/重启系统"在本工程对应"关窗重开 / 重建控件"。判据看**缺陷模式**
+> （返回值不判、失败路径漏释放、日志缺失），不看 API 名。
 
 ## ⚠️ 核心原则（对应 AI 评审第 6 层：错误处理与资源泄漏）
 - **返回值必须检查**：malloc/API 调用的返回值不能忽略

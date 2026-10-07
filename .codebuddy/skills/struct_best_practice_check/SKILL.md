@@ -1,10 +1,15 @@
 ---
 name: struct_best_practice_check
-description: 审查结构体设计规范、内存优化、对齐问题、寄存器映射、函数指针架构、柔性数组、位域使用等 18 种高级用法的正确性与最佳实践。
+description: 审查结构体设计规范、内存优化、对齐问题、函数指针架构、柔性数组、位域使用等 18 种高级用法的正确性与最佳实践。触发条件：新增/修改结构体、位域、函数指针表，或 piv-review-changes 按领域路由到本技能时自动执行。
 auto_invoke: true
 allowed-tools: [ReadFile, GrepSearch]
 ---
 # 技能：结构体设计与最佳实践审查
+
+> **本工程落地口径**：正文里的 `USART1` / `GPIO_TypeDef` / `ADC1->SR` 寄存器映射示例与
+> "32 位 MCU 需 4 字节对齐"是**上游模板残留**。本工程没有寄存器映射；对齐问题主要出现在
+> `.cgui` 二进制载荷与跨端结构体上。"只读配置加 const 存 Flash"在本工程就是
+> "只读表加 `const static`"。判据看**缺陷模式**（对齐、pack、缺 const、柔性数组越界），不看 API 名。
 
 ## 触发条件
 识别到以下场景自动执行：
