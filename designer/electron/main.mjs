@@ -7,7 +7,7 @@
  *      （命令行下同一件事：CStackGUI.exe --build <工程>）
  *   4. 打开系统资源管理器定位产物
  */
-import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, shell, Menu, clipboard } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { existsSync, appendFileSync, readFileSync } from "node:fs";
@@ -959,6 +959,12 @@ ipcMain.handle("app:confirmDiscard", async (_e, message) => {
 
 /* ------------------------------------------------------------ 生命周期 */
 
+/** 复制文本到系统剪贴板（file:// 下渲染进程的 navigator.clipboard 不保证可用，走主进程最稳） */
+ipcMain.handle("app:copyText", (_e, text) => {
+  clipboard.writeText(String(text ?? ""));
+  return true;
+});
+
 Menu.setApplicationMenu(
   Menu.buildFromTemplate([
     {
@@ -997,6 +1003,15 @@ Menu.setApplicationMenu(
         { label: "适应窗口", accelerator: "CmdOrCtrl+0", click: () => send("menu:zoomFit") },
         { type: "separator" },
         { role: "toggleDevTools", label: "开发者工具" },
+      ],
+    },
+    {
+      label: "帮助",
+      submenu: [
+        {
+          label: "QQ 交流群 151796494（点击复制群号）",
+          click: () => send("menu:qqGroup"),
+        },
       ],
     },
   ]),

@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld("cstackgui", {
   reveal: (target) => ipcRenderer.invoke("app:reveal", target),
   setTitle: (title) => ipcRenderer.invoke("app:setTitle", title),
   confirmDiscard: (message) => ipcRenderer.invoke("app:confirmDiscard", message),
+  copyText: (text) => ipcRenderer.invoke("app:copyText", text),
 
   /** 编译/运行输出流（主进程 spawn 的批处理输出）。
    *  渲染端 effect 会随依赖变化反复注册，先清旧监听再挂新的，
@@ -57,6 +58,7 @@ contextBridge.exposeInMainWorld("cstackgui", {
       "menu:programConfig",
       "menu:actions", /* 此前漏登记：菜单项点了静默失效（2026-09-27 补） */
       "menu:styles",
+      "menu:qqGroup",
     ];
     for (const ch of channels) {
       ipcRenderer.removeAllListeners(ch);

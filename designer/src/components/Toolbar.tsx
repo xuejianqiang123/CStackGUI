@@ -33,6 +33,9 @@ type Props = {
   onRedo: () => void;
   projectRoot: string;
   onLocateProject: () => void;
+  /** QQ 交流群号：常驻显示，点击复制 */
+  qqGroup: string;
+  onQqGroup: () => void;
 };
 
 export default function Toolbar(p: Props) {
@@ -116,6 +119,10 @@ export default function Toolbar(p: Props) {
           吸附
         </button>
       </div>
+
+      <button onClick={p.onQqGroup} title="QQ 交流群：点击复制群号，打开 QQ 搜索即可加入">
+        QQ 群 {p.qqGroup}
+      </button>
 
       <div className="file-state">
         <span className={p.dirty ? "dot dirty" : "dot"} />

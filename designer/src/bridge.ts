@@ -53,6 +53,8 @@ export type Bridge = {
   reveal: (target: string) => void;
   setTitle: (title: string) => void;
   confirmDiscard: (message?: string) => Promise<boolean>;
+  /** 复制文本到系统剪贴板（QQ 群号等） */
+  copyText: (text: string) => Promise<boolean>;
   onMenu: (handler: (action: string) => void) => void;
   onRunOutput: (handler: (o: RunOutput) => void) => void;
   /** 外部把当前 .cgui 改了（编辑器 / AI 技能 / git checkout）：画布据此热重载 */
@@ -109,6 +111,7 @@ export function getBridge(): Bridge {
       reveal: (t) => void api.reveal(t),
       setTitle: (t) => void api.setTitle(t),
       confirmDiscard: (m) => api.confirmDiscard(m),
+      copyText: (t) => api.copyText(t),
       onMenu: (h) => api.onMenu(h),
       onRunOutput: (h) => api.onRunOutput(h),
       onFileChanged: (h) => api.onFileChanged(h),
@@ -165,6 +168,23 @@ export function getBridge(): Bridge {
       document.title = t ? `CStackGUI — ${t}` : "CStackGUI";
     },
     confirmDiscard: async (m) => window.confirm(m || "当前改动还没保存，确定要丢弃吗？"),
+    copyText: async (text) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        /* 老内核 / 非安全上下文没有 clipboard API：textarea + execCommand 兜底 */
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand("copy");
+        ta.remove();
+        return ok;
+      }
+    },
     onMenu: () => undefined,
     onRunOutput: () => undefined,
     /* 浏览器模式没有"外部改文件"这回事（文件是下载出去的），空实现即可 */

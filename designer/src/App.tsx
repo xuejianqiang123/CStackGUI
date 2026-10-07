@@ -149,6 +149,14 @@ export default function App() {
     window.setTimeout(() => setToast((cur) => (cur === msg ? "" : cur)), 4000);
   }, []);
 
+  /** QQ 交流群号：工具栏常驻按钮与「帮助」菜单共用（改群号记得同步 electron/main.mjs 的菜单文案） */
+  const QQ_GROUP = "151796494";
+  /** 复制群号并提示下一步动作 */
+  const copyQqGroup = useCallback(async () => {
+    const ok = await bridge.copyText(QQ_GROUP);
+    say(ok ? `群号 ${QQ_GROUP} 已复制，打开 QQ 搜索即可加入` : `复制失败，QQ 交流群群号：${QQ_GROUP}`);
+  }, [bridge, say]);
+
   /* -------------------------------------------------- 撤销 / 编辑 */
   const onBeginHistory = useCallback(() => {
     past.current.push(structuredClone(docRef.current));
@@ -464,8 +472,9 @@ export default function App() {
       else if (action === "zoomIn") setZoom((z) => Math.min(3, Math.round((z + 0.1) * 10) / 10));
       else if (action === "zoomOut") setZoom((z) => Math.max(0.2, Math.round((z - 0.1) * 10) / 10));
       else if (action === "zoomFit") setZoom(1);
+      else if (action === "qqGroup") void copyQqGroup();
     });
-  }, [bridge, doNew, doOpen, doSave, doExportC, doRun, undo, redo, duplicateSelected, deleteNodes, selectedIds, infoOpen]);
+  }, [bridge, doNew, doOpen, doSave, doExportC, doRun, undo, redo, duplicateSelected, deleteNodes, selectedIds, infoOpen, copyQqGroup]);
 
   /* 编译/运行输出流：注册一次即可，只碰 setState */
   useEffect(() => {
@@ -689,6 +698,8 @@ export default function App() {
         onRedo={redo}
         projectRoot={projectRoot}
         onLocateProject={() => void doLocateProject()}
+        qqGroup={QQ_GROUP}
+        onQqGroup={() => void copyQqGroup()}
       />
 
       <div className="body">
