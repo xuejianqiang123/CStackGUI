@@ -44,6 +44,9 @@ export default function MediaSection({ node, patch, onPickImage }: MediaSectionP
         {node.type === "iconbutton"
           ? "图标等比缩放居中显示（只缩不放，四周各留 4px）；路径相对 .cgui 所在目录，支持 png / jpg / bmp / gif。"
           : "图片拉伸铺满按钮作背景，文字画在图上；路径相对 .cgui 所在目录，支持 png / jpg / bmp / gif。"}
+        画布上会按这套规则画出真图；读不到时控件角上写「读不到 + 文件名」，好赶在编译之前发现路径写错。
+        <strong>透明像素</strong>：运行时用 GDI、不做 alpha 合成，所以透明处跑起来**不会**透出按钮底色 ——
+        别指望靠透明背景图透出主题色。
       </p>
     </>
   );

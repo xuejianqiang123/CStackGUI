@@ -20,6 +20,7 @@ import {
   type CgDoc,
   type CgNode,
 } from "../model";
+import { useImage } from "../imagecache";
 
 type Props = {
   doc: CgDoc;
@@ -111,6 +112,10 @@ export default function Canvas(props: Props) {
   const primaryId = selectedIds.length > 0 ? selectedIds[selectedIds.length - 1] : null;
   const selected = primaryId ? findNode(doc, primaryId) : null;
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+
+  /** 窗口图标（`app.icon`）的预览图：运行时把它当窗口 / 托盘图标（`LoadImageW(IMAGE_ICON)`），
+   *  画布把它缩到标题栏那一小块；读不到就保持原来的占位小方块。 */
+  const appIcon = useImage(doc.app.icon);
 
   /* -------------------------------------------------- 指针交互 */
   const startMove = (e: React.PointerEvent, node: CgNode) => {
@@ -495,7 +500,11 @@ export default function Canvas(props: Props) {
           <div className={`app-window${showTitlebar ? "" : " borderless"}`} style={{ width: doc.app.width, height: doc.app.height, background: doc.app.bg }}>
             {showTitlebar ? (
               <div className="titlebar">
-                <span className="titlebar-icon" />
+                {appIcon ? (
+                  <img className="titlebar-icon-img" src={appIcon} alt="" draggable={false} />
+                ) : (
+                  <span className="titlebar-icon" />
+                )}
                 <span className="titlebar-text">{app.title}</span>
                 <span className="titlebar-size">
                   {app.width}×{app.height}

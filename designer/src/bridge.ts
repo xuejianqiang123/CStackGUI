@@ -33,6 +33,9 @@ export type Bridge = {
   pickIcon: () => Promise<{ canceled: boolean; path?: string; rel?: string }>;
   /** 选一张图片（png/jpg/bmp/gif）当按钮背景等；返回值口径同 pickIcon */
   pickImage: () => Promise<{ canceled: boolean; path?: string; rel?: string }>;
+  /** 读一张图给画布预览（`button` / `iconbutton` / `image` 的 src、窗口图标）。
+   *  路径由主进程按当前 `.cgui` 目录解析（与运行时同一个基准）；返回 dataURL 供 `<img>` 直接用。 */
+  readImage: (p: { src: string }) => Promise<{ ok: boolean; path?: string; dataUrl?: string; tooBig?: boolean }>;
   exportC: (p: ExportPayload) => Promise<ExportResult>;
   /** F5 一键运行：调项目根的 build-app.bat 编译，成功后把 exe 跑起来 */
   buildAndRun: (p: { filePath: string }) => Promise<RunResult>;
@@ -90,6 +93,7 @@ export function getBridge(): Bridge {
       saveFile: (p) => api.saveFile(p),
       pickIcon: () => api.pickIcon(),
       pickImage: () => api.pickImage(),
+      readImage: (p) => api.readImage(p),
       exportC: (p) => api.exportC(p),
       buildAndRun: (p) => api.buildAndRun(p),
       publish: (p) => api.publish(p),
@@ -129,6 +133,9 @@ export function getBridge(): Bridge {
       const file = await pickBrowserFile("image/png,image/jpeg,image/bmp,image/gif");
       return file ? { canceled: false, path: file.name } : { canceled: true };
     },
+    /* 浏览器模式读不到磁盘上的图（只有文件名，没有目录基准）：一律"读不到"，
+       画布上会显示"保存后才能预览"那类提示，不会崩。 */
+    readImage: async () => ({ ok: false }),
     exportC: async ({ baseName, files }) => {
       files.forEach((f, i) => setTimeout(() => download(f.name, f.content), i * 250));
       return { canceled: false, dir: `（浏览器模式：${baseName} 的 ${files.length} 个文件已逐个下载）`, written: files.map((f) => f.name) };

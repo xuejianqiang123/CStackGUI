@@ -146,7 +146,8 @@ export default function ContentSection({
       ) : null}
       {node.type === "image" ? (
         <p className="muted small">
-          路径相对 .cgui 所在目录；支持 png / jpg / bmp / gif。画布上只显示文件名，运行时才画真图。
+          路径相对 .cgui 所在目录；支持 png / jpg / bmp / gif。画布上会画出真图（运行时是拉伸铺满、非等比）；
+          读不到时框里写「读不到图片 + 文件名」，赶在编译之前就能发现路径写错。
         </p>
       ) : null}
 

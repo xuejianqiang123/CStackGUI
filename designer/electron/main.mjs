@@ -615,6 +615,51 @@ ipcMain.handle("app:pickIcon", async () => {
 
 /** 选控件背景图（按钮/图片控件用，png/jpg/bmp/gif）。相对路径与 assets 拷贝逻辑同 pickIcon：
  *  工程内的图直接给相对路径；工程外的拷一份进 <工程>\assets\，工程整体搬走也不失效。 */
+/** 读一张图给画布预览（`button`/`iconbutton`/`image` 的 src、窗口图标）。
+ *
+ *  路径按**当前 .cgui 所在目录**解析：这与运行时 `cgw_resolve_asset()`（`cg_win_util.c:241`）
+ *  的第二顺位、以及 `pickImage` 写 `rel` 的基准（下面那个 handler）三处一致。
+ *  绝对路径原样读。CWD 只作兜底 —— 这工程里相对路径的契约就是"相对 .cgui"。
+ *
+ *  返回 dataURL 而不是文件路径：dev 模式的页面是 http://localhost:5273，读不了 file:// 的图
+ *  （生产是 file:// 页面，两种模式都得能跑，所以走 IPC 而不是直接给 <img src>）。
+ */
+const READ_IMAGE_MAX = 4 * 1024 * 1024; /* 4 MB 上限：base64 还要再涨 1/3，别拿一张大图把画布拖死 */
+const IMAGE_MIME = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".bmp": "image/bmp",
+  ".gif": "image/gif",
+  ".ico": "image/x-icon",
+};
+
+ipcMain.handle("cgui:readImage", async (_e, { src }) => {
+  const raw = String(src || "").trim();
+  if (!raw) return { ok: false };
+  const base = currentFile ? path.dirname(path.resolve(currentFile)) : "";
+  const candidates = path.isAbsolute(raw) ? [raw] : [base ? path.join(base, raw) : "", path.resolve(raw)].filter(Boolean);
+  for (const p of candidates) {
+    try {
+      const st = await fs.stat(p);
+      if (!st.isFile()) continue;
+      /* 太大：连读都不读（base64 之后还要再涨 1/3，别拿一张大图把画布拖死）。
+         画布那边把 tooBig 与"读不到"合并成同一条提示（少一个状态、少一串分支），
+         所以这里返回的 tooBig 目前只用于日志排查，界面上看不出区别。 */
+      if (st.size > READ_IMAGE_MAX) {
+        log("readImage", `太大不预览（${st.size} 字节）：${p}`);
+        return { ok: false, tooBig: true, path: p };
+      }
+      const buf = await fs.readFile(p);
+      const mime = IMAGE_MIME[path.extname(p).toLowerCase()] || "application/octet-stream";
+      return { ok: true, path: p, dataUrl: `data:${mime};base64,${buf.toString("base64")}` };
+    } catch {
+      /* 这个候选不存在：试下一个 */
+    }
+  }
+  return { ok: false };
+});
+
 ipcMain.handle("cgui:pickImage", async () => {
   const res = await dialog.showOpenDialog(win, {
     title: "选择图片（png / jpg / bmp / gif）",

@@ -599,6 +599,13 @@ input.narrow {
   border-radius: 4px;
   background: var(--seed);
 }
+/* 有 app.icon 时画真图标：14px 与占位方块同尺寸，object-fit 保住比例 */
+.titlebar-icon-img {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
 .titlebar-text {
   font-weight: 600;
   min-width: 0;
@@ -1783,6 +1790,35 @@ button.icon-pick svg {
   line-height: 1;
   opacity: 0.55;
   pointer-events: none;
+}
+/* 「读不到这张图」：不只靠颜色，文字里也写了"读不到"（见 WidgetView 的 ctl-imgchip bad） */
+.ctl-imgchip.bad {
+  opacity: 0.95;
+  color: var(--error);
+  font-weight: 700;
+}
+/* iconbutton 的真实图标：等比、居中、**只缩不放**（与运行时 cg_win_ownerdraw.c:39-54 一致 ——
+   小图保持原始像素，只有超过可用区才等比缩小）；四周 4px 内边距同运行时的 box_w-8。 */
+.ctl-iconbtn {
+  padding: 4px;
+}
+.ctl-iconbtn-img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+}
+/* image 控件的真实图片：运行时是 StretchBlt 铺满整个控件矩形（cg_win_draw_canvas.c:144-147），
+   所以这里是非等比拉伸（object-fit 的默认值就是 fill，写出来是为了让意图可读、别被后人"优化"成 contain）。 */
+.ctl-image.loaded {
+  border: none;
+  background: none;
+}
+.ctl-image-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
 }
 /* 字体选择器：Aa 图标展开，字体/大小/字形三列 + 底部预览 */
 .font-picker {

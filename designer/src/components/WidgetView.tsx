@@ -5,6 +5,7 @@
  */
 import type { CSSProperties } from "react";
 import { eventLabel, inlineStyle, isNumEdit, CG_EVENTS, type CgNode } from "../model";
+import { useImage, type Preview } from "../imagecache";
 
 /** 画布预览只吃**内联字段**（字符串形态的命名引用没有内联字段，返回 {}）：
  *  契约 §4 明确画布不做命名样式/深色的实时预览 —— 那等于把整套自绘皮肤在 Web 侧再实现一遍。 */
@@ -21,7 +22,7 @@ const fontOf = (node: CgNode): CSSProperties => {
   };
 };
 
-function inner(node: CgNode) {
+function inner(node: CgNode, img: Preview) {
   const value = node.value ?? 40;
   const min = node.min ?? 0;
   const max = node.max ?? 100;
@@ -31,7 +32,15 @@ function inner(node: CgNode) {
     case "button": {
       const st = stOf(node);
       const skin: CSSProperties = {};
-      if (st.bg) {
+      if (img) {
+        /* 背景图：运行时是 StretchBlt 整幅铺满 + 圆角裁切（cg_skin.c:472-476）。
+           CSS 这边 background-size:100% 100% 就是非等比铺满，圆角交给 .ctl-button 自己的
+           border-radius 裁（border-radius 会裁自己的背景图，不用再套一层 overflow）。
+           有图时不再用 style.bg —— 运行时也是"有图就不走填充那条分支"。 */
+        skin.backgroundImage = `url("${img}")`;
+        skin.backgroundSize = "100% 100%";
+        skin.backgroundRepeat = "no-repeat";
+      } else if (st.bg) {
         skin.background = st.bg;
         const r = parseInt(st.bg.slice(1, 3), 16), g2 = parseInt(st.bg.slice(3, 5), 16), b = parseInt(st.bg.slice(5, 7), 16);
         skin.color = (0.2126 * r + 0.7152 * g2 + 0.0722 * b) / 255 < 0.55 ? "#FFFFFF" : "#000000";
@@ -40,9 +49,12 @@ function inner(node: CgNode) {
       return (
         <div className="ctl-button" style={skin}>
           {node.text || ""}
-          {/* 画布不画真图（运行时才画），只在角落提示用了哪张背景图 */}
-          {node.src ? (
-            <span className="ctl-imgchip" title={node.src}>
+          {/* 读到了就直接画在上面（不用再提示是哪张图）；**没读到才提示** ——
+              老担心的是"填了 src 却什么都不显示，看起来像填了没用"，现在有真图了，
+              那条担心只在"读不到"时才成立，所以提示也只在这时占地方。 */}
+          {node.src && !img ? (
+            <span className={img === null ? "ctl-imgchip bad" : "ctl-imgchip"} title={node.src}>
+              {img === null ? "读不到 " : ""}
               {node.src.split(/[\\/]/).pop()}
             </span>
           ) : null}
@@ -158,7 +170,25 @@ function inner(node: CgNode) {
       return <div className="ctl-sep" />;
 
     case "image":
-      return <div className="ctl-image">{node.src ? node.src.split(/[\\/]/).pop() : "未设置图片"}</div>;
+      /* 运行时是 StretchBlt 铺满整个控件矩形、非等比（cg_win_draw_canvas.c:144-147）。
+         占位态照旧是虚线框 + 文件名（和运行时的占位框一个意思），但多写"读不到"三个字：
+         运行时只画文件名，看不出是路径写错了、还是图本来就长这样。 */
+      if (img) {
+        return (
+          <div className="ctl-image loaded">
+            <img className="ctl-image-img" src={img} alt="" draggable={false} />
+          </div>
+        );
+      }
+      return (
+        <div className="ctl-image">
+          {!node.src
+            ? "未设置图片"
+            : img === null
+              ? `读不到图片：${node.src.split(/[\\/]/).pop()}`
+              : node.src.split(/[\\/]/).pop()}
+        </div>
+      );
 
     case "switch":
       return (
@@ -235,13 +265,15 @@ function inner(node: CgNode) {
       return <div className="ctl-link">{node.text || "链接"}</div>;
 
     case "iconbutton":
+      /* 运行时：等比缩放、居中、**只缩不放**（小图保持原始像素），四周各让 4px
+         （cg_win_ownerdraw.c:33-54）；图加载成功时不再画文字（文字只属于"缺图占位"那一支）。 */
       return (
         <div className="ctl-iconbtn">
-          {node.text || "图标"}
-          {/* 和 button/image 一样：画布不画真图（运行时才画），只在角落提示用了哪张图 ——
-              否则属性面板里填了 src 却什么都不显示，看起来像"填了没用" */}
-          {node.src ? (
-            <span className="ctl-imgchip" title={node.src}>
+          {img ? <img className="ctl-iconbtn-img" src={img} alt="" draggable={false} /> : node.text || "图标"}
+          {/* 同上：读到了就不提示，没读到才在角落说一声是哪张图、为什么没显示 */}
+          {node.src && !img ? (
+            <span className={img === null ? "ctl-imgchip bad" : "ctl-imgchip"} title={node.src}>
+              {img === null ? "读不到 " : ""}
               {node.src.split(/[\\/]/).pop()}
             </span>
           ) : null}
@@ -539,6 +571,10 @@ type Props = {
 };
 
 export default function WidgetView({ node, depth, selected, primaryId, onPointerDown }: Props) {
+  /* 预览图必须在**任何提前 return 之前**取：下面就有 `if (node.type === "menu") return null;`，
+     hook 放到它后面就成了条件调用 —— 而控件类型是能在「属性」面板里改的，一改就"Hooks 数量不一致"崩溃
+     （和 Inspector 里那条注释记的是同一个坑）。 */
+  const img = useImage(node.src);
   const style: CSSProperties = {
     position: "absolute",
     left: node.rect.x,
@@ -596,7 +632,7 @@ export default function WidgetView({ node, depth, selected, primaryId, onPointer
       onPointerDown={(e) => onPointerDown(e, node)}
       title={`${node.type} #${node.id}`}
     >
-      {inner(node)}
+      {inner(node, img)}
 
       {isGroup && kids.length ? (
         <div className="group-body">

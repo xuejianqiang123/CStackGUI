@@ -17,6 +17,7 @@ import SupportPanel from "./components/SupportPanel";
 import Toolbar from "./components/Toolbar";
 import WindowPanel from "./components/WindowPanel";
 import { getBridge } from "./bridge";
+import { setImageBase } from "./imagecache";
 import { collectCallbacks, generateC, uniqueCallbackNames } from "./codegen";
 import {
   absRect,
@@ -574,6 +575,12 @@ export default function App() {
   useEffect(() => {
     bridge.setTitle(`${filePath ? filePath.split(/[\\/]/).pop() : doc.app.title || "main"}${dirty ? " *" : ""}`);
   }, [bridge, filePath, dirty, doc.app.title]);
+
+  /* 图片预览的相对路径以当前 .cgui 所在目录为基准（和运行时 `cgw_resolve_asset` 同一个基准）：
+     换文件时同步给缓存 —— 缓存键里带它，于是同名相对路径会重新读，不会串成上一个工程的图。 */
+  useEffect(() => {
+    setImageBase(filePath);
+  }, [filePath]);
 
   useEffect(() => {
     void bridge.info().then((info) => {
