@@ -1975,11 +1975,24 @@ button.icon-pick svg {
 /* 运行按钮（F5 一键运行） */
 .run-btn {
   background: var(--seed);
+  border-color: var(--seed);
   color: #fff;
   font-weight: 600;
 }
+/* 必须自己写 :hover / :disabled —— 通用的 button:hover 会把底色翻成近白的
+   --surface-2，而这里的字是白色的，于是"点亮时白底白字"看不见。
+   （button.primary 之所以没事，是因为它自己有 :hover。） */
+.run-btn:hover:not(:disabled) {
+  background: #5b4599;
+  border-color: #5b4599;
+  color: #fff;
+}
 .run-btn:disabled {
-  opacity: 0.6;
+  /* 不用半透明：紫色压到 60% 再叠白字反而更糊。浅底 + 深字最清楚。 */
+  background: var(--seed-weak);
+  border-color: var(--seed-weak);
+  color: #21005d;
+  opacity: 1;
   cursor: default;
 }
 

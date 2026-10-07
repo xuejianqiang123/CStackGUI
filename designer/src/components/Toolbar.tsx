@@ -80,14 +80,14 @@ export default function Toolbar(p: Props) {
           className="run-btn"
           disabled={p.running}
           onClick={p.onRun}
-          title="F5：保存 → build-app.bat 编译 → 启动 exe（工程放在项目根下任意子目录，且已导出 C 骨架）"
+          title="F5：保存 → 编译 → 启动 exe。编译在 CStackGUI 内部完成（只要装了 MinGW-w64），工程需已导出 C 骨架"
         >
           {p.running ? "编译中…" : "▶ 运行"}
         </button>
         <button
           disabled={p.publishing || p.running}
           onClick={p.onPublish}
-          title="发布：保存 → release 编译 → 打成自包含 zip（publish\\ 下），发给其他人即可双击运行"
+          title="发布：保存 → release 编译 → 把界面并进 exe，得到一个独立 exe（publish\\ 下）。对方双击就能跑，不需要 .cgui、不需要任何其他文件"
         >
           {p.publishing ? "发布中…" : "⇪ 发布"}
         </button>
