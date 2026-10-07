@@ -599,7 +599,7 @@ export default function WidgetView({ node, depth, selected, primaryId, onPointer
   }
 
   const bound = CG_EVENTS.filter((e) => node.events?.[e]);
-  const isGroup = node.type === "group" || node.type === "box" || node.type === "tabs" || node.type === "card";
+  const isGroup = node.type === "group" || node.type === "box" || node.type === "tabs" || node.type === "card" || node.type === "dialog";
   /* 分隔条按方向画：format "row" = 上下分行（横条），缺省 "col" = 左右分栏（竖条） */
   const splitterRow = node.type === "splitter" && node.format === "row";
 

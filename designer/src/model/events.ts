@@ -189,6 +189,17 @@ export const KIND_EVENTS: Record<string, CgEvent[]> = {
   led: [],
   /* 仪表盘同理：值由 cg_meter_set 写，指针不给用户拖 */
   meter: [],
+  /* 对话框：窗口级事件的**子集** —— 复用主窗口的窗口过程，能触发的都在这。
+     ready/firstactivate/idle 是"整个应用启动/泵"级别的事，tray 要 per-窗口托盘图标，
+     drop 要对对话框 HWND 调 DragAcceptFiles —— 这五个对话框都没有，先不承诺
+     （monthcal 的教训：不承诺不触发的）。cg_dialog_open 落地后逐个核对，该补的**两边一起补**
+     （文档/画布/掩码三方对账，check-examples 的 ④.6/④.7 会立刻抓不一致）。
+     必须和 runtime/src/core/cg_doc_kind.c 的 dialog 行一致。 */
+  dialog: [
+    "close", "closequery", "destroy", "move", "size", "activate", "deactivate",
+    "show", "hide", "mousedown", "mouseup", "dblclick", "rdown", "rup", "mousemove",
+    "gotfocus", "lostfocus", "keydown", "keyup", "char", "wheel",
+  ],
 };
 
 /** 这个控件支持的事件；没登记的按"不支持任何事件"处理（C 侧同样会拒绝）。

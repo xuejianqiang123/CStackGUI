@@ -79,6 +79,11 @@ export const KINDS: KindInfo[] = [
   /* 串口：无界面控件（运行时不建窗口），靠 arrive 事件把收到的数据交给业务。
      顺序与 runtime/src/core/cg_doc_kind.c 的 k_kinds 表一致。 */
   { type: "serial", label: "串口", group: "其它", container: false, w: 48, h: 48, text: "" },
+  /* 对话框：一个**独立顶层窗口**（多窗体）。text = 窗口标题、rect = 窗口位置尺寸、
+     children = 窗口里的控件；运行时在 cg_dialog_open 打开时才建原生（懒建），
+     画布上它就是一个带标题的虚线容器（.glyph-dialog）。
+     顺序与 k_kinds 一致（k_kinds 里它跟在 window 伪控件后面，画布没有 window 这行）。 */
+  { type: "dialog", label: "对话框", group: "容器", container: true, w: 360, h: 240, text: "" },
 ];
 
 export const KIND_MAP: Record<string, KindInfo> = Object.fromEntries(KINDS.map((k) => [k.type, k]));

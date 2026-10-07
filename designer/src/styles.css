@@ -1548,6 +1548,12 @@ input.narrow {
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.7);
 }
+/* 对话框：虚线容器 + 顶部一条"标题带"——它是一个独立窗口，不是普通容器（多窗体） */
+.glyph-dialog {
+  border-style: dashed;
+  border-radius: 5px;
+  background: linear-gradient(to bottom, var(--outline-strong) 0 18%, transparent 18%);
+}
 .glyph-shape {
   border: 1.5px solid var(--outline-strong);
   border-radius: 6px;
