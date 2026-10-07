@@ -209,8 +209,9 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
      lib\libcstackgui.a  <- 运行时库副本，整个目录拷走也能重编译
    ```
 
-   > 工程目录里**不再**生成 `build-app.bat`：编译入口只有项目根那一个
-   > （`build-app.bat <名字>`，或者画布里打开 `.cgui` 按 F5）。
+   > 工程目录里**不再**生成 `build-app.bat`：编译在项目根那条（`build-app.bat <名字>`）
+   > 或画布里打开 `.cgui` 按 F5。编译的实现在 `CStackGUI.exe` 内部，客户不需要装
+   > Node.js，也不需要旁边放任何内核文件 —— 只要装了 MinGW-w64。
 
 7. **运行 / 自检**：
 

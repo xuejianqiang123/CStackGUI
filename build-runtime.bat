@@ -12,39 +12,28 @@ if not "%CG_CP: =%"=="65001" (
 rem ---- UTF-8 content starts here: Chinese is fine below ----
 rem ============================================================
 rem  CStackGUI - thin shell. Builds ONLY the runtime library
-rem  (build\lib\libcstackgui.a). Real logic: tools\cgbuild.c
-rem  run with --runtime-only. ASCII-only on purpose - see the
-rem  header in build-app.bat for why.
+rem  (build\lib\libcstackgui.a). Same logic, two routes:
+rem      CStackGUI.exe --build --runtime-only          (customer, no Node)
+rem      node designer\electron\cgbuild.mjs --runtime-only   (developer)
+rem
+rem  *** ASCII ONLY - NO EXCEPTIONS *** - see build-app.bat for
+rem  why (cmd + UTF-8 Chinese = a later line gets cut in half and
+rem  its tail runs as a command).
 rem
 rem  You rarely need this by hand: every project build refreshes
 rem  the runtime library first.
-rem
-rem  Requirements: MinGW-w64 only. No Node.js.
 rem ============================================================
 setlocal
-set "KERN=%~dp0build\cgbuild.exe"
-set "SRC=%~dp0tools\cgbuild.c"
+set "EXE=%~dp0CStackGUI.exe"
+if exist "%EXE%" (
+    "%EXE%" --build --runtime-only
+    exit /b %errorlevel%
+)
 
-if "%MINGW%"=="" set "MINGW=C:\mingw64\bin"
-set "PATH=%MINGW%;%PATH%"
-
-if not exist "%SRC%" (
-    echo [fail] missing %SRC%
+where node >nul 2>nul
+if errorlevel 1 (
+    echo [fail] neither CStackGUI.exe nor node.exe is available.
     exit /b 1
 )
-set "STALE="
-if not exist "%KERN%" set "STALE=1"
-if exist "%KERN%" for %%I in ("%SRC%") do for %%J in ("%KERN%") do if "%%~tI" GTR "%%~tJ" set "STALE=1"
-if defined STALE (
-    echo [boot] building the build kernel: %SRC%
-    gcc -std=c11 -O2 -o "%KERN%" "%SRC%"
-    if errorlevel 1 (
-        echo.
-        echo [fail] cannot build the kernel - gcc not found?
-        echo            set MINGW=D:\mingw64\bin
-        exit /b 1
-    )
-)
-
-"%KERN%" --runtime-only
+node "%~dp0designer\electron\cgbuild.mjs" --runtime-only
 exit /b %errorlevel%

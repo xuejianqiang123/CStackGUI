@@ -465,22 +465,26 @@ examples\gallery\
    只有 5 个 C 文件，几秒钟，换来「改了就能编」的确定性（`build-all.bat` 统一刷一次后跳过）。
 2. **工程目录里留一份运行时库副本**：这样整个目录被挪走之后还能自己重编 ——
    挪走后重编靠的是这份 `lib\`，不是靠某一份脚本。
-3. **编译的实现只有一份**：`tools\cgbuild.c` → 编成 `cgbuild.exe`（**只要 MinGW**）。
-   四个入口都转发到它 ——
-   - 项目根 `build-app.bat <名字或路径>`（ASCII 薄壳；内核不存在或源码更新时先自举编一下）
-   - 画布 F5：直接 spawn `cgbuild.exe`，**不经过 cmd / bat，也不需要 Node**
-   - `CStackGUI.exe --build <工程>`（无窗口 CLI，发布包的 `build-app.bat` 转发到它）
-   - `build-runtime.bat`（ASCII 薄壳，`--runtime-only`）
+3. **编译的实现只有一份，而且在 exe 内部**：`designer\electron\cgbuild.mjs`，
+   随 asar 打进 `CStackGUI.exe`。三个入口都调它的 `build()` ——
+   - 画布 F5：主进程 **await build()**，不经 cmd / bat / 任何外部内核，也不阻塞界面
+   - `CStackGUI.exe --build <工程> [--release]`：无窗口 CLI
+   - `build-app.bat` / `build-runtime.bat`：ASCII 薄壳，转发到上面那条
 
-   为什么是 C 而不是 bat / Node：
-   - **bat**：cmd 用"cmd 自己启动时"的代码页解码批处理，UTF-8 中文会被从多字节字符
-     中间切断、后半段被当成命令执行；而且客户机器的代码页不可控。
-   - **Node**：客户只装 MinGW，不能要求 Node.js。
-   - **C**：内核自己就是 `gcc -O2 -o cgbuild.exe tools\cgbuild.c` 一行编出来的，
-     客户机器上没有也能当场自举。
+   为什么这样（三条约束挤出来的唯一解）：
+   - **客户拿到的是单个 `CStackGUI.exe`**，不该附带一堆文件 ⇒ 不能有旁边的内核
+     exe，也不该把 `runtime\` 自举到 exe 旁边。
+   - **客户只装 MinGW** ⇒ 不能要求 Node.js。这里的 Node 是 **exe 自带的运行时**，
+     客户不需要装，也看不到任何 `.mjs`。
+   - **编译信息必须是中文** ⇒ 不能走 bat：cmd 用"cmd 启动时"的代码页解码批处理，
+     UTF-8 中文会被从多字节字符中间切断、后半段被当成命令执行
+     （`'lery' is not recognized` 那一类）。Node 输出走 WriteConsoleW / UTF-8，
+     任何代码页下中文都正确。
 
-   自举顺序：`build\cgbuild.exe` 不存在、或 `tools\cgbuild.c` 比它新 → 先用 gcc 编，
-   再跑。`build\` 是 gitignore 的，所以新克隆的仓库第一次编译会自动把内核编出来。
+   编译所需的 C 运行时资源（`cstackgui.h`、`libcstackgui.a`、`cstackgui_res.o`、
+   `runtime\res\`）由 electron-builder 的 `extraResources` **内嵌进 exe**，
+   从 `process.resourcesPath` 取；源码树里则走 `build\lib\`（有 `runtime\src` 时先刷一遍）。
+   客户侧唯一外部依赖：**MinGW-w64**。
 
    2026-10-07 之前每个工程里还会被生成一份 `build-app.bat` 薄壳（双击即可重编那一个），
    已移除：它和画布的编译按钮是重复入口，26 份内容相同的生成物进库纯属噪声。

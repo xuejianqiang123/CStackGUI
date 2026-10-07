@@ -130,20 +130,10 @@ rem 开发工具：clangd 配置生成器 + 格式契约回归 + 截图
 if not exist release\tools mkdir release\tools
 copy /y packaging\check-format.bat release\tools\check-format.bat >nul
 copy /y tools\gen-cc.mjs release\tools\ >nul
-rem 编译内核（纯 C）：发布包的 build-app.bat 转发到 CStackGUI.exe --build，
-rem exe 内部再 spawn release\cgbuild.exe。客户只要有 MinGW 就能用，不需要 Node。
-if not exist build\cgbuild.exe (
-    gcc -std=c11 -O2 -o build\cgbuild.exe tools\cgbuild.c
-    if errorlevel 1 (
-        echo [fail] 编译内核 build\cgbuild.exe 失败（先跑一次 build-all.bat）
-        exit /b 1
-    )
-)
-copy /y build\cgbuild.exe release\cgbuild.exe >nul
-if errorlevel 1 (
-    echo [fail] 复制编译内核 release\cgbuild.exe 失败
-    exit /b 1
-)
+rem 编译不需要任何内核文件：实现在 CStackGUI.exe 内部（cgbuild.mjs 随 asar 打包），
+rem 编译所需的 cstackgui.h / libcstackgui.a / cstackgui_res.o / runtime\res 也由
+rem electron-builder 的 extraResources 内嵌进 exe。客户拿走单个 CStackGUI.exe 就能编
+rem 自己的工程（只另需 MinGW-w64）。release\ 里其余内容都是给开发者的源码与示例。
 copy /y tools\format-roundtrip.mjs release\tools\ >nul
 copy /y tools\shot.ps1 release\tools\ >nul
 rem cg_kit 冒烟测试也带上：发布包里那份预编译库要能真跑通文件/配置/编码

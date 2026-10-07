@@ -11,8 +11,9 @@ import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { existsSync, appendFileSync, readFileSync } from "node:fs";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { build } from "./cgbuild.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEV_URL = process.env.CSTACKGUI_DEV_URL || "";
@@ -41,22 +42,6 @@ function cguiFromArgv() {
     if (arg.toLowerCase().endsWith(".cgui") && existsSync(arg)) return path.resolve(arg);
   }
   return "";
-}
-
-/** 编译内核的位置：发布包里就在根上（cgbuild.exe），源码树里在 build\ 下。
- *  内核是纯 C（tools\cgbuild.c），只要有 MinGW 就能现编 —— **不依赖 Node**。 */
-function findKernel(root) {
-  return [path.join(root, "cgbuild.exe"), path.join(root, "build", "cgbuild.exe")].find(existsSync) || null;
-}
-async function ensureKernel(root) {
-  const found = findKernel(root);
-  if (found) return found;
-  const src = path.join(root, "tools", "cgbuild.c");
-  if (!existsSync(src)) return null;
-  if (!existsSync(path.join(root, "build"))) await fs.mkdir(path.join(root, "build"), { recursive: true });
-  const out = path.join(root, "build", "cgbuild.exe");
-  const r = spawnSync("gcc", ["-std=c11", "-O2", "-o", out, src], { stdio: "inherit", cwd: root });
-  return !r.error && r.status === 0 && existsSync(out) ? out : null;
 }
 
 /* ------------------------------------------------------ C 项目根目录
@@ -593,44 +578,22 @@ ipcMain.handle("run:buildAndLaunch", async (_e, { filePath }) => {
   if (!existsSync(path.join(appDir, "main.c"))) {
     return fail(`${appDir} 里没有 main.c。\n先点「导出 C 骨架」生成 C 代码，再运行。`);
   }
-  /* 内核源码必须在这个根里 —— 便携版指错了根时给一句能照着做的话，
-   * 而不是让 spawn 失败后只显示一个退出码。 */
-  if (!existsSync(path.join(root, "tools", "cgbuild.c"))) {
-    return fail(`项目根 ${root} 里没有编译内核源码 tools\\cgbuild.c。\n用工具条的「定位项目根」选含 runtime\\、tools\\ 的那一层目录。`);
-  }
+
 
   runBusy = true;
   send("run:output", { kind: "line", text: `$ cgbuild ${name}` });
 
-  /* 直接 spawn 编译内核 cgbuild.exe（由 tools\cgbuild.c 编出来的原生 exe）。
+  /* 编译就在本进程里做（cgbuild.mjs，住在 asar 内）。
    * 以前这里 spawn 的是 `cmd /d /s /c "chcp 65001 >nul & build-app.bat"`：
    * chcp 与批处理挤在同一个 cmd 进程里，脚本自带的重入逻辑不生效，
    * 在部分机器上中文行会被从多字节字符中间切断、后半段被当成命令执行。
-   * 内核是 C 写的，所以**不依赖 Node** —— 客户只要装了 MinGW 就能编。
-   * 工程目录直接走命令行参数（不再用 CG_APP_DIR）。 */
-  const kernel = await ensureKernel(root);
-  if (!kernel) {
-    return fail(`编译内核编不出来：${path.join(root, "build", "cgbuild.exe")}\n` +
-      `装好 MinGW-w64（或设 MINGW 指向它的 bin 目录）再来一次。`);
-  }
-  let exitCode = -1;
-  await new Promise((resolve) => {
-    const child = spawn(kernel, [appDir], {
-      cwd: root,
-      env: { ...process.env, CSTACKGUI_HOME: root },
-    });
-    const push = (buf) => {
-      for (const line of String(buf).split(/\r?\n/)) {
-        if (line.trim()) send("run:output", { kind: "line", text: line });
-      }
-    };
-    child.stdout.on("data", push);
-    child.stderr.on("data", push);
-    child.on("exit", (code) => { exitCode = code ?? -1; resolve(); });
-    child.on("error", (err) => {
-      send("run:output", { kind: "line", text: `[run] ${err}` });
-      resolve();
-    });
+   * 现在：不经 cmd / bat / 外部内核；客户不需要 Node（用的是画布自带的运行时），
+   * 也不需要旁边放任何文件 —— 编译资源是内嵌进 exe 的。
+   * build() 是异步的，所以编译期间界面不卡。 */
+  const exitCode = await build({
+    root,
+    project: appDir,
+    onLine: (text) => send("run:output", { kind: "line", text }),
   });
   runBusy = false;
 
@@ -847,24 +810,19 @@ const buildCliArgs = (() => {
   return i < 0 ? null : process.argv.slice(i + 1);
 })();
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (buildCliArgs) {
-    /* 打包后 exe 就在发布包根（release\CStackGUI.exe），内核被 make-release.bat
-     * 拷到同级的 tools\ 下。开发态（electron .）的 execPath 指向 electron.exe，
-     * 那种情况直接 node tools\cgbuild.mjs。 */
+    /* 编译发生在 exe 内部（cgbuild.mjs 在 asar 里），用的是 exe 自带的运行时，
+     * 所以命令行这一条同样不需要客户装 Node，也不需要旁边有内核文件。 */
     const root = path.dirname(process.execPath);
-    const kernel = path.join(root, "cgbuild.exe");
-    if (!existsSync(kernel)) {
-      process.stdout.write(`[fail] build kernel not found: ${kernel}\n`);
-      app.exit(1);
-      return;
-    }
-    const r = spawnSync(kernel, buildCliArgs, {
-      stdio: "inherit",
-      cwd: root,
-      env: { ...process.env, CSTACKGUI_HOME: root },
+    const code = await build({
+      root,
+      project: buildCliArgs.find((a) => !a.startsWith("--")),
+      release: buildCliArgs.includes("--release"),
+      runtimeOnly: buildCliArgs.includes("--runtime-only"),
+      onLine: (s) => process.stdout.write(`${s}\n`),
     });
-    app.exit(r.status ?? 1);
+    app.exit(code);
     return;
   }
   createWindow();
