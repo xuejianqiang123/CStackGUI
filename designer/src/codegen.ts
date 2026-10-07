@@ -3,10 +3,14 @@
  * 目标：画布上填了哪些事件名，就生成对应的空函数 + 绑定表，
  * 让业务同学打开就能填逻辑，不用手抄一遍事件名（抄错就是运行时不报错的空绑定）。
  */
+/* 桶导入**带 .js 后缀**：codegen 是唯一会被 Node 直接 import 的模型层消费者
+ * （端到端探针要真跑 generateC 去造工程），而 Node 的 ESM 不认"目录导入"——
+ * 编译产物里留一个 `./model` 会报 ERR_UNSUPPORTED_DIR_IMPORT。
+ * 与 model/ 内部那条"相对导入带 .js"的约定同一个道理。 */
 import {
   CG_EVENTS, EVENT_LABEL, KIND_MAP, WINDOW_EVENTS, serializeDoc, walk,
   type CgDoc, type CgEvent, type CgInfo, type CgNode,
-} from "./model";
+} from "./model.js";
 
 export type CallbackUse = {
   name: string;
@@ -249,7 +253,9 @@ ${actionUses.length ? actionUses.map((a) => ` *   ${a.action.padEnd(18)} ${(doc.
   const stubs = `/**
 * @file    ${base}_ui_events.c
  * @brief   事件回调实现：业务逻辑写在这里
- * @details 这份文件是「你的代码」，重新导出不会覆盖它（画布导出时同名文件会跳过）。
+ * @details 这份文件是「你的代码」：重新导出**只补不改** —— 画布上新绑的事件会自动补上桩
+ *          （不补的话 .h 里已经声明、main.c 的绑定表也引用了它，链接会 undefined reference），
+ *          而你写过的任何一行都不会被动。
  *          每个回调都能拿到：
  *          self 触发事件的那个控件，用 cg_widget_text/cg_widget_checked/cg_widget_value 读它的状态
  *          ev   事件类型（一个函数只挂一个事件时可以直接忽略）
@@ -268,8 +274,11 @@ ${
     : `/* 画布上还没有绑定事件。在画布右侧「事件」页签里填上 C 函数名，再重新导出。 */\n`
 }`;
 
-  const mainC = `/* @generated-by-cstackgui:main.c —— 画布产物。看到这行说明本文件可以被画布重新导出；
-   手写工程请把业务写在 ${base}_ui_events.c 里，别改这个文件。 */
+  const mainC = `/* @generated-by-cstackgui:main.c —— 画布产物标记。
+   这行的用处是让导出/编译脚本认出"这是画布生成的工程"（没有它的算手写工程：
+   只同步 .cgui，代码一律不碰）。**注意：重新导出并不会覆盖这个文件**（怕抹掉你自己加的东西），
+   所以业务逻辑请写在 ${base}_ui_events.c 里 —— 那个文件重新导出时只会补上缺的空函数，
+   你写过的任何一行都不会被动。 */
 /**
  * @file    main.c
  * @brief   应用入口（由 CStackGUI 画布生成）

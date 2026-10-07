@@ -356,7 +356,11 @@ export default function App() {
       setDirty(false);
     }
     const skipped = res.skipped?.length ? `（跳过已存在的 ${res.skipped.join("、")}）` : "";
-    say(`已导出到 ${res.dir}${skipped}，接着去填 ${baseName}_ui_events.c`);
+    /* 新绑的事件会自动补桩：把补了哪些念出来，用户才知道该去哪个函数里写逻辑 */
+    const added = res.addedCallbacks?.length
+      ? `；已为新绑的 ${res.addedCallbacks.length} 个事件补上空函数：${res.addedCallbacks.join("、")}`
+      : "";
+    say(`已导出到 ${res.dir}${skipped}${added}，接着去填 ${baseName}_ui_events.c`);
     return { dir: res.dir ?? "", appName: baseName };
   }, [bridge, docRef, say, filePath]);
 
@@ -412,10 +416,10 @@ export default function App() {
       }
     }
 
-    /* 发布必须**重新导出**一次 C：界面的正文是要编译进 exe 的
-     * （<名字>_cgui.c）。不重导出，打进去的就是上次导出时的旧界面 ——
+    /* 发布必须**重新导出**一次 C：界面的正文是编译期作为 PE 资源编进 exe 的
+     * （见 cgbuild.mjs）。不重导出，打进去的就是上次导出时的旧界面 ——
      * 这种"exe 里的界面跟画布上看到的不一样"最难查。
-     * 导出会覆盖 main.c / <名字>_cgui.c，跳过用户写过的 _ui_events.c。 */
+     * 这一步**不会**碰用户写的代码：main.c 存在就跳过；<名字>_ui_events.c 只补缺的回调桩。 */
     const exp = await doExportC();
     if (!exp) {
       say("发布前需要先导出 C 骨架");

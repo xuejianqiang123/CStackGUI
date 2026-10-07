@@ -14,6 +14,7 @@ import { existsSync, appendFileSync, readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { build } from "./cgbuild.mjs";
+import { mergeEvents } from "./merge-events.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEV_URL = process.env.CSTACKGUI_DEV_URL || "";
@@ -484,6 +485,8 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
 
   const written = [];
   const skipped = [];
+  /** 这次为新绑的事件补上的空函数（渲染端会把它念给用户听） */
+  const addedCallbacks = [];
   try {
     await fs.mkdir(dir, { recursive: true });
     for (const f of files) {
@@ -492,12 +495,27 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
         skipped.push(f.name);
         continue;
       }
-      /* 业务代码是用户的资产：入口与业务文件（main.c / _ui_events.c）已存在就不覆盖。
-       * main.c 尤其不能碰 —— 仓库里的示例是**手写程序**（业务与回调就在 main.c 里），
-       * 覆盖它等于把回调清空（2026-10-07 踩过：darkterm 的按钮全部失效）。
-       * 单文件发布不依赖 main.c，界面是编译时作为 PE 资源编进 exe 的。 */
-      if ((f.name === "main.c" || f.name.endsWith("_ui_events.c")) && existsSync(target)) {
+      /* main.c 已是用户的资产：**已存在就不覆盖**。仓库里的示例是手写程序
+       * （业务与回调就在 main.c 里），覆盖它等于把回调清空（2026-10-07 踩过：darkterm 按钮全部失效）。
+       * 单文件发布也不依赖它 —— 界面是编译期作为 PE 资源编进 exe 的。 */
+      if (f.name === "main.c" && existsSync(target)) {
         skipped.push(f.name);
+        continue;
+      }
+      /* <工程>_ui_events.c 不再整份跳过，改成"**只补不改**"：
+       * 缺的回调补桩 —— 不补的话 .h 里已经声明、main.c 的 BIND 表也引用了它，
+       * 链接会直接 undefined reference；已有的原样留着，永不删用户的代码。
+       * 合并结果与老文件完全一致时**连文件都不写**：mtime 不动，才不会触发无谓的重新编译。 */
+      if (f.name.endsWith("_ui_events.c") && existsSync(target)) {
+        const merged = mergeEvents(await fs.readFile(target, "utf8"), f.content);
+        if (merged.mode === "same") {
+          skipped.push(f.name);
+          continue;
+        }
+        await fs.writeFile(target, merged.content, "utf8");
+        written.push(f.name);
+        addedCallbacks.push(...merged.added);
+        if (merged.added.length) log("exportC", `补桩 ${merged.added.length} 个：${merged.added.join(", ")}`);
         continue;
       }
       await fs.writeFile(target, f.content, "utf8");
@@ -532,6 +550,7 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
     skipped,
     projectRoot: isProjectRoot(projectRootCache) ? projectRootCache : "",
     appName: baseName,
+    addedCallbacks,
   };
 });
 

@@ -13,6 +13,9 @@ export type ExportResult = {
   skipped?: string[];
   projectRoot?: string;
   appName?: string;
+  /** 这次导出为「新绑的事件」自动补上的空函数名。
+   *  `<工程>_ui_events.c` 是"只补不改"的：缺的回调补桩、已有的原样留着（见 merge-events.mjs）。 */
+  addedCallbacks?: string[];
 };
 
 /** 一键运行的事件流：line = 编译输出行，done = 成功启动，fail = 失败 */
