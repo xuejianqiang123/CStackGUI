@@ -3,10 +3,11 @@
 # 发布包（由 make-release.bat 生成）
 release/
 publish
-# 每个工程里由编译脚本生成的东西（exe、运行时库副本、编译入口）
+# 每个工程里由编译脚本生成的东西（exe、运行时库副本）
+# 注：这三行是注释不是规则 —— 仓库有意跟踪 examples 下的 exe 与 lib\（保持与源码同步）。
+# 曾经还会在每个工程里生成一份 build-app.bat 薄壳，2026-10-07 已移除（编译入口只留项目根一个）
 # examples/*/lib/
 # examples/*/*.exe
-# examples/*/build-app.bat
 # apps\ 是用户自己的工程目录，只保留说明文件
 apps/*
 !apps/README.md

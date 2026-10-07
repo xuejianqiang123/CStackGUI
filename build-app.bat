@@ -183,15 +183,12 @@ if defined LD_DO (
     echo   -- %OUT% 没变，跳过链接
 )
 
-echo 往工程目录里放一个启动脚本，双击就能重编本工程
-call "%~dp0tools\gen-launcher.bat" "%APPDIR%"
-
-
 echo [ok] %OUT%
 echo.
 echo     run it (double-click works):   %OUT%
 echo     self-check without window:     %OUT% --selftest
-echo     rebuild this project:          %APPDIR%\build-app.bat
+echo     rebuild this project:          build-app.bat %APP%
+echo     在画布里编译：                 打开本工程的 .cgui，按 F5（画布就是调上面这一条）
 
 echo 刷新 clangd 语言服务配置（tools\gen-cc.mjs 里的编译参数和这里保持一致）。
 echo 没装 node 或者不在项目根时会静默跳过。
