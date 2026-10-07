@@ -30,6 +30,8 @@ const SPLASH_BMP = path.join(ROOT, "designer", "splash.bmp");
 const PORTABLE_NSI = path.join(
   __dirname, "..", "node_modules", "app-builder-lib", "templates", "nsis", "portable.nsi",
 );
+/** "补丁已打"的唯一标志：下面写补丁时用同一个常量，标记就不可能和实际内容漂 */
+const PATCH_MARK = "CStackGUI 补丁：这里原本是 HideWindow";
 
 /**
  * @brief 让解包器在解包期间保留启动图窗口（改 electron-builder 的便携版模板）
@@ -49,8 +51,15 @@ function patchPortableSplash() {
     throw new Error(`[afterPack] 找不到 ${PORTABLE_NSI}，无法保证解包期不露白`);
   }
   const src = fs.readFileSync(PORTABLE_NSI, "utf8");
+  /* 先认"补丁已经打过"的标志：补丁自己是一段注释，里面**写着 HideWindow 四个字**
+     （讲这行为什么要删）—— 只判 includes("HideWindow") 会把打过补丁的模板当成没打过，
+     第二次构建必挂（2026-10-08：重装 node_modules 之前是这样踩的）。 */
+  if (src.includes(PATCH_MARK)) return;
   if (!src.includes("HideWindow")) {
-    return; // 已经打过（本次或上次构建打的）
+    throw new Error(
+      `[afterPack] ${PORTABLE_NSI} 里既没有 HideWindow 也没有 ${PATCH_MARK} 的痕迹` +
+        `（electron-builder 升级过？）—— 不确定该改哪一行，先对一下模板再打包`,
+    );
   }
   const re = /^([ \t]*)HideWindow([ \t]*)\r?$/m;
   if (!re.test(src)) {
@@ -63,7 +72,7 @@ function patchPortableSplash() {
   const patched = src.replace(
     re,
     [
-      "$1; CStackGUI 补丁：这里原本是 HideWindow，会在解包一开始就把画着启动图的窗口藏掉。",
+      `$1; ${PATCH_MARK}，会在解包一开始就把画着启动图的窗口藏掉。`,
       "$1; 解包要 2～4 秒，藏掉就是满屏空白 —— 改成保留窗口，由 designer/scripts/after-pack.cjs 每次构建自动打。",
       "$1; 别手工删这段：删掉 HideWindow 之后这个注释块就是补丁生效的标记。",
     ].join(eol),
