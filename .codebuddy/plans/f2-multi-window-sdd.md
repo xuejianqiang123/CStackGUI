@@ -183,7 +183,18 @@ A7 → T2 ｜ A8 → T3。
       + `selftest OK`；**红证**：serialize 临时丢 dialog children →
       `子控件 4 -> 0` 与 `探针子控件丢失` 两连红，还原回绿。其余 4 个示例无 dialog，
       走 `if (dlg)` 守卫静默跳过 —— 5 个 roundtrip 全过，`check-format` `BAT_EXIT=0`。
-- [ ] P4 T2-full：Inspector 对话框分节 + `center` 字段（管线与开关同轮）+
+- [x] P4 **T2-full（2026-10-07 落地）**：`center` 字段走完五层管线
+      （types/parse/serialize → TypeSection「打开时居中」分节 → `cg_doc.h`/`cg_doc.c`
+      （`cj_bool` 缺省 1，旧文件零变化）→ `cg_widget.c` 拷贝 → `cg_win_modal.c` 开窗）。
+      **画布叠画决断（按推荐定案）**：同一画布浮着 + 角上「模态」小徽章（`.dlg-badge`），
+      不用遮罩 —— 画布还要编辑子控件。往返探针顺带守 `center:false`（写不出/读不回都会红）。
+      **自查修正**：`center:false` 分支第一版做了 `cgw_scale_px`，与主窗口 `app.x/y`
+      的裸赋值先例（cg_win_window.c has_pos）口径不一 —— 改成同一口径（不换算）。
+      真机 A1~A5 全 PASS（缺省路径回归）+ 5 个 roundtrip / check-format `BAT_EXIT=0`。
+      **如实记录**：`center:false` 的**开窗位置**没有真机断言（modaltest 只有一张
+      居中的对话框；该分支与居中分支共用 CreateWindowExW，位置语义同主窗口先例，低风险）。
+- [ ] P5 T3 尾：gallery 示例与类型计数已在 T2-minimal 落；本文档（CGUI-FORMAT）已随
+      `center` 与函数索引更新。剩余：`format-roundtrip` 的 dialog 探针已在 T1.3 落。
       **画布叠画的设计决断**（同一画布浮着 vs 独立窗口视图，审查报告 R1 #4）+
       禁止把 `menu` 拖进 dialog
 - [ ] P5 T3：教学/文档收尾（gallery 的对话框接上打开按钮）
