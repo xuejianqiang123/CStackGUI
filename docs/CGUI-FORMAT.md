@@ -199,6 +199,7 @@ int cg_theme_is_dark(const cg_app_t *app);      /* 现在是深色吗 */
 | `src` | 字符串 | 否 | 图片路径：`image` 的内容图、`iconbutton` 的图标、`button` 的背景图，见 2.4 |
 | `format` | 字符串 | 否 | `datepicker` 的细分格式：`date`（缺省）/ `time` / `datetime`；`shape` 的外形：`rect`（缺省）/ `roundrect` / `ellipse`；`splitter` 的方向：`col`（缺省，左右分栏）/ `row`（上下分行）；`terminal` 的显示模式：留空（文本）/ `hex`；`chart` 的图形：`line`（缺省）/ `bar`；`led` 的形状：`round`（缺省，圆）/ `square`（方）；`meter` 的样式：`arc`（缺省，270° 圆弧）/ `half`（半圆 180°）|
 | `hint` | 字符串 | 否 | 鼠标悬停提示（tooltip），**所有控件通用**；不写 / 空 = 无提示 |
+| `center` | 布尔 | `true` | **只有 `dialog`**：打开时是否居中于主窗口。`false` 时 `rect.x`/`rect.y` 按**屏幕坐标**解释（与 `app.x`/`app.y` 同一口径）——画布上拖到哪儿，运行时就出现在哪儿。只有显式写 `false` 才落盘（"缺省不写"），旧文件没有该字段、零行为变化 |
 | `bind` | 对象 | 否 | 控件绑定：值/文字/勾选跟着另一个控件走，见 2.8 |
 | `action` | 字符串 | 否 | 动作引用：点这个控件 = 触发同名动作（文字 / 启用 / 勾选都跟随动作），见 2.8.1。**只有支持 `click` 的类型能用** |
 | `period` | 整数 | 否 | `timer` 的触发周期（毫秒）。**不写 = 0 = 不触发**（画布新建时钟时给 1000）；`led` 的闪烁周期（毫秒，仅在状态=闪时有意义；缺省 500，小于 100 兜回缺省）|
@@ -826,7 +827,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `tag` | 标签片 | 否 | 72×28 | `标签` | `click` | `BUTTON` 自绘 |
 | `rate` | 评分 | 否 | 140×32 | — | `change` | `BUTTON` 自绘五角星（星数 = `max-min`，上限 10）|
 | `pagination` | 分页 | 否 | 180×32 | — | `change` | `BUTTON` 自绘（页数 = `max-min+1`）|
-| `dialog` | 对话框 | **是** | 360×240 | — | `close`、`closequery`、`destroy`、`move`、`size`、`activate`、`deactivate`、`show`、`hide`、鼠标三件套（`mousedown` / `mouseup` / `dblclick` / `rdown` / `rup` / `mousemove`）、`gotfocus`、`lostfocus`、`keydown`、`keyup`、`char`、`wheel` | **独立顶层窗口**（多窗体）：`text` 是窗口标题、`rect` 是窗口位置尺寸（默认居中于主窗口）、`children` 是窗口里的控件（坐标相对对话框客户区）。原生在 `cg_dialog_open` 打开时才建（懒建），模态时主窗口被禁用；返回 0 = 取消/Esc，1 = `cg_dialog_close(self, 1)` |
+| `dialog` | 对话框 | **是** | 360×240 | — | `close`、`closequery`、`destroy`、`move`、`size`、`activate`、`deactivate`、`show`、`hide`、鼠标三件套（`mousedown` / `mouseup` / `dblclick` / `rdown` / `rup` / `mousemove`）、`gotfocus`、`lostfocus`、`keydown`、`keyup`、`char`、`wheel` | **独立顶层窗口**（多窗体）：`text` 是窗口标题、`rect` 是窗口位置尺寸（`center` 缺省 `true` = 打开时居中于主窗口；写 `false` 则按 `rect.x`/`rect.y` **屏幕坐标**摆，与 `app.x`/`app.y` 同一口径）、`children` 是窗口里的控件（坐标相对对话框客户区）。原生在 `cg_dialog_open` 打开时才建（懒建），模态时主窗口被禁用；返回 0 = 取消/Esc，1 = `cg_dialog_close(self, 1)` |
 
 > 上表的事件列与 `k_kinds[].events` 位掩码一一对应（`node tools\check-examples.mjs --docs` 会逐行回校）。
 > 鼠标 / 键盘那种"一整类"的写在行内括号里；某类控件不该有的事件，运行时与自检都会明确报出来。
@@ -1311,6 +1312,7 @@ void   cg_set_title(cg_app_t *app, const char *title);
 | 网口 | `cg_net_` 系列（TCP 客户端与服务端、UDP 数据报） | `COMM.md` |
 | 通用对话框 | `cg_open_file_dialog` / `cg_save_file_dialog` / `cg_choose_color` / `cg_message_box` / **`cg_input_box`**（单行输入，原值预填且全选） | 本文 6 节上文 |
 | 窗口 | `cg_win_center` / `cg_win_set_pos` / `cg_win_set_size` / `cg_win_show` / `cg_win_set_topmost` / `cg_win_set_state` / `cg_win_set_icon` / `cg_cancel_close` / **`cg_win_screenshot` / `cg_widget_screenshot`**（存 PNG） | 本文第 1 节 |
+| 多窗体 | `cg_dialog_open` / `cg_dialog_close`（模态子窗体：独立 HWND + 子树懒建 + 内层泵） | 本文第 4 节（类型表 `dialog` 行） |
 | 散项 | `cg_splitter_pos` / `cg_splitter_set`、`cg_browser_navigate`、`cg_widget_hint`、`cg_widget_count`、`cg_widget_set_value_range`、`cg_widget_list_scroll_bottom`、`cg_file_exists` / `cg_file_delete` / `cg_file_copy`、`cg_dir_exists` / `cg_dir_create`、`cg_event_name` / `cg_event_from_name`、`cg_dump_doc` | 头文件 |
 
 ---

@@ -139,6 +139,10 @@ walk(doc.widgets, (n) => {
      * 探针按钮的事件复用已登记的回调（knownCallback），别造"未登记"的假故障 ——
      * 那会让第 4 步的自检以 5 退出，是测试自己造的假故障。 */
     n.children = n.children ?? [];
+    if (n.center !== false) {
+      n.center = false;   /* 顺带走一遍「不居中」字段（T2-full 加的）：往返也不能丢，第 3 步核对 */
+      touched += 1;
+    }
     if (!n.children.some((c) => c.id === "chk_dlg_child")) {
       const child = makeNode("button", 16, 16);
       child.id = "chk_dlg_child";
@@ -327,6 +331,11 @@ console.log(`[ok] 画布改动 ${touched} 处，写出 ${output}（${written.len
           console.error(
             `[fail] 恒等回写丢了 dialog 子控件：${dlg.id} 子控件 ${origCount} -> ${gotChildren.length}`,
           );
+          lost += 1;
+          dlgLost += 1;
+        }
+        if (gotDlg.center !== false) {
+          console.error(`[fail] 恒等回写丢了 dialog 的 center:false：${dlg.id}`);
           lost += 1;
           dlgLost += 1;
         }
