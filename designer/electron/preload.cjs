@@ -25,6 +25,13 @@ contextBridge.exposeInMainWorld("cstackgui", {
     ipcRenderer.on("run:output", (_e, o) => handler(o));
   },
 
+  /** 外部改了当前 .cgui（别的程序 / 编辑器写了磁盘）—— 画布据此热重载。
+   *  同上：注册前先清旧监听，否则 effect 反复注册会堆积。 */
+  onFileChanged: (handler) => {
+    ipcRenderer.removeAllListeners("file:changed");
+    ipcRenderer.on("file:changed", (_e, o) => handler(o));
+  },
+
   /** 主进程菜单 -> 渲染进程（同上，注册前先清旧监听） */
   onMenu: (handler) => {
     const channels = [

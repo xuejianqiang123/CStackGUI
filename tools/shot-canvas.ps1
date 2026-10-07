@@ -14,7 +14,10 @@
 #     先把 App.tsx 里 `useState<Tab>("props")` 临时改成那个页签，构建、截图，改回来再构建。
 #   - 截法同 shot.ps1：PrintWindow flag 先 2（合成画面）再 0（WM_PRINT）兜底。
 param(
-  [string]$Out = "build\canvas-shot.png"
+  [string]$Out = "build\canvas-shot.png",
+  # Optional: a .cgui to open on startup (the canvas accepts "CStackGUI.exe xxx.cgui").
+  # Used by the hot-reload probe: launch pointing at a file, then change that file from outside.
+  [string]$File = ""
 )
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Drawing
@@ -36,7 +39,9 @@ $dist = Join-Path $appDir "dist\index.html"
 if (-not (Test-Path $exe)) { Write-Output "[fail] no electron at $exe (run npm install in designer\)"; exit 1 }
 if (-not (Test-Path $dist)) { Write-Output "[fail] no $dist (run: cd designer && npx vite build)"; exit 1 }
 
-$p = Start-Process -FilePath $exe -ArgumentList $appDir -PassThru
+$argList = @("`"$appDir`"")
+if ($File) { $argList += "`"$((Resolve-Path $File).Path)`"" }
+$p = Start-Process -FilePath $exe -ArgumentList $argList -PassThru
 $h = [IntPtr]::Zero
 for ($i = 0; $i -lt 60; $i++) {
   Start-Sleep -Milliseconds 500

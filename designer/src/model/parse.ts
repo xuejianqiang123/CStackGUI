@@ -437,9 +437,13 @@ function coerceNode(raw: unknown, index: number): CgNode | null {
 }
 
 export function parseDoc(text: string): { doc?: CgDoc; error?: string } {
+  /* 跳过 UTF-8 BOM：运行时那边（`cg_json.c`）明确"自动跳过 BOM，编辑器保存的 .cgui 常带"，
+     画布原先不跳 —— 结果是同一份文件 exe 跑得好、画布却说"不是合法 JSON"。
+     两端口径必须一致（热重载上线后，外部编辑器写的文件是一等场景，这个不一致会更常撞上）。 */
+  const src = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   let raw: unknown;
   try {
-    raw = JSON.parse(text);
+    raw = JSON.parse(src);
   } catch (e) {
     return { error: `不是合法的 JSON：${(e as Error).message}` };
   }

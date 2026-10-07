@@ -92,6 +92,8 @@ export default function App() {
   const [actionsOpen, setActionsOpen] = useState(false);
   /** 「样式」对话框开关（工具栏按钮打开）：管理顶层 styles{}（命名样式） */
   const [stylesOpen, setStylesOpen] = useState(false);
+  /** 外部把 .cgui 改了、但画布有未保存改动时挂在这里：底部出通知条问一句，绝不自动覆盖 */
+  const [external, setExternal] = useState<CgDoc | null>(null);
   /** 「新建工程」模板选择对话框 */
   const [newOpen, setNewOpen] = useState(false);
 
@@ -309,6 +311,7 @@ export default function App() {
         if (res.canceled) return { canceled: true as const };
         if (res.path) setFilePath(res.path);
         setDirty(false);
+        setExternal(null); /* 自己刚写的那一份就是最新真相，挂起的"外部改动"已经过时 */
         say(`已保存 ${res.path ?? ""}`.trim());
         return { canceled: false as const, path: res.path };
       }
@@ -324,6 +327,7 @@ export default function App() {
       if (res.canceled) return { canceled: true as const };
       setFilePath(res.path ?? target);
       setDirty(false);
+      setExternal(null); /* 同上：这次保存已经把磁盘写成了画布的样子 */
       say(`已保存 ${res.path ?? target}`);
       return { canceled: false as const, path: res.path ?? target };
     },
@@ -461,6 +465,40 @@ export default function App() {
       else if (o.kind === "fail") setRunLines((ls) => [...ls, "", `# 编译失败（退出码 ${o.code ?? "?"}）`]);
     });
   }, [bridge]);
+
+  /** 用磁盘上的版本替换画布内容。两个入口共用这段：外部改动（画布干净时）与
+   *  通知条上的「载入外部版本」。撤销栈必须清掉 —— 那份历史属于另一条血脉，
+   *  留着它 Ctrl+Z 会回到「外部改动之前」，是最难解释的一种状态。 */
+  const applyExternal = useCallback(
+    (next: CgDoc) => {
+      past.current = [];
+      future.current = [];
+      setDoc(next);
+      setDirty(false);
+      setSelectedIds([]);
+      setExternal(null);
+      setHistVersion((v) => v + 1);
+      say("已载入外部改动（撤销历史已重置）");
+    },
+    [say],
+  );
+
+  /* 外部程序改了当前 .cgui（编辑器 / 发布包里那套 AI 技能 / git checkout）：画布自己跟上。
+     有未保存改动时**只挂起、不覆盖** —— 自动覆盖等于替使用者把他正在改的东西丢掉。 */
+  useEffect(() => {
+    bridge.onFileChanged((o) => {
+      const parsed = parseDoc(o.text);
+      if (!parsed.doc) {
+        say(".cgui 在外部被改过，但内容读不懂，已忽略");
+        return;
+      }
+      if (dirty) {
+        setExternal(parsed.doc);
+        return;
+      }
+      applyExternal(parsed.doc);
+    });
+  }, [bridge, dirty, say, applyExternal]);
 
   /* 浏览器里跑时 Electron 菜单不存在，这里补一套等价快捷键 */
   useEffect(() => {
@@ -662,6 +700,11 @@ export default function App() {
           onApply={onApply}
           pendingDrop={pendingDrop}
           onDropDone={() => setPendingDrop(null)}
+          externalPending={external !== null}
+          onLoadExternal={() => {
+            if (external) applyExternal(external);
+          }}
+          onDismissExternal={() => setExternal(null)}
         />
 
         <div className="right">
@@ -842,7 +885,8 @@ rect = { x:${selected.rect.x}, y:${selected.rect.y}, w:${selected.rect.w}, h:${s
       </div>
 
       {toast ? (
-        <div className="toast" onClick={() => setToast("")}>
+        /* 有通知条时把 toast 抬起来：它是 position:fixed 贴底的，否则正好压住通知条上的按钮 */
+        <div className={external ? "toast toast-raised" : "toast"} onClick={() => setToast("")}>
           {toast}
         </div>
       ) : null}

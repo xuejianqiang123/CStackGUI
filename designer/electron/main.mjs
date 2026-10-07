@@ -39,6 +39,73 @@ log("main.mjs 模块加载完成（相对时间起点）");
 let win = null;
 let currentFile = "";
 
+/* ------------------------------------------------ 外部改动热重载（.cgui 被别的程序改了）
+ *
+ * 场景：发布包里带的那套 AI 技能（cgui-edit）改完 .cgui 文本，或者使用者在编辑器里手改、
+ * git checkout 换了版本 —— 已经开着的画布必须自己跟上，否则他会对着旧界面白改半天。
+ *
+ * 为什么用轮询而不是 fs.watch：编辑器（VS Code 这类）保存时常常"写临时文件 → 改名覆盖"，
+ * Windows 上 fs.watch 盯着的那个句柄会跟着消失、之后**再也不报事件**（静默失效，最难查）。
+ * 轮询 mtime+size 没这个坑；.cgui 就几 KB，700ms 一次 stat 的开销可以忽略。
+ *
+ * 为什么还要"比内容"：保存/导出之后时间戳必然变，只比时间戳会把"自己刚保存"
+ * 也当成外部改动（画布会莫名跳出一句"已载入外部改动"）。
+ */
+const WATCH_MS = 700;
+let watchTimer = null;
+let watchPath = "";
+let watchStamp = "";
+let watchText = "";
+
+function watchStop() {
+  if (watchTimer) clearInterval(watchTimer);
+  watchTimer = null;
+  watchPath = "";
+}
+
+/** 记下"磁盘上现在是什么"：自己保存/导出之后调用，免得把自己写的内容当成外部改动。
+ *  只把时间戳标记成未知，下次轮询读出来比一次内容 —— 一样就什么都不做。 */
+function noteDiskContent(filePath, text) {
+  if (filePath !== watchPath) return;
+  watchText = text;
+  watchStamp = "";
+}
+
+/** 开始盯一个文件。换文件时先停掉旧的：同一时刻只盯"当前这个"，
+ *  否则打开 A 再打开 B，A 被人改了也会弹到 B 的画布上。 */
+function watchStart(filePath, text) {
+  watchStop();
+  if (!filePath) return;
+  watchPath = filePath;
+  noteDiskContent(filePath, text);
+  watchTimer = setInterval(() => {
+    void pollWatch();
+  }, WATCH_MS);
+}
+
+async function pollWatch() {
+  if (!watchPath || !win || win.isDestroyed()) return;
+  let st;
+  try {
+    st = await fs.stat(watchPath);
+  } catch {
+    return; /* 文件被删 / 被改名：当没这回事，等它回来 */
+  }
+  const stamp = `${st.mtimeMs}:${st.size}`;
+  if (stamp === watchStamp) return;
+  watchStamp = stamp;
+  let text;
+  try {
+    text = await fs.readFile(watchPath, "utf8");
+  } catch {
+    return;
+  }
+  if (text === watchText) return; /* 只动了时间戳、内容一样（多半就是自己刚写的） */
+  watchText = text;
+  log("file:changed", `${watchPath}（${text.length} 字节）`);
+  win.webContents.send("file:changed", { path: watchPath, text });
+}
+
 /** 命令行里带的 .cgui：CStackGUI.exe apps\hello\hello.cgui
  *  （打包后把 .cgui 关联到 CStackGUI.exe，双击界面文件也能直接打开） */
 function cguiFromArgv() {
@@ -269,6 +336,7 @@ function createWindow() {
   });
   win.on("closed", () => {
     win = null;
+    watchStop(); /* 窗口没了就别再轮询磁盘 */
   });
   // 外部链接丢给系统浏览器，不在画布里开新窗口
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -296,6 +364,7 @@ ipcMain.handle("app:initialFile", async () => {
   try {
     const text = await fs.readFile(fromArgv, "utf8");
     currentFile = fromArgv;
+    watchStart(fromArgv, text);
     return { canceled: false, path: fromArgv, text };
   } catch (e) {
     dialog.showErrorBox("打开失败", String(e));
@@ -342,6 +411,7 @@ ipcMain.handle("cgui:open", async () => {
   try {
     const text = await fs.readFile(filePath, "utf8");
     currentFile = filePath;
+    watchStart(filePath, text);
     return { canceled: false, path: filePath, text };
   } catch (e) {
     dialog.showErrorBox("打开失败", String(e));
@@ -363,6 +433,7 @@ ipcMain.handle("cgui:save", async (_e, { filePath, text, suggestName }) => {
   try {
     await fs.writeFile(target, text, "utf8");
     currentFile = target;
+    watchStart(target, text); /* 换成"另存为"的新路径时，监视器也跟着换 */
     return { canceled: false, path: target };
   } catch (e) {
     dialog.showErrorBox("保存失败", String(e));
@@ -435,6 +506,16 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
   } catch (e) {
     dialog.showErrorBox("导出失败", String(e));
     return { canceled: true };
+  }
+
+  /* 导出会写一份 .cgui 到工程目录，画布侧随后也把"当前文件"指到它 ——
+     监视器跟着换过去，顺手把主进程的 currentFile 也补上（原先导出后它还是旧值，
+     `app:info` 报出去的是个过期路径）。 */
+  const cguiFile = files.find((f) => f.name.endsWith(".cgui"));
+  if (cguiFile) {
+    const cguiPath = path.join(dir, cguiFile.name);
+    currentFile = cguiPath;
+    watchStart(cguiPath, cguiFile.content);
   }
 
   /* 顺手认一下项目根：用户选在 <root>\apps\xxx 里的话，这里就能自动识别并记住，

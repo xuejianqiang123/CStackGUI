@@ -44,6 +44,8 @@ export type Bridge = {
   confirmDiscard: (message?: string) => Promise<boolean>;
   onMenu: (handler: (action: string) => void) => void;
   onRunOutput: (handler: (o: RunOutput) => void) => void;
+  /** 外部把当前 .cgui 改了（编辑器 / AI 技能 / git checkout）：画布据此热重载 */
+  onFileChanged: (handler: (o: { path: string; text: string }) => void) => void;
 };
 
 type WinWithBridge = Window & {
@@ -97,6 +99,7 @@ export function getBridge(): Bridge {
       confirmDiscard: (m) => api.confirmDiscard(m),
       onMenu: (h) => api.onMenu(h),
       onRunOutput: (h) => api.onRunOutput(h),
+      onFileChanged: (h) => api.onFileChanged(h),
     };
     return cached;
   }
@@ -149,6 +152,8 @@ export function getBridge(): Bridge {
     confirmDiscard: async (m) => window.confirm(m || "当前改动还没保存，确定要丢弃吗？"),
     onMenu: () => undefined,
     onRunOutput: () => undefined,
+    /* 浏览器模式没有"外部改文件"这回事（文件是下载出去的），空实现即可 */
+    onFileChanged: () => undefined,
   };
   return cached;
 }

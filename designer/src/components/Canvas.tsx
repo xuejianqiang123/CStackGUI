@@ -37,6 +37,10 @@ type Props = {
   /** 从调色板拖进来的类型 */
   pendingDrop: string | null;
   onDropDone: () => void;
+  /** 有外部改动挂起（.cgui 被别的程序改了，而画布上有未保存改动）：底部出通知条让人先选 */
+  externalPending: boolean;
+  onLoadExternal: () => void;
+  onDismissExternal: () => void;
 };
 
 type DragState =
@@ -83,7 +87,22 @@ const HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const;
 const DRAG_MIN = 3;
 
 export default function Canvas(props: Props) {
-  const { doc, selectedIds, zoom, snapOn, showGrid, onSelect, onSelectMany, onBeginHistory, onApply, pendingDrop, onDropDone } = props;
+  const {
+    doc,
+    selectedIds,
+    zoom,
+    snapOn,
+    showGrid,
+    onSelect,
+    onSelectMany,
+    onBeginHistory,
+    onApply,
+    pendingDrop,
+    onDropDone,
+    externalPending,
+    onLoadExternal,
+    onDismissExternal,
+  } = props;
   const stageRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState>({ kind: "none" });
   const [snapLines, setSnapLines] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] });
@@ -559,6 +578,23 @@ export default function Canvas(props: Props) {
           </div>
         </div>
       </div>
+
+      {/* 外部改了 .cgui、而画布上有未保存改动：问一句，绝不替人丢东西。
+          放在视口与提示行之间（正常文档流）—— 顶部已经被对齐/分布条占着了。 */}
+      {externalPending ? (
+        <div className="notice-bar">
+          <span className="notice-text">
+            <strong>.cgui 在外部被改了</strong>（编辑器 / AI 技能 / git 换版本），而画布上还有没保存的改动：
+            载入外部版本会丢掉它们。
+          </span>
+          <button className="mini" onClick={onLoadExternal}>
+            载入外部版本
+          </button>
+          <button className="mini" onClick={onDismissExternal}>
+            留着我的改动
+          </button>
+        </div>
+      ) : null}
 
       <div className="viewport-hint">
         拖拽移动 · Shift 点选多选（空白处可拖框选） · Delete 删除 · Ctrl+A 全选 · 拖进分组框会成为子控件

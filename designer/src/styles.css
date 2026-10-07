@@ -527,6 +527,39 @@ input.narrow {
   outline: 1px dashed var(--seed);
   outline-offset: 0;
 }
+/* 画布底部通知条：外部改了 .cgui、而画布上有未保存改动时出现。
+   放在 .viewport 与 .viewport-hint 之间（正常文档流）—— 顶部已经被对齐/分布条占了，
+   再用绝对定位会撞；这条只在需要时出现，不占常驻空间。描边分层，不叠阴影。 */
+.notice-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--outline);
+}
+.notice-bar .notice-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--on-surface);
+}
+.notice-bar button.mini {
+  flex: 0 0 auto;
+  padding: 3px 10px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+/* toast 是 position:fixed 贴在视口底部的，通知条一出现就会正好被它压住 ——
+   那 4 秒里两个按钮点不到。有通知条时把 toast 抬到它上面。
+   选择器故意写成 .toast.toast-raised（而不是单个类）：本文件里 .toast 在更靠后的位置，
+   同权重就是"后写的赢"，只写一个类会被 .toast 的 bottom:22px 悄悄盖掉（踩过一次）。 */
+.toast.toast-raised {
+  /* 宁可多留：通知条的高度会随窗口宽度变（画布窄了文案折成两行），
+     按下限算就又压回去了。要压到 104px 得折成四行，实际不会。 */
+  bottom: 104px;
+}
 .viewport {
   flex: 1;
   min-height: 0;
@@ -2157,6 +2190,19 @@ button.icon-pick svg {
   gap: 8px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--outline);
+}
+.modal-head {
+  /* 抬头只放"标题 + 条数"这种短信息；长说明一律放正文（.act-legend）——
+     抬头是 flex 行、宽度被关闭按钮挤掉一块，长句子会在那里从词中间断开。 */
+  gap: 8px;
+}
+.modal-head .small {
+  min-width: 0;
+}
+/* 兜底：内联代码是"一个词"，任何时候都不许从中间劈开
+   （曾经把 {"use": "名字", ...覆盖 } 折成 ...覆 / 盖 } 两行） */
+.modal-head code {
+  white-space: nowrap;
 }
 .modal-head .mini {
   margin-left: auto;
