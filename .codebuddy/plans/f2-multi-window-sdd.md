@@ -28,16 +28,16 @@
   "type": "dialog",
   "rect": { "x": 0, "y": 0, "w": 320, "h": 180 },  // x/y = 位置（center=true 时忽略），w/h = 窗口客户区
   "text": "端口设置",                               // = 窗口标题（复用，不新增字段）
-  "center": false,                                  // 唯一新字段：相对 owner 居中，默认 true（不写 = 居中）
+  "center": false,                                  // T2-full 再加：相对 owner 居中，默认 true（不写 = 居中）
   "events": { "close": "on_dlg_close" },            // 窗口级事件，与 app.events 同一套名字
   "children": [ /* 这个窗口里的控件，坐标相对对话框客户区 */ ]
 }
 ```
 
-**设计原则：能复用就复用。** `rect`/`text`/`events`/`children` 全是既有字段，**只新增 `center` 一个**
-（模态性是**调用点**的属性、不是窗口的属性 → 不做字段；边框 T1 一律 fixed + 只关按钮 → 不做字段；
-图标复用窗口类自带的 app 图标 → 不做字段）。`serialize.ts`"等于默认值不写"的约定使得
-`center:true` 的文件里根本看不到这个键。
+**设计原则：能复用就复用。** `rect`/`text`/`events`/`children` 全是既有字段；本轮（T1.1 + T2 最小集）
+**一个新字段都不加** —— 模态性是**调用点**的属性（不做字段）、边框一律 fixed + 只关按钮（不做字段）、
+图标复用窗口类自带的 app 图标（不做字段）、`center` 与 Inspector 的开关同轮再加
+（没有消费者的字段会先造成"管线落了、往返门禁没守它"的缺口）。
 
 `k_kinds` 行（插在 `group/box/card` 容器组之后；枚举值插在 `CG_K_COUNT` 前——`.cgui` 存的是
 类型**名字符串**不是枚举值，所以枚举数值变化无影响）：
@@ -147,6 +147,20 @@ A7 → T2 ｜ A8 → T3。
 - [x] P1 PRD
 - [x] P2 SDD：本文件
 - [x] P2.5 T1.0 画布未知类型静默丢数据（顺手修掉，红绿证据齐）
-- [ ] P3 实现 T1.1 → T1.2 → T1.3（下一轮）
-- [ ] P4 T2 画布
-- [ ] P5 T3 示例与文档
+- [x] P3a **T1.1 + T2 最小集 + 示例落点 + 文档计数（2026-10-07 同轮落地，全绿）**
+      —— **切片边界被门禁修正**：`check-examples.mjs` 从 `k_kinds` **现读**类型清单（只排除
+      `window`），单落运行时会让 `dialog` 进 "every kind has an example" 的 missing，且
+      ④.5 计数 / ④.6 掩码↔文档 / ④.7 画布↔掩码三道对账全红；实测 `--docs` 先失败还会
+      `exit /b 1` 遮住后面的 coverage 步。**绿的最小单位 = 运行时 + 画布类型表 + 示例 + 文档**。
+      已落：`CG_K_DIALOG` + `k_kinds` 行（掩码裁到 21 个真会触发的，C/TS/文档三方同步）+
+      建原生两处整树跳过；`KINDS`/`KIND_EVENTS`/`isGroup`/`.glyph-dialog`；
+      gallery 落 `dlg_about` 示例 + exe 重编；文档计数 43→44 + CGUI-FORMAT 第 4 节 dialog 行 +
+      children 说明。证据：审查报告 `2026-10-07-多窗体T1.1-T2最小集.md`（selftest 树 dump /
+      run-tests / check-format 全绿 / 画布截图）。
+- [ ] P3b T1.2：`cg_dialog_open/close` + 模态泵 + `WM_DESTROY` 只主窗退 + `cgw_parent_hwnd_of`
+      按窗口取 + **掩码逐个核对**（该补的两边一起补）+ 用带绑定的真工程真机验 A1~A5
+- [ ] P3c T1.3：`format-roundtrip.mjs` 加 dialog 探针（守 children 往返无损）
+- [ ] P4 T2-full：Inspector 对话框分节 + `center` 字段（管线与开关同轮）+
+      **画布叠画的设计决断**（同一画布浮着 vs 独立窗口视图，审查报告 R1 #4）+
+      禁止把 `menu` 拖进 dialog
+- [ ] P5 T3：教学/文档收尾（gallery 的对话框接上打开按钮）

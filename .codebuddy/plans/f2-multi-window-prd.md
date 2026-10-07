@@ -123,10 +123,18 @@ void cg_dialog_close(cg_widget_t *self, int result);
 - [x] P0 地基调研（运行时窗口模型 / 消息泵 / 契约 / 画布模型四路，结论见 §0）
 - [x] P1 PRD：本文件（§7 三条决策按推荐定案）
 - [x] P2 SDD：`.codebuddy/plans/f2-multi-window-sdd.md`（核心决策 W：`app->widgets` 保持一棵树不分区，
-      窗口 = window 伪控件、子树懒建；契约只新增 `center` 一个字段）
+      窗口 = window 伪控件、子树懒建；**本轮零新字段**——`center` 与 Inspector 开关同轮（T2-full）再加）
 - [x] P2.5 T1.0 前置加固：画布对未知控件类型**静默降级成 label**（会连子树一起丢）→ 改成与运行时
       同口径"拒绝整份文件"。红绿证据：`tools/probe-dialog.mjs`（反例 2 条红，打印出
       `dlg_settings` 变 label、4 个子控件全没）；5 个真示例往返探针全绿（收紧没打破真文件）
 - [x] P3 切片细化：SDD §6（T1.1/T1.2/T1.3 每步带验证）；fixture 已备好（`tools/fixtures/dialog.cgui`），
       红基线已实测（运行时 exit=3：`unknown widget type "dialog"`）
-- [ ] P4 实现 T1.1 → T1.2 → T1.3（下一轮）
+- [x] P3a **T1.1 + T2 最小集 + 示例落点 + 文档计数（2026-10-07 同轮落地，全绿）**
+      —— 切片边界被门禁修正（SDD §8：check-examples 从 k_kinds 现读类型清单，
+      单落运行时必红，且 --docs 先失败会遮住 coverage 步）。
+      验收证据：`tools/probe-dialog.mjs` 全绿（画布不静默丢 + 运行时树 dump 可见 dialog 与子控件）+
+      `run-tests.bat --no-kit` = `all checks passed` + `check-format.bat` = `BAT_EXIT=0`
+      （5 个往返探针含带 dialog 的 gallery、`every kind has an example`、计数 44）+
+      `tsc`/`vite build` 绿 + 画布截图 `build\canvas-dialog.png`。
+- [ ] P3b T1.2：`cg_dialog_open/close` + 模态泵 + `WM_DESTROY` 只主窗退 + 真机 A1~A5
+      （用带绑定的真工程；掩码逐个核对，该补的两边一起补）
