@@ -621,6 +621,11 @@ release/
 - **画布内一键运行 / 发布**：工具条「运行」（F5）编译并启动工程；「发布」产出**独立单文件 exe**
   —— 就是**工程目录里那个 exe**（`.cgui` 旁边），不进 `publish\`、不打 zip。编译都在 `CStackGUI.exe`
   内部完成（见 §6.1 第 3 条），不经 cmd / bat。
+- **`.cgui` 外部变更热重载**：画布盯着当前 `.cgui`，磁盘一变就自己跟上（发布包里那套 AI 技能
+  改完 `.cgui`、编辑器手改、`git checkout` 换版本，都不必重开画布）。判"这次改动是不是我自己写的"
+  **靠比内容不靠比时间**；画布上有未保存改动时**只挂起不覆盖**，底部出通知条让人选。
+  实现用轮询 `mtime+size` 而不是 `fs.watch`：编辑器"写临时文件再改名"会让 `fs.watch` 静默失效
+  （见 `designer/electron/main.mjs` 顶部注释）。
 - **单文件发布：界面作为 PE 资源编进 exe**。编译时（`designer\electron\cgbuild.mjs`）为
   `<名字>.cgui` 生成一行 `<名字>_cgui_res.rc`（`CGUI RCDATA "…"`），用 windres 编成资源对象
   一起链接；运行时（`runtime/src/core/cg_app.c` 的 `open_cgui_text`）在**所有文件位置都找不到**
