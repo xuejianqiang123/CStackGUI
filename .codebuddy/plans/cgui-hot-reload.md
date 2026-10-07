@@ -88,7 +88,7 @@ py880 的头号卖点是 **「说出需求，AI 搭界面」**：AI 改完界面
 ```bat
 cd designer && npx tsc --noEmit && npx vite build
 tools\check-format.bat                    :: 含 electron 主进程语法那一项
-powershell -NoProfile -ExecutionPolicy Bypass -File build\probe-hotreload.ps1   :: 真机：起画布 → 外部改文件 → 两次截图
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\probe-hotreload.ps1   :: 真机：起画布 → 外部改文件 → 两次截图
 ```
 
 ## 5. 进度
@@ -132,6 +132,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File build\probe-hotreload.ps1   
   且 `watchStamp` 写入幂等，真重叠也只是多读一次。
 - 🟢 观测：启动日志里 `app:info ... file=(none)` 会让人以为"命令行带的文件没打开" ——
   其实只是 `info()` 比 `initialFile()` 先 resolve（同轮 `file:changed` 照样出现）。
-- 🟢 观测：`build\probe-hotreload.ps1` 按 SOP 留在 `build\`（gitignore），不进库；下次要用直接跑。
+- 🟢 观测：`tools\probe-hotreload.ps1` —— **2026-10-08 反转了当时的决定**：原先按 SOP 留在
+  `build\`（gitignore）不进库，但那意味着 `build\` 一清，热重载这条永久回归就只剩文档里的一段
+  散文（且它守的是"自保存不能误报成外部改动"这种**容易被改坏**的行为）。现已升格到 `tools\`，
+  与 `probe-dialog.mjs` / `probe-style-consistency.mjs` 同一口径：真机复跑资产入库。
 - **下一轮候选**：F2 多窗体/窗体引用（跨端 epic，要独立 SDD）→ F8 生成代码的分区保留
   （让 main.c 能安全重新生成，而不是"宁可不同步"）。

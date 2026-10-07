@@ -138,7 +138,7 @@ A1→T1/T2 全程老文件回归 ｜ A2/A3→T1 截图 ｜ A4→T2 真机 ｜ A5
       全部走 `cg_skin_neutral` 或深色分支（新定深值 4 处：0x2E2B33 禁用底、0xE6E0E9 指针帽、
       edit 边框 0x49454F、edit 底/字 0x1D1B20/0xE6E0E9）+ `cg_skin_edit_retheme`（s->bg 是建控件时
       缓存的，apply 钩子重算）+ WM_CTLCOLOR 深色 edit 分支（两处拦截，SDD §2.2）。
-      **验收**：`build\gen-darkaudit.mjs` 造一页深色审计工程，BEFORE/AFTER + 浅色变体三张截图
+      **验收**：`tools\gen-darkaudit.mjs` 造一页深色审计工程，BEFORE/AFTER + 浅色变体三张截图
       —— BEFORE 里禁用按钮是深底上发光的浅灰块、edit 纯白、meter 指针不可见，AFTER 全部修复；
       浅色变体逐控件与既有浅色皮肤一致（A2/A3 ✓）。
       **并行协作记录**：所有者同日在库上提交了 `d9cb449`（补 retheme 头文件声明——与本工作区

@@ -162,7 +162,7 @@ A7 → T2 ｜ A8 → T3。
       防重入锁存/清/恢复）+ `cgw_MainProc` 宿主化（按 HWND 认宿主，主窗口=__window、
       对话框=dialog 节点）+ `WM_DESTROY` 只主窗退（A5）+ `cgw_destroy_native_tree` +
       `cgw_layout_apply` 对话框跳过（它写死排 app->window 的孩子）。
-      **真机证据**：`build\probe-modal.c`（外部驱动，MinGW 直编）15 项断言 ALL PASS、
+      **真机证据**：`tools\probe-modal.c`（外部驱动，MinGW 直编）15 项断言 ALL PASS、
       probe-exit=0 —— A1 独立 HWND（标题/WS_CAPTION/WS_SYSMENU/≠主窗口）、
       A2 owner 禁用/恢复、A3 返回值 OK=1/WM_CLOSE=0、A4 `cg_find` 读回 edt_port=COM3、
       A5 主窗口存活。**掩码核对**：裁掉的五个结构性不会发（ready=启动时只发 __window、
@@ -195,11 +195,11 @@ A7 → T2 ｜ A8 → T3。
       居中的对话框；该分支与居中分支共用 CreateWindowExW，位置语义同主窗口先例，低风险）。
 - [x] P5 T3 尾：gallery 示例与类型计数已在 T2-minimal 落；本文档（CGUI-FORMAT）已随
       `center` 与函数索引更新。剩余：`format-roundtrip` 的 dialog 探针已在 T1.3 落。
-- [x] P6 **F2 收敛（2026-10-07）**：A7 端到端补证（`build\probe-dialog-e2e.mjs`：画布模型 →
+- [x] P6 **F2 收敛（2026-10-07）**：A7 端到端补证（`tools\probe-dialog-e2e.mjs`：画布模型 →
       generateC → 用户一行补桩 → cgbuild → 真窗口，10 项 ALL PASS —— 顺带把 center:false 的
       **真机定位断言**也补上了，`pos=40,40` 精确命中）+ PRD A1~A8 对账 + 偷学清单 F2 销账。
       **诊断插曲**：PowerShell 的 Add-Type 委托两轮跑法下都静默失灵（连已知有窗口的 modaltest
-      都"枚举不到"），换 C 驱动（`build\findwin.c`，probe-modal 同款）一次就对 ——
+      都"枚举不到"），换 C 驱动（`tools\findwin.c`，probe-modal 同款）一次就对 ——
       **工具不可靠时换工具，别把"工具找不到"当成"应用没窗口"**；
       另踩一处探针自身的错（尺寸写成顶层 `.w/.h`，序列化只认 `rect.w/h`）。
       **画布叠画的设计决断**（同一画布浮着 vs 独立窗口视图，审查报告 R1 #4）+

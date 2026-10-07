@@ -138,14 +138,14 @@ void cg_dialog_close(cg_widget_t *self, int result);
       `tsc`/`vite build` 绿 + 画布截图 `build\canvas-dialog.png`。
 - [x] P3b **T1.2（2026-10-07）**：`cg_dialog_open/close`（新 `cg_win_modal.c`：独立 HWND + 子树懒建/
       收尾 + 内层泵 + 防重入锁存/清/恢复）+ `cgw_MainProc` 宿主化 + `WM_DESTROY` 只主窗退（A5）+
-      `cgw_destroy_native_tree`。真机 A1~A5 **15 项断言 ALL PASS**（`build\probe-modal.c` 外部驱动 +
+      `cgw_destroy_native_tree`。真机 A1~A5 **15 项断言 ALL PASS**（`tools\probe-modal.c` 外部驱动 +
       被测程序自写 result.log 双证）
 - [x] P3c **T1.3（2026-10-07）**：往返门禁加 dialog 子树探针（编辑塞探针按钮 + 恒等回写逐字核对），
       红证：serialize 临时丢 children → `4 -> 0` 两连红
 - [x] P4 **T2-full（2026-10-07）**：`center` 字段五层管线（缺省居中，旧文件零变化）+
       Inspector「打开时居中」分节 + 画布「模态」徽章（同一画布浮着，不用遮罩）。
       自查修正：center:false 位置与主窗口 app.x/y 同口径（裸值不换算）
-- [x] P5 **A7 端到端（2026-10-07）**：`build\probe-dialog-e2e.mjs` —— 画布模型 → generateC →
+- [x] P5 **A7 端到端（2026-10-07）**：`tools\probe-dialog-e2e.mjs` —— 画布模型 → generateC →
       用户一行补桩 → cgbuild → 真窗口：对话框存在、`pos=40,40`（center:false 精确定位）、
       owner 禁用。**10 项断言 ALL PASS**。过程记录：PowerShell 的 Add-Type 委托两轮跑法下
       都静默失灵（连已知有窗口的 modaltest 都"枚举不到"）—— 换 C 驱动（probe-modal 同款）一次就对；
