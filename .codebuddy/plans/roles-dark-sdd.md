@@ -145,5 +145,14 @@ A1→T1/T2 全程老文件回归 ｜ A2/A3→T1 截图 ｜ A4→T2 真机 ｜ A5
       编辑收敛到同一行）及 `6ba4374`/`98f8d0b`（画布功能）；本片提交 `6f8c67d` 只含运行时实现
       与调用 + 重编的 darkterm/gallery exe，零冲突。README/契约深色口径已按事实改写（剩余边界：
       品牌紫有意保持、用户写死色等 G1、菜单/清单平台边界）。
-- [ ] P3b T2 实现 + test_roles.c（A4/A5/A8）
+- [x] P3b **T2 落地（2026-10-07）**：`cg_role_t`（数组仿 named_style）+ `parse_roles`（容错同口径，
+      两槽都缺的条目跳过）+ `style_overlay` 的 `@引用` 分支（值槽 NONE + 串 + mask 位 7/8）+
+      `style_merge_named` 传播扩展（内联值/引用都没写时，命名样式的引用**连串带位**落下）+
+      `cg_role_lookup` 纯函数（core 层，单测可测）+ 求值挂 `cgw_theme_widget`（建控件/切主题同一条路）
+      与 `cgw_theme_apply` 顶部的 app.bg/窗口同步 + 失效引用 WARN（含 app.bg）。
+      **验收**：`test_roles.c` 四套件（形状/引用挂载/合并穿透/求值口径）全绿——首跑红过一次
+      （表含 dup 两条、覆盖发生在查找时——断言写错，与 test_style 的 dup×2 同口径修正）；
+      真机 A4：审计工程加 `roles` + 三个 @控件，深浅截图各取对应槽
+      （accent 浅紫/深紫、danger 红/浅红、@按钮同拍）。**A4/A5 ✓**。
+      run-tests `all checks passed` + check-format `BAT_EXIT=0`。
 - [ ] P3c T3 实现 + 往返与一致性探针（A6/A7）
