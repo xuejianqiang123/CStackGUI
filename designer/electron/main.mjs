@@ -22,14 +22,19 @@ const VERSION = "0.1.0";
 /* 启动排查探针：设了 CSTACKGUI_LOG=<文件路径> 才写，平时零开销。
  * 打包后的 GUI exe 抓不到 stdout/stderr，白屏、找不到项目根这类问题全靠它。 */
 const LOG_FILE = process.env.CSTACKGUI_LOG || "";
+/* 进程内的相对时间起点：用来量"启动到出界面"到底花在哪一段
+   （配合 CSTACKGUI_LOG 用；便携版解包发生在 Electron 起来之前，量不到，看差值即知）。 */
+const T0 = Date.now();
 function log(...args) {
   if (!LOG_FILE) return;
   try {
-    appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${args.join(" ")}\n`);
+    const ms = String(Date.now() - T0).padStart(5, " ");
+    appendFileSync(LOG_FILE, `[${new Date().toISOString()} +${ms}ms] ${args.join(" ")}\n`);
   } catch {
     /* 写日志失败绝不能影响启动 */
   }
 }
+log("main.mjs 模块加载完成（相对时间起点）");
 
 let win = null;
 let currentFile = "";
@@ -190,6 +195,7 @@ async function resolveWorkspaceRoot() {
 }
 
 function createWindow() {
+  log("createWindow 开始");
   win = new BrowserWindow({
     width: 1480,
     height: 940,
@@ -212,8 +218,10 @@ function createWindow() {
   }
 
   /* 白屏/启动失败时这几个事件能直接说明是加载失败、preload 炸了，还是前端崩了 */
+  win.once("ready-to-show", () => log("ready-to-show（窗口可以显示/已可见）"));
+
   const wc = win.webContents;
-  wc.on("did-finish-load", () => log("did-finish-load"));
+  wc.on("did-finish-load", () => log("did-finish-load（Renderer 加载完）"));
   wc.on("did-fail-load", (_e, code, desc, url) => log("did-fail-load", code, desc, url));
   wc.on("preload-error", (_e, file, err) => log("preload-error", file, String(err)));
   wc.on("render-process-gone", (_e, details) => log("render-process-gone", JSON.stringify(details)));
@@ -784,6 +792,7 @@ const buildCliArgs = (() => {
 })();
 
 app.whenReady().then(async () => {
+  log("app.whenReady 触发（Chromium 已就绪）");
   if (buildCliArgs) {
     /* 编译发生在 exe 内部（cgbuild.mjs 在 asar 里），用的是 exe 自带的运行时，
      * 所以命令行这一条同样不需要客户装 Node，也不需要旁边有内核文件。 */

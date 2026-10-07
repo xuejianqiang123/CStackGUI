@@ -89,7 +89,8 @@
       "shortcutName": "CStackGUI"
     },
     "portable": {
-      "artifactName": "CStackGUI.exe"
+      "artifactName": "CStackGUI.exe",
+      "splashImage": "splash.bmp"
     }
   }
 }
