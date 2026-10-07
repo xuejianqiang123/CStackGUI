@@ -194,6 +194,22 @@ async function resolveWorkspaceRoot() {
   return "";
 }
 
+/* 窗口出现后、真正界面加载完之前显示的那一屏（内联，不依赖 vite 产物，
+   所以它能立刻画出来）。配色与画布一致：品牌紫 #6750A4 + 底色 #F3EDF7。 */
+const LOADING_PAGE =
+  "data:text/html;charset=utf-8," +
+  encodeURIComponent(
+    `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>CStackGUI</title>
+<style>
+  html,body{margin:0;height:100%;background:#F3EDF7;
+    font:14px/1.6 system-ui,"Microsoft YaHei",sans-serif;color:#49454F}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+  .mark{width:64px;height:64px;border-radius:50%;background:#6750A4;color:#fff;
+    font:600 34px/64px system-ui;text-align:center}
+</style></head>
+<body><div class="mark">C</div><div>正在启动…</div></body></html>`,
+  );
+
 function createWindow() {
   log("createWindow 开始");
   win = new BrowserWindow({
@@ -212,9 +228,27 @@ function createWindow() {
   });
 
   if (DEV_URL) {
+    /* 开发态 vite 自己有首屏，不插启动页（免得挡住热更新） */
     win.loadURL(DEV_URL);
   } else {
-    win.loadFile(path.join(__dirname, "..", "dist", "index.html"));
+    /* 窗口一出现（+30ms 左右）先画一张内联的"正在启动…"，真正的界面加载完再切过去。
+     *
+     * 为什么需要它：便携版解包期间由打包器的启动图占着，但那张图与解包**同生共死**
+     * （解包一结束就关），之后到本窗口出现之间还有约 2.7 秒 —— 那是 Electron 冷启动，
+     * 我们的代码那时还没跑起来，谁都补不了。能补的是**本窗口出现之后**到界面可用之间
+     * 那约 0.7 秒：以前是一块空底色，现在有字有标识。 */
+    const indexFile = path.join(__dirname, "..", "dist", "index.html");
+    let switched = false;
+    const loadRealUi = () => {
+      if (switched || !win || win.isDestroyed()) return;
+      switched = true;
+      win.loadFile(indexFile);
+    };
+    /* 两个事件都挂（各只触发一次 + switched 兜底），保证启动页画完就切，
+     * 且启动页万一加载失败也不会把真正的界面卡住。 */
+    win.webContents.once("did-finish-load", loadRealUi);
+    win.webContents.once("did-fail-load", loadRealUi);
+    win.loadURL(LOADING_PAGE);
   }
 
   /* 白屏/启动失败时这几个事件能直接说明是加载失败、preload 炸了，还是前端崩了 */
