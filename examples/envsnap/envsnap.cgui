@@ -135,6 +135,74 @@
       "checked": true,
       "value": 800,
       "hint": "每行一条采集与导出记录"
+    },
+    {
+      "id": "dlg_edit",
+      "type": "dialog",
+      "rect": { "x": 0, "y": 0, "w": 400, "h": 210 },
+      "text": "添加变量",
+      "events": { "show": "on_dlg_show" },
+      "children": [
+        {
+          "id": "lab_dlg_group",
+          "type": "label",
+          "rect": { "x": 20, "y": 22, "w": 84, "h": 24 },
+          "text": "分组："
+        },
+        {
+          "id": "edt_dlg_group",
+          "type": "edit",
+          "rect": { "x": 108, "y": 20, "w": 272, "h": 26 },
+          "hint": "写 [方括号] 里的那个名字；改成别的就是换分组"
+        },
+        {
+          "id": "lab_dlg_name",
+          "type": "label",
+          "rect": { "x": 20, "y": 62, "w": 84, "h": 24 },
+          "text": "变量名："
+        },
+        {
+          "id": "edt_dlg_name",
+          "type": "edit",
+          "rect": { "x": 108, "y": 60, "w": 272, "h": 26 },
+          "hint": "比如 PATH、TEMP；同一分组里不能重名"
+        },
+        {
+          "id": "lab_dlg_note",
+          "type": "label",
+          "rect": { "x": 20, "y": 102, "w": 84, "h": 24 },
+          "text": "备注（可空）："
+        },
+        {
+          "id": "edt_dlg_note",
+          "type": "edit",
+          "rect": { "x": 108, "y": 100, "w": 272, "h": 26 },
+          "hint": "会写进 ini 的 = 号后面，表格与快照里都显示"
+        },
+        {
+          "id": "lab_dlg_hint",
+          "type": "label",
+          "rect": { "x": 20, "y": 138, "w": 360, "h": 24 },
+          "text": "",
+          "style": { "fg": "#B3261E" }
+        },
+        {
+          "id": "btn_dlg_ok",
+          "type": "button",
+          "rect": { "x": 200, "y": 168, "w": 88, "h": 30 },
+          "text": "确定",
+          "hint": "一次提交三个字段；不合法就留在框里改，不关框",
+          "events": { "click": "on_dlg_ok" }
+        },
+        {
+          "id": "btn_dlg_cancel",
+          "type": "button",
+          "rect": { "x": 296, "y": 168, "w": 88, "h": 30 },
+          "text": "取消",
+          "hint": "不写清单，直接关框（Esc 同效）",
+          "events": { "click": "on_dlg_cancel" }
+        }
+      ]
     }
   ]
 }

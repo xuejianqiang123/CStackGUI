@@ -11,10 +11,12 @@
  *          方括号是分组（树里的一支），键是变量名，值是备注（可空）。
  *          工具栏第二排就是对这份清单的增删改查：
  *              导入INI —— 选任意一份 ini 重新载入清单，此后的增删改都存回它；
- *              添加 —— 分组 / 变量名 / 备注 三步输入，同组同名重复会被拒；
+ *              添加 —— 打开一张表单（分组 / 变量名 / 备注 一次填完、一次提交）；
  *              删除 —— 删选中的变量，选中分组则整组连带删除；
- *              修改 —— 三步输入预填现值，可改名 / 挪分组 / 改备注；
+ *              修改 —— 同一张表单预填现值，可改名 / 挪分组 / 改备注；
  *              查询 —— 按关键字过滤清单（变量名 / 备注 / 分组），结果摆进右侧表格。
+ *          添加与修改共用 .cgui 里的 dlg_edit 表单（cg_dialog_open 模态打开）：
+ *          校验不过就只改框内提示行、**不关框**，改完直接再点确定 —— 而不是连着弹三个框。
  *          每次改动立即存回当前 ini —— 文件是清单的唯一事实源，
  *          记事本手工改完点「导入INI」一样生效。
  *
@@ -114,6 +116,12 @@ static int       s_item_count;          /**< 清单已用行数 */
 static char      s_groups[K_GROUP_MAX][48]; /**< 分组名表（对应 INI 的节，空节也保留） */
 static int       s_group_count;         /**< 分组数 */
 static char      s_ini_path[1024];      /**< 当前清单文件；空串 = 还没有（自检模式不碰盘） */
+
+/** 编辑对话框（dlg_edit）这次是干嘛的 */
+enum { DLG_ADD = 0, DLG_EDIT = 1 };
+static int  s_dlg_mode;                 /**< DLG_ADD / DLG_EDIT */
+static int  s_dlg_idx;                  /**< DLG_EDIT：要改的行号（添加时是 -1） */
+static char s_dlg_old[120];             /**< DLG_EDIT：原「组\名」，写日志用 */
 
 static entry_t   s_entries[K_DIR_MAX];  /**< 目录条目快照（刷新时重扫） */
 static int       s_entry_count;         /**< 已登记的条目数 */
@@ -1056,61 +1064,192 @@ static void on_btn_import_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief 「添加」：三步输入（分组 / 变量名 / 备注）往清单加一行，存回 ini
- * @param self 被点的按钮
+ * @brief 把对话框底部的提示行改掉（校验不过时写在框里，不弹消息框、也不关框）
+ * @param app 应用
+ * @param msg 提示文字；NULL 当空串
+ * @return void 无返回值
+ */
+static void dlg_hint(cg_app_t *app, const char *msg)
+{
+    cg_widget_set_text(cg_find(app, "lab_dlg_hint"), msg ? msg : "");
+}
+
+/**
+ * @brief 预填对话框：标题 + 三个字段 + 清提示行
+ * @param app 应用
+ * @param title 窗口标题（"添加变量" / "修改变量"）
+ * @param g 分组（可为 NULL = 空）
+ * @param name 变量名（可为 NULL = 空）
+ * @param note 备注（可为 NULL = 空）
+ * @return void 无返回值
+ * @note 每次打开都整体重写一遍：对话框是同一个，上次的值必须清掉
+ */
+static void dlg_fill(cg_app_t *app, const char *title, const char *g, const char *name, const char *note)
+{
+    cg_widget_set_text(cg_find(app, "dlg_edit"),       title  ? title  : "");
+    cg_widget_set_text(cg_find(app, "edt_dlg_group"),  g      ? g      : "");
+    cg_widget_set_text(cg_find(app, "edt_dlg_name"),   name   ? name   : "");
+    cg_widget_set_text(cg_find(app, "edt_dlg_note"),   note   ? note   : "");
+    dlg_hint(app, "");
+}
+
+/**
+ * @brief 对话框打开时（原生刚建好）：把光标放到该填的那一格
+ * @param self 对话框控件
  * @param ev 事件类型
  * @param user 未使用
  * @return void 无返回值
- * @note 分组预填当前选中节点所属的组；同组同名重复会被消息框拦下；
- *       输入框是模态对话框：自检（无窗口）时跳过
+ * @note 原生是 cg_dialog_open 里懒建的，open 前 focus 是空操作 —— 所以焦点得在这里给；
+ *       分组预填为空（清单里还没有组）就先让人填分组，否则直接落在变量名上
  */
-static void on_btn_add_click(cg_widget_t *self, cg_event_t ev, void *user)
+static void on_dlg_show(cg_widget_t *self, cg_event_t ev, void *user)
 {
-    cg_app_t *app = cg_app_of(self);
-    char      g[48], name[64], note[96];
+    cg_app_t   *app = cg_app_of(self);
+    const char *g   = cg_widget_text(cg_find(app, "edt_dlg_group"));
+
+    (void)ev;
+    (void)user;
+
+    cg_widget_focus(cg_find(app, (g && g[0]) ? "edt_dlg_name" : "edt_dlg_group"));
+}
+
+/**
+ * @brief 表单「确定」：三个字段一次校验、一次提交，存回 ini；不合法就留在框里
+ * @param self 被点的按钮（对话框里的）
+ * @param ev 事件类型
+ * @param user 未使用
+ * @return void 无返回值
+ * @note 校验失败只改框内提示行、**不关框** —— 这是"三次弹框"换成"一次表单"的关键：
+ *       用户改完直接再点确定，不用重新走一遍流程
+ */
+static void on_dlg_ok(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t   *app = cg_app_of(self);
+    char        g[48], name[64], note[96];
+    const char *s;
+    int         other;
 
     (void)ev;
     (void)user;
 
     if (!cg_app_has_window(app)) {
-        log_line(app, "自检模式：跳过添加（不弹输入框）");
+        log_line(app, "自检模式：跳过表单确定（不改清单）");
         return;
     }
 
-    sel_group(app, g, sizeof(g));
-    if (!cg_input_box(self, "添加变量", "分组：", g, g, sizeof(g))) { log_line(app, "取消添加"); return; }
-    name[0] = '\0';
-    if (!cg_input_box(self, "添加变量", "变量名：", "", name, sizeof(name))) { log_line(app, "取消添加"); return; }
-    note[0] = '\0';
-    if (!cg_input_box(self, "添加变量", "备注（可空）：", "", note, sizeof(note))) { log_line(app, "取消添加"); return; }
+    s = cg_widget_text(cg_find(app, "edt_dlg_group"));
+    snprintf(g, sizeof g, "%s", s ? s : "");
+    s = cg_widget_text(cg_find(app, "edt_dlg_name"));
+    snprintf(name, sizeof name, "%s", s ? s : "");
+    s = cg_widget_text(cg_find(app, "edt_dlg_note"));
+    snprintf(note, sizeof note, "%s", s ? s : "");
 
     str_trim(g);
     str_trim(name);
     str_trim(note);
     str_clean(g, "[]");                            /* 组名带 ] 会把 INI 节写坏 */
     str_clean(name, "=");                          /* 键名带 = 会把键值切开 */
+
     if (!name[0]) {
-        cg_message_box(self, "变量名不能为空。", "添加变量", 1);
+        dlg_hint(app, "变量名不能为空。");
         return;
     }
     if (group_ensure(g) < 0) {
-        cg_message_box(self, "分组名为空或分组数已满（32），加不进去。", "添加变量", 2);
+        dlg_hint(app, "分组名为空，或分组数已满（32）。");
         return;
     }
-    if (item_find(g, name) >= 0) {
-        cg_message_box(self, "这个分组下已有同名变量。", "添加变量", 1);
+    other = item_find(g, name);
+
+    if (s_dlg_mode == DLG_ADD) {
+        if (other >= 0) {
+            dlg_hint(app, "这个分组下已有同名变量。");
+            return;
+        }
+        if (model_add(g, name, note) != 0) {
+            dlg_hint(app, "清单已满（256 个变量）。");
+            return;
+        }
+        crud_save(app);
+        rebuild_env_tree(app);
+        if (note[0]) log_line(app, "已添加：%s\\%s（%s）——清单 %d 个变量", g, name, note, s_item_count);
+        else         log_line(app, "已添加：%s\\%s ——清单 %d 个变量", g, name, s_item_count);
+        status_msg(app, "已添加 %s\\%s", g, name);
+    } else {
+        if (s_dlg_idx < 0 || s_dlg_idx >= s_item_count) {
+            dlg_hint(app, "要改的那一行已经不在清单里了，关掉重新选。");
+            return;
+        }
+        if (other >= 0 && other != s_dlg_idx) {
+            dlg_hint(app, "目标分组下已有同名变量。");
+            return;
+        }
+        snprintf(s_items[s_dlg_idx].group, sizeof s_items[s_dlg_idx].group, "%s", g);
+        snprintf(s_items[s_dlg_idx].name,  sizeof s_items[s_dlg_idx].name,  "%s", name);
+        snprintf(s_items[s_dlg_idx].note,  sizeof s_items[s_dlg_idx].note,  "%s", note);
+        crud_save(app);
+        rebuild_env_tree(app);
+        if (note[0]) log_line(app, "已修改：%s → %s\\%s（%s）", s_dlg_old, g, name, note);
+        else         log_line(app, "已修改：%s → %s\\%s", s_dlg_old, g, name);
+        status_msg(app, "已修改 %s\\%s", g, name);
+    }
+
+    cg_dialog_close(self, 1);
+}
+
+/**
+ * @brief 表单「取消」：什么都不写，直接关框（Esc 同效）
+ * @param self 被点的按钮（对话框里的）
+ * @param ev 事件类型
+ * @param user 未使用
+ * @return void 无返回值
+ */
+static void on_dlg_cancel(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+
+    (void)ev;
+    (void)user;
+
+    if (!cg_app_has_window(app)) {
+        log_line(app, "自检模式：跳过表单取消");
         return;
     }
-    if (model_add(g, name, note) != 0) {
-        cg_message_box(self, "清单已满（256 个变量）。", "添加变量", 2);
+    cg_dialog_close(self, 0);
+}
+
+/**
+ * @brief 「添加」：打开表单对话框（分组 / 变量名 / 备注 一次填完、一次提交）
+ * @param self 被点的按钮
+ * @param ev 事件类型
+ * @param user 未使用
+ * @return void 无返回值
+ * @note 分组预填当前选中节点所属的组；校验与落盘都在 on_dlg_ok 里；
+ *       对话框是模态的：自检（无窗口）时跳过
+ */
+static void on_btn_add_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t    *app = cg_app_of(self);
+    cg_widget_t *dlg;
+    char         g[48];
+
+    (void)ev;
+    (void)user;
+
+    if (!cg_app_has_window(app)) {
+        log_line(app, "自检模式：跳过添加（不弹表单）");
         return;
     }
 
-    crud_save(app);
-    rebuild_env_tree(app);
-    if (note[0]) log_line(app, "已添加：%s\\%s（%s）——清单 %d 个变量", g, name, note, s_item_count);
-    else         log_line(app, "已添加：%s\\%s ——清单 %d 个变量", g, name, s_item_count);
-    status_msg(app, "已添加 %s\\%s", g, name);
+    dlg = cg_find(app, "dlg_edit");
+    if (!dlg) return;
+
+    sel_group(app, g, sizeof(g));
+    s_dlg_mode = DLG_ADD;
+    s_dlg_idx  = -1;
+    s_dlg_old[0] = '\0';
+    dlg_fill(app, "添加变量", g, "", "");
+
+    if (!cg_dialog_open(dlg)) log_line(app, "取消添加（表单没确定）");
 }
 
 /**
@@ -1176,28 +1315,28 @@ static void on_btn_del_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief 「修改」：三步输入预填现值，改名 / 挪分组 / 改备注，存回 ini
+ * @brief 「修改」：打开同一张表单（预填现值），改名 / 挪分组 / 改备注，存回 ini
  * @param self 被点的按钮
  * @param ev 事件类型
  * @param user 未使用
  * @return void 无返回值
  * @note 分组改了就是挪组（原组空了会保留空节，方便以后再加回去）；
- *       改到同组同名（别的行）会被拒
+ *       改到同组同名（别的行）会被拒；校验与落盘都在 on_dlg_ok 里
  */
 static void on_btn_edit_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app  = cg_app_of(self);
     cg_widget_t *tree = cg_find(app, "tree_main");
     int          item = tree ? cg_tree_selected(tree) : -1;
+    cg_widget_t *dlg;
     cg_node_t   *n;
-    char         g[48], name[64], note[96], old[120];
-    int          idx, other;
+    int          idx;
 
     (void)ev;
     (void)user;
 
     if (!cg_app_has_window(app)) {
-        log_line(app, "自检模式：跳过修改（不弹输入框）");
+        log_line(app, "自检模式：跳过修改（不弹表单）");
         return;
     }
     if (item < 0 || item >= s_node_count) {
@@ -1214,47 +1353,15 @@ static void on_btn_edit_click(cg_widget_t *self, cg_event_t ev, void *user)
         status_msg(app, "修改：清单里找不到这一行（刚导入过？重新选中再试）");
         return;
     }
+    dlg = cg_find(app, "dlg_edit");
+    if (!dlg) return;
 
-    snprintf(g, sizeof g, "%s", s_items[idx].group);
-    snprintf(name, sizeof name, "%s", s_items[idx].name);
-    snprintf(note, sizeof note, "%s", s_items[idx].note);
-    snprintf(old, sizeof old, "%s\\%s", g, name);
+    s_dlg_mode = DLG_EDIT;
+    s_dlg_idx  = idx;
+    snprintf(s_dlg_old, sizeof s_dlg_old, "%s\\%s", s_items[idx].group, s_items[idx].name);
+    dlg_fill(app, "修改变量", s_items[idx].group, s_items[idx].name, s_items[idx].note);
 
-    if (!cg_input_box(self, "修改变量", "分组（改了就是挪组）：", g, g, sizeof g) ||
-        !cg_input_box(self, "修改变量", "变量名：", name, name, sizeof name) ||
-        !cg_input_box(self, "修改变量", "备注（可空）：", note, note, sizeof note)) {
-        log_line(app, "取消修改");
-        return;
-    }
-
-    str_trim(g);
-    str_trim(name);
-    str_trim(note);
-    str_clean(g, "[]");
-    str_clean(name, "=");
-    if (!name[0]) {
-        cg_message_box(self, "变量名不能为空。", "修改变量", 1);
-        return;
-    }
-    other = item_find(g, name);
-    if (other >= 0 && other != idx) {
-        cg_message_box(self, "目标分组下已有同名变量。", "修改变量", 1);
-        return;
-    }
-    if (group_ensure(g) < 0) {
-        cg_message_box(self, "分组名为空或分组数已满（32）。", "修改变量", 2);
-        return;
-    }
-
-    snprintf(s_items[idx].group, sizeof s_items[idx].group, "%s", g);
-    snprintf(s_items[idx].name,  sizeof s_items[idx].name,  "%s", name);
-    snprintf(s_items[idx].note,  sizeof s_items[idx].note,  "%s", note);
-
-    crud_save(app);
-    rebuild_env_tree(app);
-    if (note[0]) log_line(app, "已修改：%s → %s\\%s（%s）", old, g, name, note);
-    else         log_line(app, "已修改：%s → %s\\%s", old, g, name);
-    status_msg(app, "已修改 %s\\%s", g, name);
+    if (!cg_dialog_open(dlg)) log_line(app, "取消修改（表单没确定）");
 }
 
 /**
@@ -1495,6 +1602,9 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND("on_btn_del_click",     on_btn_del_click),
     CG_BIND("on_btn_edit_click",    on_btn_edit_click),
     CG_BIND("on_btn_find_click",    on_btn_find_click),
+    CG_BIND("on_dlg_show",          on_dlg_show),
+    CG_BIND("on_dlg_ok",            on_dlg_ok),
+    CG_BIND("on_dlg_cancel",        on_dlg_cancel),
     CG_BIND("on_tree_sel",          on_tree_sel),
     CG_BIND("on_tree_expand",       on_tree_expand),
     CG_BIND_END
