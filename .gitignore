@@ -47,3 +47,6 @@ kit_dir/
 kit_test.ini
 kit_test.txt
 term_test.txt
+
+# envsnap 运行时在 exe 旁生成的清单（用户数据，机器本地，首次运行自动重建）
+examples/envsnap/envsnap.ini
