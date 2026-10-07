@@ -267,16 +267,20 @@ export default function StyleDialog({ open, doc, onClose, onBeginHistory, onAppl
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <strong>样式</strong>
-          <span className="muted small">
-            共 {names.length} 条 · 控件用 <code>"style": "名字"</code> 或{" "}
-            <code>{"{ \"use\": \"名字\", ...覆盖 }"}</code> 引用它
-          </span>
+          <span className="muted small">共 {names.length} 条</span>
           <button className="mini" onClick={onClose} title="关闭">
             ×
           </button>
         </div>
 
         <div className="modal-body">
+          {/* 引用写法放正文：抬头那一行宽度被关闭按钮挤掉一块，长句子会在那儿从词中间断开 */}
+          {names.length ? (
+            <p className="act-legend muted small">
+              控件用 <code>"style": "名字"</code> 或 <code>{"{ \"use\": \"名字\", ...覆盖 }"}</code>{" "}
+              引用它；卡片上的「N 处引用」就是当前有多少个控件指着这个名字。
+            </p>
+          ) : null}
           {names.length === 0 ? (
             <div className="hint-box">
               <div className="hint-title">什么是命名样式</div>

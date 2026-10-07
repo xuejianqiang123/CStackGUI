@@ -233,9 +233,7 @@ export default function ActionsDialog({ open, doc, onClose, onBeginHistory, onAp
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <strong>动作</strong>
-          <span className="muted small">
-            共 {names.length} 条 · 菜单项与控件引用它，C 侧靠 <code>CG_BIND</code> 按名字找回调
-          </span>
+          <span className="muted small">共 {names.length} 条</span>
           <button className="mini" onClick={onClose} title="关闭">
             ×
           </button>
