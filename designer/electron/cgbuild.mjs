@@ -36,6 +36,10 @@ const listExt = (dir, ext) =>
     : [];
 const newest = (files) => files.reduce((a, f) => Math.max(a, mtime(f)), -Infinity);
 
+/* 一个工程可以纯 C、纯 C++，也可以混着来：后缀决定用 gcc 还是 g++ 编这一个文件 */
+const CXX_EXTS = [".cpp", ".cc", ".cxx"];
+const isCxx = (src) => CXX_EXTS.includes(path.extname(src).toLowerCase());
+
 /* ---------------------------------------------------------------- 项目根 */
 
 function findRoot() {
@@ -243,26 +247,44 @@ async function buildApp(ctx, root, tk, appDir, release) {
   }
 
   /* 增量编译：头变新同样触发重编，避免悄悄链上旧代码 */
-  const hdrT = newest([...listExt(appDir, ".h"), path.join(tk.inc, "cstackgui.h")]);
+  const hdrT = newest([
+    ...listExt(appDir, ".h"), ...listExt(appDir, ".hpp"), path.join(tk.inc, "cstackgui.h"),
+  ]);
+  const sources = [...listExt(appDir, ".c"), ...CXX_EXTS.flatMap((e) => listExt(appDir, e))];
   const objs = [];
-  for (const src of listExt(appDir, ".c")) {
-    const obj = path.join(appLib, `${path.basename(src, ".c")}.o`);
+  for (const src of sources) {
+    const obj = path.join(appLib, `${path.basename(src, path.extname(src))}.o`);
     objs.push(obj);
     if (mtime(obj) > mtime(src) && mtime(obj) > hdrT) continue;
     ctx.log(`  CC ${path.basename(src)}`);
-    const rc = await ctx.run(["gcc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Wno-unused-parameter",
+    /* C++ 源文件交给 g++：gcc 按 C 编 .cpp 会因为后缀不认而失败 */
+    const rc = await ctx.run([isCxx(src) ? "g++" : "gcc", isCxx(src) ? "-std=c++17" : "-std=c11",
+      "-O2", "-Wall", "-Wextra", "-Wno-unused-parameter",
       `-I${tk.inc}`, "-c", src, "-o", obj]);
     if (rc) return rc;
   }
-  if (!objs.length) return ctx.fail(`${appDir} 里没有 .c 源文件`);
+  if (!objs.length) return ctx.fail(`${appDir} 里没有源文件（.c / .cpp / .cc / .cxx）`);
 
-  /* 链接的代价远低于一个不匹配的 exe，所以总是链接 */
-  ctx.log(`  LD ${name}.exe${release ? "（发布版，无控制台）" : "（调试版，带控制台）"}`);
-  const rc = await ctx.run(["gcc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Wno-unused-parameter", `-I${tk.inc}`,
+  /* 链接的代价远低于一个不匹配的 exe，所以总是链接。
+     工程里有 C++ 就用 g++ 链接：C++ 异常 / 静态对象的初始化要它带进来的一堆东西，
+     少一样就会在"链接过了、一运行就崩"这种最难查的地方炸。 */
+  const hasCxx = sources.some(isCxx);
+  if (hasCxx && !hasExe("g++")) {
+    return ctx.fail("工程里有 C++ 源文件，但没找到 g++。MinGW-w64 装完整就有它（gcc 旁边那个 g++.exe）");
+  }
+  ctx.log(`  LD ${name}.exe${release ? "（发布版，无控制台）" : "（调试版，带控制台）"}${hasCxx ? "（C++ 工程，用 g++ 链接）" : ""}`);
+  /* C++ 工程静态收进 libstdc++ / libgcc：客户机器上没有 MinGW，
+     动态链接的 exe 一运行就是 0xC0000135（找不到 libstdc++-6.dll）。 */
+  const rc = await ctx.run([hasCxx ? "g++" : "gcc", hasCxx ? "-std=c++17" : "-std=c11",
+    /* -static：把 libstdc++ / libgcc / libwinpthread 全静态收进 exe。
+       不做这件事，exe 在没装 MinGW 的机器上要么 0xC0000135（找不到 libstdc++-6.dll），
+       要么更糟 —— 从 PATH 里捡到一个位数不对的同名 dll，报 0xC000007B。 */
+    ...(hasCxx ? ["-static"] : []),
+    "-O2", "-Wall", "-Wextra", "-Wno-unused-parameter", `-I${tk.inc}`,
     ...(release ? ["-mwindows"] : []),
     "-o", out, ...objs, appRes, ...(cguiRes ? [cguiRes] : []), path.join(appLib, "libcstackgui.a"),
     "-lcomctl32", "-luser32", "-lgdi32", "-lshell32", "-lgdiplus", "-lcomdlg32",
-    "-luuid", "-lole32", "-loleaut32", "-lws2_32", "-lstdc++"]);
+    "-luuid", "-lole32", "-loleaut32", "-lws2_32", ...(hasCxx ? [] : ["-lstdc++"])]);
   if (rc) return rc;
 
   ctx.log(`[ok] ${out}`);
