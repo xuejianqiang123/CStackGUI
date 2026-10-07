@@ -366,12 +366,27 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
     dir = path.basename(chosen).toLowerCase() === baseName.toLowerCase() ? chosen : path.join(chosen, baseName);
   }
 
+  /* 这个目录是不是"手写工程"（main.c 不是画布产物）？
+   * 判据只能是模板首行的机器标记：示例的 main.c 同样含 desc.auto_locate_cgui /
+   * k_bindings 这些"看着像模板"的东西，靠内容猜会误判（踩过：darkterm 的回调被清空）。
+   * 手写工程**只同步界面文件 .cgui**（那是画布自己的产物），代码一律不碰 ——
+   * 往里塞 main.c / _ui_events.* / .rc / build.bat 不但污染目录，还会被一起编进 exe。
+   * 与"单文件发布"无关：界面是编译期作为 PE 资源编进 exe 的（见 cgbuild.mjs）。 */
+  const mainPath = path.join(dir, "main.c");
+  const handwritten = existsSync(mainPath)
+    ? !/generated-by-cstackgui/.test(await fs.readFile(mainPath, "utf8"))
+    : false;
+
   const written = [];
   const skipped = [];
   try {
     await fs.mkdir(dir, { recursive: true });
     for (const f of files) {
       const target = path.join(dir, f.name);
+      if (handwritten && !f.name.endsWith(".cgui")) {
+        skipped.push(f.name);
+        continue;
+      }
       /* 业务代码是用户的资产：入口与业务文件（main.c / _ui_events.c）已存在就不覆盖。
        * main.c 尤其不能碰 —— 仓库里的示例是**手写程序**（业务与回调就在 main.c 里），
        * 覆盖它等于把回调清空（2026-10-07 踩过：darkterm 的按钮全部失效）。
