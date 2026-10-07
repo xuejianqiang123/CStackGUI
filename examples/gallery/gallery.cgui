@@ -110,7 +110,7 @@
         "新特性"
       ],
       "style": {
-        "bg": "#dbf8ff"
+        "bg": "#DBF8FF"
       },
       "events": {
         "select": "on_pages_change"
@@ -130,7 +130,7 @@
             "font": "Microsoft YaHei UI",
             "size": 9,
             "fg": "#1D1B20",
-            "bg": "#dbfff0"
+            "bg": "#DBFFF0"
           },
           "children": [
             {
@@ -403,8 +403,8 @@
           "value": 5,
           "min": 0,
           "max": 100,
-          "spin": 1,
           "input": 7,
+          "spin": 1,
           "events": {
             "change": "on_count_change"
           }
@@ -1221,6 +1221,52 @@
       "items": [
         "就绪",
         "点个控件试试"
+      ]
+    },
+    {
+      "id": "dlg_about",
+      "type": "dialog",
+      "rect": {
+        "x": 60,
+        "y": 620,
+        "w": 330,
+        "h": 190
+      },
+      "text": "关于本陈列室",
+      "children": [
+        {
+          "id": "dlg_about_lab",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 20,
+            "w": 290,
+            "h": 40
+          },
+          "text": "我是一个独立顶层窗口（多窗体）。运行时用 cg_dialog_open 打开，模态时主窗口会被挡住。"
+        },
+        {
+          "id": "dlg_about_ok",
+          "type": "button",
+          "rect": {
+            "x": 128,
+            "y": 140,
+            "w": 88,
+            "h": 30
+          },
+          "text": "确定"
+        },
+        {
+          "id": "dlg_about_cancel",
+          "type": "button",
+          "rect": {
+            "x": 224,
+            "y": 140,
+            "w": 88,
+            "h": 30
+          },
+          "text": "取消"
+        }
       ]
     }
   ]

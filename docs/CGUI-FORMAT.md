@@ -194,7 +194,7 @@ int cg_theme_is_dark(const cg_app_t *app);      /* 现在是深色吗 */
 | `text` | 字符串 | 否 | 显示文字。**缺省 = 空文字** —— 运行时以 `.cgui` 为唯一真相，**不回填**类型默认值；第 4 节那列"默认文本"是**画布新建控件**时的初值（`cg_widget_add()` 也用它）|
 | `style` | 对象 / 字符串 | 否 | 控件样式。对象 = 内联字段（见 2.2）；字符串 = 引用 `styles{}` 里的命名样式名；对象里带 `use` = 「命名 + 局部覆盖」。三种形态与合并规则见 2.2.1 |
 | `events` | 对象 | 否 | 见第 3 节 |
-| `children` | 数组 | 否 | 只有容器类型（`group` / `box` / `card` / `tabs`）能带；**非容器带 children 会被运行时判为错误** |
+| `children` | 数组 | 否 | 只有容器类型（`group` / `box` / `card` / `tabs` / `dialog`）能带；**非容器带 children 会被运行时判为错误** |
 | `page` | 整数 | 否 | 属于父 `tabs` 的第几页（0 起）。缺省 0 |
 | `src` | 字符串 | 否 | 图片路径：`image` 的内容图、`iconbutton` 的图标、`button` 的背景图，见 2.4 |
 | `format` | 字符串 | 否 | `datepicker` 的细分格式：`date`（缺省）/ `time` / `datetime`；`shape` 的外形：`rect`（缺省）/ `roundrect` / `ellipse`；`splitter` 的方向：`col`（缺省，左右分栏）/ `row`（上下分行）；`terminal` 的显示模式：留空（文本）/ `hex`；`chart` 的图形：`line`（缺省）/ `bar`；`led` 的形状：`round`（缺省，圆）/ `square`（方）；`meter` 的样式：`arc`（缺省，270° 圆弧）/ `half`（半圆 180°）|
@@ -826,6 +826,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `tag` | 标签片 | 否 | 72×28 | `标签` | `click` | `BUTTON` 自绘 |
 | `rate` | 评分 | 否 | 140×32 | — | `change` | `BUTTON` 自绘五角星（星数 = `max-min`，上限 10）|
 | `pagination` | 分页 | 否 | 180×32 | — | `change` | `BUTTON` 自绘（页数 = `max-min+1`）|
+| `dialog` | 对话框 | **是** | 360×240 | — | `close`、`closequery`、`destroy`、`move`、`size`、`activate`、`deactivate`、`show`、`hide`、鼠标三件套（`mousedown` / `mouseup` / `dblclick` / `rdown` / `rup` / `mousemove`）、`gotfocus`、`lostfocus`、`keydown`、`keyup`、`char`、`wheel` | **独立顶层窗口**（多窗体）：`text` 是窗口标题、`rect` 是窗口位置尺寸（默认居中于主窗口）、`children` 是窗口里的控件（坐标相对对话框客户区）。原生在 `cg_dialog_open` 打开时才建（懒建），模态时主窗口被禁用；返回 0 = 取消/Esc，1 = `cg_dialog_close(self, 1)` |
 
 > 上表的事件列与 `k_kinds[].events` 位掩码一一对应（`node tools\check-examples.mjs --docs` 会逐行回校）。
 > 鼠标 / 键盘那种"一整类"的写在行内括号里；某类控件不该有的事件，运行时与自检都会明确报出来。
