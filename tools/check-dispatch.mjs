@@ -141,9 +141,11 @@ const RULES = [
   },
   {
     scope: "file", file: "runtime/src/win32/cg_win_main.c",
-    must: ["app->window->ev_x = (int)(short)LOWORD(lp) * 100 / sc;"],
+    must: ["win->ev_x = (int)(short)LOWORD(lp) * 100 / sc;"],
     why: "size 事件的宽高也要折回逻辑像素 —— 这样业务在 size 回调里读到的 w×h 可以原样回喂"
-       + "cg_win_set_size()，与 .cgui 是同一套单位。",
+       + "cg_win_set_size()，与 .cgui 是同一套单位。（多窗体后这条消息的宿主是 win："
+       + "主窗口=__window、模态对话框=dialog 节点，折回逻辑对两者同一套 —— 2026-10-07 随"
+       + " cg_dialog_open 落地从 app->window 改成宿主，折回本身不能丢。）",
   },
   {
     scope: "file", file: "runtime/src/win32/cg_win_sync.c",

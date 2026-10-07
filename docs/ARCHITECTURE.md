@@ -314,6 +314,7 @@ runtime/
       cg_win_menu.c     菜单与工具栏
       cg_win_window.c   窗口生命周期与窗口/托盘 API
       cg_win_dialog.c   通用对话框（打开/保存/选色/消息框）
+      cg_win_modal.c    模态子窗体（cg_dialog_open/close：独立 HWND + 子树懒建 + 内层泵）
       cg_win_api.c      画板 / 表格 API、browser 导航
       cg_win_diag.c     诊断：日志落点、致命错误弹窗、未处理异常兜底
     skin/              自绘外观层（GDI+，M3 风格）：换 D2D 内核时整目录替换
