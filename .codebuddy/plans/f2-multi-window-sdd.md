@@ -177,7 +177,12 @@ A7 → T2 ｜ A8 → T3。
       错误。以编译器/git/新鲜读取为唯一真相重新核实后继续；期间发出的两份废稿
       （PowerShell 探针）已废弃，改用百余行 C 探针（MinGW 直编，无编码坑）；另抓到探针与
       工程同目录会让 cgbuild 误编出双 main 的布局坑（已挪出）。
-- [ ] P3c T1.3：`format-roundtrip.mjs` 加 dialog 探针（守 children 往返无损）
+- [x] P3c **T1.3（2026-10-07 落地）**：`format-roundtrip.mjs` 编辑阶段往 dialog 塞探针按钮
+      （事件复用已登记回调，不造"未登记"假故障），恒等回写阶段逐字核对子树
+      （数量 / id / 类型 / 文字 / 事件）。gallery 实测：`dialog 子树无损（4 个子控件，含探针按钮）`
+      + `selftest OK`；**红证**：serialize 临时丢 dialog children →
+      `子控件 4 -> 0` 与 `探针子控件丢失` 两连红，还原回绿。其余 4 个示例无 dialog，
+      走 `if (dlg)` 守卫静默跳过 —— 5 个 roundtrip 全过，`check-format` `BAT_EXIT=0`。
 - [ ] P4 T2-full：Inspector 对话框分节 + `center` 字段（管线与开关同轮）+
       **画布叠画的设计决断**（同一画布浮着 vs 独立窗口视图，审查报告 R1 #4）+
       禁止把 `menu` 拖进 dialog
