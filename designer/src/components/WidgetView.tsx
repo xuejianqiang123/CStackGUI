@@ -531,12 +531,14 @@ function inner(node: CgNode) {
 type Props = {
   node: CgNode;
   depth: number;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
+  /** 当前选中集（主选框也在里面）：这里只回答「选没选中」 */
+  selected: ReadonlySet<string>;
+  /** 主选框 id（最后点的那个）：实线外框；其余选中项走虚线，主次一眼可分 */
+  primaryId: string | null;
   onPointerDown: (e: React.PointerEvent, node: CgNode) => void;
 };
 
-export default function WidgetView({ node, depth, selectedId, onSelect, onPointerDown }: Props) {
+export default function WidgetView({ node, depth, selected, primaryId, onPointerDown }: Props) {
   const style: CSSProperties = {
     position: "absolute",
     left: node.rect.x,
@@ -584,7 +586,7 @@ export default function WidgetView({ node, depth, selectedId, onSelect, onPointe
         `widget-${node.type}`,
         node.type === "shape" ? `shape-${node.format ?? "roundrect"}` : "",
         splitterRow ? "widget-splitter-row" : "",
-        selectedId === node.id ? "selected" : "",
+        primaryId === node.id ? "selected" : selected.has(node.id) ? "selected-2" : "",
         node.visible === false ? "hidden-widget" : "",
         node.enabled === false ? "disabled-widget" : "",
       ]
@@ -592,10 +594,6 @@ export default function WidgetView({ node, depth, selectedId, onSelect, onPointe
         .join(" ")}
       style={style}
       onPointerDown={(e) => onPointerDown(e, node)}
-      onClick={(e) => {
-        e.stopPropagation();
-        onSelect(node.id);
-      }}
       title={`${node.type} #${node.id}`}
     >
       {inner(node)}
@@ -607,8 +605,8 @@ export default function WidgetView({ node, depth, selectedId, onSelect, onPointe
               key={c.id}
               node={c}
               depth={depth + 1}
-              selectedId={selectedId}
-              onSelect={onSelect}
+              selected={selected}
+              primaryId={primaryId}
               onPointerDown={onPointerDown}
             />
           ))}

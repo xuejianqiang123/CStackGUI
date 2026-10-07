@@ -21,15 +21,19 @@ import { collectCallbacks, generateC, uniqueCallbackNames } from "./codegen";
 import {
   absRect,
   clamp,
+  cloneNode,
   emptyDoc,
   findNode,
   findParent,
   isContainer,
   makeNode,
+  moveNodes,
   parseDoc,
   removeNode,
   serializeDoc,
   templateDoc,
+  topLevelOnly,
+  uniquifyIds,
   walk,
   type CgDoc,
   type CgNode,
@@ -66,7 +70,9 @@ export default function App() {
   const [doc, setDoc] = useState<CgDoc>(() => emptyDoc());
   const [filePath, setFilePath] = useState("");
   const [dirty, setDirty] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  /* 选择集：数组顺序 = 点选顺序，**最后一个是主选框**（属性面板显示它、拖动吸附以它为准）。
+     单选就是长度为 1 的集合，所以老的 setSelectedId(id) 语义由下面的 selectOne 原样保留。 */
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [zoom, setZoom] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
   const [snapOn, setSnapOn] = useState(true); // 拖动时吸附到 4px 栅格 + 邻近控件
@@ -95,7 +101,45 @@ export default function App() {
   const docRef = useRef(doc);
   docRef.current = doc;
 
+  /** 主选框 = 最后点的那个（数组顺序就是点选顺序） */
+  const selectedId = selectedIds.length > 0 ? selectedIds[selectedIds.length - 1] : null;
   const selected = selectedId ? findNode(doc, selectedId) : null;
+
+  /** 替换整个选择集（= 老的单选语义，全部老调用点都落这里） */
+  const setSelectedId = useCallback((id: string | null) => setSelectedIds(id ? [id] : []), []);
+  /** 加选 / 减选（Shift / Ctrl + 点击） */
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  }, []);
+  /** 点选：普通点击替换整个选择集，带 Shift/Ctrl 加选；点空白只在不加选时清空 */
+  const selectNode = useCallback(
+    (id: string | null, additive = false) => {
+      if (id === null) {
+        if (!additive) setSelectedIds([]);
+        return;
+      }
+      if (additive) toggleSelect(id);
+      else setSelectedIds([id]);
+    },
+    [toggleSelect],
+  );
+  /** 框选：一次性给一串 id（Canvas 已经归一化过，这里不再去重） */
+  const selectMany = useCallback((ids: string[]) => setSelectedIds(ids), []);
+
+  /* 撤销 / 删除 / 换文件之后，选择集里会留着已经不存在的 id —— 清掉，
+     否则「选中 N 个」的数对不上，Inspector 还会拿着空节点空转。
+     数组没变就原样返回：拖动时 onApply 每帧都换一份 doc，不这样写会白白重渲染。 */
+  useEffect(() => {
+    setSelectedIds((cur) => {
+      if (cur.length === 0) return cur;
+      /* 一次遍历收齐全部 id，别对每个选中 id 各走一遍树：拖动时这里是每帧都跑的，
+         全选一个上百控件的文档会变成每帧上百次树遍历。 */
+      const alive = new Set<string>();
+      walk(doc.widgets, (n) => alive.add(n.id));
+      const next = cur.filter((id) => alive.has(id));
+      return next.length === cur.length ? cur : next;
+    });
+  }, [doc]);
 
   const say = useCallback((msg: string) => {
     setToast(msg);
@@ -167,41 +211,47 @@ export default function App() {
     [edit, say],
   );
 
-  const deleteNode = useCallback(
-    (id: string) => {
+  /** 批量删除：一次操作 = 一步撤销。层级面板的 × 仍传单个 id，所以留 deleteNode 这层壳。 */
+  const deleteNodes = useCallback(
+    (ids: string[]) => {
+      const targets = topLevelOnly(docRef.current, ids);
+      if (targets.length === 0) return;
       edit((d) => {
-        removeNode(d, id);
+        for (const id of targets) removeNode(d, id);
       });
-      setSelectedId(null);
+      setSelectedIds([]);
     },
     [edit],
   );
 
+  const deleteNode = useCallback((id: string) => deleteNodes([id]), [deleteNodes]);
+
+  /** 批量复制：走 model/parse 的 cloneNode + uniquifyIds —— 它们会把**子控件的 id 也重排**。
+   *  （老实现只给顶层节点改名，复制一个分组框会造出一堆重复 id。） */
   const duplicateSelected = useCallback(() => {
-    if (!selectedId) return;
-    let newId: string | null = null;
+    const targets = topLevelOnly(docRef.current, selectedIds);
+    if (targets.length === 0) return;
+    const newIds: string[] = [];
     edit((d) => {
-      const node = findNode(d, selectedId);
-      if (!node) return;
-      const copy: CgNode = structuredClone(node);
-      copy.rect.x += 16;
-      copy.rect.y += 16;
       const taken = new Set<string>();
       walk(d.widgets, (n) => taken.add(n.id));
-      let i = 2;
-      while (taken.has(`${copy.type}_${i}`)) i += 1;
-      copy.id = `${copy.type}_${i}`;
-      const parent = findParent(d, selectedId);
-      if (parent) {
-        parent.children = parent.children ?? [];
-        parent.children.push(copy);
-      } else {
-        d.widgets.push(copy);
+      for (const id of targets) {
+        const node = findNode(d, id);
+        if (!node) continue;
+        const copy = cloneNode(node);
+        uniquifyIds(copy, taken);
+        const parent = findParent(d, id);
+        if (parent) {
+          parent.children = parent.children ?? [];
+          parent.children.push(copy);
+        } else {
+          d.widgets.push(copy);
+        }
+        newIds.push(copy.id);
       }
-      newId = copy.id;
     });
-    if (newId) setSelectedId(newId);
-  }, [edit, selectedId]);
+    setSelectedIds(newIds);
+  }, [edit, selectedIds]);
 
   /* -------------------------------------------------- 文件操作 */
   const doNew = useCallback(async (kind: TemplateKind = "blank") => {
@@ -396,12 +446,12 @@ export default function App() {
       else if (action === "undo") undo();
       else if (action === "redo") redo();
       else if (action === "duplicate") duplicateSelected();
-      else if (action === "delete" && selectedId) deleteNode(selectedId);
+      else if (action === "delete" && selectedIds.length > 0) deleteNodes(selectedIds);
       else if (action === "zoomIn") setZoom((z) => Math.min(3, Math.round((z + 0.1) * 10) / 10));
       else if (action === "zoomOut") setZoom((z) => Math.max(0.2, Math.round((z - 0.1) * 10) / 10));
       else if (action === "zoomFit") setZoom(1);
     });
-  }, [bridge, doNew, doOpen, doSave, doExportC, doRun, undo, redo, duplicateSelected, deleteNode, selectedId, infoOpen]);
+  }, [bridge, doNew, doOpen, doSave, doExportC, doRun, undo, redo, duplicateSelected, deleteNodes, selectedIds, infoOpen]);
 
   /* 编译/运行输出流：注册一次即可，只碰 setState */
   useEffect(() => {
@@ -446,41 +496,41 @@ export default function App() {
         return;
       }
       if (typing) return;
+      if (mod && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        /* 全选**顶层**控件：把子控件也一起选上的话，框线糊成一片、计数也和实际对不上 */
+        setSelectedIds(docRef.current.widgets.map((n) => n.id));
+        return;
+      }
       if (mod && e.key.toLowerCase() === "d") {
         e.preventDefault();
         duplicateSelected();
         return;
       }
       if (e.key === "Delete" || e.key === "Backspace") {
-        if (selectedId) {
+        if (selectedIds.length > 0) {
           e.preventDefault();
-          deleteNode(selectedId);
+          deleteNodes(selectedIds);
         }
         return;
       }
       if (e.key === "Escape") {
-        setSelectedId(null);
+        setSelectedIds([]);
         return;
       }
-      if (e.key.startsWith("Arrow") && selectedId) {
+      if (e.key.startsWith("Arrow") && selectedIds.length > 0) {
         e.preventDefault();
         const step = e.shiftKey ? 8 : 1;
         const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
         const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
         edit((d) => {
-          const n = findNode(d, selectedId);
-          if (!n) return;
-          const parent = findParent(d, selectedId);
-          const maxW = parent ? parent.rect.w : d.app.width;
-          const maxH = parent ? parent.rect.h : d.app.height;
-          n.rect.x = clamp(n.rect.x + dx, 0, Math.max(0, maxW - n.rect.w));
-          n.rect.y = clamp(n.rect.y + dy, 0, Math.max(0, maxH - n.rect.h));
+          moveNodes(d, selectedIds, dx, dy);
         });
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [doSave, doOpen, doExportC, doRun, undo, redo, duplicateSelected, deleteNode, selectedId, edit]);
+  }, [doSave, doOpen, doExportC, doRun, undo, redo, duplicateSelected, deleteNodes, selectedIds, edit]);
 
   /* -------------------------------------------------- 标题 & 项目路径 */
   useEffect(() => {
@@ -592,8 +642,8 @@ export default function App() {
           <Palette onAdd={addNode} onStartDrop={(t) => setPendingDrop(t)} />
           <LayerTree
             doc={doc}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
+            selectedIds={selectedIds}
+            onSelect={selectNode}
             onBeginHistory={onBeginHistory}
             onApply={onApply}
             onRemove={deleteNode}
@@ -602,11 +652,12 @@ export default function App() {
 
         <Canvas
           doc={doc}
-          selectedId={selectedId}
+          selectedIds={selectedIds}
           zoom={zoom}
           snapOn={snapOn}
           showGrid={showGrid}
-          onSelect={setSelectedId}
+          onSelect={selectNode}
+          onSelectMany={selectMany}
           onBeginHistory={onBeginHistory}
           onApply={onApply}
           pendingDrop={pendingDrop}

@@ -54,6 +54,12 @@ button:disabled {
   opacity: 0.4;
   cursor: default;
 }
+/* 键盘可达：画布原先没有任何焦点环规则，Tab 到按钮上看不出焦点落在哪。
+   补一条全局的，别在单个组件里各写一套。 */
+button:focus-visible {
+  outline: 2px solid var(--seed);
+  outline-offset: 2px;
+}
 button.primary {
   background: var(--seed);
   border-color: var(--seed);
@@ -466,6 +472,60 @@ input.narrow {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  position: relative; /* 对齐/分布条按它定位 */
+}
+/* 对齐/分布条：只在选中 ≥2 时出现，压在画布顶部居中。描边与阴影二选一，这里只描边。 */
+.align-bar {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  flex-wrap: wrap; /* 窗口窄时折成两行，而不是把「等宽」挤成竖排的「等 / 宽」 */
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  /* width:max-content 是必需的，不是画蛇添足：绝对定位元素只给 left、不给 right/width 时，
+     "可用宽度" = 包含块宽 - left（这里就只剩半屏），于是内容再窄也会被判定放不下而折行。
+     显式声明 max-content 后，宽度才真正由内容决定；max-width 兜住窄窗口。 */
+  width: max-content;
+  max-width: calc(100% - 40px);
+  padding: 4px 10px;
+  background: var(--surface);
+  border: 1px solid var(--outline);
+  border-radius: 999px;
+}
+/* 条里的按钮比通用的 .mini 再高一点：桌面点选目标要 ≥24px（.mini 是 22px）。
+   flex: none + nowrap 一起兜住上面那个"挤成竖排字"的观感事故。 */
+.align-bar button.mini {
+  flex: none;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+.align-group {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+.align-label {
+  color: var(--on-surface-var);
+  font-size: 11px;
+  white-space: nowrap;
+}
+/* 框选矩形：只描边 + 极淡填充，底下的控件仍然看得见 */
+.marquee {
+  position: absolute;
+  border: 1px solid var(--seed);
+  background: rgba(103, 80, 164, 0.08);
+  pointer-events: none;
+  z-index: 40;
+}
+/* 多选里的「次要选中」：细虚线；主选框仍是 .selected 的实线粗框，主次一眼可分 */
+.widget.selected-2 {
+  outline: 1px dashed var(--seed);
+  outline-offset: 0;
 }
 .viewport {
   flex: 1;

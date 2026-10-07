@@ -30,6 +30,7 @@ export * from "./model/style.js";
 export * from "./model/textcodec.js";
 export * from "./model/factory.js";
 export * from "./model/tree.js";
+export * from "./model/align.js";
 export * from "./model/parse.js";
 export * from "./model/serialize.js";
 export * from "./model/math.js";

@@ -7,14 +7,16 @@ import { KIND_MAP, type CgDoc, type CgNode } from "../model";
 
 type Props = {
   doc: CgDoc;
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
+  /** 选中集：层级面板也支持 Shift/Ctrl 加选，所以拿整个集合 */
+  selectedIds: string[];
+  /** 行点击：additive = Shift/Ctrl 加选 */
+  onSelect: (id: string | null, additive?: boolean) => void;
   onBeginHistory: () => void;
   onApply: (mutator: (doc: CgDoc) => void) => void;
   onRemove: (id: string) => void;
 };
 
-export default function LayerTree({ doc, selectedId, onSelect, onBeginHistory, onApply, onRemove }: Props) {
+export default function LayerTree({ doc, selectedIds, onSelect, onBeginHistory, onApply, onRemove }: Props) {
   const reorder = (node: CgNode, dir: -1 | 1) => {
     onBeginHistory();
     onApply((d) => {
@@ -40,9 +42,9 @@ export default function LayerTree({ doc, selectedId, onSelect, onBeginHistory, o
     nodes.map((n, i) => (
       <div key={n.id}>
         <div
-          className={`layer-row${selectedId === n.id ? " selected" : ""}`}
+          className={`layer-row${selectedIds.includes(n.id) ? " selected" : ""}`}
           style={{ paddingLeft: 8 + depth * 14 }}
-          onClick={() => onSelect(n.id)}
+          onClick={(e) => onSelect(n.id, e.shiftKey || e.ctrlKey || e.metaKey)}
           title={`${n.type} #${n.id}`}
         >
           <span className={`glyph glyph-${n.type}`} />
