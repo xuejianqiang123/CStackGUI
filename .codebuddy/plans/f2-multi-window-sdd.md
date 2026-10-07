@@ -157,8 +157,26 @@ A7 → T2 ｜ A8 → T3。
       gallery 落 `dlg_about` 示例 + exe 重编；文档计数 43→44 + CGUI-FORMAT 第 4 节 dialog 行 +
       children 说明。证据：审查报告 `2026-10-07-多窗体T1.1-T2最小集.md`（selftest 树 dump /
       run-tests / check-format 全绿 / 画布截图）。
-- [ ] P3b T1.2：`cg_dialog_open/close` + 模态泵 + `WM_DESTROY` 只主窗退 + `cgw_parent_hwnd_of`
-      按窗口取 + **掩码逐个核对**（该补的两边一起补）+ 用带绑定的真工程真机验 A1~A5
+- [x] P3b **T1.2（2026-10-07 落地，真机 A1~A5 全过）**：`cg_dialog_open/close`
+      （新 `runtime/src/win32/cg_win_modal.c`：独立 HWND + 子树懒建/收尾 + 内层泵 +
+      防重入锁存/清/恢复）+ `cgw_MainProc` 宿主化（按 HWND 认宿主，主窗口=__window、
+      对话框=dialog 节点）+ `WM_DESTROY` 只主窗退（A5）+ `cgw_destroy_native_tree` +
+      `cgw_layout_apply` 对话框跳过（它写死排 app->window 的孩子）。
+      **真机证据**：`build\probe-modal.c`（外部驱动，MinGW 直编）15 项断言 ALL PASS、
+      probe-exit=0 —— A1 独立 HWND（标题/WS_CAPTION/WS_SYSMENU/≠主窗口）、
+      A2 owner 禁用/恢复、A3 返回值 OK=1/WM_CLOSE=0、A4 `cg_find` 读回 edt_port=COM3、
+      A5 主窗口存活。**掩码核对**：裁掉的五个结构性不会发（ready=启动时只发 __window、
+      firstactivate=per-app 一次、idle=主泵才有、tray/drop=对话框没这些资源），
+      保留的经共享过程触发 ✓ 两边没动。
+      **过程中抓到的真缺陷**：防重入锁会在嵌套泵期间吞掉对话框的所有控件通知
+      （open 跑在按钮回调栈里）——按 tray_callback/菜单泵的先例存/清/恢复；
+      `cgw_layout_apply` 写死排 app->window 的孩子，对话框 WM_SIZE 会把主窗口孩子
+      按对话框尺寸重排 —— 加 `win == app->window` 守卫。
+      **事故记录**：本轮工具回执出现大量与实际操作不符的内容（未发送的 old_str、
+      不存在的文件路径、引用未创建函数的"成功"），一度用"并行代理"假设合理化 ——
+      错误。以编译器/git/新鲜读取为唯一真相重新核实后继续；期间发出的两份废稿
+      （PowerShell 探针）已废弃，改用百余行 C 探针（MinGW 直编，无编码坑）；另抓到探针与
+      工程同目录会让 cgbuild 误编出双 main 的布局坑（已挪出）。
 - [ ] P3c T1.3：`format-roundtrip.mjs` 加 dialog 探针（守 children 往返无损）
 - [ ] P4 T2-full：Inspector 对话框分节 + `center` 字段（管线与开关同轮）+
       **画布叠画的设计决断**（同一画布浮着 vs 独立窗口视图，审查报告 R1 #4）+
