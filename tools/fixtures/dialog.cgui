@@ -1,0 +1,99 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "多窗体 fixture",
+    "width": 420,
+    "height": 190,
+    "bg": "#F3EDF7"
+  },
+  "widgets": [
+    {
+      "id": "lbl_hint",
+      "type": "label",
+      "rect": {
+        "x": 16,
+        "y": 16,
+        "w": 380,
+        "h": 22
+      },
+      "text": "点按钮打开对话框（T1 验收 fixture，手写）"
+    },
+    {
+      "id": "btn_open",
+      "type": "button",
+      "rect": {
+        "x": 16,
+        "y": 48,
+        "w": 140,
+        "h": 32
+      },
+      "text": "打开设置",
+      "events": {
+        "click": "on_btn_open_click"
+      }
+    },
+    {
+      "id": "dlg_settings",
+      "type": "dialog",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 320,
+        "h": 180
+      },
+      "text": "端口设置",
+      "children": [
+        {
+          "id": "lbl_port",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 20,
+            "w": 80,
+            "h": 22
+          },
+          "text": "端口号"
+        },
+        {
+          "id": "edt_port",
+          "type": "edit",
+          "rect": {
+            "x": 104,
+            "y": 18,
+            "w": 120,
+            "h": 26
+          },
+          "text": "COM3"
+        },
+        {
+          "id": "btn_ok",
+          "type": "button",
+          "rect": {
+            "x": 120,
+            "y": 124,
+            "w": 84,
+            "h": 30
+          },
+          "text": "确定",
+          "events": {
+            "click": "on_dlg_ok_click"
+          }
+        },
+        {
+          "id": "btn_cancel",
+          "type": "button",
+          "rect": {
+            "x": 212,
+            "y": 124,
+            "w": 84,
+            "h": 30
+          },
+          "text": "取消",
+          "events": {
+            "click": "on_dlg_cancel_click"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -121,7 +121,12 @@ void cg_dialog_close(cg_widget_t *self, int result);
 ## 8. 进度
 
 - [x] P0 地基调研（运行时窗口模型 / 消息泵 / 契约 / 画布模型四路，结论见 §0）
-- [x] P1 PRD：本文件
-- [ ] P2 SDD（`docs/` 级：`.cgui` 字段、运行时结构改动、画布模型、跨端顺序）
-- [ ] P3 切片细化（T1 拆成可实现的步骤 + 每步验证）
-- [ ] P4 实现 T1
+- [x] P1 PRD：本文件（§7 三条决策按推荐定案）
+- [x] P2 SDD：`.codebuddy/plans/f2-multi-window-sdd.md`（核心决策 W：`app->widgets` 保持一棵树不分区，
+      窗口 = window 伪控件、子树懒建；契约只新增 `center` 一个字段）
+- [x] P2.5 T1.0 前置加固：画布对未知控件类型**静默降级成 label**（会连子树一起丢）→ 改成与运行时
+      同口径"拒绝整份文件"。红绿证据：`tools/probe-dialog.mjs`（反例 2 条红，打印出
+      `dlg_settings` 变 label、4 个子控件全没）；5 个真示例往返探针全绿（收紧没打破真文件）
+- [x] P3 切片细化：SDD §6（T1.1/T1.2/T1.3 每步带验证）；fixture 已备好（`tools/fixtures/dialog.cgui`），
+      红基线已实测（运行时 exit=3：`unknown widget type "dialog"`）
+- [ ] P4 实现 T1.1 → T1.2 → T1.3（下一轮）
