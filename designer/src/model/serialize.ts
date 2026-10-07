@@ -17,6 +17,7 @@ import {
   type CgDoc,
   type CgInfo,
   type CgNode,
+  type CgRole,
   type CgStyle,
   type CgStyleRef,
   type CgStyleValue,
@@ -105,6 +106,22 @@ function cleanStyles(styles: Record<string, CgStyle> | undefined): Record<string
     if (s.align && s.align !== "left") item.align = s.align;
     if (s.radius) item.radius = s.radius;
     out[key] = item;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** 顶层色彩角色表（roles{}）：非法名丢掉；light/dark 字符串**原样保留**（画布不做色值校验，
+ *  运行时容错同口径）；两个槽都没写的条目丢掉（运行时也是跳过它）。 */
+function cleanRoles(roles: Record<string, CgRole> | undefined): Record<string, CgRole> | undefined {
+  if (!roles) return undefined;
+  const out: Record<string, CgRole> = {};
+  for (const [name, r] of Object.entries(roles)) {
+    const key = name.trim();
+    if (!isSafeStyleName(key)) continue;
+    const item: CgRole = {};
+    if (typeof r.light === "string" && r.light) item.light = r.light;
+    if (typeof r.dark === "string" && r.dark) item.dark = r.dark;
+    if (item.light || item.dark) out[key] = item;
   }
   return Object.keys(out).length ? out : undefined;
 }
@@ -278,11 +295,13 @@ function cleanDoc(doc: CgDoc): CgDoc {
   /* 动作表、样式表紧跟在 app 后面：顶层四个东西，读起来是「窗口 → 命令 → 样式 → 界面」 */
   const actions = cleanActions(doc.actions);
   const styles = cleanStyles(doc.styles);
+  const roles = cleanRoles(doc.roles);
   return {
     cgui: 1,
     app,
     ...(actions ? { actions } : {}),
     ...(styles ? { styles } : {}),
+    ...(roles ? { roles } : {}),
     widgets: doc.widgets.map(cleanNode),
   };
 }

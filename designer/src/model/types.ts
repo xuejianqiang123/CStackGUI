@@ -276,5 +276,16 @@ export type CgDoc = {
   /** 命名样式表（契约 §1）：样式名 -> 样式字段。控件用 style 引用它（见 CgStyleValue）。
    *  缺省 = 没有命名样式，老 .cgui 行为不变；重名后写覆盖前写（与 actions 一致）。 */
   styles?: Record<string, CgStyle>;
+  /** 色彩角色表：角色名 -> 深浅两份值。颜色字段用 "@角色名" 引用（深色皮肤 G1）。
+   *  缺省 = 没有 roles，老 .cgui 行为不变；容错与 styles{} 同口径（重名后者覆盖、
+   *  值缺失 = 该槽当没写）。 */
+  roles?: Record<string, CgRole>;
   widgets: CgNode[];
+};
+
+/** roles{} 的一条：同一个语义色在浅色 / 深色下的两份值（都可选，至少一个有意义）。
+ *  画布不做色值校验（运行时 cj_color 容错同口径），字符串原样保留。 */
+export type CgRole = {
+  light?: string;
+  dark?: string;
 };

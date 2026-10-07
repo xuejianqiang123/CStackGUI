@@ -7,6 +7,20 @@ import type { CSSProperties } from "react";
 import { eventLabel, resolveStyle, isNumEdit, CG_EVENTS, type CgDoc, type CgNode, type CgStyle } from "../model";
 import { useImage, type Preview } from "../imagecache";
 
+/** @角色引用 → 当前模式下的具体色；非 @ 原样（字面色）；角色/槽缺失 → undefined（当没写）。
+ *  模式：app.dark 显式值定，"auto"/缺省读系统偏好（matchMedia）—— 只在取色瞬间读一次，
+ *  系统主题变化不触发重渲染（A7 是静态对齐，契约 §1.1 的"深色不预览"指的不是这个）。 */
+export const roleColor = (doc: CgDoc, ref: string | undefined): string | undefined => {
+  if (!ref) return undefined;
+  if (!ref.startsWith("@") || ref.length < 2) return ref;
+  const role = doc.roles?.[ref.slice(1)];
+  if (!role) return undefined;                       /* 角色不存在 = 当没写 */
+  const mode = doc.app?.dark;                        /* 深浅开关在 app 上（画布模型没有 doc.dark） */
+  const dark =
+    mode === true ? true : mode === false ? false : !!window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+  return (dark ? role.dark : role.light) || undefined;   /* 槽没写 = 当没写 */
+};
+
 /** 画布渲染**解析后的样式**：命名样式打底、内联覆盖（resolveStyle 与运行时
  *  resolve_named_styles 同一套语义）。控件写了 "style": "log"，画布上就该是 log 的
  *  字体颜色 —— 不然又造一类"画布上看到的不一样"。F6 第一刀（2026-10-07）把命名样式
@@ -577,8 +591,9 @@ export default function WidgetView({ doc, node, depth, selected, primaryId, onPo
      （和 Inspector 里那条注释记的是同一个坑）。 */
   const img = useImage(node.src);
   /* 解析一次，整棵渲染共用：命名样式打底、内联覆盖（引用了不存在的名字 → effective
-     就是内联自己，与运行时"当没有 use"同一口径）。 */
-  const st = resolveStyle(doc, node.style).effective;
+     就是内联自己，与运行时"当没有 use"同一口径）；@角色引用再按当前模式落到具体色。 */
+  const st0 = resolveStyle(doc, node.style).effective;
+  const st: CgStyle = { ...st0, fg: roleColor(doc, st0.fg), bg: roleColor(doc, st0.bg) };
   const style: CSSProperties = {
     position: "absolute",
     left: node.rect.x,

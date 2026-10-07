@@ -23,6 +23,7 @@ import {
   type CgStyleRef,
 } from "../../model";
 import { Row, type Patch } from "./PanelUi";
+import { roleColor } from "../WidgetView";
 
 /** 字体选择器候选： Windows 常见字体，label 用中文名好认，value 写进 .cgui */
 const FONT_CHOICES: { label: string; value: string }[] = [
@@ -302,10 +303,26 @@ export default function StyleSection({ doc, node, patch, fontOpen, onToggleFont 
               : undefined
         }
       >
+        {/* 角色下拉（深色皮肤 G1/T3）：选角色 = fg 写成 "@名"，颜色跟随主题深浅；
+            选「字面色」回到取色器。角色/槽缺失时画布与运行时都按没写处理。 */}
+        <select
+          className="input narrow"
+          value={own.fg?.startsWith("@") ? own.fg : ""}
+          title="选「字面色」用旁边的取色器；选角色则颜色跟随主题深浅"
+          onChange={(e) => (e.target.value ? setField("fg", e.target.value) : clearField("fg"))}
+        >
+          <option value="">字面色</option>
+          {Object.keys(doc.roles ?? {}).map((r) => (
+            <option key={r} value={`@${r}`}>
+              @{r}
+            </option>
+          ))}
+        </select>
         <input
           className="input color"
           type="color"
-          value={eff.fg ?? (node.type === "led" ? "#1b6e33" : node.type === "meter" ? "#6750a4" : "#1d1b20")}
+          disabled={!!own.fg?.startsWith("@")}
+          value={roleColor(doc, eff.fg) ?? (node.type === "led" ? "#1b6e33" : node.type === "meter" ? "#6750a4" : "#1d1b20")}
           onChange={(e) => setField("fg", e.target.value)}
         />
         <button className="mini" title="清掉本控件写的文字色（回到命名样式 / 缺省）" onClick={() => clearField("fg")}>

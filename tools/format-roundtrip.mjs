@@ -225,6 +225,25 @@ if (doc.app) {
   touched += 1;
 }
 
+/* roles{} 与 @角色引用（深色皮肤 G1/T3）：表本身 + 控件颜色字段上的引用都要双向无损。
+ * 角色名挂一份、给一个空闲控件写 fg="@轮到它的角色" —— 丢了不报错、只是深浅联动悄悄失效。 */
+const probeRole = "cgui_roundtrip_role";
+let roleHostId = "";
+{
+  doc.roles = { ...(doc.roles ?? {}), [probeRole]: { light: "#6750A4", dark: "#D0BCFF" } };
+  touched += 1;
+  walk(doc.widgets, (n) => {
+    if (!roleHostId && n.id && !n.style && (n.type === "label" || n.type === "button")) roleHostId = n.id;
+  });
+  const host = roleHostId ? findNode(doc, roleHostId) : null;
+  if (host) {
+    host.style = { fg: `@${probeRole}` };
+    touched += 1;
+  } else {
+    console.log("[note] 没有空闲控件可挂 @角色引用，跳过该探针");
+  }
+}
+
 const written = serializeDoc(doc);
 fs.mkdirSync(path.dirname(output), { recursive: true });
 fs.writeFileSync(output, written, "utf8");
@@ -308,6 +327,29 @@ console.log(`[ok] 画布改动 ${touched} 处，写出 ${output}（${written.len
       lost += 1;
     }
     console.log(`[ok] 恒等回写：命名样式 "${probeStyle}" 与两种引用形态无损`);
+  }
+
+  /* roles 与 @角色引用逐字核对（T3.5）：表本身 + 挂在控件上的引用，一个都不能丢。 */
+  {
+    const want = doc.roles?.[probeRole];
+    const got = back.doc?.roles?.[probeRole];
+    if (!want) {
+      console.error("[fail] 探针没把 roles 写进文档（自测脚本问题）");
+      lost += 1;
+    } else if (!got || got.light !== want.light || got.dark !== want.dark) {
+      console.error(`[fail] 恒等回写丢了角色：${probeRole} -> ${JSON.stringify(got ?? null)}`);
+      lost += 1;
+    }
+    if (roleHostId) {
+      const gotHost = back.doc ? findNode(back.doc, roleHostId) : null;
+      if (!gotHost || gotHost.style?.fg !== `@${probeRole}`) {
+        console.error(`[fail] 恒等回写丢了 @角色引用：${roleHostId} -> ${JSON.stringify(gotHost?.style ?? null)}`);
+        lost += 1;
+      }
+    }
+    if (want && got && got.light === want.light && got.dark === want.dark) {
+      console.log(`[ok] 恒等回写：roles "${probeRole}" 与 @引用无损`);
+    }
   }
 
   /* 对话框子树逐字核对（T1.3）：dialog 是唯一「children = 另一个窗口」的容器。

@@ -19,6 +19,7 @@ import {
   type CgDoc,
   type CgInfo,
   type CgNode,
+  type CgRole,
   type CgRect,
   type CgStyle,
   type CgStyleRef,
@@ -232,10 +233,18 @@ function coerceStyleObject(raw: unknown, keepDefaults: boolean): CgStyle | undef
   if (has("fg")) {
     const c = colorOf(o.fg);
     if (c) out.fg = c;
+    else if (typeof o.fg === "string" && o.fg.startsWith("@") && o.fg.length > 1) {
+      /* "@角色名" 引用：原样保留（颜色字面量解析不出是正常的）。运行时求值、
+       * 画布渲染按 doc.roles + 当前模式取色（深色皮肤 G1/T3）。 */
+      out.fg = o.fg;
+    }
   }
   if (has("bg")) {
     const c = colorOf(o.bg);
     if (c) out.bg = c;
+    else if (typeof o.bg === "string" && o.bg.startsWith("@") && o.bg.length > 1) {
+      out.bg = o.bg;
+    }
   }
   /* align：运行时只在字符串命中 left/center/right 时才置位（"middle" 当没写） */
   if (o.align === "center" || o.align === "right" || (keepDefaults && o.align === "left")) {
@@ -281,6 +290,25 @@ function coerceStyles(raw: unknown): Record<string, CgStyle> | undefined {
     const st = coerceStyleObject(value, false);
     if (!st) continue;
     out[name] = st;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** 顶层色彩角色表（roles{}）：角色名 -> 深浅两份值。读入宽容与 styles{} 同口径：
+ *  空名 / 非法名 / 值不是对象丢掉；light/dark 是字符串就**原样保留**（画布不做色值校验，
+ *  与运行时"值取不到算没写"的容错一致——校验放到求值/绘制端）；两个槽都没有的条目丢掉。 */
+function coerceRoles(raw: unknown): Record<string, CgRole> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const out: Record<string, CgRole> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const name = key.trim();
+    if (!isSafeStyleName(name)) continue;
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const o = value as Record<string, unknown>;
+    const item: CgRole = {};
+    if (typeof o.light === "string" && o.light) item.light = o.light;
+    if (typeof o.dark === "string" && o.dark) item.dark = o.dark;
+    if (item.light || item.dark) out[name] = item;
   }
   return Object.keys(out).length ? out : undefined;
 }
@@ -542,5 +570,7 @@ export function parseDoc(text: string): { doc?: CgDoc; error?: string } {
   if (actions) doc.actions = actions;
   const styles = coerceStyles(o.styles);
   if (styles) doc.styles = styles;
+  const roles = coerceRoles(o.roles);
+  if (roles) doc.roles = roles;
   return { doc };
 }
