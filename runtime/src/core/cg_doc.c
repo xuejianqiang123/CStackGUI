@@ -140,6 +140,14 @@ static void style_overlay(const cj_val_t *o, cg_style_t *st, unsigned *mask)
         if (c != CG_COLOR_NONE) {
             st->fg = c;
             if (mask) *mask |= CG_STYLE_HAS_FG;
+        } else if (v->type == CJ_STR && v->str && v->str[0] == '@' && v->str[1]) {
+            /* "@角色名"：值解析不出是正常的（颜色字面量只认 hex），存引用，
+             * 值槽留 NONE —— 主题钩子按当前模式求值写回（深色皮肤 G1/T2）。
+             * 引用指向的角色不存在时按"没写"处理（与 use 的失效同口径），解析期不拦。 */
+            free(st->fg_role);
+            st->fg_role = dup_str(v->str + 1);
+            st->fg = CG_COLOR_NONE;
+            if (mask) *mask |= CG_STYLE_HAS_FG_ROLE;
         }
     }
     if ((v = cj_get(o, "bg")) != NULL) {
@@ -148,6 +156,11 @@ static void style_overlay(const cj_val_t *o, cg_style_t *st, unsigned *mask)
         if (c != CG_COLOR_NONE) {
             st->bg = c;
             if (mask) *mask |= CG_STYLE_HAS_BG;
+        } else if (v->type == CJ_STR && v->str && v->str[0] == '@' && v->str[1]) {
+            free(st->bg_role);
+            st->bg_role = dup_str(v->str + 1);
+            st->bg = CG_COLOR_NONE;
+            if (mask) *mask |= CG_STYLE_HAS_BG_ROLE;
         }
     }
     if ((v = cj_get(o, "radius")) != NULL) {
@@ -185,6 +198,39 @@ static const cg_named_style_t *style_find(const cg_named_style_t *styles, size_t
         if (styles[i].name && strcmp(styles[i].name, name) == 0) return &styles[i];
     }
     return NULL;
+}
+
+/**
+ * @brief 按名字找色彩角色（roles{} 表，结构与查找口径同 style_find）
+ * @param roles 角色表
+ * @param n 表里有效条目数
+ * @param name 要查的角色名（不带 @）；空串等同找不到
+ * @return const cg_role_t* 命中的条目；没有返回 NULL
+ */
+static const cg_role_t *role_find(const cg_role_t *roles, size_t n, const char *name)
+{
+    if (!roles || !name || !*name) return NULL;
+    for (size_t i = n; i-- > 0; ) {
+        if (roles[i].name && strcmp(roles[i].name, name) == 0) return &roles[i];
+    }
+    return NULL;
+}
+
+/**
+ * @brief 角色求值：按当前模式取 light / dark 槽
+ * @param doc 文档（roles 表在里面）
+ * @param name 角色名（不带 @）
+ * @param dark 1 = 取 dark 槽，0 = 取 light 槽
+ * @return unsigned 颜色值；角色不存在或该槽没写返回 CG_COLOR_NONE（= 当没写）
+ * @note core 层纯函数：不给 app 也能算（unit test 用它核对求值口径，不开窗）。
+ */
+unsigned cg_role_lookup(const cg_doc_t *doc, const char *name, int dark)
+{
+    const cg_role_t *r = role_find(doc ? doc->roles : NULL, doc ? doc->nroles : 0, name);
+
+    if (!r) return CG_COLOR_NONE;
+    if (dark) return r->has_dark ? r->dark : CG_COLOR_NONE;
+    return r->has_light ? r->light : CG_COLOR_NONE;
 }
 
 /**
@@ -232,8 +278,26 @@ static void style_merge_named(cg_style_t *st, unsigned mask, const cg_named_styl
     }
     if (!(mask & CG_STYLE_HAS_SIZE))   st->size   = base->st.size;
     if (!(mask & CG_STYLE_HAS_BOLD))   st->bold   = base->st.bold;
-    if (!(mask & CG_STYLE_HAS_FG))     st->fg     = base->st.fg;
-    if (!(mask & CG_STYLE_HAS_BG))     st->bg     = base->st.bg;
+    /* fg/bg：命名样式里写的可能是**颜色值**，也可能是 **@角色引用**（值槽是 NONE、串在 *_role）。
+     * 控件自己两样都没写才继承，且引用要**连串带位**落下来（求值读的是串，不是值）。 */
+    if (!(mask & (CG_STYLE_HAS_FG | CG_STYLE_HAS_FG_ROLE))) {
+        if (base->st.fg_role) {
+            free(st->fg_role);
+            st->fg_role = dup_str(base->st.fg_role);
+            st->fg = CG_COLOR_NONE;
+        } else {
+            st->fg = base->st.fg;
+        }
+    }
+    if (!(mask & (CG_STYLE_HAS_BG | CG_STYLE_HAS_BG_ROLE))) {
+        if (base->st.bg_role) {
+            free(st->bg_role);
+            st->bg_role = dup_str(base->st.bg_role);
+            st->bg = CG_COLOR_NONE;
+        } else {
+            st->bg = base->st.bg;
+        }
+    }
     if (!(mask & CG_STYLE_HAS_RADIUS)) st->radius = base->st.radius;
     if (!(mask & CG_STYLE_HAS_ALIGN))  st->align  = base->st.align;
 }
@@ -260,6 +324,14 @@ static void resolve_named_styles(cg_node_t *n, cg_doc_t *doc)
             if (doc->style_missing == 0) doc->style_missing_name = n->style_name;
             doc->style_missing++;
         }
+    }
+    /* 角色引用失效计数（口径同 style_missing：不崩不中断，但必须报出来——
+     * 求值端对不存在的角色返回"没写"，不报的话外观悄悄退回缺省、无从排查） */
+    if ((n->style.fg_role && !role_find(doc->roles, doc->nroles, n->style.fg_role)) ||
+        (n->style.bg_role && !role_find(doc->roles, doc->nroles, n->style.bg_role))) {
+        if (doc->role_missing == 0)
+            doc->role_missing_name = n->style.fg_role ? n->style.fg_role : n->style.bg_role;
+        doc->role_missing++;
     }
     for (size_t i = 0; i < n->nchildren; i++) resolve_named_styles(n->children[i], doc);
 }
@@ -297,6 +369,50 @@ static cg_named_style_t *parse_named_styles(const cj_val_t *o, size_t *count)
 }
 
 /**
+ * @brief 解析顶层 `roles{}`：键是角色名，值是 { light, dark } 两份颜色
+ * @param o `roles` 的值
+ * @param count 输出：条数
+ * @return cg_role_t* 数组（调用方 free，条目里的 name 也要放）；空/类型不对返回 NULL
+ * @note 容错（与 styles{} 同口径）：空名跳过、值不是对象跳过、颜色值解析不出 = 该槽"没写"；
+ *       重名不查重，靠 role_find 倒序查找实现"后者覆盖"。
+ */
+static cg_role_t *parse_roles(const cj_val_t *o, size_t *count)
+{
+    cg_role_t *out;
+    size_t     n = 0;
+
+    *count = 0;
+    if (!o || o->type != CJ_OBJ || o->count == 0 || !o->keys) return NULL;
+    out = (cg_role_t *)calloc(o->count, sizeof(cg_role_t));
+    if (!out) return NULL;
+
+    for (size_t i = 0; i < o->count; i++) {
+        const char     *name = o->keys[i];
+        const cj_val_t *v    = o->items[i];
+        unsigned        c;
+
+        if (!name || !*name) continue;                  /* 空名：跳过 */
+        if (!v || v->type != CJ_OBJ) continue;          /* 值不是对象：跳过 */
+        out[n].name = dup_str(name);
+        if ((c = cj_color(cj_get(v, "light"), CG_COLOR_NONE)) != CG_COLOR_NONE) {
+            out[n].light = c;
+            out[n].has_light = 1;
+        }
+        if ((c = cj_color(cj_get(v, "dark"), CG_COLOR_NONE)) != CG_COLOR_NONE) {
+            out[n].dark = c;
+            out[n].has_dark = 1;
+        }
+        if (!out[n].has_light && !out[n].has_dark) {    /* 两个槽都没写：这条没意义，跳过 */
+            free(out[n].name);
+            continue;
+        }
+        n++;
+    }
+    *count = n;
+    return out;
+}
+
+/**
  * @brief 释放 style 里的堆字段（font）
  * @param st 目标样式
  * @return void 无返回值
@@ -305,6 +421,10 @@ static void style_free(cg_style_t *st)
 {
     free(st->font);
     st->font = NULL;
+    free(st->fg_role);
+    st->fg_role = NULL;
+    free(st->bg_role);
+    st->bg_role = NULL;
 }
 
 /* --------------------------------------------------- 结构化内容的解析 */
@@ -780,6 +900,15 @@ cg_doc_t *cg_doc_parse(const char *json, char *err, size_t errsz)
     doc->width = cj_int(cj_get(app, "width"), 640);
     doc->height = cj_int(cj_get(app, "height"), 420);
     doc->bg = cj_color(cj_get(app, "bg"), CG_COLOR_NONE);
+    if (doc->bg == CG_COLOR_NONE) {
+        /* "@角色"：值解析不出是正常的，存引用（求值在主题初始化/切换时） */
+        const cj_val_t *bgv = cj_get(app, "bg");
+
+        if (bgv && bgv->type == CJ_STR && bgv->str && bgv->str[0] == '@' && bgv->str[1]) {
+            free(doc->bg_role);
+            doc->bg_role = dup_str(bgv->str + 1);
+        }
+    }
     if (doc->width < 80) doc->width = 80;
     if (doc->height < 60) doc->height = 60;
 
@@ -908,6 +1037,9 @@ cg_doc_t *cg_doc_parse(const char *json, char *err, size_t errsz)
     /* 顶层 styles：命名样式表（与 actions 同级）。控件解析时**只记名字**，
      * 合并统一放到树建完之后 —— 样式表在 .cgui 里的位置不保证在控件之前。 */
     doc->styles = parse_named_styles(cj_get(root, "styles"), &doc->nstyles);
+    /* 顶层 roles：色彩角色表（深色皮肤 G1）。引用只记名字，求值统一在主题钩子里 ——
+     * 表的位置同样不保证在控件之前，而求值要到建树/切主题才发生，天然没问题。 */
+    doc->roles = parse_roles(cj_get(root, "roles"), &doc->nroles);
 
     for (size_t i = 0; i < cj_count(ws); i++) {
         cg_node_t *n = parse_node(cj_at(ws, i), err, errsz);
@@ -926,6 +1058,14 @@ cg_doc_t *cg_doc_parse(const char *json, char *err, size_t errsz)
     if (doc->style_missing) {
         cg_log(CG_LOG_WARN, "有 %d 个控件引用了不存在的样式名（第一个是 \"%s\"）：这些控件按「没写 style」处理，外观退回缺省",
                doc->style_missing, doc->style_missing_name ? doc->style_missing_name : "?");
+    }
+    if (doc->role_missing) {
+        cg_log(CG_LOG_WARN, "有 %d 个控件引用了不存在的角色名（第一个是 \"@%s\"）：这些引用按「没写」处理，颜色退回缺省",
+               doc->role_missing, doc->role_missing_name ? doc->role_missing_name : "?");
+    } else if (doc->bg_role && !role_find(doc->roles, doc->nroles, doc->bg_role)) {
+        doc->role_missing = 1;
+        doc->role_missing_name = doc->bg_role;
+        cg_log(CG_LOG_WARN, "app.bg 引用了不存在的角色名 \"@%s\"：按「没写」处理", doc->bg_role);
     }
 
     cj_free(root);
@@ -964,9 +1104,16 @@ void cg_doc_release(cg_doc_t *doc)
         for (size_t i = 0; i < doc->nstyles; i++) {
             free(doc->styles[i].name);
             free(doc->styles[i].st.font);
+            free(doc->styles[i].st.fg_role);
+            free(doc->styles[i].st.bg_role);
         }
         free(doc->styles);
     }
+    if (doc->roles) {
+        for (size_t i = 0; i < doc->nroles; i++) free(doc->roles[i].name);
+        free(doc->roles);
+    }
+    free(doc->bg_role);
     node_free(doc->root);
     memset(doc, 0, sizeof(*doc));
 }

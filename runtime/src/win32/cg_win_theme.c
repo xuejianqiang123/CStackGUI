@@ -166,6 +166,11 @@ void cgw_theme_widget(cg_widget_t *w)
     h  = (HWND)w->native;
     fn = theme_fn();
 
+    /* 角色引用先换成当前模式的具体值（引用串保留 —— 切主题时本函数被再调一遍就重算；
+     * 不存在的角色求出来是"没写"，外观退缺省，解析期已有 WARN）。 */
+    if (w->style.fg_role) w->style.fg = cg_role_lookup(&app->doc, w->style.fg_role, app->dark);
+    if (w->style.bg_role) w->style.bg = cg_role_lookup(&app->doc, w->style.bg_role, app->dark);
+
     if (fn && (cgw_is_t(w, "listbox") || cgw_is_t(w, "table") || cgw_is_t(w, "tree"))) {
         /* 这三个是 ListBox / ListView / TreeView。深色要两步：先按窗口放行，再换主题
          * （见上面 dark_opt_in 的注释）。浅色时传空串还原。 */
@@ -223,6 +228,12 @@ void cgw_theme_apply(cg_app_t *app)
 
     if (!app || !st) return;
     h = (HWND)app->hwnd;
+
+    /* app.bg 的角色引用先换值（下面的窗口底刷要用它），窗口伪控件的 bg 跟着同步；
+     * 控件自己的引用在下面 cgw_theme_widget 循环里逐个求值。 */
+    if (app->doc.bg_role)
+        app->doc.bg = cg_role_lookup(&app->doc, app->doc.bg_role, app->dark);
+    if (app->window) app->window->style.bg = app->doc.bg;
 
     if (st->bg_brush) {
         DeleteObject(st->bg_brush);

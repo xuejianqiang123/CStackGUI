@@ -152,6 +152,8 @@ void cg_widget_free(cg_widget_t *w)
     free(w->type);
     free(w->text);
     free(w->style.font);
+    free(w->style.fg_role);
+    free(w->style.bg_role);
     free(w->children);
     free(w);
 }
@@ -346,6 +348,8 @@ static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node
     }
     w->style = n->style;
     w->style.font = cg_str_dup(n->style.font);   /* 拷贝一份，文档释放后控件仍可用 */
+    w->style.fg_role = cg_str_dup(n->style.fg_role);   /* 角色引用串同 font：浅拷会悬空 */
+    w->style.bg_role = cg_str_dup(n->style.bg_role);
     w->tree_sel = -1;
     w->table_sel = -1;
     w->table_col = -1;

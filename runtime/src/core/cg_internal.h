@@ -479,6 +479,16 @@ unsigned cg_win_behind_rgb(cg_app_t *app, void *hwnd);
  */
 cg_widget_t *cg_build_widgets(cg_app_t *app);
 
+/**
+ * @brief 角色求值：按当前模式取 roles{} 里 light / dark 槽的值（深色皮肤 G1/T2）
+ * @param doc 文档（roles 表在里面）
+ * @param name 角色名（不带 @）
+ * @param dark 1 = 取 dark 槽，0 = 取 light 槽
+ * @return unsigned 颜色值；角色不存在或该槽没写返回 CG_COLOR_NONE（= 当没写）
+ * @note core 层纯函数（不开窗可测）；win32 的主题钩子按 app->dark 调它。
+ */
+unsigned cg_role_lookup(const cg_doc_t *doc, const char *name, int dark);
+
 /* ---------------------------------------------- 日志与诊断（cg_log.c / cg_win_diag.c）
  * GUI 版没有控制台，光 fprintf(stderr, ...) 用户看不到，所以要有文件日志与错误弹窗。 */
 

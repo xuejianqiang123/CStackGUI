@@ -170,10 +170,14 @@ typedef struct {
     char     *font;
     int       size;    /* 磅 */
     int       bold;
-    unsigned  fg;      /* 0xRRGGBB，或 CG_COLOR_NONE */
+    unsigned  fg;      /* 0xRRGGBB，或 CG_COLOR_NONE（fg_role 非空时是求值槽） */
     unsigned  bg;
     int       radius;  /* 圆角，原生控件不支持时忽略（自绘后端用） */
     cg_align_t align;
+    /** 非空 = fg/bg 写的是「@角色名」引用（值槽留给主题钩子求值写回，引用串保留）。
+     *  求值与容错口径见 .codebuddy/plans/roles-dark-sdd.md §3。 */
+    char     *fg_role;
+    char     *bg_role;
 } cg_style_t;
 
 /** style 里"到底写了哪几个字段" —— 合并命名样式与内联字段时**必须**知道，
@@ -186,7 +190,11 @@ enum {
     CG_STYLE_HAS_FG     = 1 << 3,
     CG_STYLE_HAS_BG     = 1 << 4,
     CG_STYLE_HAS_RADIUS = 1 << 5,
-    CG_STYLE_HAS_ALIGN  = 1 << 6
+    CG_STYLE_HAS_ALIGN  = 1 << 6,
+    /** fg/bg 写的是 @角色引用（值槽是"待求值"而不是颜色）—— 合并时与 FG/BG 同权：
+     *  自己写了引用，命名样式里的 fg/bg（值或引用）都不能再来盖 */
+    CG_STYLE_HAS_FG_ROLE  = 1 << 7,
+    CG_STYLE_HAS_BG_ROLE  = 1 << 8
 };
 
 /** 顶层 `styles{}` 里的一条命名样式 */
@@ -194,6 +202,16 @@ typedef struct {
     char       *name;   /* 引用名（.cgui 里 "style": "name" 用的就是它） */
     cg_style_t  st;     /* 把它当"内联字段全写满"的一份样式 */
 } cg_named_style_t;
+
+/** 顶层 `roles{}` 里的一条色彩角色：同一个语义色在浅色 / 深色下的两份值
+ *  （深色皮肤 G1；形状仿 cg_named_style_t，重名后者覆盖，容错同口径） */
+typedef struct {
+    char    *name;
+    unsigned light;   /* 0xRRGGBB；has_light = 0 表示这个槽没写（求值时当没写） */
+    unsigned dark;
+    int      has_light;
+    int      has_dark;
+} cg_role_t;
 
 /* --------------------------------------------------- 结构化条目
  * 这几种控件的内容不是一句 text 能表达的，.cgui 里各有一个字段描述：
@@ -402,6 +420,16 @@ typedef struct {
      *  core 不碰 Win32，所以 auto 只记成 -1，由**后端**去读系统主题（HKCU 的 AppsUseLightTheme）。
      *  运行时要切换用 cg_theme_set_dark()。 */
     int               dark;
+    /** 顶层 roles：色彩角色表（可为空）。颜色字段用 "@名字" 引用它，深浅各取对应槽。
+     *  容错与 styles{} 同口径：按书写顺序存，重名后者覆盖。 */
+    cg_role_t        *roles;
+    size_t            nroles;
+    /** app.bg 写成 "@角色" 时的引用名（doc.bg 留 CG_COLOR_NONE，主题钩子求值写回） */
+    char             *bg_role;
+    /** 引用了**不存在**的角色名的控件个数（口径同 style_missing：不崩不中断，但报 WARN） */
+    int               role_missing;
+    /** 第一个失效角色引用的名字（指向节点里的字符串，随文档一起释放） */
+    const char       *role_missing_name;
 } cg_doc_t;
 
 /**
