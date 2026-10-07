@@ -111,9 +111,13 @@ export default function Canvas(props: Props) {
   /** 客户区矩形（框选与调色板落点都用它换算）：stage 矩形包含标题栏 + 菜单栏，口径差一截 */
   const clientRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState>({ kind: "none" });
-  const [snapLines, setSnapLines] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] });
-  /** 调色板拖入的幽灵预览位置（客户区逻辑像素）：拖动全程跟手显示 */
-  const [dropPos, setDropPos] = useState<{ x: number; y: number } | null>(null);
+  /** move 拖动是否真的动过（过位移阈值）：拖动中不进 React 状态，用 ref 记 */
+  const moveMovedRef = useRef(false);
+  /** move 拖动的吸附线：拖动中不走 React 渲染，直写这两个常驻元素 */
+  const snapVRef = useRef<HTMLDivElement>(null);
+  const snapHRef = useRef<HTMLDivElement>(null);
+  /** 调色板拖入的幽灵预览：位置由 pointermove 直写 DOM（不经 React 渲染） */
+  const ghostRef = useRef<HTMLDivElement>(null);
 
   /** 主选框：实线外框 + 8 个缩放手柄。多选时只有它有手柄，免得一屏都是握点 */
   const primaryId = selectedIds.length > 0 ? selectedIds[selectedIds.length - 1] : null;
@@ -191,6 +195,68 @@ export default function Canvas(props: Props) {
     });
   };
 
+  /* ---- move 拖动的本地预览工具 ----
+   * 拖动中**不写 doc、不重渲染整树**：只直写被拖控件的 transform（走合成器，零重光栅化），
+   * 松手才一次性提交最终位置。之前每帧 structuredClone + 全树重渲染，大文档时
+   * 拖动卡顿、还会诱发合成器残影（拖动路径上留下旧帧的半透明"重影"）。 */
+
+  /** move 拖动的落点计算（4px 吸附 + 同级/边缘对齐）：预览与松手提交共用同一套口径 */
+  const computeMoveSnap = (d: CgDoc, mv: Extract<DragState, { kind: "move" }>, dx: number, dy: number) => {
+    const o0 = mv.origins[mv.id];
+    const n = findNode(d, mv.id);
+    if (!o0 || !n) return null;
+    let nx = snap(o0.x + dx, 4, snapOn);
+    let ny = snap(o0.y + dy, 4, snapOn);
+    const parent = findParent(d, mv.id);
+    const sibs = (parent ? parent.children ?? [] : d.widgets).filter((s) => s.id !== mv.id);
+    const vx: number[] = [];
+    const vy: number[] = [];
+    const boundsW = parent ? parent.rect.w : d.app.width;
+    const boundsH = parent ? parent.rect.h : d.app.height;
+    for (const s of sibs) {
+      for (const cand of [s.rect.x, s.rect.x + s.rect.w / 2, s.rect.x + s.rect.w]) {
+        if (Math.abs(cand - nx) <= 5) vx.push(cand);
+        if (Math.abs(cand - (nx + n.rect.w)) <= 5) vx.push(cand - n.rect.w);
+      }
+      for (const cand of [s.rect.y, s.rect.y + s.rect.h / 2, s.rect.y + s.rect.h]) {
+        if (Math.abs(cand - ny) <= 5) vy.push(cand);
+        if (Math.abs(cand - (ny + n.rect.h)) <= 5) vy.push(cand - n.rect.h);
+      }
+    }
+    if (Math.abs(nx) <= 5) vx.push(0);
+    if (Math.abs(boundsW - (nx + n.rect.w)) <= 5) vx.push(boundsW - n.rect.w);
+    if (Math.abs(ny) <= 5) vy.push(0);
+    if (Math.abs(boundsH - (ny + n.rect.h)) <= 5) vy.push(boundsH - n.rect.h);
+    if (vx.length) nx = vx[0];
+    if (vy.length) ny = vy[0];
+    return { ddx: nx - o0.x, ddy: ny - o0.y, vx: vx.slice(0, 1), vy: vy.slice(0, 1) };
+  };
+
+  /** 直写拖动预览：整组控件 + 主选框一起平移；ddx/ddy 为 0 时清除（松手提交后 React 接管位置） */
+  const paintMovePreview = (mv: Extract<DragState, { kind: "move" }>, ddx: number, ddy: number) => {
+    const root = clientRef.current;
+    if (!root) return;
+    const t = ddx === 0 && ddy === 0 ? "" : `translate(${ddx}px, ${ddy}px)`;
+    for (const id of mv.ids) {
+      const el = root.querySelector<HTMLElement>(`[data-node-id="${id}"]`);
+      if (el) el.style.transform = t;
+    }
+    const h = root.querySelector<HTMLElement>(".handles");
+    if (h) h.style.transform = t;
+  };
+
+  /** 吸附线直写（两条常驻元素，拖动中显隐/移动） */
+  const showSnapLines = (vx: number[], vy: number[]) => {
+    if (snapVRef.current) {
+      snapVRef.current.style.display = vx.length ? "block" : "none";
+      if (vx.length) snapVRef.current.style.left = `${vx[0]}px`;
+    }
+    if (snapHRef.current) {
+      snapHRef.current.style.display = vy.length ? "block" : "none";
+      if (vy.length) snapHRef.current.style.top = `${vy[0]}px`;
+    }
+  };
+
   useEffect(() => {
     if (drag.kind === "none") return;
 
@@ -207,64 +273,26 @@ export default function Canvas(props: Props) {
       const dx = (e.clientX - drag.startX) / zoom;
       const dy = (e.clientY - drag.startY) / zoom;
 
-      /* 「点一下」没真拖动时绝不能改坐标：位移低于阈值直接忽略，
-       * 否则 4px 吸附会在点选的瞬间把控件挪到栅格上（坐标自己变的根因）。 */
+      if (drag.kind === "move") {
+        /* move：本地预览。位移阈值照旧 ——「点一下」绝不能改坐标，
+         * 否则 4px 吸附会在点选的瞬间把控件挪到栅格上（坐标自己变的根因）。 */
+        if (!moveMovedRef.current && Math.abs(e.clientX - drag.startX) < DRAG_MIN && Math.abs(e.clientY - drag.startY) < DRAG_MIN) return;
+        if (!moveMovedRef.current) onBeginHistory();   /* 历史压在真正开始拖的一刻 */
+        moveMovedRef.current = true;
+        const s = computeMoveSnap(doc, drag, dx, dy);
+        if (!s) return;
+        paintMovePreview(drag, s.ddx, s.ddy);
+        showSnapLines(s.vx, s.vy);
+        return;
+      }
+
+      /* resize：尺寸变化要即时反馈到内容布局（文字换行等），保留 React 渲染路径。
+       * 「点一下」没真拖动时绝不能改坐标（同上）。 */
       if (!drag.moved && Math.abs(e.clientX - drag.startX) < DRAG_MIN && Math.abs(e.clientY - drag.startY) < DRAG_MIN) return;
 
       if (!drag.moved) onBeginHistory();   /* 历史压在真正开始拖的一刻 */
 
-      if (drag.kind === "move") {
-        const o0 = drag.origins[drag.id];
-        if (!o0) return;
-        onApply((d) => {
-          const n = findNode(d, drag.id);
-          if (!n) return;
-          const rawX = o0.x + dx;
-          const rawY = o0.y + dy;
-          let nx = snap(rawX, 4, snapOn);
-          let ny = snap(rawY, 4, snapOn);
-
-          /* 简单对齐：和同级控件/窗口边缘比较，近则吸附（顺手，不做全面对齐系统） */
-          const parent = findParent(d, drag.id);
-          const sibs = (parent ? parent.children ?? [] : d.widgets).filter((s) => s.id !== drag.id);
-          const vx: number[] = [];
-          const vy: number[] = [];
-          const boundsW = parent ? parent.rect.w : d.app.width;
-          const boundsH = parent ? parent.rect.h : d.app.height;
-          for (const s of sibs) {
-            for (const cand of [s.rect.x, s.rect.x + s.rect.w / 2, s.rect.x + s.rect.w]) {
-              if (Math.abs(cand - nx) <= 5) vx.push(cand);
-              if (Math.abs(cand - (nx + n.rect.w)) <= 5) vx.push(cand - n.rect.w);
-            }
-            for (const cand of [s.rect.y, s.rect.y + s.rect.h / 2, s.rect.y + s.rect.h]) {
-              if (Math.abs(cand - ny) <= 5) vy.push(cand);
-              if (Math.abs(cand - (ny + n.rect.h)) <= 5) vy.push(cand - n.rect.h);
-            }
-          }
-          if (Math.abs(nx) <= 5) vx.push(0);
-          if (Math.abs(boundsW - (nx + n.rect.w)) <= 5) vx.push(boundsW - n.rect.w);
-          if (Math.abs(ny) <= 5) vy.push(0);
-          if (Math.abs(boundsH - (ny + n.rect.h)) <= 5) vy.push(boundsH - n.rect.h);
-          if (vx.length) nx = vx[0];
-          if (vy.length) ny = vy[0];
-          setSnapLines({ x: vx.slice(0, 1), y: vy.slice(0, 1) });
-
-          /* 整组按主选框算出来的位移平移：组内相对位置一个像素都不会变 */
-          const ddx = nx - o0.x;
-          const ddy = ny - o0.y;
-          for (const id of drag.ids) {
-            const org = drag.origins[id];
-            const t = findNode(d, id);
-            if (!org || !t) continue;
-            t.rect.x = org.x + ddx;
-            t.rect.y = org.y + ddy;
-          }
-        });
-        setDrag({ ...drag, moved: true });
-        return;
-      }
-
-      /* resize */
+      /* resize（到这里 drag 只剩 resize：marquee/move 都已提前 return） */
       onApply((d) => {
         const n = findNode(d, drag.id);
         if (!n) return;
@@ -301,7 +329,7 @@ export default function Canvas(props: Props) {
       setDrag({ ...drag, moved: true });
     };
 
-    const onUp = () => {
+    const onUp = (e: PointerEvent) => {
       if (drag.kind === "marquee") {
         const x0 = Math.min(drag.sx, drag.cx);
         const y0 = Math.min(drag.sy, drag.cy);
@@ -320,50 +348,70 @@ export default function Canvas(props: Props) {
           onSelect(null);   /* 点空白 = 取消选择；带 Shift 起框时不动原有选择 */
         }
       }
-      if (drag.kind === "move" && drag.moved && drag.ids.length === 1) {
-        /* 拖动结束：重新判定它该待在哪个容器里（只是点选、没拖动就别改归属） */
-        onApply((d) => {
-          const node = findNode(d, drag.id);
-          if (!node) return;
-          const parent = findParent(d, drag.id);
-          const abs = absRect(d, node);
-          const target = containerAt(d, abs.x + abs.w / 2, abs.y + abs.h / 2, node.id);
-          const targetParent = target ?? null;
-          const sameParent = (targetParent?.id ?? null) === (parent?.id ?? null);
-          if (sameParent) return;
-          if (targetParent && isInside(d, targetParent.id, node.id)) return;
+      if (drag.kind === "move" && moveMovedRef.current) {
+        /* 松手：按最终指针位置算一次吸附，整组坐标 + 容器归属一次提交（= 一步撤销） */
+        const dx = (e.clientX - drag.startX) / zoom;
+        const dy = (e.clientY - drag.startY) / zoom;
+        const s = computeMoveSnap(doc, drag, dx, dy);
+        if (s) {
+          onApply((d) => {
+            for (const id of drag.ids) {
+              const org = drag.origins[id];
+              const t = findNode(d, id);
+              if (!org || !t) continue;
+              t.rect.x = org.x + s.ddx;
+              t.rect.y = org.y + s.ddy;
+            }
+            if (drag.ids.length === 1) {
+              /* 拖动结束：重新判定它该待在哪个容器里（只是点选、没拖动就别改归属） */
+              const node = findNode(d, drag.id);
+              if (!node) return;
+              const parent = findParent(d, drag.id);
+              const abs = absRect(d, node);
+              const target = containerAt(d, abs.x + abs.w / 2, abs.y + abs.h / 2, node.id);
+              const targetParent = target ?? null;
+              const sameParent = (targetParent?.id ?? null) === (parent?.id ?? null);
+              if (sameParent) return;
+              if (targetParent && isInside(d, targetParent.id, node.id)) return;
 
-          const list = parent ? parent.children ?? [] : d.widgets;
-          const i = list.findIndex((n) => n.id === node.id);
-          if (i < 0) return;
-          list.splice(i, 1);
+              const list = parent ? parent.children ?? [] : d.widgets;
+              const i = list.findIndex((n) => n.id === node.id);
+              if (i < 0) return;
+              list.splice(i, 1);
 
-          const base = targetParent
-            ? { x: absRect(d, targetParent).x, y: absRect(d, targetParent).y }
-            : { x: 0, y: 0 };
-          node.rect.x = abs.x - base.x;
-          node.rect.y = abs.y - base.y;
+              const base = targetParent
+                ? { x: absRect(d, targetParent).x, y: absRect(d, targetParent).y }
+                : { x: 0, y: 0 };
+              node.rect.x = abs.x - base.x;
+              node.rect.y = abs.y - base.y;
 
-          if (targetParent && targetParent.type === "tabs") {
-            targetParent.children = targetParent.children ?? [];
-            node.page = targetParent.value ?? 0;
-            targetParent.children.push(node);
-          } else {
-            /* 从 tabs 拖出时清掉残留的分页号，否则脏 page 会一直写进 .cgui */
-            delete node.page;
-            d.widgets.push(node);
-          }
-        });
+              if (targetParent && targetParent.type === "tabs") {
+                targetParent.children = targetParent.children ?? [];
+                node.page = targetParent.value ?? 0;
+                targetParent.children.push(node);
+              } else {
+                /* 从 tabs 拖出时清掉残留的分页号，否则脏 page 会一直写进 .cgui */
+                delete node.page;
+                d.widgets.push(node);
+              }
+            }
+          });
+        }
+        /* 清预览 transform：先清再提交，两者在同一事件任务里完成，paint 只有一次（最终位置） */
+        paintMovePreview(drag, 0, 0);
+        showSnapLines([], []);
+        moveMovedRef.current = false;
       }
       setDrag({ kind: "none" });
-      setSnapLines({ x: [], y: [] });
     };
 
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
   }, [drag, doc, zoom, snapOn, onApply, onBeginHistory, onSelect, onSelectMany]);
 
@@ -378,6 +426,19 @@ export default function Canvas(props: Props) {
       const rect = clientRef.current?.getBoundingClientRect();
       if (!rect) return null;
       return { x: (clientX - rect.left) / zoom, y: (clientY - rect.top) / zoom };
+    };
+    const updateGhost = (clientX: number, clientY: number) => {
+      /* 位置直写 DOM：不经 React 渲染，指针进画布前隐藏、进画布才显示 */
+      const rect = clientRef.current?.getBoundingClientRect();
+      const el = ghostRef.current;
+      if (!rect || !el) return;
+      const px = (clientX - rect.left) / zoom;
+      const py = (clientY - rect.top) / zoom;
+      const target = containerAt(doc, px, py);
+      const base = target ? absRect(doc, target) : { x: 0, y: 0 };
+      el.style.left = `${base.x + snap(px - base.x - 40, 4, snapOn)}px`;
+      el.style.top = `${base.y + snap(py - base.y - 16, 4, snapOn)}px`;
+      el.style.visibility = "visible";
     };
     const place = (px: number, py: number) => {
       const target = containerAt(doc, px, py);
@@ -400,18 +461,29 @@ export default function Canvas(props: Props) {
       onSelect(node.id);
       onDropDone();
     };
-    const onMove = (e: PointerEvent) => setDropPos(at(e.clientX, e.clientY));
+    const hideGhost = () => {
+      if (ghostRef.current) ghostRef.current.style.visibility = "hidden";
+    };
+    const onMove = (e: PointerEvent) => updateGhost(e.clientX, e.clientY);
     const onUp = (e: PointerEvent) => {
       const p = at(e.clientX, e.clientY);
-      setDropPos(null);
+      hideGhost();
       if (p) place(p.x, p.y);
     };
+    /* 拖入被中断（Esc / 失焦 / 指针异常）：宁可丢弃这次拖入也不能让预览残留 */
+    const onGone = () => {
+      hideGhost();
+      onDropDone();
+    };
     window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp, { once: true });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onGone);
+    window.addEventListener("blur", onGone);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
-      setDropPos(null);
+      window.removeEventListener("pointercancel", onGone);
+      window.removeEventListener("blur", onGone);
     };
   }, [pendingDrop, doc, zoom, snapOn, onApply, onBeginHistory, onSelect, onDropDone]);
 
@@ -422,20 +494,6 @@ export default function Canvas(props: Props) {
     n.id = "__drop_preview";
     return n;
   }, [pendingDrop]);
-
-  /* 预览落点 = 松手后的真实落点（同一套 containerAt + snap + 偏移），所见即所得。
-     w/h 兜底一个最小可视尺寸：menu 没有矩形（0×0），全按种子尺寸画会什么都看不见。 */
-  const ghostRect = useMemo(() => {
-    if (!dropGhost || !dropPos) return null;
-    const target = containerAt(doc, dropPos.x, dropPos.y);
-    const base = target ? absRect(doc, target) : { x: 0, y: 0 };
-    return {
-      x: base.x + snap(dropPos.x - base.x - 40, 4, snapOn),
-      y: base.y + snap(dropPos.y - base.y - 16, 4, snapOn),
-      w: Math.max(dropGhost.rect.w, 60),
-      h: Math.max(dropGhost.rect.h, 24),
-    };
-  }, [dropGhost, dropPos, doc, snapOn]);
 
   const parentOfSelected = selected ? findParent(doc, selected.id) : null;
   /* 窗口只能有一根菜单栏，和运行时一样只认第一个 */
@@ -593,22 +651,27 @@ export default function Canvas(props: Props) {
                   onPointerDown={startMove}
                 />
               ))}
-              {snapLines.x.map((x, i) => (
-                <div key={`sx${i}`} className="snapline-v" style={{ left: x }} />
-              ))}
-              {snapLines.y.map((y, i) => (
-                <div key={`sy${i}`} className="snapline-h" style={{ top: y }} />
-              ))}
+              {/* 吸附线：常驻两条、显隐/位置由拖动逻辑直写（拖动中不走 React 渲染） */}
+              <div ref={snapVRef} className="snapline-v" style={{ display: "none" }} />
+              <div ref={snapHRef} className="snapline-h" style={{ display: "none" }} />
 
               {/* 框选矩形：客户区坐标系，和控件同一套 */}
               {marqueeRect ? <div className="marquee" style={marqueeRect} /> : null}
 
               {/* 调色板拖入的幽灵预览：真实控件外观跟手，虚线框标出松手后的落点。
+                  位置由 pointermove 直写（初始 hidden，指针进画布才显示），不进 React 渲染。
                   pointer-events:none —— 预览不参与命中，指针事件继续走 window 监听。 */}
-              {dropGhost && ghostRect ? (
+              {dropGhost ? (
                 <div
+                  ref={ghostRef}
                   className="drop-ghost"
-                  style={{ left: ghostRect.x, top: ghostRect.y, width: ghostRect.w, height: ghostRect.h }}
+                  style={{
+                    visibility: "hidden",
+                    left: 0,
+                    top: 0,
+                    width: Math.max(dropGhost.rect.w, 60),
+                    height: Math.max(dropGhost.rect.h, 24),
+                  }}
                 >
                   <WidgetView
                     doc={doc}

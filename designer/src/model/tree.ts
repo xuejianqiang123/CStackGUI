@@ -106,22 +106,33 @@ export function absRect(doc: CgDoc, node: CgNode): CgRect {
   return { x, y, w: node.rect.w, h: node.rect.h };
 }
 
-/** 命中测试：返回落点最深的容器（用于把控件放进分组框里） */
+/** 命中测试：返回落点最深的**可见**容器（用于把控件放进分组框里）。
+ *
+ *  「可见」必须与画布渲染同一口径：tabs 只画当前页的子控件（WidgetView 的 page 过滤），
+ *  所以挂在 tabs **非当前页**上的子容器（哪怕 rect 压着指针）也绝不能命中——
+ *  否则拖控件松手，控件被塞进一个画布上根本不渲染的容器里，看起来就是「控件消失了」
+ *  （doc 里其实有：层树能看到、还处于选中态，2026-10-07 gallery 实测复现）。
+ *  非 tabs 容器（group/box/card/dialog）的子控件画布上全部渲染，可见性原样传递。 */
 export function containerAt(doc: CgDoc, x: number, y: number, excludeId?: string): CgNode | null {
   let hit: CgNode | null = null;
   let bestDepth = -1;
-  const visit = (nodes: CgNode[], depth: number) => {
+  /* parent 的类型决定孩子们的可见性：tabs 只渲染当前页，其余容器全渲染 */
+  const visit = (nodes: CgNode[], depth: number, parent: CgNode | null, parentVisible: boolean) => {
     for (const n of nodes) {
-      if (n.id === excludeId) continue;
-      if (!isContainer(n.type)) continue;
-      const r = absRect(doc, n);
-      if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h && depth > bestDepth) {
-        hit = n;
-        bestDepth = depth;
+      if (n.id === excludeId) continue;   /* 拖动中的控件自身连同子孙都不命中 */
+      const visible =
+        parentVisible &&
+        (!parent || parent.type !== "tabs" || (n.page ?? 0) === (parent.value ?? 0));
+      if (visible && isContainer(n.type)) {
+        const r = absRect(doc, n);
+        if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h && depth > bestDepth) {
+          hit = n;
+          bestDepth = depth;
+        }
       }
-      if (n.children?.length) visit(n.children, depth + 1);
+      if (n.children?.length) visit(n.children, depth + 1, n, visible);
     }
   };
-  visit(doc.widgets, 0);
+  visit(doc.widgets, 0, null, true);
   return hit;
 }
