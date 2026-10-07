@@ -27,6 +27,7 @@ export * from "./model/events.js";
 export * from "./model/types.js";
 export * from "./model/kinds.js";
 export * from "./model/style.js";
+export * from "./model/refs.js";
 export * from "./model/textcodec.js";
 export * from "./model/factory.js";
 export * from "./model/tree.js";

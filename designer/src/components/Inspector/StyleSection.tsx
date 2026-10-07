@@ -165,7 +165,8 @@ export default function StyleSection({ doc, node, patch, fontOpen, onToggleFont 
           <div className="hint-title">引用了不存在的样式「{stale}」</div>
           <p className="muted small">
             运行时把 <code>use</code> 当成"没写"，只用本控件自己的字段（不报错、不中断）。
-            改名不会自动更新引用：想清掉就在上面选「（无）」或点这里。
+            多半是这个样式被删掉了，或者 .cgui 被手改过 —— 在「样式」对话框里改名会连带改引用，
+            手改文件里的名字不会。想清掉就在上面选「（无）」或点这里。
           </p>
           <button className="mini" onClick={() => setUse(undefined)}>
             清掉这个引用

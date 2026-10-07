@@ -96,7 +96,7 @@ export default function ActionSection({ doc, node, patch }: ActionSectionProps) 
                 </div>
                 {missing ? (
                   <p className="act-note warn">
-                    引用了不存在的动作「{row.item.action}」：动作改名不会自动更新引用，自检会报这一条。
+                    引用了不存在的动作「{row.item.action}」：多半是这个动作被删掉了，或者 .cgui 被手改过 —— 在「动作」对话框里改名会连带改引用，手改文件里的名字不会。自检会报这一条。
                   </p>
                 ) : null}
                 {shown ? (

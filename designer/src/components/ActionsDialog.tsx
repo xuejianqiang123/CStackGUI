@@ -5,14 +5,18 @@
  * 「一个回调、一处启用状态」同时管住所有引用点（不用给菜单项和按钮各绑一份回调）。
  *
  * 两件要注意的事（在界面上明说）：
- *   1. **改名不会自动更新引用**（v1 的约定）：引用处会变成「不存在的动作」，自检会报出来；
+ *   1. **改名会连带更新引用**：改名时把每个控件、每个菜单项/树节点的 action 一起改到新名
+ *      （和「属性」面板改控件 id 连带改 bind.src 同一个做法）——所以改完不会留下悬空引用。
+ *      手改 .cgui 里的名字才会留下悬空引用，那种情况自检（--selftest）会报出来；
  *   2. 快捷键写错不会崩：运行时忽略它并写警告日志，--selftest 会报——所以旁边给了可用键列表。
  *
  * 名字（= actions 的键）是唯一会被「删掉再建」的字段，所以它单独走「失焦才提交」：
  * 否则每敲一个字符就重建一次键、还会把引用打断。
+ *
+ * 卡片上写「被 N 处引用」：改名或删除之前先看见影响面（`refs.ts` 统计，与样式对话框同一套口径）。
  */
 import { useState } from "react";
-import { isSafeActionName, type CgAction, type CgDoc } from "../model";
+import { countRefs, isSafeActionName, renameActionRefs, type CgAction, type CgDoc } from "../model";
 import { Row } from "./Inspector/PanelUi";
 
 type Props = {
@@ -40,6 +44,8 @@ type CardProps = {
   action: CgAction;
   /** 全部动作名（判重名用；自己也在里面，同名会走「没改」分支提前返回） */
   taken: Set<string>;
+  /** 有多少处引用着这条动作（控件 + 菜单项/树节点，0 = 没人引用） */
+  refCount: number;
   onRename: (to: string) => void;
   onPatch: (patch: Partial<CgAction>) => void;
   onRemove: () => void;
@@ -47,7 +53,7 @@ type CardProps = {
 
 /** 一条动作 = 一张卡片。text/accel/handler 每敲一下就落盘（和「程序配置」同一套手感），
  *  只有动作名是失焦/回车才提交。 */
-function ActionCard({ name, action, taken, onRename, onPatch, onRemove }: CardProps) {
+function ActionCard({ name, action, taken, refCount, onRename, onPatch, onRemove }: CardProps) {
   const [draft, setDraft] = useState(name);
   const [error, setError] = useState("");
 
@@ -85,7 +91,25 @@ function ActionCard({ name, action, taken, onRename, onPatch, onRemove }: CardPr
             if (e.key === "Enter") e.currentTarget.blur();
           }}
         />
-        <button className="mini" onClick={onRemove} title="删除这个动作（引用它的菜单项/控件会变成「不存在的动作」）">
+        <span
+          className="act-refs muted small"
+          title={
+            refCount > 0
+              ? `${refCount} 处（控件 + 菜单项）用 action 引用着它；改名会连带把它们一起改到新名字`
+              : "没有地方引用它，改名或删除都不影响任何控件"
+          }
+        >
+          {refCount > 0 ? `${refCount} 处引用` : "未被引用"}
+        </span>
+        <button
+          className="mini"
+          onClick={onRemove}
+          title={
+            refCount > 0
+              ? `删除这个动作：还有 ${refCount} 处引用它，删了它们会变成引用不存在的动作`
+              : "删除这个动作（没有地方引用它）"
+          }
+        >
           删除
         </button>
       </div>
@@ -155,6 +179,9 @@ export default function ActionsDialog({ open, doc, onClose, onBeginHistory, onAp
   const actions = doc.actions ?? {};
   const names = Object.keys(actions);
   const taken = new Set(names);
+  /* 每条动作被几处引用（控件的 action + 菜单项/树节点的 action，一次遍历算完） */
+  const actionRefs = countRefs(doc).actions;
+  const refCountOf = (name: string) => actionRefs.get(name) ?? 0;
 
   const patchAction = (name: string, patch: Partial<CgAction>) => {
     onBeginHistory();
@@ -169,6 +196,8 @@ export default function ActionsDialog({ open, doc, onClose, onBeginHistory, onAp
     });
   };
 
+  /** 改名：**同一次 onApply 里**把引用也改掉 —— "改名"在撤销栈里是一步，
+   *  也不会有"表改了、引用还指着旧名"的中间态。 */
   const renameAction = (from: string, to: string) => {
     onBeginHistory();
     onApply((d) => {
@@ -176,6 +205,7 @@ export default function ActionsDialog({ open, doc, onClose, onBeginHistory, onAp
       const a = d.actions[from] ?? {};
       delete d.actions[from];
       d.actions[to] = a;
+      renameActionRefs(d, from, to);
     });
   };
 
@@ -235,6 +265,7 @@ export default function ActionsDialog({ open, doc, onClose, onBeginHistory, onAp
                 name={name}
                 action={actions[name]}
                 taken={taken}
+                refCount={refCountOf(name)}
                 onRename={(to) => renameAction(name, to)}
                 onPatch={(p) => patchAction(name, p)}
                 onRemove={() => removeAction(name)}
@@ -245,8 +276,9 @@ export default function ActionsDialog({ open, doc, onClose, onBeginHistory, onAp
 
         <div className="modal-foot">
           <p className="muted small">
-            选好动作后，菜单项 / 控件的点击就走这个回调；<strong>改名不会自动更新引用</strong>
-            （引用处会变成「不存在的动作」，<code>--selftest</code> 会报出来）。
+            选好动作后，菜单项 / 控件的点击就走这个回调；<strong>改名会连带更新引用</strong>
+            （改名时每个控件、每个菜单项的 <code>action</code> 一起改到新名字，不会留下悬空引用；
+            只有手改 <code>.cgui</code> 里的名字才会，那种情况 <code>--selftest</code> 会报出来）。
             导出 C 骨架时会为每个回调名生成空函数。
           </p>
           <button className="mini" onClick={addAction}>

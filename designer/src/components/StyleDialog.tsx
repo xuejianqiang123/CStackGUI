@@ -4,17 +4,23 @@
  * 控件用三种形态引用它（契约 §2）：内联对象 / `"style": "名字"` / `{ "use": "名字", ...覆盖 }`。
  * 于是「同一套字号/配色」只写一遍，改一处就全变。
  *
- * 两件要在界面上说清楚的事：
- *   1. **改名不会自动更新引用**（与「动作」同一个约定）：引用处会变成「不存在的样式」，
- *      运行时当"没有命名样式"处理（**不报错**）—— 所以要靠「属性」面板里的标红自查。
+ * 三件要在界面上说清楚的事：
+ *   1. **改名会连带更新引用**（和「属性」面板改控件 id 连带改 bind.src 同一个做法）：
+ *      改名时把每个控件的 style 一起改到新名，所以上面那句"改一处全变"才是真的。
+ *      手改 .cgui 里的名字才会留下悬空引用 —— 那种情况运行时当"没有命名样式"处理
+ *      （**不报错**，只是外观悄悄按没有样式来），靠「属性」面板里的标红自查。
  *   2. 一条样式**一个字段都没有**也能存在（别的控件还引用着它）；这种空样式本身不改变外观，
  *      只是给引用点一个"以后往这里填"的位置。
+ *   3. 卡片上写「被 N 处引用」：改名/删除之前先让人看见影响面。
  *
  * 名字（= styles 的键）是唯一会被「删掉再建」的字段，所以它单独走「失焦才提交」，
  * 并且空名字/重名**当场标红**（不必等失焦）。
+ *
+ * 「复制」= py880 那句"复制主题做自己的配色"的最小落地：以这条样式为初值另建一条，
+ * 新的随便改，旧的原样不动。
  */
 import { useState } from "react";
-import { isSafeStyleName, type CgDoc, type CgStyle } from "../model";
+import { countRefs, isSafeStyleName, renameStyleRefs, type CgDoc, type CgStyle } from "../model";
 import { Row } from "./Inspector/PanelUi";
 
 type Props = {
@@ -43,14 +49,17 @@ type CardProps = {
   style: CgStyle;
   /** 全部样式名（判重名用；自己也在里面，同名会走「没改」分支提前返回） */
   taken: Set<string>;
+  /** 有多少个控件引用着这条样式（0 = 没人引用，改名或删除都不影响任何控件） */
+  refCount: number;
   onRename: (to: string) => void;
   onPatch: (patch: Partial<CgStyle>) => void;
   onRemove: () => void;
+  onDuplicate: () => void;
 };
 
 /** 一条样式 = 一张卡片。字段每改一下就落盘（和「动作」「程序配置」同一套手感），
  *  只有样式名是失焦/回车才提交。 */
-function StyleCard({ name, style, taken, onRename, onPatch, onRemove }: CardProps) {
+function StyleCard({ name, style, taken, refCount, onRename, onPatch, onRemove, onDuplicate }: CardProps) {
   const [draft, setDraft] = useState(name);
 
   /* 空名字 / 重名当场标红（不必等失焦，契约要求"空名字当场标红"） */
@@ -80,7 +89,28 @@ function StyleCard({ name, style, taken, onRename, onPatch, onRemove }: CardProp
             if (e.key === "Enter") e.currentTarget.blur();
           }}
         />
-        <button className="mini" onClick={onRemove} title="删除这个样式（引用它的控件会变成「不存在的样式」）">
+        <span
+          className="act-refs muted small"
+          title={
+            refCount > 0
+              ? `${refCount} 个控件用 style 引用着它；改名会连带把它们一起改到新名字`
+              : "没有控件引用它，改名或删除都不影响任何控件"
+          }
+        >
+          {refCount > 0 ? `${refCount} 处引用` : "未被引用"}
+        </span>
+        <button className="mini" onClick={onDuplicate} title="以这条样式为初值另建一条：新的随便改，旧的原样不动">
+          复制
+        </button>
+        <button
+          className="mini"
+          onClick={onRemove}
+          title={
+            refCount > 0
+              ? `删除这个样式：还有 ${refCount} 个控件引用它，删了它们会变成引用不存在的样式`
+              : "删除这个样式（没有控件引用它）"
+          }
+        >
           删除
         </button>
       </div>
@@ -166,6 +196,9 @@ export default function StyleDialog({ open, doc, onClose, onBeginHistory, onAppl
   const styles = doc.styles ?? {};
   const names = Object.keys(styles);
   const taken = new Set(names);
+  /* 每条样式被几个控件引用（一次遍历同时算完两张表，见 model/refs.ts） */
+  const styleRefs = countRefs(doc).styles;
+  const refCountOf = (name: string) => styleRefs.get(name) ?? 0;
 
   const patchStyle = (name: string, patch: Partial<CgStyle>) => {
     onBeginHistory();
@@ -181,6 +214,8 @@ export default function StyleDialog({ open, doc, onClose, onBeginHistory, onAppl
     });
   };
 
+  /** 改名：**同一次 onApply 里**把引用也改掉 —— 这样"改名"在撤销栈里是一步，
+   *  也不会留下"表改了、引用还指着旧名"的中间态。 */
   const renameStyle = (from: string, to: string) => {
     onBeginHistory();
     onApply((d) => {
@@ -188,6 +223,7 @@ export default function StyleDialog({ open, doc, onClose, onBeginHistory, onAppl
       const s = d.styles[from] ?? {};
       delete d.styles[from];
       d.styles[to] = s;
+      renameStyleRefs(d, from, to);
     });
   };
 
@@ -205,6 +241,24 @@ export default function StyleDialog({ open, doc, onClose, onBeginHistory, onAppl
     onBeginHistory();
     onApply((d) => {
       d.styles = { ...(d.styles ?? {}), [name]: { size: 9 } };
+    });
+  };
+
+  /** 复制一条样式（py880 那句"复制主题做自己的配色"）：字段逐字搬过去，**不搬引用** ——
+   *  新样式是独立的一条，谁去引用它由使用者自己决定。 */
+  const duplicateStyle = (name: string) => {
+    const base = `${name}_副本`;
+    let to = base;
+    let i = 2;
+    while (styles[to]) {
+      to = `${base}${i}`;
+      i += 1;
+    }
+    onBeginHistory();
+    onApply((d) => {
+      const src = d.styles?.[name];
+      if (!src) return;
+      d.styles = { ...(d.styles ?? {}), [to]: { ...src } };
     });
   };
 
@@ -249,9 +303,11 @@ export default function StyleDialog({ open, doc, onClose, onBeginHistory, onAppl
                 name={name}
                 style={styles[name]}
                 taken={taken}
+                refCount={refCountOf(name)}
                 onRename={(to) => renameStyle(name, to)}
                 onPatch={(p) => patchStyle(name, p)}
                 onRemove={() => removeStyle(name)}
+                onDuplicate={() => duplicateStyle(name)}
               />
             ))
           )}
@@ -259,8 +315,8 @@ export default function StyleDialog({ open, doc, onClose, onBeginHistory, onAppl
 
         <div className="modal-foot">
           <p className="muted small">
-            <strong>改名不会自动更新引用</strong>：引用处会变成「不存在的样式」，运行时当没有命名样式处理
-            （不报错、不中断）——「属性」面板会把失效的引用标红。
+            <strong>改名会连带更新引用</strong>：改名时每个控件的 style 一起改到新名字，不会留下悬空引用
+            （只有手改 .cgui 里的名字才会，那种情况「属性」面板把失效的引用标红）。
             一条样式可以一个字段都不填，只要还有人引用着它；深色模式下的配色以控件写死的颜色为准，
             样式里写了的颜色会盖过深色缺省。
           </p>

@@ -2404,6 +2404,11 @@ button.icon-pick svg {
 .act-card-head .mini {
   flex: 0 0 auto;
 }
+/* 卡片头上的「N 处引用」：不参与收缩、不折行（对话框窄的时候也得看得见这条判据） */
+.act-refs {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
 .act-note {
   margin: 2px 0 4px;
   line-height: 1.5;
