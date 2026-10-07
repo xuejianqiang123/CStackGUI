@@ -43,7 +43,22 @@
  *              encconv.exe                  按 exe 同目录自动找 encconv.cgui
  *              encconv.exe xxx.cgui         用它当界面
  *              encconv.exe <目录>           界面自动找，启动后枚举该目录并**另存**转换一遍
- *           最后的自动转换**只另存新文件、绝不覆盖**（覆盖必须人工在界面上两步确认）。
+ *              encconv.exe 任务单.ini       界面自动找，导入 [task] 节参数后枚举并**另存**转换一遍
+ *           最后的自动转换**只另存新文件、绝不覆盖**（覆盖必须人工在界面上两步确认）：
+ *           命令行 / 任务单把「覆盖原文件」勾上也只是填勾，自动跑仍停在两步确认的第一步。
+ *
+ *          【INI 任务单导入】把"转什么、怎么转"写成最朴素的 INI 交给工具（车间下发任务单、
+ *          脚本批量生成的场景）：界面点「导入 INI 配置」，或命令行直接给 .ini。格式（[task] 节）：
+ *              [task]
+ *              dir=D:\data\old           要扫描的目录；空 = 保持目录框现状
+ *              direction=gbk2utf8        gbk2utf8 | utf82gbk
+ *              newline=keep              keep | crlf | lf
+ *              bom=0                     0 | 1（只在 GBK→UTF-8 方向有意义）
+ *              overwrite=0               0 | 1（真覆盖仍要两步确认，导入不绕过）
+ *          读取用 cg_ini_read **逐键**读 —— 运行时没有枚举节/键的接口，所以任务单是
+ *          键名固定的"表单"，不是任意 INI 的全量解析。缺项 = 保持界面当前值；非法值
+ *          点名报出来并保持，绝不悄悄改。「造示例文件」会用 cg_ini_write 顺带造一份
+ *          示例任务单 task.ini；「任务单」框空着时默认找「目录」下的 task.ini。
  *
  *          自检（--selftest）不开窗：就绪钩子里不读盘；枚举 / 读文件 / 写盘 / 弹框之前一律先问
  *          `cg_app_has_window()`，无窗口时整条 I/O 路径跳过。内存：整读回来的堆串拷进 static 缓冲
@@ -98,6 +113,7 @@ static int            s_done, s_skip, s_fail;      /**< 上次转换的统计：
 static int            s_confirmed;                 /**< 覆盖确认：两步走的第二下 */
 
 static char s_boot_dir[ENCCONV_DIR_MAX]; /**< 命令行点名的目录：开窗后枚举并另存转换一遍 */
+static char s_boot_ini[ENCCONV_DIR_MAX]; /**< 命令行点名的 INI 任务单：开窗后导入参数再跑一遍 */
 
 /* ------------------------------------------------------------ 判定与文本小工具 */
 
@@ -544,11 +560,175 @@ static void make_samples(cg_app_t *app)
         if (path) cg_free(path);
     }
 
+    /* 顺带造一份示例任务单（cg_ini_write 逐键写：节不存在会自动补 [task]）。
+     * dir 故意留空 —— 任务单跟数据同目录，导入时"dir 未填 = 保持目录框现状"，
+     * 而「造示例文件」已经把目录框填好了，导入后直接就能枚举 */
+    {
+        char *task = cg_path_join(dir, "task.ini");
+
+        if (task && cg_file_exists(task)) {
+            note(app, CG_TERM_SYS, "  task.ini：已存在，跳过（不覆盖）。");
+        } else if (!task ||
+                   cg_ini_write(task, "task", "dir", "") != 0 ||
+                   cg_ini_write(task, "task", "direction", "gbk2utf8") != 0 ||
+                   cg_ini_write(task, "task", "newline", "keep") != 0 ||
+                   cg_ini_write(task, "task", "bom", "0") != 0 ||
+                   cg_ini_write(task, "task", "overwrite", "0") != 0) {
+            note(app, CG_TERM_SYS, "  task.ini：写不进去，跳过。");
+        } else {
+            note(app, CG_TERM_TX, "  已造 task.ini（示例任务单：GBK→UTF-8，dir 留空 = 导入时保持目录框现状）");
+        }
+        if (task) cg_free(task);
+    }
+
     note(app, CG_TERM_SYS, "造示例完成：%d 个成功、%d 个失败（目录：%s）", ok, fail, dir);
     note(app, CG_TERM_SYS, "  其中 readme_ascii.txt 是纯 ASCII 对照：它会判「无需转换」（谁都能读它）");
+    note(app, CG_TERM_SYS, "  点「导入 INI 配置」（任务单框空着就找这份 task.ini）可一键把参数填好");
     if (fallback) cg_free(fallback);
 
     scan_dir(app);                            /* 顺手枚举一遍：接着双击一行就能看对照预览 */
+}
+
+/* ------------------------------------------------------------ INI 任务单导入 */
+
+/**
+ * @brief 两个串按 ASCII 折大小写后是否相等（任务单的枚举值判断用）
+ * @param a 串一；NULL 安全
+ * @param b 串二；NULL 安全
+ * @return int 1 相等、0 不等
+ * @note 不引 <ctype.h> / 平台专有 stricmp：与 ends_with_ci 同款手写，规则一目了然
+ */
+static int equal_ci(const char *a, const char *b)
+{
+    int i;
+
+    if (!a || !b) return 0;
+    if (strlen(a) != strlen(b)) return 0;
+    for (i = 0; a[i]; i++) {
+        unsigned char ca = (unsigned char)a[i];
+        unsigned char cb = (unsigned char)b[i];
+
+        if (ca >= 'A' && ca <= 'Z') ca = (unsigned char)(ca - 'A' + 'a');
+        if (cb >= 'A' && cb <= 'Z') cb = (unsigned char)(cb - 'A' + 'a');
+        if (ca != cb) return 0;
+    }
+    return 1;
+}
+
+/**
+ * @brief 把 INI 任务单（[task] 节）里的转换参数逐键读出、填进界面控件
+ * @param app 应用：找控件、往终端写报告
+ * @param path 任务单 INI 的路径
+ * @return int 0 = 已导入（含部分键非法/缺省的情况）；-1 = 文件不存在，什么都没动
+ * @note 读取用 cg_ini_read 逐键读 —— 运行时**没有**枚举节/键的接口，所以任务单是键名固定的
+ *       "表单"（dir / direction / newline / bom / overwrite），不是任意 INI 的全量解析。
+ *       行为约定：缺项 = 保持界面当前值；非法值点名报出来并保持当前值，绝不悄悄改。
+ *       导入只填参数**不执行转换**：执行仍走「开始转换」，覆盖的两步确认也不被导入绕过
+ */
+static int import_task_ini(cg_app_t *app, const char *path)
+{
+    cg_widget_t *cbo_dir = cg_find(app, "cbo_dir");
+    cg_widget_t *cbo_nl  = cg_find(app, "cbo_nl");
+    char        *v;
+    int          bad = 0;
+
+    if (!path || !path[0] || !cg_file_exists(path)) {
+        note(app, CG_TERM_SYS, "任务单不存在：%s", (path && path[0]) ? path : "（路径空）");
+        return -1;
+    }
+
+    note(app, CG_TERM_TX, "导入 INI 任务单：%s", path);
+
+    /* dir：空 = 保持目录框现状（任务单往往和数据放一起，目录让使用者自己选） */
+    v = cg_ini_read(path, "task", "dir", "");
+    if (v && v[0]) {
+        cg_widget_set_text(cg_find(app, "edt_dir"), v);
+        note(app, CG_TERM_SYS, "  dir = %s", v);
+    } else {
+        note(app, CG_TERM_SYS, "  dir 未填，保持目录框现状。");
+    }
+    cg_free(v);
+
+    /* direction：gbk2utf8 / utf82gbk（大小写不敏感） */
+    v = cg_ini_read(path, "task", "direction", "");
+    if (equal_ci(v, "gbk2utf8")) {
+        cg_widget_set_value(cbo_dir, 0);
+    } else if (equal_ci(v, "utf82gbk")) {
+        cg_widget_set_value(cbo_dir, 1);
+    } else {
+        note(app, CG_TERM_SYS, "  direction = %s（非法：收 gbk2utf8 / utf82gbk），保持当前方向。",
+             (v && v[0]) ? v : "未填");
+        bad += (v && v[0]) ? 1 : 0;
+    }
+    cg_free(v);
+
+    /* newline：keep / crlf / lf */
+    v = cg_ini_read(path, "task", "newline", "");
+    if      (equal_ci(v, "keep")) cg_widget_set_value(cbo_nl, ENC_NL_KEEP);
+    else if (equal_ci(v, "crlf")) cg_widget_set_value(cbo_nl, ENC_NL_CRLF);
+    else if (equal_ci(v, "lf"))   cg_widget_set_value(cbo_nl, ENC_NL_LF);
+    else {
+        note(app, CG_TERM_SYS, "  newline = %s（非法：收 keep / crlf / lf），保持当前换行。",
+             (v && v[0]) ? v : "未填");
+        bad += (v && v[0]) ? 1 : 0;
+    }
+    cg_free(v);
+
+    /* bom / overwrite：0 或 1；覆盖只填勾，真覆盖仍要两步确认 */
+    v = cg_ini_read(path, "task", "bom", "");
+    if      (equal_ci(v, "0")) cg_widget_set_checked(cg_find(app, "chk_bom"), 0);
+    else if (equal_ci(v, "1")) cg_widget_set_checked(cg_find(app, "chk_bom"), 1);
+    else {
+        note(app, CG_TERM_SYS, "  bom = %s（非法：收 0 / 1），保持当前勾选。",
+             (v && v[0]) ? v : "未填");
+        bad += (v && v[0]) ? 1 : 0;
+    }
+    cg_free(v);
+
+    v = cg_ini_read(path, "task", "overwrite", "");
+    if      (equal_ci(v, "0")) cg_widget_set_checked(cg_find(app, "chk_overwrite"), 0);
+    else if (equal_ci(v, "1")) cg_widget_set_checked(cg_find(app, "chk_overwrite"), 1);
+    else {
+        note(app, CG_TERM_SYS, "  overwrite = %s（非法：收 0 / 1），保持当前勾选。",
+             (v && v[0]) ? v : "未填");
+        bad += (v && v[0]) ? 1 : 0;
+    }
+    cg_free(v);
+
+    note(app, CG_TERM_TX, "导入完成%s。下一步点「枚举文件」→「开始转换」（导入只填参数，不替你转换）。",
+         bad ? "（有非法键已按当前值保持）" : "");
+    return 0;
+}
+
+/**
+ * @brief 「导入 INI 配置」按钮：按任务单框的路径导入；框空着就找目录下的 task.ini
+ * @param app 应用
+ * @return void 无返回值
+ * @note 默认路径跟数据放一起（车间习惯：任务单和数据同一个目录），找「目录」框目录下的
+ *       task.ini；目录也没填就明说，不瞎猜。导入成功顺手枚举一遍，接着就能看表
+ */
+static void import_clicked(cg_app_t *app)
+{
+    cg_widget_t *edt = cg_find(app, "edt_ini");
+    const char  *p   = edt ? cg_widget_text(edt) : NULL;
+    char        *fallback = NULL;
+    int          rc;
+
+    if (!p || !p[0]) {                           /* 任务单框空着：找「目录」下的 task.ini */
+        const char *dir = cg_widget_text(cg_find(app, "edt_dir"));
+
+        if (!dir || !dir[0]) {
+            note(app, CG_TERM_SYS, "任务单路径空着，目录框也空着：先填一个（任务单跟数据放一起时，空着也行）。");
+            return;
+        }
+        fallback = cg_path_join(dir, "task.ini");
+        p = fallback;
+        note(app, CG_TERM_SYS, "任务单框空着，默认找目录下的 task.ini：%s", p);
+    }
+
+    rc = import_task_ini(app, p);
+    if (fallback) cg_free(fallback);
+    if (rc == 0) scan_dir(app);                  /* 目录键若是新的，枚举表跟着刷新 */
 }
 
 /* ------------------------------------------------------------ 转换与落盘 */
@@ -839,13 +1019,15 @@ static void on_btn_click(cg_widget_t *self, cg_event_t ev, void *user)
         note(app, CG_TERM_SYS, "自检模式：跳过「%s」（不真读盘）。",
              strcmp(id, "btn_scan") == 0     ? "枚举"
            : strcmp(id, "btn_preview") == 0  ? "预览"
-           : strcmp(id, "btn_samples") == 0  ? "造示例文件" : "转换");
+           : strcmp(id, "btn_samples") == 0  ? "造示例文件"
+           : strcmp(id, "btn_import") == 0   ? "导入任务单" : "转换");
         return;
     }
 
     if (strcmp(id, "btn_samples") == 0) { make_samples(app);     return; }
     if (strcmp(id, "btn_scan") == 0)    { scan_dir(app);         return; }
     if (strcmp(id, "btn_preview") == 0) { preview_selected(app); return; }
+    if (strcmp(id, "btn_import") == 0)  { import_clicked(app);   return; }
     if (strcmp(id, "btn_convert") == 0) { convert_all(app);      return; }
 }
 
@@ -898,12 +1080,20 @@ static void on_ready(cg_app_t *app, void *user)
     note(app, CG_TERM_SYS, "编码与换行转换器就绪。单文件上限 8 MB、一次最多 200 个；超限一律跳过，不截断。");
     note(app, CG_TERM_SYS, "判定只是猜测：先按严格 UTF-8 校验，不合法才判「疑似 GBK」——纯 ASCII 谁都合法。");
     note(app, CG_TERM_SYS, "默认另存新文件（原名 + .utf8.txt / .gbk.txt）；覆盖原文件需要在界面上两步确认。");
+    note(app, CG_TERM_SYS, "转换参数可写成 INI 任务单（[task] 节）再「导入 INI 配置」，或命令行直接给 task.ini。");
 
     if (s_boot_dir[0] && cg_app_has_window(app)) {
         note(app, CG_TERM_TX, "命令行点名了目录，直接枚举并另存转换：%s", s_boot_dir);
         cg_widget_set_text(cg_find(app, "edt_dir"), s_boot_dir);
         scan_dir(app);
         convert_all(app);
+    } else if (s_boot_ini[0] && cg_app_has_window(app)) {
+        note(app, CG_TERM_TX, "命令行点名了任务单，导入参数后枚举并另存转换：%s", s_boot_ini);
+        cg_widget_set_text(cg_find(app, "edt_ini"), s_boot_ini);
+        if (import_task_ini(app, s_boot_ini) == 0) {
+            scan_dir(app);
+            convert_all(app);          /* 只另存：任务单里 overwrite=1 也只填勾，仍停在两步确认 */
+        }
     }
 }
 
@@ -945,7 +1135,7 @@ static const cg_binding_t k_bindings[] = {
 /**
  * @brief 入口：登记绑定与 .cgui 路径后交给运行时
  * @param argc 命令行参数个数
- * @param argv 命令行参数数组：argv[1] 是 .cgui 路径或要处理的目录，写 "--selftest" 则跑自检
+ * @param argv 命令行参数数组：argv[1] 是 .cgui 路径 / .ini 任务单 / 要处理的目录，写 "--selftest" 则跑自检
  * @return int 进程退出码：运行 / 自检的返回值，0 = 正常
  */
 int main(int argc, char **argv)
@@ -962,11 +1152,14 @@ int main(int argc, char **argv)
         return cg_app_selftest(&desc);
     }
 
-    /* 参数约定：写 xxx.cgui 当界面（再给第二个参数就是启动要处理的目录）；写别的当目录 */
+    /* 参数约定：写 xxx.cgui 当界面（再给第二个参数就是启动要处理的目录）；
+     * 写 xxx.ini 当任务单（导入 [task] 参数后自动跑）；写别的当目录 */
     desc.cgui_path = "encconv.cgui";
     if (argc > 1 && ends_with_ci(argv[1], ".cgui")) {
         desc.cgui_path = argv[1];
         if (argc > 2) snprintf(s_boot_dir, sizeof s_boot_dir, "%s", argv[2]);
+    } else if (argc > 1 && ends_with_ci(argv[1], ".ini")) {
+        snprintf(s_boot_ini, sizeof s_boot_ini, "%s", argv[1]);
     } else if (argc > 1) {
         snprintf(s_boot_dir, sizeof s_boot_dir, "%s", argv[1]);
     }

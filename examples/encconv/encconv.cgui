@@ -7,8 +7,8 @@
     "bg": "#F3EDF7",
     "info": {
       "product": "CStackGUI 编码转换器",
-      "desc": "GBK/UTF-8 互转 + 换行统一：整读 + 8 MB 上限，判定按 UTF-8 校验可能误判；可一键造 GBK 示例文件，预览按两种解读对照",
-      "version": "1.0.0.0",
+      "desc": "GBK/UTF-8 互转 + 换行统一：整读 + 8 MB 上限，判定按 UTF-8 校验可能误判；可一键造 GBK 示例文件，支持 INI 任务单导入转换参数",
+      "version": "1.1.0.0",
       "author": "CStackGUI"
     },
     "events": { "close": "on_close" }
@@ -23,8 +23,8 @@
     {
       "id": "grp_top",
       "type": "group",
-      "rect": { "x": 12, "y": 8, "w": 996, "h": 112 },
-      "text": "① 目录与选项（单文件上限 8 MB / 一次最多 200 个）",
+      "rect": { "x": 12, "y": 8, "w": 996, "h": 156 },
+      "text": "① 目录、选项与任务单（单文件上限 8 MB / 一次最多 200 个）",
       "children": [
         {
           "id": "lab_dir",
@@ -121,20 +121,40 @@
           "text": "开始转换",
           "hint": "逐个候选转换并落盘；每个文件报「原名 → 新名 / 字节变化 / 结论」",
           "events": { "click": "on_btn_click" }
+        },
+        {
+          "id": "lab_ini",
+          "type": "label",
+          "rect": { "x": 16, "y": 114, "w": 44, "h": 22 },
+          "text": "任务单"
+        },
+        {
+          "id": "edt_ini",
+          "type": "edit",
+          "rect": { "x": 64, "y": 108, "w": 340, "h": 26 },
+          "hint": "INI 任务单路径（[task] 节：dir / direction / newline / bom / overwrite）。空着 = 默认找「目录」下的 task.ini（「造示例文件」会顺带造一份）；命令行也可直接给 encconv.exe task.ini"
+        },
+        {
+          "id": "btn_import",
+          "type": "button",
+          "rect": { "x": 412, "y": 106, "w": 140, "h": 30 },
+          "text": "导入 INI 配置",
+          "hint": "读任务单把参数填进界面：缺项保持当前值、非法值点名报出；导入只填参数不自动转换，覆盖勾上后真覆盖仍要两步确认",
+          "events": { "click": "on_btn_click" }
         }
       ]
     },
     {
       "id": "grp_main",
       "type": "group",
-      "rect": { "x": 12, "y": 128, "w": 996, "h": 488 },
+      "rect": { "x": 12, "y": 172, "w": 996, "h": 444 },
       "grow": 1,
       "text": "② 文件列表（左） / 日志与预览（右）",
       "children": [
         {
           "id": "tbl_files",
           "type": "table",
-          "rect": { "x": 16, "y": 26, "w": 560, "h": 440 },
+          "rect": { "x": 16, "y": 26, "w": 560, "h": 396 },
           "columns": [
             { "title": "文件名", "w": 250 },
             { "title": "大小", "w": 84 },
@@ -146,7 +166,7 @@
         {
           "id": "term_out",
           "type": "terminal",
-          "rect": { "x": 584, "y": 26, "w": 396, "h": 440 },
+          "rect": { "x": 584, "y": 26, "w": 396, "h": 396 },
           "grow": 1,
           "checked": false,
           "value": 5000,
