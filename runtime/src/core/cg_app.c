@@ -201,6 +201,19 @@ static char *open_cgui_text(const cg_app_desc_t *desc, char *found, size_t found
         if (json) { fprintf(stderr, "[cstackgui] 界面文件: %s\n", cand); if (found) snprintf(found, found_size, "%s", cand); return json; }
     }
 
+    /* 最后再试一次：界面可能被**编进了 exe 自己**（单文件发布时把 .cgui 作为
+       PE 资源 RT_RCDATA "CGUI" 一起打包）。放在所有文件位置之后是故意的 ——
+       把一份 .cgui 放到 exe 旁边仍然优先，这样"改界面不必重新编译"照旧成立。 */
+    {
+        size_t n = 0;
+        json = cg_embedded_resource("CGUI", &n);
+        if (json) {
+            cg_log(CG_LOG_INFO, "界面来源：exe 内嵌资源（%lu 字节）", (unsigned long)n);
+            if (found) snprintf(found, found_size, "(内嵌资源)");
+            return json;
+        }
+    }
+
     s_fatal[0] = '\0';
     fatal_add("程序按顺序找过这些位置：\n");
     if (desc->cgui_path) fatal_add("    %s\n", desc->cgui_path);

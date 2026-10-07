@@ -593,6 +593,17 @@ void cg_timers_clear(cg_app_t *app);
  */
 int cg_exe_path(char *buf, size_t size);
 
+/**
+ * @brief 读本 exe 里内嵌的资源（PE 的 RT_RCDATA）
+ * @param name 资源名（ASCII，如 "CGUI"）
+ * @param size 输出资源字节数；可为 NULL
+ * @return char * 资源内容（malloc 的字节块，**末尾补了一个 '\0'**，调用方 free）；
+ *                没有这个资源或读取失败返回 NULL
+ * @note 为什么要有这个端口：单文件发布要把 .cgui 编进 exe，而 core 必须平台中立
+ *       （不许 include windows.h），所以按 cg_exe_path 的同一套路，由 win32 后端实现。
+ */
+char *cg_embedded_resource(const char *name, size_t *size);
+
 /* Win32 后端内部的联动入口（cg_app.c 的公共 API 会调）：
  * hint / period 改完要动 tooltip 和 SetTimer，那些句柄只有后端知道。 */
 /**

@@ -220,6 +220,28 @@ async function buildApp(ctx, root, tk, appDir, release) {
     }
   }
 
+  /* 单文件发布：把界面文件作为 PE 资源一起编进 exe（运行时在所有文件位置都找不到
+     .cgui 时才读它）。用资源而不是"生成一个几百 KB 的 C 数组"：
+       - 不用改工程代码 —— 手写工程（examples/*）也能直接单文件发布；
+       - 不生成中间源码，不污染工程目录。
+     旁边放一份 .cgui 仍然优先，所以"改界面不必重新编译"照旧成立。 */
+  const cguiPath = path.join(appDir, `${name}.cgui`);
+  let cguiRes = null;
+  if (fs.existsSync(cguiPath) && fs.statSync(cguiPath).size > 0) {
+    const objDir = path.join(root, "build", "obj");
+    const rcFile = path.join(objDir, `${name}_cgui_res.rc`);
+    const objFile = path.join(objDir, `${name}_cgui_res.o`);
+    fs.mkdirSync(objDir, { recursive: true });
+    /* 资源内容只取决于 .cgui 的字节，所以增量判据拿 obj 比 .cgui 就够 */
+    fs.writeFileSync(rcFile, `CGUI RCDATA "${cguiPath.replace(/\\/g, "/")}"\r\n`, "utf8");
+    if (!(mtime(objFile) > mtime(cguiPath))) {
+      ctx.log("  RC 把界面编进 exe（单文件发布）");
+      const rc = await ctx.run(["windres", "--codepage=65001", "-O", "coff", rcFile, "-o", objFile]);
+      if (rc) return rc;
+    }
+    cguiRes = objFile;
+  }
+
   /* 增量编译：头变新同样触发重编，避免悄悄链上旧代码 */
   const hdrT = newest([...listExt(appDir, ".h"), path.join(tk.inc, "cstackgui.h")]);
   const objs = [];
@@ -238,7 +260,7 @@ async function buildApp(ctx, root, tk, appDir, release) {
   ctx.log(`  LD ${name}.exe${release ? "（发布版，无控制台）" : "（调试版，带控制台）"}`);
   const rc = await ctx.run(["gcc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Wno-unused-parameter", `-I${tk.inc}`,
     ...(release ? ["-mwindows"] : []),
-    "-o", out, ...objs, appRes, path.join(appLib, "libcstackgui.a"),
+    "-o", out, ...objs, appRes, ...(cguiRes ? [cguiRes] : []), path.join(appLib, "libcstackgui.a"),
     "-lcomctl32", "-luser32", "-lgdi32", "-lshell32", "-lgdiplus", "-lcomdlg32",
     "-luuid", "-lole32", "-loleaut32", "-lws2_32", "-lstdc++"]);
   if (rc) return rc;

@@ -357,6 +357,46 @@ int cg_exe_path(char *buf, size_t size)
     return 0;
 }
 
+/** @brief 读本 exe 内嵌的 RT_RCDATA 资源（单文件发布：把 .cgui 一起编进 exe）
+ *  @param name 资源名（ASCII，如 "CGUI"）
+ *  @param size 输出资源字节数；可为 NULL
+ *  @return char * malloc 的字节块，**末尾补了 '\0'**（调用方 free）；没有该资源或读取失败返回 NULL
+ */
+char *cg_embedded_resource(const char *name, size_t *size)
+{
+    wchar_t     wname[128];
+    HRSRC       res;
+    HGLOBAL     mem;
+    const char *bytes;
+    DWORD       n;
+    char       *out;
+
+    if (size) *size = 0;
+    if (!name || !name[0]) return NULL;
+
+    /* 资源 API 有 A/W 两套，而 RT_RCDATA 在 Unicode 构建下本身就是宽字符宏 ——
+       统一走 W 那套，省掉 A/W 混用带来的类型不匹配。 */
+    if (MultiByteToWideChar(CP_UTF8, 0, name, -1, wname, (int)(sizeof(wname) / sizeof(wname[0]))) <= 0) return NULL;
+
+    res = FindResourceW(NULL, wname, RT_RCDATA);
+    if (!res) return NULL;
+    n = SizeofResource(NULL, res);
+    if (!n) return NULL;
+    mem = LoadResource(NULL, res);
+    if (!mem) return NULL;
+    bytes = (const char *)LockResource(mem);
+    if (!bytes) return NULL;
+
+    /* 拷出来再补 0：调用方拿它当 C 字符串喂 cg_doc_parse。
+       资源在进程退出时由系统回收，这里不需要（也没法）单独释放。 */
+    out = (char *)malloc((size_t)n + 1);
+    if (!out) return NULL;
+    memcpy(out, bytes, (size_t)n);
+    out[n] = '\0';
+    if (size) *size = (size_t)n;
+    return out;
+}
+
 /** @brief 宽字符 -> UTF-8 堆串（调用方 free）；NULL 进 NULL 出，转换失败也返回 NULL
  *  @param ws 源宽字符串；NULL 直接返回 NULL
  *  @return char * 堆分配的 UTF-8 串，调用方 free；失败返回 NULL
