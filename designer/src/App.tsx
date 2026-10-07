@@ -301,7 +301,11 @@ export default function App() {
       setDirty(false);
     }
     const skipped = res.skipped?.length ? `（跳过已存在的 ${res.skipped.join("、")}）` : "";
-    say(`已导出到 ${res.dir}${skipped}，接着去填 ${baseName}_ui_events.c`);
+    say(
+      res.handwritten
+        ? `已把界面写回 ${res.dir}（这个目录的 main.c 是手写的，代码一律没动）`
+        : `已导出到 ${res.dir}${skipped}，接着去填 ${baseName}_ui_events.c`,
+    );
     return { dir: res.dir ?? "", appName: baseName };
   }, [bridge, docRef, say, filePath]);
 

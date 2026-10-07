@@ -378,26 +378,35 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
     return nl < 0 ? template : template.slice(0, nl + 1) + kept + template.slice(e);
   };
 
+  /* 这个目录里的 main.c 是不是**画布产物**？
+   * 判据只能是机器标记 —— 示例里的 main.c 也含 desc.auto_locate_cgui / k_bindings
+   * 之类的"看着像模板"的东西，靠内容猜会把别人的手写程序覆盖掉（踩过：darkterm）。 */
+  const mainPath = path.join(dir, "main.c");
+  const handwritten = existsSync(mainPath)
+    ? !/generated-by-cstackgui|用户代码（重新导出时这一段原样保留）/.test(
+        await fs.readFile(mainPath, "utf8"),
+      )
+    : false;
+
   const written = [];
   const skipped = [];
   try {
     await fs.mkdir(dir, { recursive: true });
     for (const f of files) {
       const target = path.join(dir, f.name);
+      /* 手写工程（main.c 不是画布产物）：除了界面文件 .cgui 之外一律不碰 ——
+       * 那不是画布工程，塞 main.c/_ui_events.*/.rc/build.bat 进去只会污染它。 */
+      if (handwritten && !f.name.endsWith(".cgui")) {
+        skipped.push(f.name);
+        continue;
+      }
       // 业务代码是用户的资产，已存在就不覆盖
       if (f.name.endsWith("_ui_events.c") && existsSync(target)) {
         skipped.push(f.name);
         continue;
       }
       if (f.name === "main.c" && existsSync(target)) {
-        const old = await fs.readFile(target, "utf8");
-        const kept = extractUserBlock(old);
-        if (kept === null) {
-          /* 老模板（或用户大改过）：不静默丢东西，先备份再重写。
-           * main.c 是纯样板，业务本该写在 _ui_events.c 里。 */
-          await fs.copyFile(target, `${target}.bak`);
-          skipped.push("main.c（旧内容已备份为 main.c.bak）");
-        }
+        const kept = extractUserBlock(await fs.readFile(target, "utf8"));
         await fs.writeFile(target, injectUserBlock(f.content, kept ?? ""), "utf8");
         written.push("main.c");
         continue;
@@ -422,6 +431,9 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
     dir,
     written,
     skipped,
+    /* 手写工程：界面文件已同步，但不动它的 main.c 等代码。
+     * 发布时据此走"exe + .cgui 一起给"的老路子（没有内嵌界面）。 */
+    handwritten,
     projectRoot: isProjectRoot(projectRootCache) ? projectRootCache : "",
     appName: baseName,
   };
@@ -731,22 +743,44 @@ ipcMain.handle("publish:project", async (_e, { filePath }) => {
   const pubDir = path.join(pubRoot, name);
   const assetsSrc = path.join(appDir, "assets");
   const hasAssets = existsSync(assetsSrc);
-  const singleExe = !hasAssets;
+
+  /* 界面有没有被编译进 exe？只有画布生成的 main.c 才有 embedded_cgui()。
+   * 手写工程的 main.c 不认这套（也不能替他改），所以那种工程照旧
+   * "exe + .cgui 一起给"，并把原因说清楚 —— 不能静默产出一个跑不起来的包。 */
+  let embedded = false;
+  try {
+    embedded = /generated-by-cstackgui/.test(await fs.readFile(path.join(appDir, "main.c"), "utf8"));
+  } catch {
+    embedded = false;
+  }
+  const singleExe = embedded && !hasAssets;
   const readme = [
     `${name} —— 由 CStackGUI 制作`,
     "",
-    "使用方法：双击 " + name + ".exe 即可运行（无需安装任何运行库、不需要额外的界面文件）。",
-    "界面已经编译进 exe 里面了。",
+    embedded
+      ? "使用方法：双击 " + name + ".exe 即可运行（无需安装任何运行库、不需要额外的界面文件）。"
+      : "使用方法：双击 " + name + ".exe 即可运行（无需安装任何运行库）。",
+    embedded ? "界面已经编译进 exe 里面了。" : `${name}.cgui 是界面文件，必须和 exe 放在同一目录。`,
     hasAssets ? "assets\\ 里是程序用到的图片等资源，请和 exe 放在同一目录。" : "",
     "",
-    "想改界面：把改好的同名 " + name + ".cgui 放到 exe 旁边，立刻生效，不用重新编译。",
-    "（发布时用的是内嵌的那份；旁边这份优先级更高。）",
+    embedded
+      ? "想改界面：把改好的同名 " + name + ".cgui 放到 exe 旁边，立刻生效，不用重新编译。"
+      : "想改界面：编辑同目录的 " + name + ".cgui（不用重新编译）。",
+    embedded ? "（发布时用的是内嵌的那份；旁边这份优先级更高。）" : "",
   ].filter((s) => s !== "").join("\r\n");
 
   try {
     await fs.rm(pubDir, { recursive: true, force: true });
     await fs.mkdir(pubDir, { recursive: true });
     await fs.copyFile(exePath, path.join(pubDir, `${name}.exe`));
+    if (!embedded) {
+      /* 手写工程：界面文件得跟着走。按工程名落一份给运行时默认查找用，
+       * 原名不同再补一份（两条查找路都能命中）。 */
+      await fs.copyFile(filePath, path.join(pubDir, `${name}.cgui`));
+      if (path.basename(filePath) !== `${name}.cgui`) {
+        await fs.copyFile(filePath, path.join(pubDir, path.basename(filePath)));
+      }
+    }
     if (hasAssets) await fs.cp(assetsSrc, path.join(pubDir, "assets"), { recursive: true });
     if (!singleExe) await fs.writeFile(path.join(pubDir, "README.txt"), readme, "utf8");
   } catch (err) {
@@ -755,7 +789,11 @@ ipcMain.handle("publish:project", async (_e, { filePath }) => {
 
   /* 3) 只有一个 exe 时直接把它交出去；有附带文件才打 zip（Windows 10+ 自带 bsdtar） */
   let target = path.join(pubDir, `${name}.exe`);
-  let message = `已生成独立 exe：${target}\n双击即可运行（界面已内嵌，不需要 .cgui）。`;
+  let message = embedded
+    ? `已生成独立 exe：${target}\n双击即可运行（界面已内嵌，不需要 .cgui）。`
+    : `已生成发布目录：${pubDir}\n` +
+      `注意：这个工程的 main.c 不是画布生成的（手写工程），界面没有编译进 exe，\n` +
+      `${name}.cgui 必须和 exe 放在同一目录。要单文件发布，请在画布里新建工程并导出 C 骨架。`;
   if (!singleExe) {
     const zipPath = path.join(pubRoot, `${name}.zip`);
     send("run:output", { kind: "line", text: `$ tar -a -c -f ${zipPath}` });

@@ -11,6 +11,8 @@ export type ExportResult = {
   dir?: string;
   written?: string[];
   skipped?: string[];
+  /** 目标目录里的 main.c 不是画布产物（手写工程）：只同步了界面文件，代码一律没动 */
+  handwritten?: boolean;
   projectRoot?: string;
   appName?: string;
 };

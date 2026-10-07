@@ -268,7 +268,9 @@ ${
     : `/* 画布上还没有绑定事件。在画布右侧「事件」页签里填上 C 函数名，再重新导出。 */\n`
 }`;
 
-  const mainC = `/**
+  const mainC = `/* @generated-by-cstackgui:main.c —— 画布产物。看到这行说明本文件可以被画布重新导出；
+   手写工程请把业务写在 ${base}_ui_events.c 里，别改这个文件。 */
+/**
  * @file    main.c
  * @brief   应用入口（由 CStackGUI 画布生成）
  * @details 编译：本目录要放在 CStackGUI 项目的 apps\\ 下，然后在项目根目录跑
