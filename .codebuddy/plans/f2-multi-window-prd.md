@@ -136,5 +136,35 @@ void cg_dialog_close(cg_widget_t *self, int result);
       `run-tests.bat --no-kit` = `all checks passed` + `check-format.bat` = `BAT_EXIT=0`
       （5 个往返探针含带 dialog 的 gallery、`every kind has an example`、计数 44）+
       `tsc`/`vite build` 绿 + 画布截图 `build\canvas-dialog.png`。
-- [ ] P3b T1.2：`cg_dialog_open/close` + 模态泵 + `WM_DESTROY` 只主窗退 + 真机 A1~A5
-      （用带绑定的真工程；掩码逐个核对，该补的两边一起补）
+- [x] P3b **T1.2（2026-10-07）**：`cg_dialog_open/close`（新 `cg_win_modal.c`：独立 HWND + 子树懒建/
+      收尾 + 内层泵 + 防重入锁存/清/恢复）+ `cgw_MainProc` 宿主化 + `WM_DESTROY` 只主窗退（A5）+
+      `cgw_destroy_native_tree`。真机 A1~A5 **15 项断言 ALL PASS**（`build\probe-modal.c` 外部驱动 +
+      被测程序自写 result.log 双证）
+- [x] P3c **T1.3（2026-10-07）**：往返门禁加 dialog 子树探针（编辑塞探针按钮 + 恒等回写逐字核对），
+      红证：serialize 临时丢 children → `4 -> 0` 两连红
+- [x] P4 **T2-full（2026-10-07）**：`center` 字段五层管线（缺省居中，旧文件零变化）+
+      Inspector「打开时居中」分节 + 画布「模态」徽章（同一画布浮着，不用遮罩）。
+      自查修正：center:false 位置与主窗口 app.x/y 同口径（裸值不换算）
+- [x] P5 **A7 端到端（2026-10-07）**：`build\probe-dialog-e2e.mjs` —— 画布模型 → generateC →
+      用户一行补桩 → cgbuild → 真窗口：对话框存在、`pos=40,40`（center:false 精确定位）、
+      owner 禁用。**10 项断言 ALL PASS**。过程记录：PowerShell 的 Add-Type 委托两轮跑法下
+      都静默失灵（连已知有窗口的 modaltest 都"枚举不到"）—— 换 C 驱动（probe-modal 同款）一次就对；
+      **工具不可靠时换工具，别把"工具找不到"当成"应用没窗口"**。
+- [x] P7 收敛：A1~A8 逐条对账，见下
+
+### 验收对账（P7，2026-10-07）
+
+| # | 结果 | 证据 |
+|---|---|---|
+| A1 独立真窗口（标题栏/可拖） | Converged | 真机：`WS_CAPTION`/`WS_SYSMENU`/hwnd≠主窗口（probe-modal 3 项）；`CStackGUIDialog` 独立窗口类 |
+| A2 模态时 owner 禁用 | Converged | 真机两处：probe-modal（`IsWindowEnabled==0`）+ e2e（`owner-enabled=0`）；关闭后恢复 ✓ |
+| A3 返回值反映确定/取消 | Converged | result.log：OK 路径 `result=1`、WM_CLOSE 路径 `result=0` |
+| A4 对话框里的值读得回 | Converged | `cg_find` 读回 `port=COM3`（edt_port 在对话框子树里） |
+| A5 关对话框不退应用 | Converged | `alive=1`（业务自证）+ `IsWindow(main)`（user32 复核）；`WM_DESTROY` 已只主窗退 |
+| A6 老 .cgui 一个字节不变 | Converged | 全程未动任何老文件；5 个往返探针 + `run-tests` 全绿；旧文件无 center 字段 → 缺省居中零行为变化 |
+| A7 画布端到端一条链 | Converged | `probe-dialog-e2e` 10 项 ALL PASS（模型→generateC→编译→真窗口→定位→模态） |
+| A8 单文件发布不受影响 | Converged | generateC 文件清单与多窗体之前**逐字一致**（6 个文件、仍一份 .cgui）；对话框进同一份 PE 资源 |
+
+**F2 epic 收敛**。切片：T1.0（画布不许静默丢）→ T1.1（类型）→ T1.2（模态 API）→ T1.3（往返守卫）→
+T2-minimal（画布/示例/计数）→ T2-full（center/Inspector/徽章）→ A7 e2e。剩余 T4（可选）：
+非模态、对话框里的 tabs、"引用另一个 .cgui"——**有意不做**（PRD §4 非目标）。

@@ -38,7 +38,7 @@
 | F5 | AI 数据大屏（HTML+JS 嵌入） | 原生 Win32 + GDI，**没有 Web 承载层**；`chart` 控件由 `cg_chart_push` 灌数据 | **kill** | 技术路线不兼容。要"大屏"只能是 `.cgui` 里多摆几个 chart/meter/led，那是业务布局，不是框架能力 |
 | F9 | 内置 Python 环境、日期组件、双语 | 单 exe 零依赖（编译期就把界面编进 exe）；已有 `datepicker`/`monthcal` 控件；界面本来就中文 | **kill** | 无缺口。本工程的"内置环境"等价物是 `build-kernel.md`（编译内核搬进画布），已在做 |
 | F7 | 工作台五步 | 已有「新建工程」模板对话框、`run:buildAndLaunch`（F5 编译运行）、`publish:project`、`make-release.bat`（portable + NSIS 一次出齐） | **defer** | 能力齐了，缺的只是"一条命名的向导路径"。属于观感/入口整理，不是新能力，排后 |
-| F2 | **窗体引用 / 子窗体组合** | `CgDoc` 只有单个 `app`，**全仓没有多窗口概念**：`cg_window_create` 零命中，`examples/` 26 个示例没有一个多窗口 | **defer（大 epic）** | **缺口最大、价值最高、成本也最高**：要动 `.cgui` 顶层结构 + 运行时新 API + 画布 + codegen，是跨端 SDD 级项目，必须单独走 PRD → 架构 → 切片，塞不进本轮 |
+| F2 | **窗体引用 / 子窗体组合** | `CgDoc` 只有单个 `app`，**全仓没有多窗口概念**：`cg_window_create` 零命中，`examples/` 26 个示例没有一个多窗口 | **done（2026-10-07）** | 已按 PRD→SDD→切片走完：契约取"顶层 `dialog` 节点"（不是 windows[]），`cg_dialog_open/close` 模态，真机 A1~A8 全过（`.codebuddy/plans/f2-multi-window-prd.md` §8）。"引用另一个 .cgui 文件"仍 defer（PRD §4 非目标，等真实需求） |
 | F6 | 主题配色可视化编辑、复制主题 | 只有 `app.dark`（true/"auto"）+ 命名样式 `styles{}`；`README.md` §1.3 自认"深色模式不是一套完整的深色皮肤"；**画布不预览命名样式**（契约 §4 有意为之） | **defer（下一轮首选）** | 真缺口、且是画布侧为主，但与本轮的"选择模型"改动同在 `App.tsx`/`Inspector` 一带，同轮做会互相踩。下一轮单独开 |
 | F1 | AI 协作改界面 + 统一撤销 | 画布侧**零 AI 代码**（搜 `openai/llm/prompt` 全 0 命中）。但发布包里已带 `.codebuddy/skills/{cgui-edit,cstackgui-dev}` —— 本工程的"AI 改界面"路线是**让 AI 编码助手改 `.cgui`**，不是画布内置大模型 | **defer（改路线）** | 不照抄"内嵌模型"（要 API key、要联网，与"离线单 exe"定位冲突）。可偷的是 py880 那句「**人工与 AI 的修改统一 Ctrl+Z**」→ 本工程等价物 = **画布监听 .cgui 外部变更并热重载**，让 AI 改完文件画布就变。有并发冲突风险，单开一轮 |
 | F8 | 生成 UI 代码保留业务代码 | **已有更强约束**：`codegen.ts` 给 `main.c` 打 `@generated-by-cstackgui` 标记，`electron/main.mjs` 对已存在的 `main.c`/`*_ui_events.c` 一律 `skipped`（宁可不同步也不覆盖） | **defer（可改进）** | 现状是"整文件不覆盖"，代价是**改了界面，老工程不会更新**。可偷 py880 的"分区保留"：在生成文件里放 `// BEGIN/END USER CODE` 区间（py880 的 UI 生成器正是这个模式），区间外可重新生成、区间内永不覆盖。但这是**导出契约变更**，要单独评估，不同轮混做 |
@@ -182,4 +182,4 @@ tools\shot-canvas.ps1          :: 画布截图，肉眼确认框线与工具条
 - 🟡 **多选不整组缩放**：8 个手柄只服务主选框。
 - 🟢 观测：`menu` / `timer` 这类无矩形控件也会被对齐写 rect —— 运行时不读它们，只让文件里多几个数字。
 - 🟢 观测（**改动前就有，非本轮引入**）：从控件箱拖入控件时用 `.stage` 的矩形换算落点，比实际指针低一个标题栏 + 菜单栏的高度。本轮不动它，免得和选择集改动混在一起审。
-- **下一轮候选**（§1 的 defer，按优先级）：F6 主题/配色可视化编辑器 → F2 多窗体/窗体引用（跨端 SDD 大 epic）→ F1 `.cgui` 外部变更热重载（让 AI 编码助手改完文件画布就变）→ F8 生成代码的分区保留。
+- **下一轮候选**（§1 的 defer，按优先级）：F6 主题/配色可视化编辑器 → F1 `.cgui` 外部变更热重载（让 AI 编码助手改完文件画布就变）→ F7 入口整理。（F2 多窗体、F8 生成代码分区保留已完成销账）

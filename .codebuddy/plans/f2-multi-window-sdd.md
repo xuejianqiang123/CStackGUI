@@ -193,8 +193,15 @@ A7 → T2 ｜ A8 → T3。
       真机 A1~A5 全 PASS（缺省路径回归）+ 5 个 roundtrip / check-format `BAT_EXIT=0`。
       **如实记录**：`center:false` 的**开窗位置**没有真机断言（modaltest 只有一张
       居中的对话框；该分支与居中分支共用 CreateWindowExW，位置语义同主窗口先例，低风险）。
-- [ ] P5 T3 尾：gallery 示例与类型计数已在 T2-minimal 落；本文档（CGUI-FORMAT）已随
+- [x] P5 T3 尾：gallery 示例与类型计数已在 T2-minimal 落；本文档（CGUI-FORMAT）已随
       `center` 与函数索引更新。剩余：`format-roundtrip` 的 dialog 探针已在 T1.3 落。
+- [x] P6 **F2 收敛（2026-10-07）**：A7 端到端补证（`build\probe-dialog-e2e.mjs`：画布模型 →
+      generateC → 用户一行补桩 → cgbuild → 真窗口，10 项 ALL PASS —— 顺带把 center:false 的
+      **真机定位断言**也补上了，`pos=40,40` 精确命中）+ PRD A1~A8 对账 + 偷学清单 F2 销账。
+      **诊断插曲**：PowerShell 的 Add-Type 委托两轮跑法下都静默失灵（连已知有窗口的 modaltest
+      都"枚举不到"），换 C 驱动（`build\findwin.c`，probe-modal 同款）一次就对 ——
+      **工具不可靠时换工具，别把"工具找不到"当成"应用没窗口"**；
+      另踩一处探针自身的错（尺寸写成顶层 `.w/.h`，序列化只认 `rect.w/h`）。
       **画布叠画的设计决断**（同一画布浮着 vs 独立窗口视图，审查报告 R1 #4）+
       禁止把 `menu` 拖进 dialog
 - [ ] P5 T3：教学/文档收尾（gallery 的对话框接上打开按钮）
