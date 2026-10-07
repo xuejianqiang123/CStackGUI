@@ -168,3 +168,18 @@ A1→T1/T2 全程老文件回归 ｜ A2/A3→T1 截图 ｜ A4→T2 真机 ｜ A5
       run-tests / check-format / probe-dialog / 一致性探针全绿。
       **残留**：StyleDialog / WindowPanel 的角色下拉、roles{} 表的画布编辑器（手改 .cgui +
       热重载可用）、`doc.app.dark` 变化不触发画布重渲染（静态对齐的已知边界）。
+- [x] P5 **角色编辑器收尾（2026-10-08，`be58e05`）**：SDD 残留全清——
+      `RolesDialog.tsx`（roles 表 CRUD：改名连带 `renameRoleRefs`——控件 style / 命名样式表 /
+      app.bg 三处 @引用一起改；引用计数 `countRefs().roles`；复制/删除/空态说明，
+      手感与 StyleDialog 刻意一致）+ 工具栏「色彩」按钮 + StyleDialog 样式卡与 WindowPanel
+      窗口底色的角色下拉（T3.4 残留清偿）。`roleColor` 收进模型层 style.ts（三处共用，
+      Node 探针无 window 时当浅色）。
+      **模型层事实修正**：画布模型没有（也不需要有）fg_role/bg_role 字段——@引用就是
+      fg/bg 字符串值本身；C 侧的伴生字段是 uint32 存不下名字才需要的。refs.ts 第一版
+      按错误形状写（tsc 抓住 11 处），重写为"@ 字符串判定"。
+      **计数与改名口径对齐**：命名样式表里的 @引用也算引用点（否则卡片说「未被引用」、
+      改名却动了样式表，自相矛盾）——countRefs 与 renameRoleRefs 同口径，探针断言钉死
+      （accent=2：控件 fg + 命名样式 fg；danger=2：控件 fg + 命名样式 bg）。
+      tsc / vite / 一致性探针 / probe-dialog / check-format 全绿。
+      **未做**：RolesDialog 的截图验收（镜像 StyleDialog 的成熟模式，结构靠 tsc 保证）；
+      Canvas.tsx / tree.ts 的未提交改动是所有者并行工作，未纳入本片提交。
