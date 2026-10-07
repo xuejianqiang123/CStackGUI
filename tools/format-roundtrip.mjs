@@ -132,6 +132,22 @@ walk(doc.widgets, (n) => {
     n.items = [...(n.items ?? []), "画布加的按钮"];
     touched += 1;
   }
+  if (n.type === "dialog") {
+    /* dialog 的 children 是「第二个窗口」的控件树 —— 往返丢一个子控件，
+     * 用户界面就缺一块，而且 C 侧自检**发现不了**（少的那个不是错误，只是没了），
+     * 与 bind/action/styles 同属"丢了不报错"的那类，必须在这里塞探针、第 3 步逐字核对。
+     * 探针按钮的事件复用已登记的回调（knownCallback），别造"未登记"的假故障 ——
+     * 那会让第 4 步的自检以 5 退出，是测试自己造的假故障。 */
+    n.children = n.children ?? [];
+    if (!n.children.some((c) => c.id === "chk_dlg_child")) {
+      const child = makeNode("button", 16, 16);
+      child.id = "chk_dlg_child";
+      child.text = "对话框里加的按钮";
+      if (knownCallback) child.events = { click: knownCallback };
+      n.children.push(child);
+      touched += 1;
+    }
+  }
   if (n.type === "image" && n.src) {
     n.rect.w += 10;
     touched += 1;
@@ -288,6 +304,61 @@ console.log(`[ok] 画布改动 ${touched} 处，写出 ${output}（${written.len
       lost += 1;
     }
     console.log(`[ok] 恒等回写：命名样式 "${probeStyle}" 与两种引用形态无损`);
+  }
+
+  /* 对话框子树逐字核对（T1.3）：dialog 是唯一「children = 另一个窗口」的容器。
+   * 上面塞进去的探针按钮连同原有每个子控件都要原样回来 ——
+   * 数量 / id / 类型 / 文字 / 事件，一个都不能丢。 */
+  {
+    let dlg = null;
+    walk(doc.widgets, (n) => {
+      if (!dlg && n.type === "dialog") dlg = n;
+    });
+    if (dlg) {
+      let dlgLost = 0;
+      const gotDlg = back.doc ? findNode(back.doc, dlg.id) : null;
+      const origCount = (dlg.children ?? []).length;
+      if (!gotDlg || gotDlg.type !== "dialog") {
+        console.error(`[fail] 恒等回写丢了整个 dialog：${dlg.id}`);
+        lost += 1;
+      } else {
+        const gotChildren = gotDlg.children ?? [];
+        if (gotChildren.length !== origCount) {
+          console.error(
+            `[fail] 恒等回写丢了 dialog 子控件：${dlg.id} 子控件 ${origCount} -> ${gotChildren.length}`,
+          );
+          lost += 1;
+          dlgLost += 1;
+        }
+        const probe = gotChildren.find((c) => c.id === "chk_dlg_child");
+        if (!probe) {
+          console.error("[fail] 恒等回写丢了 dialog 探针子控件：chk_dlg_child");
+          lost += 1;
+          dlgLost += 1;
+        } else {
+          if (probe.type !== "button") {
+            console.error(`[fail] 探针子控件类型变了：button -> ${probe.type}`);
+            lost += 1;
+            dlgLost += 1;
+          }
+          if ((probe.text ?? "") !== "对话框里加的按钮") {
+            console.error(`[fail] 探针子控件文字变了：「对话框里加的按钮」->「${probe.text}」`);
+            lost += 1;
+            dlgLost += 1;
+          }
+          if (knownCallback && probe.events?.click !== knownCallback) {
+            console.error(
+              `[fail] 探针子控件的事件丢了：click ${knownCallback} -> ${probe.events?.click ?? "(无)"}`,
+            );
+            lost += 1;
+            dlgLost += 1;
+          }
+        }
+        if (!dlgLost) {
+          console.log(`[ok] 恒等回写：dialog 子树无损（${gotChildren.length} 个子控件，含探针按钮）`);
+        }
+      }
+    }
   }
 
   if (lost) process.exit(1);

@@ -11,7 +11,8 @@
  *
  * 入库位置说明：fixture 与本探针都在 tools\ 下（build\ 整个不入库），因为
  *   - fixture 是 T1 的验收输入（SDD §6 引用它）；
- *   - 「画布不许静默丢」那几条是**永久回归测试**；「运行时基线」两条等 T1.3 翻转后再升级成门禁。
+ *   - 「画布不许静默丢」那几条是**永久回归测试**；「运行时基线」两条已在 T1.1 升级为
+ *     「能解析进树」的回归判据（open/close 的行为验证在 T1.2 由 build\probe-modal 真机完成）。
  */
 import fs from "node:fs";
 import path from "node:path";
