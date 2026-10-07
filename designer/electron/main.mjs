@@ -661,27 +661,15 @@ ipcMain.handle("publish:project", async (_e, { filePath }) => {
   }
 
   runBusy = true;
-  send("run:output", { kind: "line", text: `$ build-app.bat ${name} --release` });
+  send("run:output", { kind: "line", text: `$ 发布编译 ${name}（release，编译在 CStackGUI 内部完成）` });
 
-  /* 1) release 编译（-mwindows：无控制台窗口，适合分发） */
-  let exitCode = -1;
-  await new Promise((resolve) => {
-    const child = spawn("cmd.exe", ["/d", "/s", "/c", "chcp 65001 >nul & build-app.bat --release"], {
-      cwd: root,
-      env: { ...process.env, CG_APP_DIR: appDir },
-    });
-    const push = (buf) => {
-      for (const line of String(buf).split(/\r?\n/)) {
-        if (line.trim()) send("run:output", { kind: "line", text: line });
-      }
-    };
-    child.stdout.on("data", push);
-    child.stderr.on("data", push);
-    child.on("exit", (code) => { exitCode = code ?? -1; resolve(); });
-    child.on("error", (err) => {
-      send("run:output", { kind: "line", text: `[publish] ${err}` });
-      resolve();
-    });
+  /* 1) release 编译（-mwindows：无控制台窗口，适合分发）。
+   *    走和 F5 同一条内部编译（cgbuild.mjs），不经 cmd / bat。 */
+  const exitCode = await build({
+    root,
+    project: appDir,
+    release: true,
+    onLine: (text) => send("run:output", { kind: "line", text }),
   });
   runBusy = false;
 
@@ -694,53 +682,55 @@ ipcMain.handle("publish:project", async (_e, { filePath }) => {
     return fail(`编译没有生成 ${exePath}，请确认工程目录里有 main.c。`);
   }
 
-  /* 2) 组装自包含发布目录：exe + .cgui + assets + 使用说明 */
+  /* 2) 组装发布目录：界面已经内嵌进 exe，所以主体就是**一个 exe**。
+   *    只有工程真的用到外挂图片（assets\）时才多带一个目录 —— 图片是运行时按路径读的。 */
   const pubRoot = path.join(root, "publish");
   const pubDir = path.join(pubRoot, name);
+  const assetsSrc = path.join(appDir, "assets");
+  const hasAssets = existsSync(assetsSrc);
+  const singleExe = !hasAssets;
   const readme = [
     `${name} —— 由 CStackGUI 制作`,
     "",
-    "使用方法：解压后双击 " + name + ".exe 即可运行（无需安装任何运行库）。",
-    name + ".cgui 是界面文件，必须和 exe 放在同一目录（解压即已同目录，别单独挪走）。",
-    "assets\\ 里是程序用到的图片等资源（如有）。",
+    "使用方法：双击 " + name + ".exe 即可运行（无需安装任何运行库、不需要额外的界面文件）。",
+    "界面已经编译进 exe 里面了。",
+    hasAssets ? "assets\\ 里是程序用到的图片等资源，请和 exe 放在同一目录。" : "",
     "",
-    "想自己改界面：去 CStackGUI 项目（https://github.com/ 上找作者要）用画布打开 .cgui。",
-  ].join("\r\n");
+    "想改界面：把改好的同名 " + name + ".cgui 放到 exe 旁边，立刻生效，不用重新编译。",
+    "（发布时用的是内嵌的那份；旁边这份优先级更高。）",
+  ].filter((s) => s !== "").join("\r\n");
 
   try {
     await fs.rm(pubDir, { recursive: true, force: true });
     await fs.mkdir(pubDir, { recursive: true });
     await fs.copyFile(exePath, path.join(pubDir, `${name}.exe`));
-    /* .cgui 必须按**工程名**落一份：运行时默认找的就是 `<exe 名>.cgui`（找不到才去
-     * ..\apps\ 与 ..\examples\ 里翻），README 也是这么写给用户的。
-     * 早先这里只拷 basename —— 用户「另存为」改过名之后，zip 里那份 .cgui 与 exe 名对不上，
-     * 双击 exe 三条查找路全落空，直接报"找不到界面文件"。
-     * 原名再补一份：万一工程名与文件名不同，两种都能命中（多一份几百字节，换的是"绝不扑空"）。 */
-    await fs.copyFile(filePath, path.join(pubDir, `${name}.cgui`));
-    if (path.basename(filePath) !== `${name}.cgui`) {
-      await fs.copyFile(filePath, path.join(pubDir, path.basename(filePath)));
-    }
-    const assetsDir = path.join(appDir, "assets");
-    if (existsSync(assetsDir)) await fs.cp(assetsDir, path.join(pubDir, "assets"), { recursive: true });
-    await fs.writeFile(path.join(pubDir, "README.txt"), readme, "utf8");
+    if (hasAssets) await fs.cp(assetsSrc, path.join(pubDir, "assets"), { recursive: true });
+    if (!singleExe) await fs.writeFile(path.join(pubDir, "README.txt"), readme, "utf8");
   } catch (err) {
     return fail(`组装发布目录失败：${err}`);
   }
 
-  /* 3) 打 zip（Windows 10+ 自带 bsdtar，-a 按扩展名选 zip） */
-  const zipPath = path.join(pubRoot, `${name}.zip`);
-  send("run:output", { kind: "line", text: `$ tar -a -c -f ${zipPath}` });
-  let zipOk = true;
-  await new Promise((resolve) => {
-    const child = spawn("tar.exe", ["-a", "-c", "-f", zipPath, "-C", pubRoot, name]);
-    child.on("exit", (code) => { zipOk = code === 0; resolve(); });
-    child.on("error", () => { zipOk = false; resolve(); });
-  });
+  /* 3) 只有一个 exe 时直接把它交出去；有附带文件才打 zip（Windows 10+ 自带 bsdtar） */
+  let target = path.join(pubDir, `${name}.exe`);
+  let message = `已生成独立 exe：${target}\n双击即可运行（界面已内嵌，不需要 .cgui）。`;
+  if (!singleExe) {
+    const zipPath = path.join(pubRoot, `${name}.zip`);
+    send("run:output", { kind: "line", text: `$ tar -a -c -f ${zipPath}` });
+    let zipOk = true;
+    await new Promise((resolve) => {
+      const child = spawn("tar.exe", ["-a", "-c", "-f", zipPath, "-C", pubRoot, name]);
+      child.on("exit", (code) => { zipOk = code === 0; resolve(); });
+      child.on("error", () => { zipOk = false; resolve(); });
+    });
+    if (zipOk) {
+      target = zipPath;
+      message = `发布包已生成：${zipPath}\n（exe 里已内嵌界面；zip 里额外带 assets\\ 图片资源）`;
+    }
+  }
 
-  const target = zipOk ? zipPath : pubDir;
   send("run:output", { kind: "done", text: target });
   shell.showItemInFolder(target);
-  return { ok: true, message: zipOk ? `发布包已生成：${zipPath}` : `发布目录已生成：${pubDir}`, target };
+  return { ok: true, message, target };
 });
 
 /** 关闭前询问未保存的改动 */

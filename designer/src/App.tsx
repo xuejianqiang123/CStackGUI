@@ -285,7 +285,7 @@ export default function App() {
     const files = generateC(docRef.current, baseName);
     /* 带上当前文件路径：主进程好从文件位置向上认出真正的项目根（便携版画布尤甚） */
     const res = await bridge.exportC({ baseName, files, filePath: filePath || undefined });
-    if (res.canceled) return;
+    if (res.canceled) return false;
     if (res.projectRoot) setProjectRoot(res.projectRoot);
     setLastExport({ dir: res.dir ?? "", appName: baseName });
     /* 导出时 .cgui 已经写进工程目录了：把「当前文件」指向它并清掉未保存标记，
@@ -296,6 +296,7 @@ export default function App() {
     }
     const skipped = res.skipped?.length ? `（跳过已存在的 ${res.skipped.join("、")}）` : "";
     say(`已导出到 ${res.dir}${skipped}，接着去填 ${baseName}_ui_events.c`);
+    return true;
   }, [bridge, docRef, projectRoot, say, filePath]);
 
   const doLocateProject = useCallback(async () => {
@@ -352,6 +353,16 @@ export default function App() {
       if (saved.path) target = saved.path;   /* 同上：用刚保存出来的路径 */
     }
 
+    /* 发布必须**重新导出**一次 C：界面的正文是要编译进 exe 的
+     * （<名字>_cgui.c）。不重导出，打进去的就是上次导出时的旧界面 ——
+     * 这种"exe 里的界面跟画布上看到的不一样"最难查。
+     * 导出会覆盖 main.c / <名字>_cgui.c，跳过用户写过的 _ui_events.c。 */
+    if (!(await doExportC())) {
+      say("发布前需要先导出 C 骨架");
+      setRunOpen(false);
+      return;
+    }
+
     setPublishing(true);
     try {
       const res = await bridge.publish({ filePath: target });
@@ -360,7 +371,7 @@ export default function App() {
     } finally {
       setPublishing(false);
     }
-  }, [bridge, dirty, doSave, filePath, say]);
+  }, [bridge, dirty, doSave, doExportC, filePath, say]);
 
   /* -------------------------------------------------- 菜单 & 快捷键 */
   useEffect(() => {
