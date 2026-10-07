@@ -465,8 +465,19 @@ examples\gallery\
    只有 5 个 C 文件，几秒钟，换来「改了就能编」的确定性（`build-all.bat` 统一刷一次后跳过）。
 2. **工程目录里留一份运行时库副本**：这样整个目录被挪走之后还能自己重编 ——
    挪走后重编靠的是这份 `lib\`，不是靠某一份脚本。
-3. **编译只有项目根这一个入口**：`build-app.bat <名字或路径>`，画布按 F5 也是调它
-   （用环境变量 `CG_APP_DIR` 传工程目录，不走 argv —— `spawn` 出来的 cmd 转义会把路径搞坏）。
+3. **编译的实现只有一份**：`tools\cgbuild.mjs`（Node）。四个入口都转发到它 ——
+   - 项目根 `build-app.bat <名字或路径>`（ASCII 薄壳，转发到内核）
+   - 画布 F5：画布直接用自带的 Node fork 内核，**不经过 cmd / bat**
+   - `CStackGUI.exe --build <工程>`（无窗口 CLI，发布包的 `build-app.bat` 转发到它）
+   - `build-runtime.bat`（ASCII 薄壳，`--runtime-only`）
+
+   为什么搬出 bat：`build-app.bat` 原是带中文的 UTF-8 批处理，靠
+   `chcp 65001 + cmd /c "%~f0"` 重入才能正确解析；画布那条
+   `cmd /d /s /c "chcp 65001 >nul & build-app.bat"` 让 chcp 与脚本挤在同一个 cmd 进程，
+   重入不生效 —— 在部分机器上中文行被从多字节字符中间切断，后半段被当成命令执行。
+   Node 没有代码页这一层。**代价：编译现在需要 Node.js 18+**（仓库里的
+   `check-*.mjs`、`gen-cc.mjs` 本来就依赖它）。
+
    2026-10-07 之前每个工程里还会被生成一份 `build-app.bat` 薄壳（双击即可重编那一个），
    已移除：它和画布的编译按钮是重复入口，26 份内容相同的生成物进库纯属噪声。
 

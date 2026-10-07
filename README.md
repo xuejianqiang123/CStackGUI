@@ -207,8 +207,10 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
    apps\myapp\
      myapp.exe           <- 双击就能跑（界面文件就在旁边）
      lib\libcstackgui.a  <- 运行时库副本，整个目录拷走也能重编译
-     build-app.bat       <- 双击就能重编译这一个工程
    ```
+
+   > 工程目录里**不再**生成 `build-app.bat`：编译入口只有项目根那一个
+   > （`build-app.bat <名字>`，或者画布里打开 `.cgui` 按 F5）。
 
 7. **运行 / 自检**：
 
