@@ -14,7 +14,7 @@ import { existsSync, appendFileSync, readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { build } from "./cgbuild.mjs";
-import { mergeEvents } from "./merge-events.mjs";
+import { mergeEvents, callbackDiff } from "./merge-events.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEV_URL = process.env.CSTACKGUI_DEV_URL || "";
@@ -479,9 +479,24 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
    * 往里塞 main.c / _ui_events.* / .rc / build.bat 不但污染目录，还会被一起编进 exe。
    * 与"单文件发布"无关：界面是编译期作为 PE 资源编进 exe 的（见 cgbuild.mjs）。 */
   const mainPath = path.join(dir, "main.c");
-  const handwritten = existsSync(mainPath)
-    ? !/generated-by-cstackgui/.test(await fs.readFile(mainPath, "utf8"))
-    : false;
+  const normEol = (s) => s.replace(/\r\n/g, "\n");
+  const oldMain = existsSync(mainPath) ? await fs.readFile(mainPath, "utf8") : "";
+  const handwritten = oldMain ? !/generated-by-cstackgui/.test(oldMain) : false;
+
+  /* 事件头是每次导出都重写的纯生成物 → 它 = "画布上次导出时绑定了哪些回调"的权威快照。
+     导出前先读下来：老 .h 声明过、新 .h 里没有的名字，就是"画布上已不再绑定、而 .c 里还留着"的回调。 */
+  const headerName = files.find((f) => f.name.endsWith("_ui_events.h"))?.name ?? "";
+  const cName = files.find((f) => f.name.endsWith("_ui_events.c"))?.name ?? "";
+  const headerPath = headerName ? path.join(dir, headerName) : "";
+  const cPath = cName ? path.join(dir, cName) : "";
+  const oldHeader = headerPath && existsSync(headerPath) ? await fs.readFile(headerPath, "utf8") : "";
+  const newHeader = headerName ? files.find((f) => f.name === headerName)?.content ?? "" : "";
+
+  /* main.c **永不覆盖**（见下），但"工程里那份已经和当前样板不同步"这件事得让用户知道 ——
+     否则画布改了样板，老工程永远拿不到，而且一点提示都没有。只比对、只提醒，绝不自动写。
+     换行符先归一：在编辑器里存过一手的 main.c 会被转成 CRLF，那不算"用户改过"。 */
+  const newMain = files.find((f) => f.name === "main.c")?.content ?? "";
+  const staleMainC = Boolean(oldMain) && !handwritten && normEol(oldMain) !== normEol(newMain);
 
   const written = [];
   const skipped = [];
@@ -516,6 +531,10 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
         written.push(f.name);
         addedCallbacks.push(...merged.added);
         if (merged.added.length) log("exportC", `补桩 ${merged.added.length} 个：${merged.added.join(", ")}`);
+        /* 想补却切不出整块 = 内部不变量被破坏（当前调用路径不可能发生，它拿到的永远是生成器产物）。
+           这时文件没动、上面已把它记进 skipped（用户在导出结果里能看到"跳过了这个文件"），
+           这里补一条日志把名字留下，否则真出了事只能看到"跳过一个文件"而无从下手。 */
+        if (merged.failed.length) log("exportC", `[warn] 补桩失败（整块切不出来）：${merged.failed.join(", ")}`);
         continue;
       }
       await fs.writeFile(target, f.content, "utf8");
@@ -543,6 +562,12 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
     if (detected) await rememberProjectRoot(detected);
   }
 
+  /* 画布上**已不再绑定**、而 .c 里还留着的回调：**永不自动删**（那些函数里可能有逻辑），
+     只提醒一句让用户自己决定。判据是"老 .h 声明过、新 .h 里没有了"——
+     拿 .c 里的函数名去比会把手写的辅助函数也算进来（它们从来不是回调）。 */
+  const unusedCallbacks = cPath && existsSync(cPath) ? callbackDiff(oldHeader, newHeader) : [];
+  if (unusedCallbacks.length) log("exportC", `已不再绑定但保留的实现：${unusedCallbacks.join(", ")}`);
+
   return {
     canceled: false,
     dir,
@@ -551,6 +576,8 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
     projectRoot: isProjectRoot(projectRootCache) ? projectRootCache : "",
     appName: baseName,
     addedCallbacks,
+    unusedCallbacks,
+    staleMainC,
   };
 });
 

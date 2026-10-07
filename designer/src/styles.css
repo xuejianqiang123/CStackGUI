@@ -2182,6 +2182,17 @@ button.icon-pick svg {
   z-index: 100;
 }
 
+/* 长文案折行：toast 默认是 nowrap + ellipsis，超过 70vw 就把尾巴吃掉。
+   而导出结果可能一次带三句提醒（补了哪些空函数 / 哪些回调已不再绑定 / main.c 不同步），
+   那几句正是要读的内容 —— 所以放不下就折行，圆角从胶囊收成方一点。
+   选择器写成两个类：.toast 在本文件更靠后，单类会被同权重盖掉（踩过一次，见上面 toast-raised）。 */
+.toast.toast-long {
+  white-space: normal;
+  border-radius: 12px;
+  text-align: center;
+  line-height: 1.5;
+}
+
 /* 主窗口图标（事件页签 / 属性页签里的「主窗口」头） */
 .glyph-window {
   background: var(--seed);

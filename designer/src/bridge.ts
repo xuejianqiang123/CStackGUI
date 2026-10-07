@@ -16,6 +16,11 @@ export type ExportResult = {
   /** 这次导出为「新绑的事件」自动补上的空函数名。
    *  `<工程>_ui_events.c` 是"只补不改"的：缺的回调补桩、已有的原样留着（见 merge-events.mjs）。 */
   addedCallbacks?: string[];
+  /** 画布上**已不再绑定**、而 .c 里还留着的回调：**不会自动删**（里面可能有逻辑），只提醒一句。
+   *  判据是"老 .h 声明过、新 .h 里没有了"（不能拿 .c 的函数名比 —— 手写辅助函数会被误算）。 */
+  unusedCallbacks?: string[];
+  /** 工程里的 `main.c` 与当前画布样板已不同步（画布**不会**覆盖它，只提醒）。 */
+  staleMainC?: boolean;
 };
 
 /** 一键运行的事件流：line = 编译输出行，done = 成功启动，fail = 失败 */

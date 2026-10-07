@@ -356,11 +356,16 @@ export default function App() {
       setDirty(false);
     }
     const skipped = res.skipped?.length ? `（跳过已存在的 ${res.skipped.join("、")}）` : "";
-    /* 新绑的事件会自动补桩：把补了哪些念出来，用户才知道该去哪个函数里写逻辑 */
+    /* 三句提醒都只在真的发生时出现，平时那一行还是原来那么短：
+     * 补了桩（用户得知道去哪个函数里写逻辑）/ 不再绑定但保留着（自己决定删不删）/ main.c 已不同步。 */
     const added = res.addedCallbacks?.length
       ? `；已为新绑的 ${res.addedCallbacks.length} 个事件补上空函数：${res.addedCallbacks.join("、")}`
       : "";
-    say(`已导出到 ${res.dir}${skipped}${added}，接着去填 ${baseName}_ui_events.c`);
+    const unused = res.unusedCallbacks?.length
+      ? `；画布上已不再绑定的 ${res.unusedCallbacks.join("、")} 保留在文件里（自己决定删不删）`
+      : "";
+    const stale = res.staleMainC ? "；main.c 与新版样板已不同步（画布不覆盖它，怕抹掉你加的）" : "";
+    say(`已导出到 ${res.dir}${skipped}，接着去填 ${baseName}_ui_events.c${added}${unused}${stale}`);
     return { dir: res.dir ?? "", appName: baseName };
   }, [bridge, docRef, say, filePath]);
 
@@ -896,8 +901,17 @@ rect = { x:${selected.rect.x}, y:${selected.rect.y}, w:${selected.rect.w}, h:${s
       </div>
 
       {toast ? (
-        /* 有通知条时把 toast 抬起来：它是 position:fixed 贴底的，否则正好压住通知条上的按钮 */
-        <div className={external ? "toast toast-raised" : "toast"} onClick={() => setToast("")}>
+        /* 有通知条时把 toast 抬起来：它是 position:fixed 贴底的，否则正好压住通知条上的按钮。
+           文案长（导出结果可能一次带三句提醒）就加 toast-long 让它折行 —— 默认的
+           nowrap + ellipsis 会把尾巴吃掉，而那些提醒正是要读的内容。
+           title 只是兜底：真长到折三行还放不下时，悬停还能看全。 */
+        <div
+          className={["toast", external ? "toast-raised" : "", toast.length > 60 ? "toast-long" : ""]
+            .filter(Boolean)
+            .join(" ")}
+          title={toast}
+          onClick={() => setToast("")}
+        >
           {toast}
         </div>
       ) : null}
