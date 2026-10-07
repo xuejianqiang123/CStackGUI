@@ -334,18 +334,29 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
   const root =
     (filePath ? findProjectRootUpwards(path.dirname(path.resolve(filePath))) : "") || (await resolveProjectRoot());
   const appsDir = root ? path.join(root, "apps", baseName) : "";
-  const res = await dialog.showOpenDialog(win, {
-    title: root
-      ? `导出 C 骨架到 apps/${baseName}（也可以选别的目录）`
-      : `导出 C 骨架：请选 CStackGUI 的 apps 目录（找不到项目根，导完还要手动编译）`,
-    defaultPath: appsDir || root || undefined,
-    properties: ["openDirectory", "createDirectory"],
-  });
-  if (res.canceled || !res.filePaths.length) return { canceled: true };
 
-  const chosen = res.filePaths[0];
-  // 用户可能选了 apps 这一层，或者选了自己想放的目录：两种都让结果落在 <chosen>/<baseName>
-  const dir = path.basename(chosen).toLowerCase() === baseName.toLowerCase() ? chosen : path.join(chosen, baseName);
+  /* 目标目录能自己认出来就别弹框 —— 工程已经在那儿了（.cgui 就躺在工程目录里、
+   * 旁边有 main.c），每次导出/发布都问一遍"导到哪"是纯打扰；
+   * 「发布」尤其受不了：它本来就只是想把最新界面重新编进 exe，不该中断在选目录上。
+   * 只有在真的认不出来时（新文档、目录里没有任何工程痕迹）才问。 */
+  const here = filePath ? path.dirname(path.resolve(filePath)) : "";
+  let dir = "";
+  if (here && existsSync(path.join(here, "main.c"))) dir = here;                       // 原地就是工程目录
+  else if (here && path.basename(here).toLowerCase() === baseName.toLowerCase()) dir = here;
+
+  if (!dir) {
+    const res = await dialog.showOpenDialog(win, {
+      title: root
+        ? `导出 C 骨架到 apps/${baseName}（也可以选别的目录）`
+        : `导出 C 骨架：请选 CStackGUI 的 apps 目录（找不到项目根，导完还要手动编译）`,
+      defaultPath: appsDir || root || undefined,
+      properties: ["openDirectory", "createDirectory"],
+    });
+    if (res.canceled || !res.filePaths.length) return { canceled: true };
+    const chosen = res.filePaths[0];
+    // 用户可能选了 apps 这一层，或者选了自己想放的目录：两种都让结果落在 <chosen>/<baseName>
+    dir = path.basename(chosen).toLowerCase() === baseName.toLowerCase() ? chosen : path.join(chosen, baseName);
+  }
 
   /* main.c 的"用户区"标记：重新导出时把标记之间的内容原样搬过去，
    * 标记之外的部分用最新模板（模板里含单文件发布要用的内嵌界面代码，
