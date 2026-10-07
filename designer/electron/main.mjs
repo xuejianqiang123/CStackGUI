@@ -395,7 +395,8 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
     for (const f of files) {
       const target = path.join(dir, f.name);
       /* 手写工程（main.c 不是画布产物）：除了界面文件 .cgui 之外一律不碰 ——
-       * 那不是画布工程，塞 main.c/_ui_events.*/.rc/build.bat 进去只会污染它。 */
+       * 那不是画布工程，塞 main.c 或 _ui_events 与 .rc 与 build.bat 进去只会污染它。
+       * （注意：注释里别写 "点星号斜杠"，那会提前闭合块注释 —— 这里刚踩过。） */
       if (handwritten && !f.name.endsWith(".cgui")) {
         skipped.push(f.name);
         continue;
