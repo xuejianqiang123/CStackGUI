@@ -127,7 +127,12 @@ void cgw_dialog_teardown(cg_app_t *app, cg_widget_t *dlg)
     dlg->native = NULL;   /* 对话框自己的 HWND 正在销毁中，置空别再碰 */
 }
 
-/** 递归找 native == hwnd 的 dialog 节点（cgw_dialog_by_hwnd 的实现） */
+/**
+ * @brief 递归找 native == hwnd 的 dialog 节点（cgw_dialog_by_hwnd 的实现）
+ * @param w 当前节点（首次调用传 app->window，即树的根伪控件）
+ * @param hwnd 要找的顶层窗口
+ * @return cg_widget_t* 命中的 dialog 节点；没找到返回 NULL
+ */
 static cg_widget_t *dialog_by_hwnd_walk(cg_widget_t *w, HWND hwnd)
 {
     size_t i;
@@ -153,7 +158,11 @@ cg_widget_t *cgw_dialog_by_hwnd(cg_app_t *app, HWND hwnd)
     return dialog_by_hwnd_walk(app->window, hwnd);
 }
 
-/** 找一个还开着（native 非空）的 dialog 节点 —— "同一时间只支持一个"的守卫用 */
+/**
+ * @brief 找一个还开着（native 非空）的 dialog 节点 —— "同一时间只支持一个"的守卫用
+ * @param w 当前节点（首次调用传 app->window）
+ * @return cg_widget_t* 第一个还开着的 dialog 节点；没有返回 NULL
+ */
 static cg_widget_t *any_open_dialog_walk(cg_widget_t *w)
 {
     size_t i;
