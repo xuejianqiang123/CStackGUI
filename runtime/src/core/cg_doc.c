@@ -665,6 +665,9 @@ static cg_node_t *parse_node(const cj_val_t *o, char *err, size_t errsz)
     n->s_auto = cj_bool(cj_get(o, "auto"), 0);
     n->multi = cj_bool(cj_get(o, "multi"), 0);
     n->check = cj_bool(cj_get(o, "check"), 0);
+    /* dialog 的居中开关：缺省 1（旧文件没这个字段也居中）；显式 false 才按 rect.x/y
+       屏幕坐标摆（与 app.x/y 同一口径），见 cg_win_modal.c 的 dialog_create_native */
+    n->center = cj_bool(cj_get(o, "center"), 1);
 
     /* edit（单行输入）的输入框行为。越界值一律退回缺省：.cgui 允许手写，
      * 一个 scroll=9 不该让输入框变成"没有滚动条但也不能输入"的怪状态。

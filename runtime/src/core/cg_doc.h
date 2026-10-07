@@ -283,6 +283,10 @@ typedef struct cg_node {
     int      multi;
     /** table：显示行首复选框列 */
     int      check;
+    /** dialog：打开时是否居中于主窗口（.cgui 的 center）。缺省 1 —— 旧文件没这个字段也居中，
+     *  零行为变化；只有显式写 false 才不居中，那时 rect.x/y 按**屏幕坐标**解释
+     *  （与 app.x/y 同一口径）。解析在 cg_doc.c 的 parse_node，使用在 cg_win_modal.c。 */
+    int      center;
     /* ---- edit（单行输入）的输入框行为：缺省 0 = 保持原来的单行左对齐输入框 ---- */
     /** 允许多行（ES_MULTILINE + ES_WANTRETURN，Enter 变换行） */
     int      multiline;

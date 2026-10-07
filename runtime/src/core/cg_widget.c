@@ -324,6 +324,7 @@ static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node
     if (n->action && *n->action) w->action = cg_str_dup(n->action);
     w->multi = n->multi;
     w->check = n->check;
+    w->center = n->center;   /* dialog：打开时是否居中（cg_win_modal.c 读） */
     w->multiline = n->multiline;
     w->scroll = n->scroll;
     w->maxlen = n->maxlen;

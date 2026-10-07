@@ -246,6 +246,9 @@ struct cg_widget {
     /* 表格增强：多选 / 勾选列 / 行数值 / 行图标 */
     int          multi;
     int          check;
+    /* dialog：打开时居中于主窗口（缺省 1；0 = 按 rect.x/y 屏幕坐标摆）。
+       从 doc 节点拷来（cg_widget.c 的 build），模态打开时读它（cg_win_modal.c） */
+    int          center;
 
     /* edit（单行输入）的输入框行为：建原生窗口时由 cgw_style_of 拼成 ES_ 与 WS_ 样式位，
        maxlen 例外（它只能靠 EM_SETLIMITTEXT 设，见 cg_win_create.c） */

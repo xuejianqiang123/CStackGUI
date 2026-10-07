@@ -67,12 +67,17 @@ static int dialog_create_native(cg_widget_t *dlg)
     ww = rc.right - rc.left;
     wh = rc.bottom - rc.top;
 
-    /* 默认居中于 owner（契约：center 字段落地前没有"不居中"，rect.x/y 此刻不读） */
-    {
+    /* 位置：缺省居中于 owner；.cgui 里 center:false 时按 rect.x/y 摆 ——
+       与主窗口的 app.x/y 同一口径：**原始逻辑像素直接当屏幕坐标用**，
+       不做 DPI 换算（先例：cg_win_window.c 的 has_pos 分支就是裸赋值） */
+    if (dlg->center) {
         RECT ro;
         GetWindowRect(owner, &ro);
         wx = ro.left + ((ro.right - ro.left) - ww) / 2;
         wy = ro.top + ((ro.bottom - ro.top) - wh) / 2;
+    } else {
+        wx = dlg->x;
+        wy = dlg->y;
     }
 
     h = CreateWindowExW(0, CGW_DIALOG_CLASS, wt ? wt : L"", style,
