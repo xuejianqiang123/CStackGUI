@@ -7,8 +7,8 @@
     "bg": "#F3EDF7",
     "info": {
       "product": "CStackGUI 环境快照",
-      "desc": "环境与配置快照示例：懒加载的树 + 目录快照，只读采集环境变量与用户数据目录",
-      "version": "1.0.0.0",
+      "desc": "环境与配置快照示例：INI 清单驱动的懒加载树 + 目录快照，清单可导入与增删改查",
+      "version": "1.1.0.0",
       "author": "CStackGUI"
     }
   },
@@ -24,7 +24,7 @@
       "type": "button",
       "rect": { "x": 12, "y": 12, "w": 120, "h": 32 },
       "text": "重新采集",
-      "hint": "清空树与节点表，重扫用户数据目录并重建两个根节点",
+      "hint": "清空树与节点表，重扫用户数据目录并重建两个根节点（清单不动）",
       "events": { "click": "on_btn_refresh_click" }
     },
     {
@@ -50,15 +50,61 @@
       "text": "展开节点才采集；导出 / 复制对当前已采集的内容做一次快照"
     },
     {
+      "id": "btn_import",
+      "type": "button",
+      "rect": { "x": 12, "y": 48, "w": 112, "h": 32 },
+      "text": "导入INI",
+      "hint": "选一份 INI 重新载入清单；此后的增删改都存回它",
+      "events": { "click": "on_btn_import_click" }
+    },
+    {
+      "id": "btn_add",
+      "type": "button",
+      "rect": { "x": 132, "y": 48, "w": 112, "h": 32 },
+      "text": "添加",
+      "hint": "分组 / 变量名 / 备注 三步输入；同组同名重复会被拒",
+      "events": { "click": "on_btn_add_click" }
+    },
+    {
+      "id": "btn_del",
+      "type": "button",
+      "rect": { "x": 252, "y": 48, "w": 112, "h": 32 },
+      "text": "删除",
+      "hint": "删选中的变量；选中分组则整组连带删除（无二次确认）",
+      "events": { "click": "on_btn_del_click" }
+    },
+    {
+      "id": "btn_edit",
+      "type": "button",
+      "rect": { "x": 372, "y": 48, "w": 112, "h": 32 },
+      "text": "修改",
+      "hint": "预填三步输入：改名 / 挪分组 / 改备注",
+      "events": { "click": "on_btn_edit_click" }
+    },
+    {
+      "id": "btn_find",
+      "type": "button",
+      "rect": { "x": 492, "y": 48, "w": 112, "h": 32 },
+      "text": "查询",
+      "hint": "按关键字过滤清单（分组 / 变量名 / 备注），结果摆进右侧表格",
+      "events": { "click": "on_btn_find_click" }
+    },
+    {
+      "id": "lab_ops",
+      "type": "label",
+      "rect": { "x": 612, "y": 52, "w": 364, "h": 24 },
+      "text": "清单在 envsnap.ini：改动自动存回，记事本改完点「导入INI」"
+    },
+    {
       "id": "grp_mid",
       "type": "group",
-      "rect": { "x": 12, "y": 52, "w": 976, "h": 400 },
+      "rect": { "x": 12, "y": 88, "w": 976, "h": 364 },
       "text": "采集内容（左：树 · 右：条目）",
       "children": [
         {
           "id": "tree_main",
           "type": "tree",
-          "rect": { "x": 12, "y": 24, "w": 360, "h": 340 },
+          "rect": { "x": 12, "y": 24, "w": 360, "h": 304 },
           "hint": "展开才采集；变量 / 分组 / 目录 / 扩展名各有不同的条目表",
           "events": { "select": "on_tree_sel", "expand": "on_tree_expand" }
         },
@@ -66,13 +112,13 @@
           "id": "sp_main",
           "type": "splitter",
           "format": "col",
-          "rect": { "x": 376, "y": 24, "w": 6, "h": 340 },
+          "rect": { "x": 376, "y": 24, "w": 6, "h": 304 },
           "hint": "左右拖动：树变宽 / 变窄，右边的表格跟着让位"
         },
         {
           "id": "tbl_items",
           "type": "table",
-          "rect": { "x": 386, "y": 24, "w": 578, "h": 340 },
+          "rect": { "x": 386, "y": 24, "w": 578, "h": 304 },
           "columns": [
             { "title": "名称", "w": 240 },
             { "title": "值或大小", "w": 180 },

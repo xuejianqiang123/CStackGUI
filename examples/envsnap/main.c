@@ -1,10 +1,25 @@
 /**
  * @file    main.c
- * @brief   环境快照：懒加载的树 + 环境变量与用户数据目录的只读快照
- * @details 与 syspanel 一样"只读为主、不接硬件"，本示例的重点是**懒加载的树**：
- *          左侧树只先建两个根（环境变量 / 用户数据目录），点开哪个才枚举哪个 ——
- *          用户数据目录可能有几百上千个文件，一次全展开会把消息循环堵住、界面假死，
- *          这和资源管理器"展开才读"是同一个道理。
+ * @brief   环境快照：INI 清单驱动的懒加载树 + 环境变量与用户数据目录的快照
+ * @details 采集哪些环境变量、各挂哪个分组，不再写死在代码里，而是放在清单文件
+ *          envsnap.ini（UTF-8，默认在 exe 同目录，第一次运行时按内置清单生成）：
+ *
+ *              [身份]
+ *              COMPUTERNAME=计算机名
+ *              USERNAME=用户名
+ *
+ *          方括号是分组（树里的一支），键是变量名，值是备注（可空）。
+ *          工具栏第二排就是对这份清单的增删改查：
+ *              导入INI —— 选任意一份 ini 重新载入清单，此后的增删改都存回它；
+ *              添加 —— 分组 / 变量名 / 备注 三步输入，同组同名重复会被拒；
+ *              删除 —— 删选中的变量，选中分组则整组连带删除；
+ *              修改 —— 三步输入预填现值，可改名 / 挪分组 / 改备注；
+ *              查询 —— 按关键字过滤清单（变量名 / 备注 / 分组），结果摆进右侧表格。
+ *          每次改动立即存回当前 ini —— 文件是清单的唯一事实源，
+ *          记事本手工改完点「导入INI」一样生效。
+ *
+ *          左侧树依旧是**懒加载**：点开哪个才枚举哪个 —— 用户数据目录可能有几百上千
+ *          个文件，一次全展开会把消息循环堵住、界面假死（与资源管理器"展开才读"同理）。
  *          右侧表格显示当前节点的条目，底部终端记日志、状态栏报状态。
  *
  *          为什么不做"注册表浏览器"：运行时只提供 `cg_reg_read` / `cg_reg_write`
@@ -22,14 +37,14 @@
 #include <stdio.h>
 #include <string.h>
 
-/* ------------------------------------------------------------ 采集清单 */
+/* ------------------------------------------------------------ 内置清单与限额 */
 
-/* 环境变量按**名字**读：框架只提供"按名取一个变量"，没有"枚举环境变量"的接口，
- * 所以这里列一份常用清单；分组名决定它挂在树里哪一支。 */
+/* 内置清单（种子）：exe 旁没有 envsnap.ini 时按它生成一份；自检（无窗口）也用它，
+ * 保证自检零磁盘副作用。分组名决定它挂在树里哪一支，备注一律空。 */
 static const struct {
     const char *name;    /**< 变量名 */
     const char *group;   /**< 树里的分组名 */
-} k_envs[] = {
+} k_seed_envs[] = {
     { "COMPUTERNAME", "身份" },         { "USERNAME", "身份" },           { "USERDOMAIN", "身份" },
     { "USERPROFILE", "路径" },          { "HOMEDRIVE", "路径" },          { "HOMEPATH", "路径" },
     { "APPDATA", "路径" },              { "LOCALAPPDATA", "路径" },       { "ProgramData", "路径" },
@@ -43,14 +58,18 @@ static const struct {
     { "SESSIONNAME", "会话" },          { "LOGONSERVER", "会话" }
 };
 
-/** 采集清单条目数 */
-#define K_ENV_COUNT ((int)(sizeof k_envs / sizeof k_envs[0]))
+/** 种子条目数 */
+#define K_SEED_COUNT ((int)(sizeof k_seed_envs / sizeof k_seed_envs[0]))
+/** 清单最多多少个变量（INI 里超出的不载入，日志提示） */
+#define K_ENV_MAX    256
+/** 清单最多多少个分组 */
+#define K_GROUP_MAX  32
 /** 用户数据目录最多列多少个条目（超出的只计数、不进树，免得界面被塞爆） */
-#define K_DIR_MAX   200
+#define K_DIR_MAX    200
 /** 扩展名分类最多几类 */
-#define K_EXT_MAX   48
-/** 快照文本缓冲大小：业务不 malloc（工程铁律），固定预留这么多，写满即截断 */
-#define K_SNAP_MAX  (96 * 1024)
+#define K_EXT_MAX    48
+/** 文本缓冲大小：业务不 malloc（工程铁律），固定预留这么多，写满即截断 */
+#define K_SNAP_MAX   (96 * 1024)
 
 /* ------------------------------------------------------------ 数据模型 */
 
@@ -61,8 +80,16 @@ enum { NK_NONE = 0, NK_ENV_ROOT, NK_DIR_ROOT, NK_GROUP, NK_ENV, NK_EXT, NK_DIRLI
 typedef struct {
     int  kind;          /**< 节点类别，见 NK_* */
     int  loaded;        /**< 子节点是否已建过（懒加载标记） */
+    char group[48];     /**< 所属分组（NK_ENV 用：选中变量时靠它定位清单行） */
     char data[96];      /**< 承载的数据：组名 / 变量名 / 扩展名 / 文件名 */
 } cg_node_t;
+
+/** 清单里的一行：某个分组下的一个环境变量（备注可空） */
+typedef struct {
+    char group[48];     /**< 分组名 */
+    char name[64];      /**< 变量名 */
+    char note[96];      /**< 备注（INI 里 = 号后面的内容，可空） */
+} envitem_t;
 
 /** 用户数据目录里的一个条目 */
 typedef struct {
@@ -79,8 +106,14 @@ typedef struct {
     long long bytes;       /**< 累计字节数 */
 } extstat_t;
 
-static cg_node_t s_nodes[768];          /**< 节点表：够 28 个变量 + 200 个文件条目 + 分组与分类 */
+static cg_node_t s_nodes[1024];         /**< 节点表：够 256 变量 + 32 组 + 200 文件条目 + 分类 */
 static int       s_node_count;          /**< 已用节点数，也是下一次加节点该拿到的下标 */
+
+static envitem_t s_items[K_ENV_MAX];    /**< 清单：环境变量（启动 / 导入时载入，增删改查都改它） */
+static int       s_item_count;          /**< 清单已用行数 */
+static char      s_groups[K_GROUP_MAX][48]; /**< 分组名表（对应 INI 的节，空节也保留） */
+static int       s_group_count;         /**< 分组数 */
+static char      s_ini_path[1024];      /**< 当前清单文件；空串 = 还没有（自检模式不碰盘） */
 
 static entry_t   s_entries[K_DIR_MAX];  /**< 目录条目快照（刷新时重扫） */
 static int       s_entry_count;         /**< 已登记的条目数 */
@@ -89,7 +122,7 @@ static int       s_scanned;             /**< 目录扫过没有；0 = 需要重�
 static extstat_t s_exts[K_EXT_MAX];     /**< 扩展名分类结果 */
 static int       s_ext_count;           /**< 分类数 */
 
-static char s_snap[K_SNAP_MAX];         /**< 导出用的快照文本（文件级 static，见上面那个宏） */
+static char s_snap[K_SNAP_MAX];         /**< 文本级缓冲：导出快照与拼 INI 文本共用（见各使用者） */
 static int  s_snap_len;                 /**< 已写入字节数 */
 
 /* ------------------------------------------------------------ 公共小工具 */
@@ -164,7 +197,68 @@ static void value_summary(const char *v, char *out, int cap)
 }
 
 /**
- * @brief 清空快照缓冲，准备重新生成
+ * @brief 去掉字符串首尾的空格 / 制表 / 回车（INI 解析与输入框取值都用）
+ * @param s 原地修改的字符串
+ * @return void 无返回值
+ */
+static void str_trim(char *s)
+{
+    char *p = s;
+    char *q;
+
+    while (*p == ' ' || *p == '\t' || *p == '\r') p++;
+    q = p + strlen(p);
+    while (q > p && (q[-1] == ' ' || q[-1] == '\t' || q[-1] == '\r')) q--;
+    *q = '\0';
+    if (p != s) memmove(s, p, (size_t)(q - p + 1));
+}
+
+/**
+ * @brief 把 s 里出现在 bad 中的字符删掉（防把 INI 格式写坏：组名带 ]、键名带 = 等）
+ * @param s 原地修改的字符串
+ * @param bad 要删掉的字符集合
+ * @return void 无返回值
+ */
+static void str_clean(char *s, const char *bad)
+{
+    char *w = s;
+
+    for (; *s; s++) {
+        if (strchr(bad, *s)) continue;
+        *w++ = *s;
+    }
+    *w = '\0';
+}
+
+/**
+ * @brief 大小写不敏感的"包含"判断（ASCII；中文按 UTF-8 字节精确匹配）
+ * @param hay 被搜索串
+ * @param needle 关键字
+ * @return int 1 = 包含，0 = 不包含；关键字为空串恒 1
+ */
+static int icontains(const char *hay, const char *needle)
+{
+    size_t nl = strlen(needle);
+    size_t i;
+
+    if (nl == 0) return 1;
+    for (; *hay; hay++) {
+        for (i = 0; i < nl; i++) {
+            char a = hay[i];
+            char b = needle[i];
+
+            if (a == '\0') return 0;
+            if (a >= 'A' && a <= 'Z') a = (char)(a - 'A' + 'a');
+            if (b >= 'A' && b <= 'Z') b = (char)(b - 'A' + 'a');
+            if (a != b) break;
+        }
+        if (i == nl) return 1;
+    }
+    return 0;
+}
+
+/**
+ * @brief 清空文本缓冲，准备重新生成
  * @return void 无返回值
  */
 static void snap_reset(void)
@@ -174,7 +268,7 @@ static void snap_reset(void)
 }
 
 /**
- * @brief 往快照缓冲追加一段文本（写满就停在缓冲末尾，不再增长）
+ * @brief 往文本缓冲追加一段文本（写满就停在缓冲末尾，不再增长）
  * @param fmt printf 风格格式串
  * @return void 无返回值
  */
@@ -193,6 +287,251 @@ static void snap_addf(const char *fmt, ...)
     s_snap_len += (int)strlen(s_snap + s_snap_len);   /* 追加完再量一次长度，接着往后写 */
 }
 
+/* ------------------------------------------------------------ 清单（INI 模型） */
+
+/**
+ * @brief 清空清单（变量与分组都清），载入新清单前调用
+ * @return void 无返回值
+ */
+static void model_reset(void)
+{
+    s_item_count  = 0;
+    s_group_count = 0;
+}
+
+/**
+ * @brief 查分组在分组表里的下标
+ * @param g 分组名
+ * @return int 下标；没有返回 -1
+ */
+static int group_index(const char *g)
+{
+    int i;
+
+    for (i = 0; i < s_group_count; i++)
+        if (strcmp(s_groups[i], g) == 0) return i;
+    return -1;
+}
+
+/**
+ * @brief 分组不存在就追加一行（空名 / 表满返回 -1）
+ * @param g 分组名
+ * @return int 分组下标；-1 = 没建上
+ */
+static int group_ensure(const char *g)
+{
+    if (!g[0]) return -1;
+    if (group_index(g) >= 0) return group_index(g);
+    if (s_group_count >= K_GROUP_MAX) return -1;
+    snprintf(s_groups[s_group_count], sizeof s_groups[0], "%s", g);
+    return s_group_count++;
+}
+
+/**
+ * @brief 删掉分组表里的一行（后面的整体前移）
+ * @param gi 分组下标（调用方保证合法）
+ * @return void 无返回值
+ */
+static void group_remove(int gi)
+{
+    memmove(&s_groups[gi], &s_groups[gi + 1],
+            (size_t)(s_group_count - gi - 1) * sizeof s_groups[0]);
+    s_group_count--;
+}
+
+/**
+ * @brief 查某个"分组 + 变量名"在清单里的行号
+ * @param g 分组名
+ * @param name 变量名
+ * @return int 行号；没有返回 -1
+ */
+static int item_find(const char *g, const char *name)
+{
+    int i;
+
+    for (i = 0; i < s_item_count; i++)
+        if (strcmp(s_items[i].group, g) == 0 && strcmp(s_items[i].name, name) == 0) return i;
+    return -1;
+}
+
+/**
+ * @brief 往清单追加一行（表满返回 -1；分组行由 group_ensure 负责）
+ * @param g 分组名
+ * @param name 变量名
+ * @param note 备注（可空）
+ * @return int 0 成功、-1 清单满
+ */
+static int model_add(const char *g, const char *name, const char *note)
+{
+    envitem_t *it;
+
+    if (s_item_count >= K_ENV_MAX) return -1;
+    it = &s_items[s_item_count++];
+    snprintf(it->group, sizeof it->group, "%s", g);
+    snprintf(it->name,  sizeof it->name,  "%s", name);
+    snprintf(it->note,  sizeof it->note,  "%s", note);
+    return 0;
+}
+
+/**
+ * @brief 删掉清单里的一行（后面的整体前移）
+ * @param idx 行号（调用方保证合法）
+ * @return void 无返回值
+ */
+static void item_remove(int idx)
+{
+    memmove(&s_items[idx], &s_items[idx + 1],
+            (size_t)(s_item_count - idx - 1) * sizeof s_items[0]);
+    s_item_count--;
+}
+
+/**
+ * @brief 把内置清单装进模型（自检与"生成默认 ini"都用它）
+ * @return void 无返回值
+ */
+static void model_load_seed(void)
+{
+    int i;
+
+    model_reset();
+    for (i = 0; i < K_SEED_COUNT; i++) {
+        group_ensure(k_seed_envs[i].group);
+        model_add(k_seed_envs[i].group, k_seed_envs[i].name, "");
+    }
+}
+
+/**
+ * @brief 解析一份 INI 文本进清单（先清空模型）
+ * @param text 整份 INI 文本（UTF-8）；NULL 视为空
+ * @param app 应用；可为 NULL（那就不写日志）
+ * @return int 载入的变量条数（0 = 空清单，也算成功）
+ * @note 容错口径：BOM / \r\n 都吃得下；`;` `#` 开头是注释；
+ *       没有 = 的裸键备注记空；还没进任何节的键丢弃；重复键取先出现的并计数提示
+ */
+static int ini_parse(const char *text, cg_app_t *app)
+{
+    char       line[512];
+    char       cur[48];
+    const char *p = text;
+    int        loaded = 0;
+    int        dup    = 0;
+
+    model_reset();
+    cur[0] = '\0';
+    if (!p) return 0;
+    if ((unsigned char)p[0] == 0xEF && (unsigned char)p[1] == 0xBB && (unsigned char)p[2] == 0xBF) p += 3;
+
+    while (*p) {
+        char *eq;
+        char *key;
+        char *val;
+        int   len = 0;
+
+        while (p[len] && p[len] != '\n' && len < (int)sizeof(line) - 1) len++;
+        memcpy(line, p, (size_t)len);
+        line[len] = '\0';
+        p += len;
+        if (*p == '\n') p++;
+
+        str_trim(line);
+        if (!line[0] || line[0] == ';' || line[0] == '#') continue;
+
+        if (line[0] == '[') {                          /* [分组]：登记分组，成为后续键的归属 */
+            char *end = strchr(line, ']');
+
+            if (end) {
+                *end = '\0';
+                str_trim(line + 1);
+                if (group_ensure(line + 1) < 0) {
+                    /* 组满或空名：这组连同名下的键一起丢。cur 若还留着组名，键会进
+                     * "不在分组表里"的孤儿行 —— 树里不显示、保存时也丢，与提示口径不一致 */
+                    if (s_group_count >= K_GROUP_MAX)
+                        log_line(app, "INI 分组太多（上限 %d），[%s] 名下的组与变量被丢弃", K_GROUP_MAX, line + 1);
+                    cur[0] = '\0';
+                } else {
+                    snprintf(cur, sizeof cur, "%.47s", line + 1);   /* 限长与分组表一致，gcc 才证得出装得下 */
+                }
+            }
+            continue;
+        }
+
+        eq = strchr(line, '=');
+        if (eq) { *eq = '\0'; val = eq + 1; }
+        else      val = "";
+        key = line;
+        str_trim(key);
+        str_trim(val);
+        if (!cur[0] || !key[0]) continue;              /* 节外的键 / 空键：丢弃 */
+
+        if (item_find(cur, key) >= 0) { dup++; continue; }
+        if (model_add(cur, key, val) != 0) {
+            log_line(app, "清单已满（上限 %d 个变量），%s\\%s 没载入", K_ENV_MAX, cur, key);
+            continue;
+        }
+        loaded++;
+    }
+
+    if (dup) log_line(app, "INI 里有 %d 个重复条目，取先出现的", dup);
+    return loaded;
+}
+
+/**
+ * @brief 从文件载入清单（读整份文本再解析；先清空模型）
+ * @param path ini 文件路径（UTF-8）
+ * @param app 应用；可为 NULL
+ * @return int 载入的变量条数；-1 = 文件读不到 / 读不出
+ */
+static int ini_load(const char *path, cg_app_t *app)
+{
+    char *text = cg_file_read(path);
+    int   n;
+
+    if (!text) {
+        log_line(app, "INI 读不到或读不出：%s", path);
+        return -1;
+    }
+    n = ini_parse(text, app);
+    cg_free(text);
+    return n;
+}
+
+/**
+ * @brief 把清单整份写成 INI 文本并落盘（分组按表顺序，变量按清单顺序）
+ * @param path 目标路径（UTF-8，整文件覆盖）
+ * @param app 应用；可为 NULL
+ * @return int 0 成功、-1 写盘失败
+ * @note 借用 s_snap 缓冲拼文本：256 行 × 最长约 212 字节 ≈ 54KB，96KB 的缓冲装得下；
+ *       导出快照与存清单不会同时发生（都是按钮回调里的同步动作）
+ */
+static int ini_save(const char *path, cg_app_t *app)
+{
+    int g, i;
+
+    snap_reset();
+    for (g = 0; g < s_group_count; g++) {
+        snap_addf("[%s]\r\n", s_groups[g]);
+        for (i = 0; i < s_item_count; i++)
+            if (strcmp(s_items[i].group, s_groups[g]) == 0)
+                snap_addf("%s=%s\r\n", s_items[i].name, s_items[i].note);
+    }
+    if (cg_file_write(path, s_snap) != 0) {
+        log_line(app, "清单写盘失败：%s", path);
+        return -1;
+    }
+    return 0;
+}
+
+/**
+ * @brief 增删改之后把清单存回当前 ini（还没有路径就不存 —— 自检不会走到这）
+ * @param app 应用
+ * @return void 无返回值
+ */
+static void crud_save(cg_app_t *app)
+{
+    if (!s_ini_path[0]) return;
+    if (ini_save(s_ini_path, app) != 0) status_msg(app, "清单存盘失败，详见日志");
+}
+
 /* ------------------------------------------------------------ 树与采集 */
 
 /**
@@ -200,13 +539,15 @@ static void snap_addf(const char *fmt, ...)
  * @param app 应用
  * @param parent 父节点下标；-1 = 加在根上
  * @param kind 节点类别，见 NK_*
+ * @param grp 所属分组（NK_ENV 用；其余传 NULL）
  * @param data 节点承载的数据（组名 / 变量名 / 扩展名 / 文件名）；可为 NULL
  * @param text 节点显示文字
  * @return int 新节点下标；建不上或对不上号返回 -1
  * @note 运行时是追加式建节点，控件返回的下标必然等于本表下标；
  *       一旦对不上（例如表满了）就只让它显示、不记录 —— 宁可少一点，也别让记录错位
  */
-static int node_add(cg_app_t *app, int parent, int kind, const char *data, const char *text)
+static int node_add(cg_app_t *app, int parent, int kind, const char *grp,
+                    const char *data, const char *text)
 {
     cg_widget_t *tree = app ? cg_find(app, "tree_main") : NULL;
     int          item;
@@ -218,23 +559,10 @@ static int node_add(cg_app_t *app, int parent, int kind, const char *data, const
 
     s_nodes[item].kind   = kind;
     s_nodes[item].loaded = 0;
+    snprintf(s_nodes[item].group, sizeof s_nodes[item].group, "%s", grp ? grp : "");
     snprintf(s_nodes[item].data, sizeof s_nodes[item].data, "%s", data ? data : "");
     s_node_count = item + 1;
     return item;
-}
-
-/**
- * @brief 判断某条环境变量是不是它所在分组里的第一条（用来决定要不要建一个分组节点）
- * @param idx k_envs 里的下标
- * @return int 1 = 是分组首条、0 = 前面已有同组
- */
-static int group_first(int idx)
-{
-    int j;
-
-    for (j = 0; j < idx; j++)
-        if (strcmp(k_envs[j].group, k_envs[idx].group) == 0) return 0;
-    return 1;
 }
 
 /**
@@ -319,7 +647,8 @@ static void classify_exts(void)
  * @param item 要展开的节点下标
  * @return void 无返回值
  * @note 这是本示例的核心：整棵树一次递归建完会把消息循环堵住
- *       （几百个文件、每个还要问大小与是否目录），所以一律等用户点开才建一层
+ *       （几百个文件、每个还要问大小与是否目录），所以一律等用户点开才建一层；
+ *       环境变量那侧的分组与变量来自清单模型（INI），不再遍历任何硬编码表
  */
 static void load_children(cg_app_t *app, int item)
 {
@@ -334,15 +663,15 @@ static void load_children(cg_app_t *app, int item)
 
     switch (n->kind) {
     case NK_ENV_ROOT:
-        /* 第一层先只放"分组"，变量本身等分组展开再建 */
-        for (i = 0; i < K_ENV_COUNT; i++)
-            if (group_first(i)) node_add(app, item, NK_GROUP, k_envs[i].group, k_envs[i].group);
+        /* 第一层先只放分组（INI 的节，空节也放）；变量本身等分组展开再建 */
+        for (i = 0; i < s_group_count; i++)
+            node_add(app, item, NK_GROUP, NULL, s_groups[i], s_groups[i]);
         break;
 
     case NK_GROUP:
-        for (i = 0; i < K_ENV_COUNT; i++)
-            if (strcmp(k_envs[i].group, n->data) == 0)
-                node_add(app, item, NK_ENV, k_envs[i].name, k_envs[i].name);
+        for (i = 0; i < s_item_count; i++)
+            if (strcmp(s_items[i].group, n->data) == 0)
+                node_add(app, item, NK_ENV, n->data, s_items[i].name, s_items[i].name);
         break;
 
     case NK_DIR_ROOT:
@@ -353,24 +682,24 @@ static void load_children(cg_app_t *app, int item)
              * 不限会报 -Wformat-truncation（2026-09-28 实测） */
             snprintf(label, sizeof label, "%.23s  (%d)",
                      s_exts[k].ext[0] ? s_exts[k].ext : "(无扩展名)", s_exts[k].files);
-            node_add(app, item, NK_EXT, s_exts[k].ext, label);
+            node_add(app, item, NK_EXT, NULL, s_exts[k].ext, label);
         }
         if (s_dir_count > 0) {
             snprintf(label, sizeof label, "(目录)  (%d)", s_dir_count);
-            node_add(app, item, NK_DIRLIST, "", label);
+            node_add(app, item, NK_DIRLIST, NULL, "", label);
         }
         break;
 
     case NK_EXT:
         for (i = 0; i < s_entry_count; i++)
             if (!s_entries[i].is_dir && strcmp(s_entries[i].ext, n->data) == 0)
-                node_add(app, item, NK_FILE, s_entries[i].name, s_entries[i].name);
+                node_add(app, item, NK_FILE, NULL, s_entries[i].name, s_entries[i].name);
         break;
 
     case NK_DIRLIST:
         for (i = 0; i < s_entry_count; i++)
             if (s_entries[i].is_dir)
-                node_add(app, item, NK_FILE, s_entries[i].name, s_entries[i].name);
+                node_add(app, item, NK_FILE, NULL, s_entries[i].name, s_entries[i].name);
         break;
 
     default:
@@ -386,37 +715,15 @@ static void load_children(cg_app_t *app, int item)
  */
 static void build_roots(cg_app_t *app)
 {
-    node_add(app, -1, NK_ENV_ROOT, "环境变量", "环境变量");
-    node_add(app, -1, NK_DIR_ROOT, "用户数据目录", "用户数据目录");
-}
-
-/**
- * @brief 拼快照前把环境变量这几个懒加载节点补齐
- * @param app 应用
- * @return void 无返回值
- * @note 先补环境变量根的下一层（分组），再补每个分组的下一层（变量）；都只读环境变量、不碰磁盘。
- *       目录那侧**不在这里补**，免得"导出"顺手把盘扫一遍（那是"重新采集"的活）
- */
-static void ensure_env_tree(cg_app_t *app)
-{
-    int i;
-
-    for (i = 0; i < s_node_count; i++) {
-        if (s_nodes[i].kind == NK_ENV_ROOT) {
-            load_children(app, i);
-            break;
-        }
-    }
-    for (i = 0; i < s_node_count; i++) {
-        if (s_nodes[i].kind == NK_GROUP) load_children(app, i);
-    }
+    node_add(app, -1, NK_ENV_ROOT, NULL, "环境变量", "环境变量");
+    node_add(app, -1, NK_DIR_ROOT, NULL, "用户数据目录", "用户数据目录");
 }
 
 /**
  * @brief 把两个根的下一层摆出来（懒加载的"第一次展开"）
  * @param app 应用
  * @return void 无返回值
- * @note 环境变量那侧只读变量、不碰磁盘；目录那侧会扫一层（所以只在真窗口下调用）
+ * @note 环境变量那侧只读清单模型、不碰磁盘；目录那侧会扫一层（所以只在真窗口下调用）
  */
 static void expand_roots(cg_app_t *app)
 {
@@ -425,6 +732,45 @@ static void expand_roots(cg_app_t *app)
     for (i = 0; i < s_node_count; i++)
         if (s_nodes[i].kind == NK_ENV_ROOT || s_nodes[i].kind == NK_DIR_ROOT)
             load_children(app, i);
+}
+
+/**
+ * @brief 清单变过之后的整树重建：清空树与表格，重建两个根并展开一层
+ * @param app 应用
+ * @return void 无返回值
+ * @note 目录侧沿用内存里已有的条目快照（s_scanned 不动，不重扫盘）；
+ *       选中态清空，右侧表格回到「未选中」
+ */
+static void rebuild_env_tree(cg_app_t *app)
+{
+    cg_widget_t *tree = cg_find(app, "tree_main");
+    cg_widget_t *tbl  = cg_find(app, "tbl_items");
+
+    if (tree) cg_tree_clear(tree);
+    if (tbl)  cg_table_clear(tbl);
+    s_node_count = 0;
+    build_roots(app);
+    expand_roots(app);
+}
+
+/**
+ * @brief 猜「添加」该落在哪个分组：选中的分组 / 变量所在分组，否则第一个分组
+ * @param app 应用
+ * @param out 输出缓冲
+ * @param cap out 的字节数
+ * @return void 无返回值（清单为空时 out 是空串，让用户自己填）
+ */
+static void sel_group(cg_app_t *app, char *out, int cap)
+{
+    cg_widget_t *tree = cg_find(app, "tree_main");
+    int          item = tree ? cg_tree_selected(tree) : -1;
+
+    out[0] = '\0';
+    if (item >= 0 && item < s_node_count) {
+        if (s_nodes[item].kind == NK_GROUP)      snprintf(out, (size_t)cap, "%s", s_nodes[item].data);
+        else if (s_nodes[item].kind == NK_ENV)   snprintf(out, (size_t)cap, "%s", s_nodes[item].group);
+    }
+    if (!out[0] && s_group_count > 0) snprintf(out, (size_t)cap, "%s", s_groups[0]);
 }
 
 /* ------------------------------------------------------------ 右侧表格 */
@@ -457,7 +803,7 @@ static void fill_table(cg_app_t *app)
     n = &s_nodes[item];
     switch (n->kind) {
     case NK_ENV_ROOT: {
-        const char *cells[3] = { "环境变量", "", "展开后按分组采集，选中分组或变量看详情" };
+        const char *cells[3] = { "环境变量", "", "清单来自 INI：展开看分组，分组下是变量" };
 
         cg_table_add_row(tbl, cells, 3);
         break;
@@ -483,9 +829,9 @@ static void fill_table(cg_app_t *app)
         const char *cells[3];
         int         vars = 0;
 
-        for (i = 0; i < s_node_count; i++)
-            if (s_nodes[i].kind == NK_ENV) vars++;
-        snprintf(note, sizeof(note), "环境变量分组，含 %d 个变量", vars);
+        for (i = 0; i < s_item_count; i++)
+            if (strcmp(s_items[i].group, n->data) == 0) vars++;
+        snprintf(note, sizeof(note), "分组，含 %d 个变量", vars);
         cells[0] = n->data;
         cells[1] = "分组";
         cells[2] = note;
@@ -495,12 +841,16 @@ static void fill_table(cg_app_t *app)
     case NK_ENV: {
         char       *v = cg_env(n->data);
         char        sum[80];
+        char        note[96];
         const char *cells[3];
+        int         idx = item_find(n->group, n->data);
 
+        note[0] = '\0';
+        if (idx >= 0) snprintf(note, sizeof(note), "%s", s_items[idx].note);
         value_summary(v, sum, sizeof(sum));
         cells[0] = n->data;
-        cells[1] = v ? sum : "（没有这个变量）";
-        cells[2] = v ? "已设置" : "未设置";
+        cells[1] = v ? sum : "（未设置）";
+        cells[2] = note[0] ? note : (v ? "已设置" : "未设置");
         cg_table_add_row(tbl, cells, 3);
         cg_free(v);
         break;
@@ -553,16 +903,16 @@ static void fill_table(cg_app_t *app)
 /* ------------------------------------------------------------ 快照 */
 
 /**
- * @brief 把当前已采集到的东西拼成一份文本快照，写进快照缓冲
+ * @brief 把当前已采集到的东西拼成一份文本快照，写进文本缓冲
  * @param app 应用
  * @return void 无返回值
- * @note 段落：时间 / 环境变量清单（按分组、值超长走摘要）/ 用户数据目录概览 / 扩展名分类表；
- *       只拼**已经采集到**的内容，不主动扫盘
+ * @note 段落：时间 / 环境变量清单（按分组、带备注，值超长走摘要）/ 用户数据目录概览 /
+ *       扩展名分类表；只拼**已经采集到**的内容，不主动扫盘
  */
 static void snapshot_build(cg_app_t *app)
 {
     char               *now;
-    int                 i;
+    int                 i, g;
     unsigned long long  total = 0;
 
     snap_reset();
@@ -573,18 +923,19 @@ static void snapshot_build(cg_app_t *app)
     cg_free(now);
     snap_addf("\r\n");
 
-    /* 环境变量：先把懒加载的节点补齐（只读环境变量，不碰磁盘） */
-    ensure_env_tree(app);
-    snap_addf("---- 环境变量（按分组）----\r\n");
-    for (i = 0; i < s_node_count; i++) {
-        if (s_nodes[i].kind == NK_GROUP) {
-            snap_addf("[%s]\r\n", s_nodes[i].data);
-        } else if (s_nodes[i].kind == NK_ENV) {
-            char *v = cg_env(s_nodes[i].data);
+    /* 环境变量：清单（含备注）+ 当前值；清单启动 / 导入时就已整体在模型里，直接遍历 */
+    snap_addf("---- 环境变量（清单：%s）----\r\n", s_ini_path[0] ? s_ini_path : "内置清单");
+    for (g = 0; g < s_group_count; g++) {
+        snap_addf("[%s]\r\n", s_groups[g]);
+        for (i = 0; i < s_item_count; i++) {
+            char *v;
             char  sum[80];
 
+            if (strcmp(s_items[i].group, s_groups[g]) != 0) continue;
+            v = cg_env(s_items[i].name);
             value_summary(v, sum, sizeof(sum));
-            snap_addf("    %s = %s\r\n", s_nodes[i].data, sum);
+            if (s_items[i].note[0]) snap_addf("    %s = %s（%s）\r\n", s_items[i].name, sum, s_items[i].note);
+            else                    snap_addf("    %s = %s\r\n", s_items[i].name, sum);
             cg_free(v);
         }
     }
@@ -626,7 +977,7 @@ static void snapshot_build(cg_app_t *app)
  * @param user 未使用
  * @return void 无返回值
  * @note 运行时提供"清空树"（整树重建、选中态复位），所以这里直接清空重建，不必提示重开窗口；
- *       不开窗时（自检）跳过重扫磁盘
+ *       **清单模型不动**（重采集 ≠ 重导清单）；不开窗时（自检）跳过重扫磁盘
  */
 static void on_btn_refresh_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
@@ -657,8 +1008,311 @@ static void on_btn_refresh_click(cg_widget_t *self, cg_event_t ev, void *user)
     /* 立即把两个根的下一层采集出来，免得用户还要手动展开一次 */
     expand_roots(app);
 
-    log_line(app, "重新采集完成：树 %d 个节点，目录条目 %d 个", cg_tree_count(tree), s_entry_count);
+    log_line(app, "重新采集完成：树 %d 个节点，目录条目 %d 个（清单不变）",
+             cg_tree_count(tree), s_entry_count);
     status_msg(app, "已重新采集：条目 %d", s_entry_count);
+}
+
+/**
+ * @brief 「导入INI」：选一份 ini 重新载入清单，并把之后的增删改指向它
+ * @param self 被点的按钮
+ * @param ev 事件类型
+ * @param user 未使用
+ * @return void 无返回值
+ * @note 弹对话框与读盘是副作用：自检（无窗口）时直接跳过
+ */
+static void on_btn_import_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    char      path[1024];
+
+    (void)ev;
+    (void)user;
+
+    if (!cg_app_has_window(app)) {
+        log_line(app, "自检模式：跳过导入 INI（不弹对话框、不读盘）");
+        return;
+    }
+
+    path[0] = '\0';
+    if (!cg_open_file_dialog(self, "导入清单 INI",
+                             "INI 文件(*.ini)|*.ini|所有文件(*.*)|*.*",
+                             path, sizeof(path))) {
+        log_line(app, "取消导入 INI");
+        status_msg(app, "已取消导入");
+        return;
+    }
+
+    if (ini_load(path, app) < 0) {
+        log_line(app, "导入失败：%s 读不出来", path);
+        status_msg(app, "导入失败（读不出文件）");
+        return;
+    }
+    snprintf(s_ini_path, sizeof s_ini_path, "%s", path);
+    rebuild_env_tree(app);
+    log_line(app, "已导入清单 %s：%d 组 %d 个变量（此后增删改存回它）",
+             path, s_group_count, s_item_count);
+    status_msg(app, "已导入：%d 个变量", s_item_count);
+}
+
+/**
+ * @brief 「添加」：三步输入（分组 / 变量名 / 备注）往清单加一行，存回 ini
+ * @param self 被点的按钮
+ * @param ev 事件类型
+ * @param user 未使用
+ * @return void 无返回值
+ * @note 分组预填当前选中节点所属的组；同组同名重复会被消息框拦下；
+ *       输入框是模态对话框：自检（无窗口）时跳过
+ */
+static void on_btn_add_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    char      g[48], name[64], note[96];
+
+    (void)ev;
+    (void)user;
+
+    if (!cg_app_has_window(app)) {
+        log_line(app, "自检模式：跳过添加（不弹输入框）");
+        return;
+    }
+
+    sel_group(app, g, sizeof(g));
+    if (!cg_input_box(self, "添加变量", "分组：", g, g, sizeof(g))) { log_line(app, "取消添加"); return; }
+    name[0] = '\0';
+    if (!cg_input_box(self, "添加变量", "变量名：", "", name, sizeof(name))) { log_line(app, "取消添加"); return; }
+    note[0] = '\0';
+    if (!cg_input_box(self, "添加变量", "备注（可空）：", "", note, sizeof(note))) { log_line(app, "取消添加"); return; }
+
+    str_trim(g);
+    str_trim(name);
+    str_trim(note);
+    str_clean(g, "[]");                            /* 组名带 ] 会把 INI 节写坏 */
+    str_clean(name, "=");                          /* 键名带 = 会把键值切开 */
+    if (!name[0]) {
+        cg_message_box(self, "变量名不能为空。", "添加变量", 1);
+        return;
+    }
+    if (group_ensure(g) < 0) {
+        cg_message_box(self, "分组名为空或分组数已满（32），加不进去。", "添加变量", 2);
+        return;
+    }
+    if (item_find(g, name) >= 0) {
+        cg_message_box(self, "这个分组下已有同名变量。", "添加变量", 1);
+        return;
+    }
+    if (model_add(g, name, note) != 0) {
+        cg_message_box(self, "清单已满（256 个变量）。", "添加变量", 2);
+        return;
+    }
+
+    crud_save(app);
+    rebuild_env_tree(app);
+    if (note[0]) log_line(app, "已添加：%s\\%s（%s）——清单 %d 个变量", g, name, note, s_item_count);
+    else         log_line(app, "已添加：%s\\%s ——清单 %d 个变量", g, name, s_item_count);
+    status_msg(app, "已添加 %s\\%s", g, name);
+}
+
+/**
+ * @brief 「删除」：删选中的变量；选中分组则整组连带删除，存回 ini
+ * @param self 被点的按钮
+ * @param ev 事件类型
+ * @param user 未使用
+ * @return void 无返回值
+ * @note cg_message_box 只有确定钮，做不了"是否确认"——删除立即生效（README 已写明）；
+ *       组删空后分组行也一并删掉；其余分组不受影响
+ */
+static void on_btn_del_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t    *app  = cg_app_of(self);
+    cg_widget_t *tree = cg_find(app, "tree_main");
+    int          item = tree ? cg_tree_selected(tree) : -1;
+    cg_node_t   *n;
+
+    (void)ev;
+    (void)user;
+
+    if (!cg_app_has_window(app)) {
+        log_line(app, "自检模式：跳过删除（不弹框、不改清单）");
+        return;
+    }
+    if (item < 0 || item >= s_node_count) {
+        status_msg(app, "删除：先在树里选中一个变量或分组");
+        return;
+    }
+    n = &s_nodes[item];
+
+    if (n->kind == NK_ENV) {
+        char label[120];
+        int  idx = item_find(n->group, n->data);
+
+        if (idx < 0) {
+            status_msg(app, "删除：清单里找不到这一行（刚导入过？重新选中再试）");
+            return;
+        }
+        snprintf(label, sizeof label, "%s\\%s", n->group, n->data);
+        item_remove(idx);
+        crud_save(app);
+        rebuild_env_tree(app);
+        log_line(app, "已删除：%s ——清单 %d 个变量", label, s_item_count);
+        status_msg(app, "已删除 %s", label);
+    } else if (n->kind == NK_GROUP) {
+        char label[48];
+        int  killed = 0;
+        int  i, gi;
+
+        snprintf(label, sizeof label, "%s", n->data);
+        for (i = s_item_count - 1; i >= 0; i--)
+            if (strcmp(s_items[i].group, label) == 0) { item_remove(i); killed++; }
+        gi = group_index(label);
+        if (gi >= 0) group_remove(gi);
+        crud_save(app);
+        rebuild_env_tree(app);
+        log_line(app, "已删除分组 %s（连带 %d 个变量）——清单 %d 个变量", label, killed, s_item_count);
+        status_msg(app, "已删除分组 %s", label);
+    } else {
+        status_msg(app, "删除：先在树里选中一个变量或分组");
+    }
+}
+
+/**
+ * @brief 「修改」：三步输入预填现值，改名 / 挪分组 / 改备注，存回 ini
+ * @param self 被点的按钮
+ * @param ev 事件类型
+ * @param user 未使用
+ * @return void 无返回值
+ * @note 分组改了就是挪组（原组空了会保留空节，方便以后再加回去）；
+ *       改到同组同名（别的行）会被拒
+ */
+static void on_btn_edit_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t    *app  = cg_app_of(self);
+    cg_widget_t *tree = cg_find(app, "tree_main");
+    int          item = tree ? cg_tree_selected(tree) : -1;
+    cg_node_t   *n;
+    char         g[48], name[64], note[96], old[120];
+    int          idx, other;
+
+    (void)ev;
+    (void)user;
+
+    if (!cg_app_has_window(app)) {
+        log_line(app, "自检模式：跳过修改（不弹输入框）");
+        return;
+    }
+    if (item < 0 || item >= s_node_count) {
+        status_msg(app, "修改：先在树里选中一个变量");
+        return;
+    }
+    n = &s_nodes[item];
+    if (n->kind != NK_ENV) {
+        status_msg(app, "修改：只能改变量节点（分组改名请删了重加）");
+        return;
+    }
+    idx = item_find(n->group, n->data);
+    if (idx < 0) {
+        status_msg(app, "修改：清单里找不到这一行（刚导入过？重新选中再试）");
+        return;
+    }
+
+    snprintf(g, sizeof g, "%s", s_items[idx].group);
+    snprintf(name, sizeof name, "%s", s_items[idx].name);
+    snprintf(note, sizeof note, "%s", s_items[idx].note);
+    snprintf(old, sizeof old, "%s\\%s", g, name);
+
+    if (!cg_input_box(self, "修改变量", "分组（改了就是挪组）：", g, g, sizeof g) ||
+        !cg_input_box(self, "修改变量", "变量名：", name, name, sizeof name) ||
+        !cg_input_box(self, "修改变量", "备注（可空）：", note, note, sizeof note)) {
+        log_line(app, "取消修改");
+        return;
+    }
+
+    str_trim(g);
+    str_trim(name);
+    str_trim(note);
+    str_clean(g, "[]");
+    str_clean(name, "=");
+    if (!name[0]) {
+        cg_message_box(self, "变量名不能为空。", "修改变量", 1);
+        return;
+    }
+    other = item_find(g, name);
+    if (other >= 0 && other != idx) {
+        cg_message_box(self, "目标分组下已有同名变量。", "修改变量", 1);
+        return;
+    }
+    if (group_ensure(g) < 0) {
+        cg_message_box(self, "分组名为空或分组数已满（32）。", "修改变量", 2);
+        return;
+    }
+
+    snprintf(s_items[idx].group, sizeof s_items[idx].group, "%s", g);
+    snprintf(s_items[idx].name,  sizeof s_items[idx].name,  "%s", name);
+    snprintf(s_items[idx].note,  sizeof s_items[idx].note,  "%s", note);
+
+    crud_save(app);
+    rebuild_env_tree(app);
+    if (note[0]) log_line(app, "已修改：%s → %s\\%s（%s）", old, g, name, note);
+    else         log_line(app, "已修改：%s → %s\\%s", old, g, name);
+    status_msg(app, "已修改 %s\\%s", g, name);
+}
+
+/**
+ * @brief 「查询」：按关键字过滤清单，把命中行摆进右侧表格
+ * @param self 被点的按钮
+ * @param ev 事件类型
+ * @param user 未使用
+ * @return void 无返回值
+ * @note 命中的是清单行（分组 / 变量名 / 备注），不是变量当前值；
+ *       点一下树节点就回到该节点的条目表；空关键字 / 取消不动表格
+ */
+static void on_btn_find_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t    *app = cg_app_of(self);
+    cg_widget_t *tbl  = cg_find(app, "tbl_items");
+    char         kw[96];
+    int          i, hit = 0;
+
+    (void)ev;
+    (void)user;
+
+    if (!cg_app_has_window(app)) {
+        log_line(app, "自检模式：跳过查询（不弹输入框）");
+        return;
+    }
+
+    kw[0] = '\0';
+    if (!cg_input_box(self, "查询清单", "关键字（分组 / 变量名 / 备注）：", "", kw, sizeof kw)) {
+        log_line(app, "取消查询");
+        return;
+    }
+    str_trim(kw);
+    if (!kw[0]) {
+        status_msg(app, "查询：关键字为空");
+        return;
+    }
+
+    if (!tbl) return;
+    cg_table_clear(tbl);
+    for (i = 0; i < s_item_count; i++) {
+        const char *cells[3];
+
+        if (!icontains(s_items[i].group, kw) &&
+            !icontains(s_items[i].name, kw) &&
+            !icontains(s_items[i].note, kw)) continue;
+        cells[0] = s_items[i].group;
+        cells[1] = s_items[i].name;
+        cells[2] = s_items[i].note[0] ? s_items[i].note : "—";
+        cg_table_add_row(tbl, cells, 3);
+        hit++;
+    }
+    if (hit == 0) {
+        const char *cells[3] = { "（没有匹配）", "", "试试别的关键字" };
+
+        cg_table_add_row(tbl, cells, 3);
+    }
+    log_line(app, "查询“%s”：命中 %d 条（点树节点回到该节点的条目表）", kw, hit);
+    status_msg(app, "查询命中 %d 条", hit);
 }
 
 /**
@@ -786,7 +1440,7 @@ static void on_tree_expand(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief 界面就绪：只搭两个根节点，再写一段开场白（不扫盘）
+ * @brief 界面就绪：先载清单（真窗口读 ini，没有就生成；自检用内置清单），再搭根节点
  * @param app 应用
  * @param user 启动描述里的业务数据，本示例没用
  * @return void 无返回值
@@ -794,6 +1448,28 @@ static void on_tree_expand(cg_widget_t *self, cg_event_t ev, void *user)
 static void on_ready(cg_app_t *app, void *user)
 {
     (void)user;
+
+    if (cg_app_has_window(app)) {
+        char *dir  = cg_app_dir();
+        char *path = dir ? cg_path_join(dir, "envsnap.ini") : NULL;
+        int   n;
+
+        if (path) snprintf(s_ini_path, sizeof s_ini_path, "%s", path);
+        cg_free(path);
+        cg_free(dir);
+
+        n = s_ini_path[0] ? ini_load(s_ini_path, app) : -1;
+        if (n < 0) {
+            model_load_seed();
+            if (s_ini_path[0] && ini_save(s_ini_path, app) == 0)
+                log_line(app, "exe 旁没有 envsnap.ini，已按内置清单生成（%d 组 %d 个变量）",
+                         s_group_count, s_item_count);
+        } else {
+            log_line(app, "已载入清单 %s：%d 组 %d 个变量", s_ini_path, s_group_count, s_item_count);
+        }
+    } else {
+        model_load_seed();                 /* 自检：不读盘不写盘，用内置清单撑起树 */
+    }
 
     build_roots(app);
 
@@ -804,9 +1480,8 @@ static void on_ready(cg_app_t *app, void *user)
         log_line(app, "已展开两个根：树共 %d 个节点", cg_tree_count(cg_find(app, "tree_main")));
     }
 
-    log_line(app, "环境快照就绪：展开「环境变量」或「用户数据目录」按需采集，点「重新采集」整树重扫");
-    log_line(app, "导出 / 复制只写「当前已采集到」的内容；两者都会先拼一次快照");
-    status_msg(app, "就绪：展开节点按需采集");
+    log_line(app, "清单可增删改查（改动自动存回 INI）；导出 / 复制对当前已采集的内容做快照");
+    status_msg(app, "就绪：清单 %d 组 %d 个变量", s_group_count, s_item_count);
 }
 
 /* ------------------------------------------------------------ 绑定表 */
@@ -815,6 +1490,11 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND("on_btn_refresh_click", on_btn_refresh_click),
     CG_BIND("on_btn_export_click",  on_btn_export_click),
     CG_BIND("on_btn_copy_click",    on_btn_copy_click),
+    CG_BIND("on_btn_import_click",  on_btn_import_click),
+    CG_BIND("on_btn_add_click",     on_btn_add_click),
+    CG_BIND("on_btn_del_click",     on_btn_del_click),
+    CG_BIND("on_btn_edit_click",    on_btn_edit_click),
+    CG_BIND("on_btn_find_click",    on_btn_find_click),
     CG_BIND("on_tree_sel",          on_tree_sel),
     CG_BIND("on_tree_expand",       on_tree_expand),
     CG_BIND_END
