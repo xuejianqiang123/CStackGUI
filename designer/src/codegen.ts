@@ -209,6 +209,7 @@ export function generateC(doc: CgDoc, baseName: string): GenFile[] {
 * @param self ${actionNames.has(n) ? "主窗口伪控件（cg_widget_id(self) 是 \"__window\"）" : "触发事件的控件"}
 * @param ev ${actionNames.has(n) ? "恒为 CG_EVENT_CLICK" : "事件类型"}
 * @param user 挂在控件上的业务数据（cg_widget_set_user 挂进去的）
+* @return void 回调无返回值
 */`;
 
   const header = `/**
@@ -284,6 +285,11 @@ static const cg_binding_t k_bindings[] = {
     ${macroName(base)}
     CG_BIND_END
 };
+
+/* ==================== 用户代码（重新导出时这一段原样保留） ====================
+ * 全局变量、辅助函数写在这里。别删这两行标记 —— 画布重新导出 main.c 时靠它们
+ * 把这段内容搬过去。业务逻辑请写在 ${base}_ui_events.c 里（那份文件也永不覆盖）。
+ * ==================== 用户代码结束 ==================== */
 
 /* 界面原文（编译时由 ${base}_cgui.c 内嵌进 exe） */
 extern const char *const k_cgui_text;

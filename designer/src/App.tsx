@@ -280,12 +280,18 @@ export default function App() {
     [bridge, filePath, lastExport, say],
   );
 
-  const doExportC = useCallback(async () => {
-    const baseName = suggestedBaseName(docRef.current.app.title);
+  /** 导出 C 骨架。返回导出到哪（发布要拿这个结果去编译），取消返回 null。
+   *  工程名优先取**当前文件名**：.cgui 的文件名决定 exe 名与工程目录名
+   *  （运行时默认就在 exe 旁边找同名 .cgui）。用窗口标题推会出事 ——
+   *  "串口助手（cg_serial 示例）"会推成 cg_serial，导出的目录就与工程目录对不上，
+   *  后面编译的还是旧目录，等于什么都没更新。 */
+  const doExportC = useCallback(async (): Promise<{ dir: string; appName: string } | null> => {
+    const fromFile = filePath ? (filePath.split(/[\\/]/).pop() ?? "").replace(/\.cgui$/i, "") : "";
+    const baseName = suggestedBaseName(fromFile || docRef.current.app.title);
     const files = generateC(docRef.current, baseName);
     /* 带上当前文件路径：主进程好从文件位置向上认出真正的项目根（便携版画布尤甚） */
     const res = await bridge.exportC({ baseName, files, filePath: filePath || undefined });
-    if (res.canceled) return false;
+    if (res.canceled) return null;
     if (res.projectRoot) setProjectRoot(res.projectRoot);
     setLastExport({ dir: res.dir ?? "", appName: baseName });
     /* 导出时 .cgui 已经写进工程目录了：把「当前文件」指向它并清掉未保存标记，
@@ -296,8 +302,8 @@ export default function App() {
     }
     const skipped = res.skipped?.length ? `（跳过已存在的 ${res.skipped.join("、")}）` : "";
     say(`已导出到 ${res.dir}${skipped}，接着去填 ${baseName}_ui_events.c`);
-    return true;
-  }, [bridge, docRef, projectRoot, say, filePath]);
+    return { dir: res.dir ?? "", appName: baseName };
+  }, [bridge, docRef, say, filePath]);
 
   const doLocateProject = useCallback(async () => {
     const res = await bridge.locateProject();
@@ -341,8 +347,7 @@ export default function App() {
     setRunOpen(true);
     setRunLines([]);
 
-    /* 发布前必须先落盘：zip 里要打进最新的 .cgui */
-    let target = filePath;
+    /* 发布前先落盘：导出要按"当前文件名"推工程名与工程目录，路径得先定下来 */
     if (dirty || !filePath) {
       const saved = await doSave(!filePath);
       if (saved.canceled) {
@@ -350,14 +355,14 @@ export default function App() {
         setRunOpen(false);
         return;
       }
-      if (saved.path) target = saved.path;   /* 同上：用刚保存出来的路径 */
     }
 
     /* 发布必须**重新导出**一次 C：界面的正文是要编译进 exe 的
      * （<名字>_cgui.c）。不重导出，打进去的就是上次导出时的旧界面 ——
      * 这种"exe 里的界面跟画布上看到的不一样"最难查。
      * 导出会覆盖 main.c / <名字>_cgui.c，跳过用户写过的 _ui_events.c。 */
-    if (!(await doExportC())) {
+    const exp = await doExportC();
+    if (!exp) {
       say("发布前需要先导出 C 骨架");
       setRunOpen(false);
       return;
@@ -365,7 +370,10 @@ export default function App() {
 
     setPublishing(true);
     try {
-      const res = await bridge.publish({ filePath: target });
+      /* 必须用**导出返回的目录与工程名**去发布：导出可能落在别的目录
+       * （或用户这次选了别的目录），拿事先算好的旧路径去编译会编到旧工程上，
+       * 表现就是"改了界面却没生效、内嵌界面也没进去"。 */
+      const res = await bridge.publish({ filePath: `${exp.dir}\\${exp.appName}.cgui` });
       if (res.ok) say(res.message);
       else setRunLines((ls) => [...ls, "", `# ${res.message}`]);
     } finally {

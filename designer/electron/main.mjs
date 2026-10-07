@@ -347,16 +347,48 @@ ipcMain.handle("cgui:exportC", async (_e, { baseName, files, filePath }) => {
   // 用户可能选了 apps 这一层，或者选了自己想放的目录：两种都让结果落在 <chosen>/<baseName>
   const dir = path.basename(chosen).toLowerCase() === baseName.toLowerCase() ? chosen : path.join(chosen, baseName);
 
+  /* main.c 的"用户区"标记：重新导出时把标记之间的内容原样搬过去，
+   * 标记之外的部分用最新模板（模板里含单文件发布要用的内嵌界面代码，
+   * 老工程不重写 main.c 就永远享受不到）。 */
+  const USER_BEGIN = "/* ==================== 用户代码";
+  const USER_END = "/* ==================== 用户代码结束";
+  const extractUserBlock = (text) => {
+    const b = text.indexOf(USER_BEGIN);
+    const e = text.indexOf(USER_END);
+    if (b < 0 || e < 0 || e < b) return null;   // null = 不认识的老文件
+    const nl = text.indexOf("\n", b);
+    return nl < 0 ? "" : text.slice(nl + 1, e);
+  };
+  const injectUserBlock = (template, kept) => {
+    const b = template.indexOf(USER_BEGIN);
+    const e = template.indexOf(USER_END);
+    if (b < 0 || e < 0) return template;
+    const nl = template.indexOf("\n", b);
+    return nl < 0 ? template : template.slice(0, nl + 1) + kept + template.slice(e);
+  };
+
   const written = [];
   const skipped = [];
   try {
     await fs.mkdir(dir, { recursive: true });
     for (const f of files) {
       const target = path.join(dir, f.name);
-      // 业务代码是用户的资产，已存在就不覆盖（main.c 用户也常加全局变量/逻辑）
-      const isUserCode = f.name.endsWith("_ui_events.c") || f.name === "main.c";
-      if (isUserCode && existsSync(target)) {
+      // 业务代码是用户的资产，已存在就不覆盖
+      if (f.name.endsWith("_ui_events.c") && existsSync(target)) {
         skipped.push(f.name);
+        continue;
+      }
+      if (f.name === "main.c" && existsSync(target)) {
+        const old = await fs.readFile(target, "utf8");
+        const kept = extractUserBlock(old);
+        if (kept === null) {
+          /* 老模板（或用户大改过）：不静默丢东西，先备份再重写。
+           * main.c 是纯样板，业务本该写在 _ui_events.c 里。 */
+          await fs.copyFile(target, `${target}.bak`);
+          skipped.push("main.c（旧内容已备份为 main.c.bak）");
+        }
+        await fs.writeFile(target, injectUserBlock(f.content, kept ?? ""), "utf8");
+        written.push("main.c");
         continue;
       }
       await fs.writeFile(target, f.content, "utf8");
