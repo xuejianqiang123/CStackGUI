@@ -362,6 +362,14 @@ static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
         cg_widget_set_text(cg_find(app, "rt_notes"), "");
         cg_table_clear(cg_find(app, "tbl_data"));
         status(app, "已新建（清空了富文本和表格）");
+    } else if (id && strcmp(id, "m_about") == 0) {
+        /* 模态：打开期间主窗口被挡住，返回的就是"确定=1 / 取消=0" */
+        int r = cg_dialog_open(cg_find(app, "dlg_about"));
+        status(app, "对话框关了（result=%d）", r);
+    } else if (id && strcmp(id, "m_about_nm") == 0) {
+        /* 非模态：立即返回，主窗口照常能用，对话框活着等用户自己关 */
+        cg_dialog_open_nonmodal(cg_find(app, "dlg_about"));
+        status(app, "已开非模态对话框（主窗口仍可用）");
     }
 }
 
@@ -1177,6 +1185,39 @@ static void on_ready(cg_app_t *app, void *user)
     lab_ready(app, user);
 }
 
+/* ------------------------------------------------------------ 多窗体（对话框）
+ * 对话框是**独立顶层窗口**：cg_dialog_open 模态打开（返回时才有结果），
+ * cg_dialog_open_nonmodal 非模态打开（立即返回）。关闭一律 cg_dialog_close(self, result)。
+ */
+/**
+ * @brief 对话框里的"确定"：带结果 1 关闭
+ * @param self 触发事件的控件（对话框里的按钮）
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据
+ * @return void 回调无返回值
+ */
+static void on_dlg_ok(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev;
+    (void)user;
+    cg_dialog_close(self, 1);
+}
+
+/**
+ * @brief 对话框里的"取消"：带结果 0 关闭
+ * @param self 触发事件的控件（对话框里的按钮）
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据
+ * @return void 回调无返回值
+ * @note Esc 与右上角关闭钮走的也是这条 result=0 的路，业务不必各接一遍。
+ */
+static void on_dlg_cancel(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev;
+    (void)user;
+    cg_dialog_close(self, 0);
+}
+
 /* ------------------------------------------------------------ 绑定表
  * 左边是 .cgui 里写的名字，右边是本文件里的函数。
  */
@@ -1234,6 +1275,9 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND("on_focus",         on_focus),
     CG_BIND("on_blur",          on_blur),
     CG_BIND("on_submit",        on_submit),
+    /* ---- 多窗体（对话框）---- */
+    CG_BIND("on_dlg_ok",        on_dlg_ok),
+    CG_BIND("on_dlg_cancel",    on_dlg_cancel),
     CG_BIND_END
 };
 

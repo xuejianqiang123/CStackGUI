@@ -68,6 +68,10 @@
             {
               "text": "关于",
               "id": "m_about"
+            },
+            {
+              "text": "关于（非模态）",
+              "id": "m_about_nm"
             }
           ]
         }
@@ -1229,43 +1233,90 @@
       "rect": {
         "x": 60,
         "y": 620,
-        "w": 330,
-        "h": 190
+        "w": 360,
+        "h": 280
       },
       "text": "关于本陈列室",
       "children": [
         {
-          "id": "dlg_about_lab",
-          "type": "label",
+          "id": "dlg_about_tabs",
+          "type": "tabs",
           "rect": {
-            "x": 16,
-            "y": 20,
-            "w": 290,
-            "h": 40
+            "x": 12,
+            "y": 12,
+            "w": 330,
+            "h": 190
           },
-          "text": "我是一个独立顶层窗口（多窗体）。运行时用 cg_dialog_open 打开，模态时主窗口会被挡住。"
+          "items": [
+            "说明",
+            "试试控件"
+          ],
+          "children": [
+            {
+              "id": "dlg_about_lab",
+              "type": "label",
+              "rect": {
+                "x": 16,
+                "y": 20,
+                "w": 290,
+                "h": 80
+              },
+              "text": "我是一个独立顶层窗口（多窗体）。模态打开时主窗口会被挡住；非模态打开时主窗口照常能用。",
+              "page": 0
+            },
+            {
+              "id": "dlg_about_edt",
+              "type": "edit",
+              "rect": {
+                "x": 16,
+                "y": 30,
+                "w": 180,
+                "h": 26
+              },
+              "text": "对话框里也能放输入框",
+              "page": 1
+            },
+            {
+              "id": "dlg_about_chk",
+              "type": "checkbox",
+              "rect": {
+                "x": 16,
+                "y": 78,
+                "w": 200,
+                "h": 24
+              },
+              "text": "页签里照样能勾选",
+              "page": 1
+            }
+          ]
         },
         {
           "id": "dlg_about_ok",
           "type": "button",
           "rect": {
-            "x": 128,
-            "y": 140,
+            "x": 140,
+            "y": 216,
             "w": 88,
             "h": 30
           },
-          "text": "确定"
+          "text": "确定",
+          "events": {
+            "click": "on_dlg_ok"
+          }
         },
         {
           "id": "dlg_about_cancel",
           "type": "button",
           "rect": {
-            "x": 224,
-            "y": 140,
+            "x": 240,
+            "y": 216,
             "w": 88,
             "h": 30
           },
-          "text": "取消"
+          "text": "取消",
+          "events": {
+            "click": "on_dlg_cancel"
+          }
         }
       ]
     }
