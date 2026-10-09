@@ -240,3 +240,17 @@ A1→T1/T2 全程老文件回归 ｜ A2/A3→T1 截图 ｜ A4→T2 真机 ｜ A5
       主窗口（`ready` 里直截会得到一张空白窗，实测；`SetTimer(NULL,…)` 在 ready 里设下去**不触发**，
       同写法在点击回调里却正常——原因未查明，改用框架的 timer 控件）。
       **边界（照实说）**：页签条本身仍是系统浅色（系统绘制，除非整控件改自绘）。
+- [x] P10 **深色审计覆盖全类型 + 工具栏"深底深字"修复（2026-10-09）**：把覆盖表里**没摆过**的类型
+      全补进审计页（menu / toolbar / statusbar / combo / listbox / tree / table / richtext /
+      terminal / chart / monthcal / datepicker / 带调节器的数值框），窗口放大到 1200×900。
+      出图复核结论：❌ 那批（combo / listbox / tree / table / monthcal / datepicker / statusbar /
+      菜单 / 页签条）**在 Win11 上确实都不跟随**，文档那条判断属实（我一开始看小图误判"table 跟了"，
+      放大裁剪后纠正 —— 结论必须靠裁剪/像素证据，不能靠小图肉眼）。
+      **抓到并修一个真问题**：`toolbar` 建时带 `TBSTYLE_TRANSPARENT`（父窗底色透上来），深色下
+      底变深、文字仍是系统浅色主题的深色 ⇒ **文字完全看不见**（浅色下正常）。先按清单控件那套
+      `SetWindowTheme(DarkMode_Explorer)` 试 —— **无效**（同清单控件的结果）；改走"深色时去掉
+      透明位"，工具栏自画主题底（浅底深字）⇒ 归入"经典控件不跟随"那一类且**至少可读**。
+      浅色一像素不变（样式位在浅色时还原，出图核对）。
+      **验证**：深浅各一张全类型图 + 工具栏区域裁剪对照；真机 51 项 ALL PASS；run-tests / check-format 全绿。
+      **顺带定下审计口径**（写进 CGUI-FORMAT 1.1.1）：审计页现已覆盖覆盖表里**每一个类型**，
+      重跑 `tools\gen-darkaudit.mjs` 即可复核判断，不必靠记忆。
