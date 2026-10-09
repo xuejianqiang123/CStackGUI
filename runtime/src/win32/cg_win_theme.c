@@ -173,9 +173,26 @@ void cgw_theme_widget(cg_widget_t *w)
 
     if (fn && (cgw_is_t(w, "listbox") || cgw_is_t(w, "table") || cgw_is_t(w, "tree"))) {
         /* 这三个是 ListBox / ListView / TreeView。深色要两步：先按窗口放行，再换主题
-         * （见上面 dark_opt_in 的注释）。浅色时传空串还原。 */
+         * （见上面 dark_opt_in 的注释）。浅色时传空串还原。
+         * 注：toolbar 不在这里 —— 2026-10-09 试过把它加进来，**实测无效**（与清单控件同理），
+         * 改走下面"关掉透明位"那条路；别再加回来。 */
         if (app->dark && g_allow_dark) g_allow_dark(h, TRUE);
         fn(h, app->dark ? L"DarkMode_Explorer" : L"", NULL);
+    }
+    if (cgw_is_t(w, "toolbar")) {
+        /* 工具栏建的时候带 TBSTYLE_TRANSPARENT：让父窗底色透上来。浅色下正好；
+         * 深色下就成了"深底 + 系统按浅色主题给的深色文字" = **文字看不见**
+         * （2026-10-09 深色审计抓到，审计页此前没有工具栏）。
+         * 深色时去掉这一位，让它自己按主题画底 —— 于是它归到覆盖表里"经典控件不跟随"
+         * 那一类（浅底深字），符合既有口径，且**至少可读**。浅色时还原，一像素不变。 */
+        LONG st = GetWindowLongW(h, GWL_STYLE);
+        LONG want = app->dark ? (st & ~TBSTYLE_TRANSPARENT) : (st | TBSTYLE_TRANSPARENT);
+        if (want != st) {
+            SetWindowLongW(h, GWL_STYLE, want);
+            SetWindowPos(h, NULL, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+            InvalidateRect(h, NULL, TRUE);
+        }
     }
     /* 终端/富文本是 RichEdit：WM_CTLCOLOR 给它的底色它不理，得单独发这条消息。
      * 浅色时 wParam=1 让它回到系统色 —— 换主题要能换回来。 */
