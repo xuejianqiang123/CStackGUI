@@ -870,7 +870,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `tag` | 标签片 | 否 | 72×28 | `标签` | `click` | `BUTTON` 自绘 |
 | `rate` | 评分 | 否 | 140×32 | — | `change` | `BUTTON` 自绘五角星（星数 = `max-min`，上限 10）|
 | `pagination` | 分页 | 否 | 180×32 | — | `change` | `BUTTON` 自绘（页数 = `max-min+1`）|
-| `dialog` | 对话框 | **是** | 360×240 | — | `close`、`closequery`、`destroy`、`move`、`size`、`activate`、`deactivate`、`show`、`hide`、鼠标三件套（`mousedown` / `mouseup` / `dblclick` / `rdown` / `rup` / `mousemove`）、`gotfocus`、`lostfocus`、`keydown`、`keyup`、`char`、`wheel` | **独立顶层窗口**（多窗体）：`text` 是窗口标题、`rect` 是窗口位置尺寸（`center` 缺省 `true` = 打开时居中于主窗口；写 `false` 则按 `rect.x`/`rect.y` **屏幕坐标**摆，与 `app.x`/`app.y` 同一口径）、`children` 是窗口里的控件（坐标相对对话框客户区）。原生在 `cg_dialog_open` 打开时才建（懒建），模态时主窗口被禁用；返回 0 = 取消/Esc，1 = `cg_dialog_close(self, 1)`。`cg_dialog_open_nonmodal` 开**非模态**：立即返回、主窗口保持可用，无返回值语义（关闭走 `cg_dialog_close` 或关闭钮，close/closequery/destroy 照常触发）；同一时间只支持一个对话框（模态或非模态合计），非模态对话框的窗口级 move/size/activate 事件不派发（控件级与关闭路径不受影响） |
+| `dialog` | 对话框 | **是** | 360×240 | — | `close`、`closequery`、`destroy`、`move`、`size`、`activate`、`deactivate`、`show`、`hide`、鼠标三件套（`mousedown` / `mouseup` / `dblclick` / `rdown` / `rup` / `mousemove`）、`gotfocus`、`lostfocus`、`keydown`、`keyup`、`char`、`wheel` | **独立顶层窗口**（多窗体）：`text` 是窗口标题、`rect` 是窗口位置尺寸（`center` 缺省 `true` = 打开时居中于主窗口；写 `false` 则按 `rect.x`/`rect.y` **屏幕坐标**摆，与 `app.x`/`app.y` 同一口径）、`children` 是窗口里的控件（坐标相对对话框客户区）。原生在 `cg_dialog_open` 打开时才建（懒建），模态时主窗口被禁用；返回 0 = 取消/Esc，1 = `cg_dialog_close(self, 1)`。`cg_dialog_open_nonmodal` 开**非模态**：立即返回、主窗口保持可用，无返回值语义（关闭走 `cg_dialog_close` 或关闭钮，close/closequery/destroy 照常触发）；同一时间只支持一个对话框（模态或非模态合计），非模态对话框的窗口级 move/size/activate 事件不派发（控件级与关闭路径不受影响）。`children` 里**可以放 `tabs`**：页签切换与页体显隐在第二个窗口里照常工作（子控件照常用 `page` 标页码），示例见 `examples\gallery`（「帮助 → 关于」那个对话框里有两页） |
 
 > 上表的事件列与 `k_kinds[].events` 位掩码一一对应（`node tools\check-examples.mjs --docs` 会逐行回校）。
 > 鼠标 / 键盘那种"一整类"的写在行内括号里；某类控件不该有的事件，运行时与自检都会明确报出来。
@@ -1355,7 +1355,7 @@ void   cg_set_title(cg_app_t *app, const char *title);
 | 网口 | `cg_net_` 系列（TCP 客户端与服务端、UDP 数据报） | `COMM.md` |
 | 通用对话框 | `cg_open_file_dialog` / `cg_save_file_dialog` / `cg_choose_color` / `cg_message_box` / **`cg_input_box`**（单行输入，原值预填且全选） | 本文 6 节上文 |
 | 窗口 | `cg_win_center` / `cg_win_set_pos` / `cg_win_set_size` / `cg_win_show` / `cg_win_set_topmost` / `cg_win_set_state` / `cg_win_set_icon` / `cg_cancel_close` / **`cg_win_screenshot` / `cg_widget_screenshot`**（存 PNG） | 本文第 1 节 |
-| 多窗体 | `cg_dialog_open` / `cg_dialog_close`（模态子窗体：独立 HWND + 子树懒建 + 内层泵） | 本文第 4 节（类型表 `dialog` 行） |
+| 多窗体 | `cg_dialog_open` / `cg_dialog_open_nonmodal` / `cg_dialog_close`（独立 HWND + 子树懒建；模态走内层泵，非模态立即返回） | 本文第 4 节（类型表 `dialog` 行） |
 | 散项 | `cg_splitter_pos` / `cg_splitter_set`、`cg_browser_navigate`、`cg_widget_hint`、`cg_widget_count`、`cg_widget_set_value_range`、`cg_widget_list_scroll_bottom`、`cg_file_exists` / `cg_file_delete` / `cg_file_copy`、`cg_dir_exists` / `cg_dir_create`、`cg_event_name` / `cg_event_from_name`、`cg_dump_doc` | 头文件 |
 
 ---
