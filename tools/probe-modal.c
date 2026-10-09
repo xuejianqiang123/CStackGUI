@@ -55,6 +55,9 @@ int main(void)
     FILE *f;
     char line[256];
     int seen_phase1 = 0, seen_phase2 = 0, seen_alive = 0;
+    /* "见过标记"：事件**没派发**时日志里就没有那一行，只在行内断言会"断言没跑 = 全绿" ——
+     * 假绿比假红危险得多，所以每条靠日志判定的事件都要补一个 seen 断言。 */
+    int seen_tabsel = 0, seen_dlgsize = 0, seen_dlgmove = 0;
     int i;
 
     /* 等主窗口 */
@@ -203,6 +206,12 @@ int main(void)
     if (dlg2) {
         tab = FindWindowExW(dlg2, NULL, L"SysTabControl32", NULL);
         ck("A8 tab control exists inside the dialog", tab != NULL);
+
+        /* A9：窗口级事件 —— 非模态对话框此前**收不到** move/size/activate
+         * （宿主解析只认主窗口与模态对话框）。一次 SetWindowPos 同时改位置与尺寸，
+         * 两条事件都该派到**对话框**上（回调把宿主标题写进日志，判据是 host=Other）。 */
+        SetWindowPos(dlg2, NULL, 300, 220, 400, 320, SWP_NOZORDER | SWP_NOACTIVATE);
+        Sleep(400);
         if (tab) {
             /* 页内控件有的挂在 tab 窗口下、有的挂在对话框下，两处都找一遍 */
             p1 = FindWindowExW(tab, NULL, L"BUTTON", L"OnP1");
@@ -265,10 +274,23 @@ int main(void)
                 ck("A7 re-open on the SAME node refused (nm2 result=0)", strstr(line, "result=0") != NULL);
             if (strstr(line, "other"))
                 ck("A7 one-slot guard refused a second dialog node (other result=0)", strstr(line, "result=0") != NULL);
-            if (strstr(line, "tabsel="))
+            if (strstr(line, "tabsel=")) {
+                seen_tabsel = 1;
                 ck("A8 tabs select event reached us inside a dialog", strstr(line, "tabsel=1") != NULL);
+            }
             if (strstr(line, "tabs result="))
                 ck("A8 tabs dialog opened (tabs result=1)", strstr(line, "result=1") != NULL);
+            if (strstr(line, "dlgsize")) {
+                seen_dlgsize = 1;
+                ck("A9 nonmodal dialog gets window-level size (host = the dialog)",
+                   strstr(line, "host=Other") != NULL && strstr(line, "w=") != NULL &&
+                   strstr(line, "w=0") == NULL);
+            }
+            if (strstr(line, "dlgmove")) {
+                seen_dlgmove = 1;
+                ck("A9 nonmodal dialog gets window-level move (host = the dialog)",
+                   strstr(line, "host=Other") != NULL && strstr(line, "x=300") != NULL);
+            }
             if (strstr(line, "idle_close"))
                 ck("A7 idle close did not crash (log written afterwards)", strstr(line, "done") != NULL);
         }
@@ -278,6 +300,10 @@ int main(void)
     }
     ck("A5 main window still alive (user32)", IsWindow(main) != 0);
     ck("A5 owner re-enabled after close", IsWindowEnabled(main) != 0);
+    /* 事件**到没到**：行内断言判不了"没派发"，靠这三个标记 */
+    ck("A8 tabs select event was dispatched at all", seen_tabsel != 0);
+    ck("A9 size event was dispatched to the nonmodal dialog at all", seen_dlgsize != 0);
+    ck("A9 move event was dispatched to the nonmodal dialog at all", seen_dlgmove != 0);
 
     printf(fails ? "\n%d FAILED\n" : "\nALL PASS\n", fails);
     return fails ? 1 : 0;

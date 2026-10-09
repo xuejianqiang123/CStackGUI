@@ -65,6 +65,10 @@ const dlgOther = makeNode("dialog", 0, 0);
 dlgOther.id = "dlg_other";
 dlgOther.text = "Other";
 dlgOther.rect = { x: 40, y: 40, w: 340, h: 230 };
+/* 窗口级事件（T4 收尾）：非模态对话框此前**收不到** move/size/activate
+ * （宿主解析只认主窗口与模态对话框）。回调把宿主标题打进日志 —— "Other" 就证明
+ * 宿主是这个对话框，而不是主窗口（"modal test"）。 */
+dlgOther.events = { size: "on_dlg_size", move: "on_dlg_move" };
 /* 对话框里的 tabs（T4 可选项，此前从未验证）：两页各放一个**文字不同**的按钮，
  * 探针靠"页 1 的显示 / 页 2 的隐藏"来证明切页真的换了页体 —— 光看页签高亮不算数
  * （TCM_SETCURSEL 只换高亮，页体显隐是我们自己的 cgw_sync_tabs_pages 做的）。 */
@@ -488,6 +492,50 @@ void on_sel_dlg(cg_widget_t *self, cg_event_t ev, void *user)
     (void)ev;
     (void)user;
     SetTimer(NULL, 2, 30, sel_timer_proc);
+}
+
+/**
+ * @brief 对话框的 size 事件（窗口级）：把**宿主**与新的客户区尺寸写进日志
+ * @param self 事件宿主（应当是对话框节点，不是主窗口）
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据
+ * @return void 回调无返回值
+ * @note 宿主标题就是判据：打 "Other" 说明派到了对话框上；打 "modal test" 说明派错窗口。
+ *       size 事件里 ev_x / ev_y 是**新的客户区宽高**（逻辑像素，与 .cgui 同一套单位）。
+ */
+void on_dlg_size(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    FILE *f;
+    (void)ev;
+    (void)user;
+
+    f = fopen("result.log", "a");
+    if (!f) return;
+    fprintf(f, "dlgsize host=%s w=%d h=%d\\n",
+            self ? (cg_widget_text(self) ? cg_widget_text(self) : "-") : "-",
+            cg_event_x(self), cg_event_y(self));
+    fclose(f);
+}
+
+/**
+ * @brief 对话框的 move 事件（窗口级）：把宿主与新的屏幕坐标写进日志
+ * @param self 事件宿主（应当是对话框节点）
+ * @param ev 事件类型
+ * @param user 挂在控件上的业务数据
+ * @return void 回调无返回值
+ */
+void on_dlg_move(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    FILE *f;
+    (void)ev;
+    (void)user;
+
+    f = fopen("result.log", "a");
+    if (!f) return;
+    fprintf(f, "dlgmove host=%s x=%d y=%d\\n",
+            self ? (cg_widget_text(self) ? cg_widget_text(self) : "-") : "-",
+            cg_event_x(self), cg_event_y(self));
+    fclose(f);
 }
 `;
 fs.writeFileSync(path.join(dir, `${NAME}_ui_events.c`), impl, "utf8");
