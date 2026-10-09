@@ -96,6 +96,7 @@ int cg_theme_is_dark(const cg_app_t *app);      /* 现在是深色吗 */
 | `terminal` | RichEdit 走 `EM_SETBKGNDCOLOR` |
 | 分组框（`group`）里的 `label` 与 `edit` | 跟着分组底色，不是「糊一块灰」|
 | **中性灰部件**：`progress` / `progressring` / `slider` 的**槽与轨道**、`led` 的灭态灯点、`chart` 的边框与网格、`chart` 的轴标签与图例 | 这些"浅灰细部件"跟着主题换成深色那套（收在 `cg_skin_neutral()` 一处）；品牌色填充（进度填充、滑块圆钮、圆环弧、灯的亮态）**不**跟随，见下面那条例外 |
+| `tabs` 的**页体**（客户区）| 深色且 tabs 没写 `bg` 时填**窗口底色**（与窗口/对话框连成一片）；写了 `bg` 的照旧用那个色。**2026-10-09 补**：此前审计页里没有 `tabs`，页体一直是系统画的浅灰（`#F9F9F9`），没人看见 |
 
 > 这张表有一条例外，看图最直观：**画在自绘浅色填充上的文字不跟着变** —— 按钮的文字画在 M3 浅紫填充上，
 > 深色下填充仍是浅紫，所以按钮文字**保持深色**（跟着变浅反而看不清）。「深色下按钮的字怎么没变白」
@@ -106,7 +107,7 @@ int cg_theme_is_dark(const cg_app_t *app);      /* 现在是深色吗 */
 | ❌ 不跟随 | 为什么 |
 | --- | --- |
 | `listbox` / `table` / `tree` | 本机 Win11 实测不跟随；代码里试过系统未公开的深色开关，**无效** ⇒ 保持系统浅色 |
-| `tabs`、`combo` 的下拉列表、`monthcal`、`datepicker`、`statusbar`、`toolbar` | Windows 经典控件，主题由系统内部绘制，公开接口改不动 |
+| **`tabs` 的页签条**、`combo` 的下拉列表、`monthcal`、`datepicker`、`statusbar`、`toolbar` | Windows 经典控件，主题由系统内部绘制，公开接口改不动（`tabs` 的**页体**不在此列 —— 见上面 ✅ 那行） |
 | `slider` 的**画布底**（不是槽）| 槽与轨道自绘、已跟随深色；但控件自己的**底**由原生 trackbar 画（主题灰），深色下仍是一圈浅框。试过在 `NM_CUSTOMDRAW` 的 PREPAINT 里填「背后色」、再补 `CDRF_SKIPDEFAULT`，**实测像素一个都没变** ⇒ 彻底解决要像 `progress` 那样换成自绘窗口类（连输入一起接管），未做 |
 
 **这不是 bug，也不是「深色只做了一半」**：不跟随的控件分两类 —— 一类是 Windows 经典控件
