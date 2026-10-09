@@ -175,4 +175,7 @@ tabs（T4 可选项）都已真机验证（tools\probe-modal.c 51 项 ALL PASS�
 用户跑 gallery 根本看不到这项能力。现已接通：「帮助 → 关于」走模态、「关于（非模态）」走
 `cg_dialog_open_nonmodal`，对话框里装了**两页 tabs**；自检 74 控件 / 49 回调 / **未登记 0**，
 往返探针守着这棵子树（含 tabs）无损，README 与格式文档的口径同步（含"对话框里可以放 tabs"）。
-剩余只有 T4 后半（"引用另一个 .cgui"多文件组装）——那仍是另一个契约 epic。
+剩余只有 T4 后半（"引用另一个 .cgui"多文件组装）——那仍是另一个契约 epic，
+**2026-10-10 已立为 F3 并出了 PRD**：`.codebuddy/plans/f3-window-ref-prd.md`
+（顶层 `include` 数组 + 加载期按目录展开 + 发布态由编译编进 PE 资源；切片 P1~P6）。
+F2 到此全部销账。
