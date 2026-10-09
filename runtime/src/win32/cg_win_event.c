@@ -191,18 +191,33 @@ LRESULT CALLBACK cgw_FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     }
 
     if (msg == WM_PAINT) {
-        /* 标签页的页体是系统按主题画的；设了「背景色」就把页体矩形（不含标签行）重填一遍。
+        /* 标签页的页体是系统按**它自己的**主题画的（浅色机上是 #F9F9F9）；重填页体矩形
+         * （不含标签行）的两种情形：
+         *   ① .cgui 给 tabs 设了「背景色」      -> 用那个色（既有行为）
+         *   ② 深色模式且没设背景色               -> 用窗口底色，跟窗口/对话框连成一片
+         * ② 是 2026-10-09 审计抓到的：深色皮肤下页体仍是系统的浅灰 —— 一块"发亮的浅灰"，
+         * 正是深色史诗要消灭的东西；此前没人发现，因为审计页里从来没有 tabs。
+         * **浅色且没设背景色时一像素不动**（深色史诗的硬约束：浅色是回归基线）。
          * 子控件是独立窗口、且标签页有 WS_CLIPCHILDREN，所以这一填不会盖到子控件上。 */
         LRESULT r = DefSubclassProc(hwnd, msg, wp, lp);
         cg_widget_t *tw = g_win_app ? cgw_widget_by_hwnd(g_win_app, hwnd) : NULL;
-        if (tw && cgw_is_t(tw, "tabs") && tw->style.bg != CG_COLOR_NONE) {
-            HDC dc = GetDC(hwnd);
-            if (dc) {
-                RECT rc;
-                GetClientRect(hwnd, &rc);
-                SendMessageW(hwnd, TCM_ADJUSTRECT, FALSE, (LPARAM)&rc);
-                FillRect(dc, &rc, cgw_brush_for(tw->style.bg));
-                ReleaseDC(hwnd, dc);
+        if (tw && cgw_is_t(tw, "tabs")) {
+            HBRUSH br = NULL;
+            if (tw->style.bg != CG_COLOR_NONE) {
+                br = cgw_brush_for(tw->style.bg);
+            } else if (g_win_app->dark) {
+                cg_win_state_t *st = (cg_win_state_t *)g_win_app->natives;
+                if (st && st->bg_brush) br = (HBRUSH)st->bg_brush;   /* 窗口底色刷，换主题时重建 */
+            }
+            if (br) {
+                HDC dc = GetDC(hwnd);
+                if (dc) {
+                    RECT rc;
+                    GetClientRect(hwnd, &rc);
+                    SendMessageW(hwnd, TCM_ADJUSTRECT, FALSE, (LPARAM)&rc);
+                    FillRect(dc, &rc, br);
+                    ReleaseDC(hwnd, dc);
+                }
             }
         }
         return r;

@@ -493,6 +493,10 @@ unsigned cg_win_behind_rgb(cg_app_t *app, void *hwnd)
      * 没设才让页体自己把"背后那块"画出来取色（什么主题都对得上） */
     if (pw && cgw_is_t(pw, "tabs")) {
         if (pw->style.bg != CG_COLOR_NONE) return pw->style.bg;
+        /* 深色且没设背景色：页体由 cgw_FocusProc 填成**窗口底色**（见那儿的注释）。
+         * 这里直接给同一个色，不去采样像素 —— 采样结果按父窗口缓存，子控件只要先画一步，
+         * 就会把"填色之前"的系统浅灰存进缓存，之后一直用那个亮色。 */
+        if (app->dark) return rgb_of(st->bg_color);
         return parent_body_rgb(parent, child);
     }
 
