@@ -29,8 +29,8 @@ const mainShot = lightMode ? "main-light.png" : "main-dark.png";
 const doc = emptyDoc();
 doc.app.title = "dark audit";
 doc.app.dark = !lightMode;
-doc.app.width = 580;
-doc.app.height = 560;
+doc.app.width = 1200;
+doc.app.height = 900;
 /* 对话框要在**无人操作**的情况下出现，才能自动截图取证：ready 里开（见下面的事件实现）。 */
 doc.app.events = { ready: "on_ready" };
 
@@ -207,6 +207,103 @@ dOk.text = "确定";
 dOk.events = { click: "on_dlg_ok" };
 dlg.children = [dTabs, dOk];
 add(dlg);
+
+/* ---------------- 补审计（2026-10-09）：此前审计页**从未摆过**的类型 ----------------
+ * tabs 页体那次的教训是"文档说不跟随的那半其实能改"，而它之所以一直没被发现，就是因为
+ * 审计页里没有 tabs。所以这里把剩下的系统/自绘类型都摆上：combo / listbox / tree /
+ * table / richtext / terminal / chart / 带调节器的数值框 —— 让深浅两态各出一张图来说话。 */
+const cmb = makeNode("combo", 600, 40);
+cmb.id = "cmb";
+cmb.items = ["选项一", "选项二", "选项三"];
+cmb.rect.w = 170;
+cmb.rect.h = 30;
+add(cmb);
+
+const lb = makeNode("listbox", 600, 80);
+lb.id = "lb";
+lb.items = ["条目一", "条目二", "条目三", "条目四"];
+lb.rect.w = 170;
+lb.rect.h = 120;
+add(lb);
+
+const tr = makeNode("tree", 600, 210);
+tr.id = "tr";
+tr.nodes = [{ text: "根节点", expanded: true, children: [{ text: "子节点一" }, { text: "子节点二" }] }];
+tr.rect.w = 170;
+tr.rect.h = 150;
+add(tr);
+
+const tb = makeNode("table", 600, 375);
+tb.id = "tb";
+tb.columns = [{ title: "列一", w: 120 }, { title: "列二", w: 140 }];
+tb.rows = [["甲", "100"], ["乙", "200"], ["丙", "300"]];
+tb.rect.w = 280;
+tb.rect.h = 150;
+add(tb);
+
+const rt = makeNode("richtext", 20, 540);
+rt.id = "rt";
+rt.text = "多行富文本：深色下底与字都应该跟着变";
+rt.rect.w = 280;
+rt.rect.h = 110;
+add(rt);
+
+const term = makeNode("terminal", 320, 540);
+term.id = "term";
+term.text = "terminal: 也应深底浅字";
+term.rect.w = 260;
+term.rect.h = 110;
+add(term);
+
+const ch = makeNode("chart", 600, 540);
+ch.id = "ch";
+ch.items = ["周一", "周二", "周三"];
+ch.rect.w = 280;
+ch.rect.h = 110;
+add(ch);
+
+const sp = makeNode("edit", 20, 670);
+sp.id = "sp_num";
+sp.text = "42";
+sp.spin = 1;
+sp.rect.w = 180;
+sp.rect.h = 30;
+add(sp);
+
+/* 覆盖表里剩下的系统控件也摆上：菜单栏 / 工具栏 / 状态栏 / 月历 / 日期时间。
+ * 目标是让审计页**覆盖覆盖表里的每一个类型** —— 以后（比如换了 Win10、或系统更新后）
+ * 重跑一次 `gen-darkaudit` 就能一次性复核所有"跟随/不跟随"的判断，不用再靠记忆。 */
+const mn = makeNode("menu", 0, 0);
+mn.id = "mn";
+mn.nodes = [{ text: "文件", children: [{ text: "新建", id: "m_new" }] }, { text: "帮助", children: [{ text: "关于", id: "m_about" }] }];
+add(mn);
+
+const tbar = makeNode("toolbar", 320, 670);
+tbar.id = "tbar";
+tbar.items = ["新建", "打开", "保存"];
+tbar.rect.w = 260;
+tbar.rect.h = 40;
+add(tbar);
+
+const mc = makeNode("monthcal", 910, 40);
+mc.id = "mc";
+mc.rect.w = 230;
+mc.rect.h = 180;
+add(mc);
+
+const dp = makeNode("datepicker", 910, 240);
+dp.id = "dp";
+dp.text = "2026-10-09";
+dp.rect.w = 200;
+dp.rect.h = 30;
+add(dp);
+
+const sb = makeNode("statusbar", 0, 856);
+sb.id = "sb";
+sb.items = ["状态栏：深色下跟不跟？", "第二段"];
+sb.rect.w = 1200;
+sb.rect.h = 24;
+add(sb);
 
 /* 时钟：只为了"等窗口画好再截图"（ready 里立刻截会得到一张空白窗）。
  * 用框架自己的 timer 控件而不是 SetTimer —— 后者的回调在 ready 里设下去实测**不触发**
