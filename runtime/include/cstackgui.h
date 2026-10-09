@@ -366,8 +366,10 @@ void cg_dialog_close(cg_widget_t *self, int result);
  * @return int 1 = 已打开；0 = 没开成（同一时间只支持一个对话框，模态或非模态合计）
  * @note 非模态没有返回值语义——结果靠回调（close/destroy）或 cg_find 读控件值。
  *       关闭走 cg_dialog_close() 或对话框的关闭钮，close/closequery/destroy 照常触发。
- *       与模态共用同一套地基（独立 HWND + 子树懒建）；边界：非模态对话框的**窗口级**
- *       move/size/activate 等事件 v1 不派发（控件级事件与关闭路径不受影响）。
+ *       与模态共用同一套地基（独立 HWND + 子树懒建）。窗口级 move/size/activate
+ *       也派发到对话框上（2026-10-10 起；此前非模态一律收不到）—— 宿主按 HWND 在树里
+ *       反查，只在窗口级事件这类**低频**消息上做，逐消息的路径不走它。
+ *       剩下的边界：同一时间只支持一个对话框（模态或非模态合计）。
  */
 int  cg_dialog_open_nonmodal(cg_widget_t *dlg);
 

@@ -23,6 +23,24 @@ void cgw_win_emit(cg_widget_t *win, cg_event_t ev)
 }
 
 /**
+ * @brief 窗口级事件的宿主：主窗口 = __window 伪控件，对话框 = 那个 dialog 节点
+ * @param app 应用
+ * @param hwnd 收到消息的窗口
+ * @param win 消息入口已算出的宿主（主窗口 / **模态**对话框），没有则 NULL
+ * @return cg_widget_t* 真正的宿主；找不着返回 NULL（= 不该派发）
+ * @note **非模态**对话框不在 app->modal_dlg 里，得按 HWND 在树里反查（cgw_dialog_by_hwnd，
+ *       全树 O(n)）—— 所以它只用在**窗口级事件**（用户拖窗口 / 改尺寸 / 切焦点这类低频消息），
+ *       绝不进逐消息的路径（WM_PAINT、鼠标移动那种每来一次走一遍树不值当）。
+ *       补这条之前：非模态对话框的 move/size/activate 一律不派发（T4 前半记着的 v1 边界）。
+ */
+static cg_widget_t *win_event_host(cg_app_t *app, HWND hwnd, cg_widget_t *win)
+{
+    if (win) return win;
+    if (!app || !hwnd) return NULL;
+    return cgw_dialog_by_hwnd(app, hwnd);
+}
+
+/**
  * @brief 鼠标消息的按键组合 -> 功能键状态
  * @param wp 鼠标消息的附加参数；低字含按键位
  * @return int 1=Ctrl 2=Shift 4=Alt 的按位组合；0 = 无修饰键
@@ -351,6 +369,7 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     }
     /* ---- 窗口级事件：原生窗口消息派发给 __window（「启动窗口」事件表） ---- */
     case WM_MOVE:
+        win = win_event_host(app, hwnd, win);
         if (win) {
             RECT r;
             GetWindowRect(hwnd, &r);
@@ -360,6 +379,7 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         cgw_win_emit(win, CG_EVENT_MOVE);
         break;
     case WM_SIZE:
+        win = win_event_host(app, hwnd, win);
         if (win) {
             /* 尺寸被改变：新的客户区宽高 —— **逻辑像素**（与 .cgui 同一套单位）。
              * 这样业务在 size 回调里读到的 w×h 可以原样回喂 cg_win_set_size()，
@@ -378,6 +398,7 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         break;
     case WM_ACTIVATE: {
         int active = (LOWORD(wp) != WA_INACTIVE);
+        win = win_event_host(app, hwnd, win);
         if (app && active) {
             cg_win_state_t *wst = (cg_win_state_t *)app->natives;
             if (wst && !wst->activated) {
