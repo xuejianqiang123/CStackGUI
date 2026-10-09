@@ -188,7 +188,12 @@ A1→T1/T2 全程老文件回归 ｜ A2/A3→T1 截图 ｜ A4→T2 真机 ｜ A5
       `any_dialog_open` 守卫统一进两个 open）；非模态 = 不禁用主窗口、不进内层泵，生命周期到
       WM_DESTROY；宿主解析：模态走 modal_dlg 快路径，非模态在 WM_CLOSE/WM_DESTROY
       （低频消息）按 HWND 反查（`cgw_dialog_by_hwnd`，全树 O(n)）——**窗口级 move/size/activate
-      v1 不派发**（控件级与关闭路径不受影响，契约 dialog 行已写明）。
+      v1 不派发**（控件级与关闭路径不受影响，契约 dialog 行当时已写明）。
+      **2026-10-10 补完（P11）**：非模态对话框的窗口级 move/size/activate **现在会派发** ——
+      宿主解析原先只认主窗口与**模态**对话框（`app->modal_dlg`），非模态拿到的宿主是 NULL。
+      修法是加一个只在窗口级事件里用的 `win_event_host()`：主窗口/模态走老路，其余按 HWND
+      反查（O(n) 只落在这几个低频消息上，**不放进逐消息入口**）。契约 dialog 行与头文件注释
+      已同步改掉那条边界。
       **验收**：modaltest 加 OpenNM 按钮 + `on_open_nm`，探针 phase3 六项
       （打开即返 ✓ owner 保持可用 = A2 反命题 ✓ OK 走 cg_dialog_close 关闭 ✓ 主窗存活 ✓
       nm result=1 ✓）——全序列 **27 项 ALL PASS**（模态 A1~A5 回归 + 非模态 A6）。
@@ -252,5 +257,17 @@ A1→T1/T2 全程老文件回归 ｜ A2/A3→T1 截图 ｜ A4→T2 真机 ｜ A5
       透明位"，工具栏自画主题底（浅底深字）⇒ 归入"经典控件不跟随"那一类且**至少可读**。
       浅色一像素不变（样式位在浅色时还原，出图核对）。
       **验证**：深浅各一张全类型图 + 工具栏区域裁剪对照；真机 51 项 ALL PASS；run-tests / check-format 全绿。
+- [x] P11 **非模态对话框的窗口级事件（2026-10-10）**：T4 前半留的 v1 边界（"窗口级 move/size/activate
+      不派发"）补完。**根因**：宿主解析是 `(hwnd == 主窗口) ? __window : app->modal_dlg` ——
+      非模态对话框**不在 `modal_dlg` 里** ⇒ 宿主 NULL ⇒ 一律不派发。
+      **修**：加 `win_event_host()`，只在窗口级事件（低频）里按 HWND 反查（`cgw_dialog_by_hwnd`，
+      全树 O(n)），**不进逐消息入口**（WM_PAINT / 鼠标移动那种每来一次走一遍树不值当）。
+      **验证**：modaltest 第二个对话框绑 size/move，回调把**宿主标题**写进日志；探针一次
+      SetWindowPos 同时改位置与尺寸 ⇒ `dlgmove host=Other x=300 y=220`、`dlgsize host=Other w=394 h=291`
+      （标题 "Other" 证明派到的是对话框，不是主窗口 "modal test"）。断言 51 → **56 项 ALL PASS**。
+      **红测**：让 `win_event_host` 返回 NULL → 两条 A9 精确失败。
+      **同轮堵住一个"假绿"**：事件**没派发**时日志里根本没有那一行，只在行内断言的话断言压根
+      不执行、照样 ALL PASS —— 已给靠日志判定的事件补"见过标记"（seen_tabsel / seen_dlgsize /
+      seen_dlgmove）。**假绿比假红危险得多**，以后凡"靠日志判定事件到了没到"都要配 seen 断言。
       **顺带定下审计口径**（写进 CGUI-FORMAT 1.1.1）：审计页现已覆盖覆盖表里**每一个类型**，
       重跑 `tools\gen-darkaudit.mjs` 即可复核判断，不必靠记忆。
