@@ -168,3 +168,11 @@ void cg_dialog_close(cg_widget_t *self, int result);
 **F2 epic 收敛**。切片：T1.0（画布不许静默丢）→ T1.1（类型）→ T1.2（模态 API）→ T1.3（往返守卫）→
 T2-minimal（画布/示例/计数）→ T2-full（center/Inspector/徽章）→ A7 e2e。剩余 T4（可选）：
 非模态、对话框里的 tabs、"引用另一个 .cgui"——**有意不做**（PRD §4 非目标）。
+
+**后续补记（2026-10-09）：T4 的两项已落地并沉淀进示例。** 非模态（T4 前半）与对话框里的
+tabs（T4 可选项）都已真机验证（tools\probe-modal.c 51 项 ALL PASS）。本日又发现**示例里的多窗体
+是死的**：gallery 的 `dlg_about` 只躺在 .cgui 里，main.c 里零引用、确定取消也没绑事件 ——
+用户跑 gallery 根本看不到这项能力。现已接通：「帮助 → 关于」走模态、「关于（非模态）」走
+`cg_dialog_open_nonmodal`，对话框里装了**两页 tabs**；自检 74 控件 / 49 回调 / **未登记 0**，
+往返探针守着这棵子树（含 tabs）无损，README 与格式文档的口径同步（含"对话框里可以放 tabs"）。
+剩余只有 T4 后半（"引用另一个 .cgui"多文件组装）——那仍是另一个契约 epic。
