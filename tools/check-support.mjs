@@ -83,4 +83,43 @@ if (bad) {
   console.error(`[fail] 支持库表与 cstackgui.h 不一致（${bad} 条）`);
   process.exit(1);
 }
-console.log("[ok] 支持库表与 cstackgui.h 一致");
+
+/* 5. 教学说明里手写的「支持库（N 条）」必须等于这里数出来的真值。
+ *
+ * 为什么放这里：条数的真相就在本脚本刚算出的 cmds.length（编译后的数据表 = 画布上
+ * 真实列出的条数），在这里比一次是零成本；放进「文档口径」门禁（check-examples.mjs --docs）
+ * 则只能拿正则去数源码，多行 c( ... ) 会数漏（2026-10-11 实测：正则 282、真值 292）。
+ *
+ * 为什么值得兜：这个数字以前靠人肉 +1 维护，早就漂了 —— 2026-10-11 实测文档写着 202、
+ * 真值 292（差 90 条），而当时全部门禁都是绿的。手写的"同一事实两份"没人兜就会停在
+ * 上一次手改的那一版（本仓库 2026-09-23 体检同款教训：一次漏改 31 处）。 */
+let docBad = 0;
+const docRel = "examples/教学使用说明.md";
+const docPath = path.join(root, docRel);
+if (fs.existsSync(docPath)) {
+  const docText = fs.readFileSync(docPath, "utf8");
+  let claimed = 0;
+  for (const m of docText.matchAll(/「\*\*支持库\*\*」页签（([0-9]+) 条/g)) {
+    claimed += 1;
+    if (Number(m[1]) !== cmds.length) {
+      console.error(
+        `[fail] ${docRel} 写着「支持库 ${m[1]} 条」，表里实际 ${cmds.length} 条 —— 改成 ${cmds.length}`,
+      );
+      docBad += 1;
+    }
+  }
+  if (claimed === 0) {
+    console.error(
+      `[fail] ${docRel} 里找不到「**支持库**」页签的条数声明（措辞改了？这条门禁要跟着改）`,
+    );
+    docBad += 1;
+  }
+} else {
+  console.log(`  [skip] 文档条数比对（没有 ${docRel}）`);
+}
+
+if (docBad) {
+  console.error(`[fail] 文档里的支持库条数与数据表不一致（${docBad} 处）`);
+  process.exit(1);
+}
+console.log("[ok] 支持库表与 cstackgui.h 一致、文档条数一致");

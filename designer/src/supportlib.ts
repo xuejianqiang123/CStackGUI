@@ -1186,6 +1186,14 @@ for (int i = 0; i < n; ) {
     i = j + 1;
 }`,
           }),
+          c("cg_reg_del", "删注册表值", "int cg_reg_del(const char *subkey, const char *name)", "删 HKCU\\subkey 下的值（name 传 \"\" 是删默认值）；返回 0 = 调用后该值一定不存在（本来没有也算 0）", {
+            sample: `/* 恢复 = 把值删掉，而不是写空串：空值在注册表里仍是"存在"的一条记录 */
+cg_reg_del("Software\\\\Classes\\\\*\\\\shell\\\\MyTool", "LegacyDisable");`,
+          }),
+          c("cg_reg_del_key", "删注册表键", "int cg_reg_del_key(const char *subkey)", "删 HKCU\\subkey 一整棵（连子键带值）；返回 0 = 调用后该键一定不存在。破坏性，删前先备份", {
+            sample: `/* 卸载自建的右键菜单项（先把整棵键删干净，别留空壳） */
+cg_reg_del_key("Software\\\\Classes\\\\*\\\\shell\\\\MyTool");`,
+          }),
         ],
       },
       {
