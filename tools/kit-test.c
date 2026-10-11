@@ -181,6 +181,29 @@ int main(void)
         check(cg_reg_subkeys("Software\\CStackGUITest\\没有这个键", buf, sizeof(buf)) == 0,
               "cg_reg_subkeys 键不存在返回 0（不是错误）");
     }
+    /* ---- 删值 / 删键：契约是"调用后该值/该键一定不存在"（幂等），不是"删到了才成功" ---- */
+    check(cg_reg_write("Software\\CStackGUITest", "tmp", "x") == 0, "写一个待删的值");
+    check(cg_reg_del("Software\\CStackGUITest", "tmp") == 0, "cg_reg_del 删值返回 0");
+    {
+        char *v = cg_reg_read("Software\\CStackGUITest", "tmp", "没了");
+        check(v && strcmp(v, "没了") == 0, "cg_reg_del 删掉后读不回来");
+        cg_free(v);
+    }
+    check(cg_reg_del("Software\\CStackGUITest", "tmp") == 0, "cg_reg_del 幂等：再删一次照样 0");
+    check(cg_reg_del("Software\\CStackGUITest\\没有这个键", "tmp") == 0, "cg_reg_del 键不在也算达成");
+    check(cg_reg_del(NULL, "tmp") == -1 && cg_reg_del("a", NULL) == -1, "cg_reg_del 参数为空报 -1");
+    check(cg_reg_del_key("Software\\CStackGUITest\\alpha") == 0, "cg_reg_del_key 删键返回 0");
+    check(cg_reg_del_key("Software\\CStackGUITest\\alpha") == 0, "cg_reg_del_key 幂等：再删一次照样 0");
+    check(cg_reg_del_key(NULL) == -1 && cg_reg_del_key("") == -1,
+          "cg_reg_del_key 空参数报 -1（挡住 RegDeleteTree(HKCU, NULL) 那种事故）");
+    {
+        char buf[1024];
+        char *c = cg_reg_read("Software\\CStackGUITest\\alpha\\command", "", NULL);
+        check(c == NULL, "cg_reg_del_key 连子键带值一起没了（alpha\\command 读不到）");
+        cg_free(c);
+        check(cg_reg_subkeys("Software\\CStackGUITest", buf, sizeof(buf)) > 0 && strcmp(buf, "beta\n") == 0,
+              "枚举出来只剩 beta");
+    }
     cg_run_process("reg delete \"HKCU\\Software\\CStackGUITest\" /f", 1);
 
     printf("\n%s（失败 %d 项）\n", fails ? "kit test FAILED" : "kit test OK", fails);

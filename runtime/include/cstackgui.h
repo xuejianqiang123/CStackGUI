@@ -2887,6 +2887,27 @@ int   cg_reg_write(const char *subkey, const char *name, const char *value);
  *       配合 cg_reg_read 能做"扫出右键菜单项再逐项读 MUIVerb / command"这类管理工具。
  */
 int   cg_reg_subkeys(const char *subkey, char *out, int cap);
+/**
+ * @brief 删 HKCU 下的字符串值
+ * @param subkey 子键路径；NULL 直接失败
+ * @param name 值名；NULL 直接失败；空串 "" 删默认值
+ * @return int 0 = 调用之后这个值一定不存在（删掉了，或本来就「没有」—— 幂等）；
+ *             -1 = 参数为空、编码转换失败，或键在但删不掉
+ * @note 和 cg_reg_write 配对用：写上 = 打开开关，删掉 = 恢复原样。
+ *       恢复走「删」而不是「写空串」——空值在注册表里仍是一条**存在**的记录，扫出来就是残渣。
+ *       右键菜单的 LegacyDisable 尤其如此：写空串是「禁用」，删掉才叫「恢复」。
+ */
+int   cg_reg_del(const char *subkey, const char *name);
+/**
+ * @brief 删 HKCU 下一整棵键（连子键带值，等效 reg delete /f）
+ * @param subkey 子键路径；NULL 或空串直接失败
+ * @return int 0 = 调用之后这棵键一定不存在（删掉了，或本来就「没有」）；
+ *             -1 = 参数为空、编码转换失败或删不掉
+ * @note **破坏性**：删之前自己先备份（示例里走 `reg.exe export`）。
+ *       空串被挡掉是有意的 —— RegDeleteTreeW(HKCU, NULL) 会删掉 HKCU 整个子树，
+ *       「参数没填就删掉一大片」这种事不能指望调用方自觉。
+ */
+int   cg_reg_del_key(const char *subkey);
 
 /* ---- 系统信息 ----
  * 来历：精易 `系统_` 一族有 254 条，其中**头 34 条就是"每个环境变量一个命令"**

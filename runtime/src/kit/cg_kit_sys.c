@@ -227,6 +227,61 @@ int cg_reg_write(const char *subkey, const char *name, const char *value)
 }
 
 /**
+ * @brief 删 HKCU 下的字符串值（cg_reg_write 的"恢复"半边）
+ * @param subkey 子键路径；NULL 直接失败
+ * @param name 值名；NULL 直接失败；空串 "" 删默认值
+ * @return int 0 = 调用之后这个值一定不存在（删掉了，或本来就「没有」—— 幂等）；
+ *             -1 = 参数为空、编码转换失败，或键在但删不掉
+ */
+int cg_reg_del(const char *subkey, const char *name)
+{
+    wchar_t *wsub;
+    wchar_t *wname;
+    HKEY     key = NULL;
+    int      ok  = -1;
+
+    if (!subkey || !name) return -1;
+    wsub  = kit_w(subkey);
+    wname = kit_w(name);
+    if (wsub && wname) {
+        LSTATUS st = RegOpenKeyExW(HKEY_CURRENT_USER, wsub, 0, KEY_SET_VALUE, &key);
+        if (st == ERROR_FILE_NOT_FOUND || st == ERROR_PATH_NOT_FOUND) {
+            ok = 0;                      /* 连键都不在：该值必然不存在，目标已达成 */
+        } else if (st == ERROR_SUCCESS) {
+            LSTATUS ds = RegDeleteValueW(key, wname);
+            if (ds == ERROR_SUCCESS || ds == ERROR_FILE_NOT_FOUND) ok = 0;
+            RegCloseKey(key);
+        }
+        /* 其余（如 ACCESS_DENIED）= 键在、但删不动：不能报"已达成"，
+         * 否则调用方会以为值没了，而它其实还留在注册表里 */
+    }
+    free(wsub);
+    free(wname);
+    return ok;
+}
+
+/**
+ * @brief 删 HKCU 下一整棵键（连子键带值，等效 reg delete /f）
+ * @param subkey 子键路径；NULL 或空串直接失败
+ * @return int 0 = 调用之后这棵键一定不存在（删掉了，或本来就「没有」）；-1 = 参数为空 / 编码失败 / 删不掉
+ * @note 空串挡掉是有意的：RegDeleteTreeW(HKCU, NULL) 会删掉 HKCU 整个子树。
+ */
+int cg_reg_del_key(const char *subkey)
+{
+    wchar_t *wsub;
+    int      ok = -1;
+
+    if (!subkey || !*subkey) return -1;
+    wsub = kit_w(subkey);
+    if (wsub) {
+        LSTATUS st = RegDeleteTreeW(HKEY_CURRENT_USER, wsub);
+        if (st == ERROR_SUCCESS || st == ERROR_FILE_NOT_FOUND) ok = 0;
+        free(wsub);
+    }
+    return ok;
+}
+
+/**
  * @brief 枚举 HKCU 下一个键的直接子键名，'\n' 分隔（风格与边界语义同 cg_serial_list）
  * @param subkey 子键路径
  * @param out 输出缓冲
