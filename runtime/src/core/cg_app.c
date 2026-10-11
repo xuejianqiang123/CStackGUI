@@ -277,6 +277,19 @@ static int app_open(cg_app_t *app, const cg_app_desc_t *desc, int allow_ui)
         }
         app->doc = *doc;
         free(doc);   /* doc 的所有权已转移 */
+
+        /* include 展开（F3 多文件组装）：必须在 cgui_dir 就绪之后（上面已按界面文件位置填好）、
+         * 建控件之前 —— 引用来的控件也是控件。失败按解析失败同一条路报
+         * （界面打不开，错误里带上是哪个文件/哪个 id）。 */
+        if (app->doc.nincludes > 0) {
+            if (cg_doc_expand_includes(&app->doc, app->cgui_path, err, sizeof(err)) != 0) {
+                fatal_report(allow_ui, "CStackGUI：include 引用的界面文件展开失败", err);
+                free(app->cgui_path); app->cgui_path = NULL;
+                free(app->cgui_dir);  app->cgui_dir  = NULL;
+                cg_doc_release(&app->doc);
+                return 3;
+            }
+        }
     }
 
     if (desc && desc->title_override) {

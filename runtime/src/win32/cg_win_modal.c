@@ -49,7 +49,6 @@ static void register_dialog_class(const cg_app_t *app)
 static int dialog_create_native(cg_widget_t *dlg)
 {
     cg_app_t *app = dlg->app;
-    cg_win_state_t *st = (cg_win_state_t *)app->natives;
     DWORD style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU;   /* 固定框：只有关闭钮 */
     RECT rc;
     int ww, wh, wx, wy;

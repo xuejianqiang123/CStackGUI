@@ -1040,6 +1040,24 @@ cg_doc_t *cg_doc_parse(const char *json, char *err, size_t errsz)
     /* 顶层 roles：色彩角色表（深色皮肤 G1）。引用只记名字，求值统一在主题钩子里 ——
      * 表的位置同样不保证在控件之前，而求值要到建树/切主题才发生，天然没问题。 */
     doc->roles = parse_roles(cj_get(root, "roles"), &doc->nroles);
+    /* 顶层 include[]（F3 多文件组装）：这里只把"要引用谁"记下来 —— 真正的展开在
+     * app_open 里做（那时才知道主文件在哪个目录）。条目宽容：path 不是非空字符串
+     * 就丢掉不报错（与 styles 的读入口径一致）。 */
+    v = cj_get(root, "include");
+    if (v && v->type == CJ_ARR && cj_count(v) > 0) {
+        doc->includes = (cg_include_t *)calloc(cj_count(v), sizeof(cg_include_t));
+        if (doc->includes) {
+            for (size_t i = 0; i < cj_count(v); i++) {
+                const cj_val_t *it = cj_at(v, i);
+                const char *p = it ? cj_str(cj_get(it, "path"), NULL) : NULL;
+
+                if (!p || !*p) continue;
+                doc->includes[doc->nincludes].path = dup_str(p);
+                doc->includes[doc->nincludes].pick = dup_or_null(cj_str(cj_get(it, "pick"), NULL));
+                doc->nincludes++;
+            }
+        }
+    }
 
     for (size_t i = 0; i < cj_count(ws); i++) {
         cg_node_t *n = parse_node(cj_at(ws, i), err, errsz);
@@ -1112,6 +1130,13 @@ void cg_doc_release(cg_doc_t *doc)
     if (doc->roles) {
         for (size_t i = 0; i < doc->nroles; i++) free(doc->roles[i].name);
         free(doc->roles);
+    }
+    if (doc->includes) {
+        for (size_t i = 0; i < doc->nincludes; i++) {
+            free(doc->includes[i].path);
+            free(doc->includes[i].pick);
+        }
+        free(doc->includes);
     }
     free(doc->bg_role);
     node_free(doc->root);
@@ -1235,4 +1260,469 @@ void cg_doc_dump(const cg_doc_t *doc, FILE *out)
     if (doc->root) {
         for (size_t i = 0; i < doc->root->nchildren; i++) dump_node(doc->root->children[i], out, 1);
     }
+}
+
+/* ============================================================ include 展开（F3）
+ * 语义与取舍见 .codebuddy/plans/f3-window-ref-prd.md（D1/D2/D3）。要点：
+ *   相对路径按**主文件所在目录**解析；一个文件在一次加载里最多展开一次（第二次起跳过 +
+ *   WARN，循环引用因此不会死循环）；控件 id 撞了 = **报错**（带来源文件）；三张表同名 =
+ *   主文档优先 + WARN（与失效引用的宽容口径一致）。
+ */
+
+typedef struct {
+    char **items;
+    size_t n;
+    size_t cap;
+} cg_str_list;
+
+/**
+ * @brief 路径表里是否已经有这个路径（大小写不敏感，Windows 口径）
+ * @param l 已收集的路径表
+ * @param s 要查的路径
+ * @return int 1 = 已在表里；0 = 没有
+ */
+static int str_list_has(const cg_str_list *l, const char *s)
+{
+    for (size_t i = 0; i < l->n; i++)
+        if (_stricmp(l->items[i], s) == 0) return 1;
+    return 0;
+}
+
+/**
+ * @brief 把路径加进表（已在表里就不重复加）
+ * @param l 路径表
+ * @param s 要加的路径（内部复制一份）
+ * @return int 1 = 成功（含"本来就有"）；0 = 内存不足
+ */
+static int str_list_add(cg_str_list *l, const char *s)
+{
+    if (str_list_has(l, s)) return 1;
+    if (l->n == l->cap) {
+        size_t  cap   = l->cap ? l->cap * 2 : 8;
+        char ** items = (char **)realloc(l->items, cap * sizeof(char *));
+        if (!items) return 0;
+        l->items = items;
+        l->cap   = cap;
+    }
+    l->items[l->n] = dup_str(s);
+    if (!l->items[l->n]) return 0;
+    l->n++;
+    return 1;
+}
+
+/**
+ * @brief 释放路径表
+ * @param l 路径表
+ * @return void 无返回值
+ */
+static void str_list_free(cg_str_list *l)
+{
+    for (size_t i = 0; i < l->n; i++) free(l->items[i]);
+    free(l->items);
+}
+
+/* 把 "a\.\b\..\c" 收敛成规范形（\ 分隔、消掉 . 与 ..；栈空时的 .. 保留——
+ * 相对路径开头的 .. 有语义）。include 的去重（防循环）靠路径**字符串相等**判定，
+ * 不规范化的话 ".\frag\..\inctest.cgui" 与 ".\inctest.cgui" 是同一个文件却永不相等，
+ * 循环引用就会一路叠 ".." 直到超出 MAX_PATH（2026-10-10 实测抓到）。 */
+/**
+ * @brief 把路径收敛成规范形（\\ 分隔、消掉 . 与 ..；栈空时的 .. 保留）
+ * @param p 原始路径
+ * @return char * 规范形（堆串，用完 free）；失败返回 NULL
+ */
+static char *path_normalize(const char *p)
+{
+    const char *segs[128];
+    size_t      lens[128];
+    size_t      nseg = 0;
+    size_t      i = 0, n = strlen(p), out = 0;
+    char        buf[2048];
+
+    while (i < n && nseg < 128) {
+        size_t start, len;
+        while (i < n && (p[i] == '\\' || p[i] == '/')) i++;
+        if (i >= n) break;
+        start = i;
+        while (i < n && p[i] != '\\' && p[i] != '/') i++;
+        len = i - start;
+        if (len == 1 && p[start] == '.') continue;                       /* "." 丢弃 */
+        if (len == 2 && p[start] == '.' && p[start + 1] == '.') {
+            if (nseg > 0 && !(lens[nseg - 1] == 2 && segs[nseg - 1][0] == '.')) {
+                nseg--;                                                   /* ".." 弹栈 */
+                continue;
+            }
+            /* 栈空（或顶上还是 ..）：开头的 .. 有语义，保留 */
+        }
+        segs[nseg] = p + start;
+        lens[nseg] = len;
+        nseg++;
+    }
+    for (size_t k = 0; k < nseg && out + lens[k] + 2 < sizeof(buf); k++) {
+        if (k) buf[out++] = '\\';
+        memcpy(buf + out, segs[k], lens[k]);
+        out += lens[k];
+    }
+    buf[out] = '\0';
+    return dup_str(buf);
+}
+
+/* 相对路径 -> 相对 base_dir（规范化后返回）；已经是绝对路径（盘符 / \\ 或 / 开头）就只做规范化 */
+/**
+ * @brief 解析一条 include 的 path（相对 base_dir），并规范化
+ * @param base_dir 基准目录（主 .cgui / 上级被引用文件所在目录）
+ * @param rel include 里写的 path（相对或绝对）
+ * @return char * 规范化后的路径（堆串，用完 free）；path 为空返回 NULL
+ */
+static char *include_path_resolve(const char *base_dir, const char *rel)
+{
+    char buf[1024];
+
+    if (!rel || !*rel) return NULL;
+    if (rel[1] == ':' || rel[0] == '\\' || rel[0] == '/') return path_normalize(rel);
+    snprintf(buf, sizeof(buf), "%s\\%s", base_dir && *base_dir ? base_dir : ".", rel);
+    return path_normalize(buf);
+}
+
+/**
+ * @brief 取一个文件路径的目录部分（最后一个 \\ 或 / 之前）
+ * @param file 文件路径
+ * @param out 输出缓冲
+ * @param outsz 缓冲容量
+ * @return void 无返回值（没有分隔符时写 "."）
+ */
+static void include_dir_of(const char *file, char *out, size_t outsz)
+{
+    const char *slash  = strrchr(file, '\\');
+    const char *slash2 = strrchr(file, '/');
+    size_t      n;
+
+    if (slash2 > slash) slash = slash2;
+    if (!slash) { snprintf(out, outsz, "."); return; }
+    n = (size_t)(slash - file);
+    if (n >= outsz) n = outsz - 1;
+    memcpy(out, file, n);
+    out[n] = '\0';
+}
+
+/**
+ * @brief 子树里有没有某个 id
+ * @param n 子树根
+ * @param id 要查的控件 id
+ * @return int 1 = 有；0 = 没有
+ */
+static int id_exists_in(const cg_node_t *n, const char *id)
+{
+    if (!n) return 0;
+    if (n->id && strcmp(n->id, id) == 0) return 1;
+    for (size_t i = 0; i < n->nchildren; i++)
+        if (id_exists_in(n->children[i], id)) return 1;
+    return 0;
+}
+
+/* 引用文件的控件 id 与主文档对一遍：撞了就报错（带来源文件）。
+ * 逐个节点对全树查一次是 O(n*m)，但文档就几百个控件、只在加载期跑一次，不值当优化。 */
+/**
+ * @brief 引用文件要搬进来的节点，id 与主文档撞没撞
+ * @param host 主文档
+ * @param incoming 要搬进来的节点（连同子树）
+ * @param file 来源文件（写进错误信息，便于定位）
+ * @param err 冲突时写错误信息
+ * @param errsz err 容量
+ * @return int 1 = 有冲突（err 已填，加载要失败）；0 = 没有
+ */
+static int ids_conflict(const cg_doc_t *host, const cg_node_t *incoming,
+                        const char *file, char *err, size_t errsz)
+{
+    if (!incoming) return 0;
+    if (incoming->id && id_exists_in(host->root, incoming->id)) {
+        snprintf(err, errsz,
+                 "include 冲突：id「%s」（来自 %s）在主文档里已经存在。"
+                 "id 是事件绑定与 cg_find 的钥匙，不能静默改名 —— 请改掉其中一边。",
+                 incoming->id, file);
+        return 1;
+    }
+    for (size_t i = 0; i < incoming->nchildren; i++)
+        if (ids_conflict(host, incoming->children[i], file, err, errsz)) return 1;
+    return 0;
+}
+
+/**
+ * @brief 深拷贝一份样式（三块堆串 font / fg_role / bg_role 都要复制）
+ * @param dst 目标（调用方保证内存已清零或即将整体覆盖）
+ * @param src 源
+ * @return void 无返回值
+ */
+static void style_deep_copy(cg_style_t *dst, const cg_style_t *src)
+{
+    *dst = *src;
+    dst->font    = src->font    ? dup_str(src->font)    : NULL;
+    dst->fg_role = src->fg_role ? dup_str(src->fg_role) : NULL;
+    dst->bg_role = src->bg_role ? dup_str(src->bg_role) : NULL;
+}
+
+/* 三张表合并：同名 = 主文档优先（引用文件的那份忽略 + WARN，与失效引用的宽容口径一致）。
+ * 返回 0 = 成功；1 = 内存不足（err 已填）。
+ * **每一条都要 realloc**：主文档自己的表是"按需正好装满"的，直接 &[n++] 是越界写
+ * （2026-10-10 第一版就崩在这 —— 宿主自己没有 styles 时 host->styles 是 NULL）。 */
+/**
+ * @brief 三张表（styles / roles / actions）合并进主文档：同名 = 主文档优先 + WARN
+ * @param host 主文档
+ * @param sub 被引用文件解析出的文档
+ * @param file 来源文件（写进 WARN，便于定位）
+ * @param err 内存不足时写错误信息
+ * @param errsz err 容量
+ * @return int 0 = 成功；1 = 内存不足
+ */
+static int merge_tables(cg_doc_t *host, const cg_doc_t *sub, const char *file, char *err, size_t errsz)
+{
+    for (size_t i = 0; i < sub->nstyles; i++) {
+        const cg_named_style_t *s = &sub->styles[i];
+        cg_named_style_t *grown;
+        cg_named_style_t *slot;
+
+        if (style_find(host->styles, host->nstyles, s->name)) {
+            cg_log(CG_LOG_WARN, "include（%s）：命名样式 \"%s\" 主文档里已有，主文档优先", file, s->name);
+            continue;
+        }
+        grown = (cg_named_style_t *)realloc(host->styles, (host->nstyles + 1) * sizeof(*grown));
+        if (!grown) { snprintf(err, errsz, "out of memory"); return 1; }
+        host->styles = grown;
+        slot = &host->styles[host->nstyles++];
+        slot->name = dup_str(s->name);
+        style_deep_copy(&slot->st, &s->st);
+    }
+    for (size_t i = 0; i < sub->nroles; i++) {
+        const cg_role_t *r = &sub->roles[i];
+        cg_role_t *grown;
+        cg_role_t *slot;
+
+        if (role_find(host->roles, host->nroles, r->name)) {
+            cg_log(CG_LOG_WARN, "include（%s）：色彩角色 \"%s\" 主文档里已有，主文档优先", file, r->name);
+            continue;
+        }
+        grown = (cg_role_t *)realloc(host->roles, (host->nroles + 1) * sizeof(*grown));
+        if (!grown) { snprintf(err, errsz, "out of memory"); return 1; }
+        host->roles = grown;
+        slot = &host->roles[host->nroles++];
+        slot->name      = dup_str(r->name);
+        slot->light     = r->light;
+        slot->dark      = r->dark;
+        slot->has_light = r->has_light;
+        slot->has_dark  = r->has_dark;
+    }
+    for (size_t i = 0; i < sub->nactions; i++) {
+        const cg_action_t *a = &sub->actions[i];
+        cg_action_t *grown;
+        cg_action_t *slot;
+        size_t j;
+
+        if (!a->name || !*a->name) continue;
+        for (j = 0; j < host->nactions; j++)
+            if (host->actions[j].name && strcmp(host->actions[j].name, a->name) == 0) break;
+        if (j < host->nactions) {
+            cg_log(CG_LOG_WARN, "include（%s）：动作 \"%s\" 主文档里已有，主文档优先", file, a->name);
+            continue;
+        }
+        grown = (cg_action_t *)realloc(host->actions, (host->nactions + 1) * sizeof(*grown));
+        if (!grown) { snprintf(err, errsz, "out of memory"); return 1; }
+        host->actions = grown;
+        slot = &host->actions[host->nactions++];
+        slot->name    = dup_str(a->name);
+        slot->text    = a->text    ? dup_str(a->text)    : NULL;
+        slot->accel   = a->accel   ? dup_str(a->accel)   : NULL;
+        slot->handler = a->handler ? dup_str(a->handler) : NULL;
+        slot->checked = a->checked;
+        slot->enabled = a->enabled;
+    }
+    return 0;
+}
+
+/**
+ * @brief 把一个顶层节点（连同子树）挂到主文档的虚拟根下
+ * @param host 主文档
+ * @param n 节点（所有权转移：之后由主文档释放）
+ * @return int 0 = 成功；1 = 内存不足
+ */
+static int host_append_node(cg_doc_t *host, cg_node_t *n)
+{
+    cg_node_t **items = (cg_node_t **)realloc(host->root->children,
+                        (host->root->nchildren + 1) * sizeof(cg_node_t *));
+    if (!items) return 1;
+    host->root->children = items;
+    host->root->children[host->root->nchildren++] = n;
+    return 0;
+}
+
+/**
+ * @brief 处理一条 include：读文件、解析、（递归展开它自己的 include）、并进 host
+ * @param host 主文档
+ * @param base_dir 这条相对路径的基准目录
+ * @param path include 里写的 path
+ * @param pick 只取那个文件里 id 为它的顶层节点；NULL = 全取
+ * @param visited 已展开文件表（防循环 / 防重复）
+ * @param err 失败时写错误信息
+ * @param errsz err 容量
+ * @return int 0 = 成功（含"文件已展开过，跳过"）；1 = 失败（err 已填）
+ * @note 前向声明 —— 它与 expand_doc_into 互相递归，定义在下面。
+ */
+static int expand_entry_into(cg_doc_t *host, const char *base_dir, const char *path,
+                             const char *pick, cg_str_list *visited, char *err, size_t errsz);
+
+/* 把 sub 的内容并进 host：sub 自己的 include 先递归展开进 sub，然后挑节点、并三张表。
+ * 被搬走的节点会从 sub->root 里摘掉（nchildren 收缩），之后 release(sub) 不会双 free。
+ * pick 只作用于"从 sub 取哪些顶层节点"，不影响它内部引用的递归展开。 */
+/**
+ * @brief 把 sub 的内容并进 host：sub 自己的 include 先递归展开进 sub，然后挑节点、并三张表
+ * @param host 主文档
+ * @param sub 被引用文件解析出的文档
+ * @param sub_dir sub 所在目录（它内部引用的相对路径按这里解析）
+ * @param sub_file sub 的路径（写进错误 / WARN 信息）
+ * @param pick 只取 sub 里 id 为它的顶层节点；NULL = 全取
+ * @param visited 已展开文件表（防循环 / 防重复）
+ * @param err 失败时写错误信息
+ * @param errsz err 容量
+ * @return int 0 = 成功；1 = 失败（id 冲突 / pick 没命中 / 内存不足，err 已填）
+ * @note 被搬走的节点会从 sub->root 里摘掉（nchildren 收缩），之后 release(sub) 不会双 free。
+ */
+static int expand_doc_into(cg_doc_t *host, cg_doc_t *sub, const char *sub_dir,
+                           const char *sub_file, const char *pick,
+                           cg_str_list *visited, char *err, size_t errsz)
+{
+    int bad = 0;
+
+    /* 子文件自己的 include 先展开进它自己（递归；visited 挡循环与重复）。
+     * 注意 pick 只作用于"从子文件取哪些顶层节点"，不影响它内部引用的递归展开。 */
+    for (size_t i = 0; i < sub->nincludes && !bad; i++) {
+        bad = expand_entry_into(sub, sub_dir, sub->includes[i].path, sub->includes[i].pick,
+                                visited, err, errsz);
+    }
+    if (bad) return 1;
+
+    merge_tables(host, sub, sub_file, err, errsz);
+
+    /* 挑节点：pick = 按 id 只取一个；不写 = 全取。先全部过 id 冲突关，过了才真正搬 ——
+     * 这样冲突报错时一个节点都没搬，不用做半途回滚。 */
+    {
+        size_t keep = 0;
+        size_t taken = 0;
+        for (size_t i = 0; i < sub->root->nchildren; i++) {
+            cg_node_t *c = sub->root->children[i];
+            int take = pick ? (c->id && strcmp(c->id, pick) == 0) : 1;
+
+            if (!take) { sub->root->children[keep++] = c; continue; }
+            if (ids_conflict(host, c, sub_file, err, errsz)) { bad = 1; break; }
+            if (host_append_node(host, c) != 0) {
+                snprintf(err, errsz, "out of memory");
+                bad = 1;
+                break;
+            }
+            taken++;
+            /* 引用进来的节点补一遍命名样式 / 角色合并：它的 style_name 与 @引用
+             * 此前是对着**子文件**的表解析的，现在要用主文档（已并进子文件的表）的口径 */
+            resolve_named_styles(c, host);
+        }
+        sub->root->nchildren = keep;   /* 搬走的不再留在 sub 里，release 不会双 free */
+        /* pick 写了却没命中 = 静默丢：引用的界面整块消失还一声不吭 —— 必须报错 */
+        if (!bad && pick && taken == 0) {
+            snprintf(err, errsz, "include：%s 里没有 id 为「%s」的顶层节点（pick 没命中，"
+                                 "不静默丢）", sub_file, pick);
+            bad = 1;
+        }
+    }
+    return bad ? 1 : 0;
+}
+
+/**
+ * @brief 处理一条 include：读文件、解析、（递归展开它自己的 include）、并进 host
+ * @param host 主文档
+ * @param base_dir 这条相对路径的基准目录
+ * @param path include 里写的 path
+ * @param pick 只取那个文件里 id 为它的顶层节点；NULL = 全取
+ * @param visited 已展开文件表（防循环 / 防重复）
+ * @param err 失败时写错误信息
+ * @param errsz err 容量
+ * @return int 0 = 成功（含"文件已展开过，跳过"）；1 = 失败（err 已填）
+ */
+static int expand_entry_into(cg_doc_t *host, const char *base_dir, const char *path,
+                             const char *pick, cg_str_list *visited, char *err, size_t errsz)
+{
+    char  *file = include_path_resolve(base_dir, path);
+    char  *json;
+    cg_doc_t *doc;
+    cg_doc_t parsed;
+    char dir[1024];
+    int  rc;
+
+    if (!file) { snprintf(err, errsz, "include 的 path 是空的"); return 1; }
+    if (str_list_has(visited, file)) {
+        cg_log(CG_LOG_WARN, "include（%s）已经在本次加载里展开过，跳过（防循环 / 防重复）", file);
+        free(file);
+        return 0;
+    }
+    if (!str_list_add(visited, file)) {
+        free(file);
+        snprintf(err, errsz, "out of memory");
+        return 1;
+    }
+
+    json = cg_read_file(file);
+    if (!json) {
+        snprintf(err, errsz, "include 引用的文件打不开：\n    %s", file);
+        free(file);
+        return 1;
+    }
+    doc = cg_doc_parse(json, err, errsz);
+    free(json);
+    if (!doc) { free(file); return 1; }    /* err 已由解析器填好 */
+    parsed = *doc;
+    free(doc);                              /* 文档所有权转移到栈上 */
+
+    include_dir_of(file, dir, sizeof(dir));
+    rc = expand_doc_into(host, &parsed, dir, file, pick, visited, err, errsz);
+    cg_doc_release(&parsed);                /* 搬走的已摘除，剩下的照常释放 */
+    free(file);
+    return rc;
+}
+
+/**
+ * @brief 展开 doc->includes（实现见 cg_doc.h 的语义说明）
+ * @param doc 主文档
+ * @param main_file 主 .cgui 的路径
+ * @param err 失败时写错误信息
+ * @param errsz err 容量
+ * @return int 0 = 成功；1 = 加载失败
+ */
+int cg_doc_expand_includes(cg_doc_t *doc, const char *main_file, char *err, size_t errsz)
+{
+    cg_str_list visited = { NULL, 0, 0 };
+    char base_dir[1024];
+    int  rc = 0;
+
+    if (!doc || doc->nincludes == 0) return 0;
+    if (!main_file || !*main_file) {
+        snprintf(err, errsz,
+                 "这份 .cgui 写了 include，但本次加载没有主文件路径（用 cgui_text 内嵌界面时"
+                 "解析不了相对路径）—— 请改用 cgui_path 指定界面文件，或先在编译期展开。");
+        return 1;
+    }
+    /* 主文档自己进"已展开"名单：片段再引用主文档时直接跳过（防循环） */
+    if (!str_list_add(&visited, main_file)) {
+        snprintf(err, errsz, "out of memory");
+        return 1;
+    }
+    include_dir_of(main_file, base_dir, sizeof(base_dir));
+    for (size_t i = 0; i < doc->nincludes && rc == 0; i++) {
+        rc = expand_entry_into(doc, base_dir, doc->includes[i].path, doc->includes[i].pick,
+                               &visited, err, errsz);
+    }
+    /* include 表消费完毕置空：留着只会让人以为"再展开一次"还有意义 */
+    for (size_t i = 0; i < doc->nincludes; i++) {
+        free(doc->includes[i].path);
+        free(doc->includes[i].pick);
+    }
+    free(doc->includes);
+    doc->includes  = NULL;
+    doc->nincludes = 0;
+    str_list_free(&visited);
+    return rc;
 }

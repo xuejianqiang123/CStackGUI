@@ -374,6 +374,16 @@ typedef struct {
     int   enabled; /* 初始启用状态，缺省 1 */
 } cg_action_t;
 
+/** 顶层 `include[]` 的一条（F3 多文件组装）：从 path 那个 .cgui 把界面取过来。
+ *  语义与取舍（为什么是"加载期展开"而不是"导出时展开"，见 f3-window-ref-prd.md §2.1）：
+ *  相对路径按**主文件所在目录**解析；一个文件在一次加载里最多展开一次（第二次起跳过 +
+ *  WARN，循环引用因此不会死循环）；控件 id 撞了 = **报错**（id 是事件绑定与 cg_find 的
+ *  钥匙，静默改名等于丢）；styles/roles/actions 同名 = 主文档优先 + WARN。 */
+typedef struct {
+    char *path;   /* 相对主 .cgui 所在目录（绝对路径也认） */
+    char *pick;   /* 只取那个文件里的某个顶层节点（按 id）；NULL = 全取 */
+} cg_include_t;
+
 /** 窗口属性（.cgui 的 app 节点；缺省值 = 保持 Windows 默认观感，不设就一切照旧） */
 typedef struct {
     char       *title;
@@ -424,6 +434,10 @@ typedef struct {
      *  容错与 styles{} 同口径：按书写顺序存，重名后者覆盖。 */
     cg_role_t        *roles;
     size_t            nroles;
+    /** 顶层 include[]（F3 多文件组装，可为空）：加载期由 cg_doc_expand_includes 展开，
+     *  展开完这份数组就被消费置空（画布侧只保真不展开，见 f3-window-ref-prd.md）。 */
+    cg_include_t     *includes;
+    size_t            nincludes;
     /** app.bg 写成 "@角色" 时的引用名（doc.bg 留 CG_COLOR_NONE，主题钩子求值写回） */
     char             *bg_role;
     /** 引用了**不存在**的角色名的控件个数（口径同 style_missing：不崩不中断，但报 WARN） */
@@ -468,5 +482,17 @@ void cg_doc_dump(const cg_doc_t *doc, FILE *out);
  * @return char * 堆串，用完 free；失败返回 NULL
  */
 char *cg_read_file(const char *path);
+
+/**
+ * @brief 展开 doc->includes：把被引用文件里的控件与三张表并进本文档
+ * @param doc 主文档（解析成功、还没建控件）
+ * @param main_file 主 .cgui 的路径（相对路径按它所在目录解析；它自己也进"已展开"名单防循环）
+ * @param err 失败时写错误信息（id 冲突 / 文件打不开 / pick 没找到）
+ * @param errsz err 容量
+ * @return int 0 = 成功；非 0 = 加载失败（调用方按解析失败同一条路处理）
+ * @note 只在加载期调用一次（app_open，建控件之前），展开完 doc->includes 被消费置空。
+ *       逐消息的路径**不许**调它：每条 include 都要读文件、解析、全树查 id。
+ */
+int cg_doc_expand_includes(cg_doc_t *doc, const char *main_file, char *err, size_t errsz);
 
 #endif /* CG_DOC_H */
