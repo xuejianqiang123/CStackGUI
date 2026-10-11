@@ -48,3 +48,12 @@ API 全部现成（`designer/src/model/kinds.ts` 42 种、`runtime/src/kit/cg_ki
 
 ## 禁止改动面
 runtime/ 与 designer/ 一律不动（本轮结论：无缺失项）；不改 build-all.bat（自动扫目录）。
+
+## 进度（2026-10-11 更新）
+- **v1.0 已交付并提交**（41ce4cd/f2b0cbb/9dc68b1）。
+- **用户反馈"太简陋、跟原版差别大"→ v1.1 重做并提交**（38f680c/353e4a6/de43ca7）：
+  8 页签 + 分组条 + 成对装/撤开关（沙箱键真改真还原）+ 底栏功能带 + 我的工具 INI 槽位 + 深浅主题。
+  真机探针（BM_CLICK PostMessage）全链路验证：开关写键、启动 taskmgr、最近使用记账、计数更新。
+  过程中抓到并修掉：开关方向解析偏移（id+4 是 "_on" 不是 "on"）；
+  门禁夹具 common/port_dlg.cgui 被清理导致 check-format exit=3（已重建入库）。
+- 遗留：图标按钮（无贴图能力）、系统级注册表开关（无删值/枚举接口）——照实写进界面文案，属产品边界。

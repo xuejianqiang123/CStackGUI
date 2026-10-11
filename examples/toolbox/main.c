@@ -11,7 +11,10 @@
  *               真改真还原，配「查看曾改动 / 还原全部」；
  *            ④ 底栏功能带：「本页 X 个（共 Y 个）」+ 搜索/日志/设置/关于/检查更新
  *               （日志是非模态对话框，设置 = 深浅主题切换，均为真功能）；
- *            ⑤ 我的工具 = mytools.ini 槽位（名称/命令），**加工具不用重编译**。
+ *            ⑤ 我的工具 = mytools.ini 槽位（名称/命令），**加工具不用重编译**；
+ *            ⑥ 右键菜单管理：扫 HKCU 用户区五个区域（cg_reg_subkeys 枚举 + 逐项读
+ *               MUIVerb / command / LegacyDisable），工具箱自己的两条菜单真装真撤
+ *               （reg.exe add/delete，删得干净 —— 本工程注册表接口没有删值能力）。
  *
  *          与原版的诚实差异（照实写，不在示例里装）：
  *            - 原版按钮带彩色图标：本工程按钮没有贴图能力，用文字 + 配色区分；
@@ -47,6 +50,9 @@
 
 /** 行为开关种数 */
 #define K_OPT_MAX    5
+
+/** 工具箱自建右键菜单组数 */
+#define K_RMENU_COUNT 2
 
 /** 注册表沙箱子键（相对 HKCU）——绝不写系统键 */
 #define K_REG_SUBKEY "Software\\CStackGUI\\examples\\toolbox"
@@ -155,12 +161,9 @@ static const struct {
     { "tool_progs",    "程序安装目录", "explorer C:\\Program Files",         6 },
     { "tool_appsflr",  "应用文件夹",   "explorer shell:AppsFolder",          6 },
     { "tool_tasklist", "进程列表",     "cmd /k tasklist",                    6 },
-    /* —— 右键增强页（页 7）：入口 + 沙箱演示 —— */
-    { "tool_sendto",   "发送到文件夹",     "explorer shell:sendto",  7 },
-    { "tool_desktop",  "桌面目录",         "explorer shell:desktop", 7 },
-    { "tool_downloads","下载目录",         "explorer shell:downloads", 7 },
-    { "tool_rmenu_loc","右键菜单位置",     "regedit",                7 },
-    { "tool_terminal", "在此处打开终端",   "cmd /k cd",              7 }
+    /* —— 右键增强页（页 7）：入口类命令（菜单管理见 rmenu 段，不走命令表） —— */
+    { "tool_fonts",    "字体目录",   "explorer shell:fonts",        7 },
+    { "tool_recent",   "最近使用项目", "explorer shell:recent",     7 }
 };
 
 /** 工具命令表条目数 */
@@ -302,6 +305,7 @@ static void page_count_sync(cg_app_t *app)
         if (k_tools[i].page == page && strcmp(k_tools[i].cmd, "__my__") != 0) n++;
     if (page == 0) n = s_recent_n;
     if (page == 2) n = s_my_n;
+    if (page == 7) n = K_RMENU_COUNT;   /* 右键页：本页的"工具"是自建菜单 */
 
     snprintf(buf, sizeof(buf), "本页 %d 个（共 %d 个）", n, total);
     cg_widget_set_text(cg_find(app, "lab_page"), buf);
@@ -495,6 +499,247 @@ static void on_btn_reg_reset_click(cg_widget_t *self, cg_event_t ev, void *user)
     opt_sync(app);
     status_msg(app, ok ? "已还原全部开关" : "部分值还原失败");
     log_line(app, ok ? "沙箱键全部还原（写空串）" : "沙箱键还原失败");
+}
+
+/* ------------------------------------------------------------ 右键菜单管理 */
+
+/** 工具箱自建右键菜单：键（相对 HKCU\Software\Classes）+ 菜单标题（默认值）+ command */
+static const struct {
+    const char *key;   /**< 菜单项键 */
+    const char *title; /**< 菜单标题 */
+    const char *cmd;   /**< command 默认值 */
+} k_rmenu[2] = {
+    { "*\\shell\\CStackGUI.CopyPath",
+      "复制文件路径",
+      "cmd.exe /c echo %1 | clip" },
+    { "Directory\\Background\\shell\\CStackGUI.Terminal",
+      "在此处打开终端",
+      "cmd.exe /k cd /d \"%V\"" }
+};
+
+/** 自建菜单当前是否已装（就绪钩子里读 command 判定） */
+static int s_rm_installed[2];
+
+/** 扫描目标区域（相对 HKCU\Software\Classes；原版五张区里本工程够得着的全部） */
+static const struct {
+    const char *key;   /**< 区键 */
+    const char *label; /**< 区名 */
+} k_rm_areas[] = {
+    { "*\\shell",                     "文件" },
+    { "Directory\\shell",             "文件夹" },
+    { "Directory\\Background\\shell", "空白处" },
+    { "Drive\\shell",                 "磁盘" },
+    { "AllFilesystemObjects\\shell",  "通用对象" }
+};
+
+/** 扫描区域数 */
+#define K_RM_AREA_COUNT ((int)(sizeof k_rm_areas / sizeof k_rm_areas[0]))
+
+/**
+ * @brief 同步自建菜单按钮的可用状态与说明文字
+ * @param app 应用
+ * @return void 无返回值
+ */
+static void rm_sync(cg_app_t *app)
+{
+    static const char *on_id[2]  = { "rm0_on",  "rm1_on"  };
+    static const char *off_id[2] = { "rm0_off", "rm1_off" };
+    static const char *lab_id[2] = { "lab_rm0", "lab_rm1" };
+    int i;
+
+    for (i = 0; i < K_RMENU_COUNT; i++) {
+        char        buf[128];
+        cg_widget_t *on  = cg_find(app, on_id[i]);
+        cg_widget_t *off = cg_find(app, off_id[i]);
+
+        if (on)  cg_widget_set_enabled(on,  !s_rm_installed[i]);
+        if (off) cg_widget_set_enabled(off,  s_rm_installed[i]);
+        snprintf(buf, sizeof(buf), "「%s」—— %s", k_rmenu[i].title,
+                 s_rm_installed[i] ? "已装上" : "未装");
+        cg_widget_set_text(cg_find(app, lab_id[i]), buf);
+    }
+}
+
+/**
+ * @brief 就绪钩子里读回自建菜单状态：command 有值 = 已装
+ * @param read_reg 1=真读注册表；0=自检，按未装算
+ * @return void 无返回值
+ */
+static void rm_load(int read_reg)
+{
+    int i;
+
+    for (i = 0; i < K_RMENU_COUNT; i++) {
+        s_rm_installed[i] = 0;
+        if (!read_reg) continue;
+        {
+            char key[256];
+            char *cmd;
+            snprintf(key, sizeof(key), "Software\\Classes\\%s\\command", k_rmenu[i].key);
+            cmd = cg_reg_read(key, "", NULL);
+            s_rm_installed[i] = (cmd && *cmd) ? 1 : 0;
+            cg_free(cmd);
+        }
+    }
+}
+
+/**
+ * @brief 装上 / 撤掉本工具箱自己的右键菜单：reg.exe add/delete，删得干净
+ * @param self 被点的按钮
+ * @param ev 事件类型
+ * @param user 未使用
+ * @return void 无返回值
+ * @note 写注册表是副作用：自检下只记日志不执行。id 形如 rm0_on / rm0_off，
+ *       方向用 strstr 认 —— 教训：别用固定偏移猜（opt 那次就是偏移错一位）。
+ */
+static void on_rmenu_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t   *app = cg_app_of(self);
+    const char *id  = cg_widget_id(self);
+    int         idx;
+    int         on;
+    char        keypath[384];
+    char        cmdline[768];
+
+    (void)ev;
+    (void)user;
+
+    if (!id || strlen(id) < 6) return;
+    idx = id[2] - '0';
+    on  = (strstr(id, "_on") != NULL);
+    if (idx < 0 || idx >= K_RMENU_COUNT) return;
+
+    if (!cg_app_has_window(app)) {
+        log_line(app, "自检模式：跳过 reg.exe（%s：%s）",
+                 k_rmenu[idx].title, on ? "装上" : "撤掉");
+        s_rm_installed[idx] = on;
+        rm_sync(app);
+        return;
+    }
+
+    snprintf(keypath, sizeof(keypath), "HKCU\\Software\\Classes\\%s", k_rmenu[idx].key);
+    if (on) {
+        snprintf(cmdline, sizeof(cmdline),
+                 "reg add \"%s\" /ve /d \"%s\" /f", keypath, k_rmenu[idx].title);
+        if (cg_run_process(cmdline, 1) != 0) {
+            status_msg(app, "reg add 失败（标题）");
+            log_line(app, "reg.exe 失败：%s", cmdline);
+            return;
+        }
+        snprintf(cmdline, sizeof(cmdline),
+                 "reg add \"%s\\command\" /ve /d \"%s\" /f", keypath, k_rmenu[idx].cmd);
+        if (cg_run_process(cmdline, 1) != 0) {
+            status_msg(app, "reg add 失败（命令）");
+            log_line(app, "reg.exe 失败：%s", cmdline);
+            return;
+        }
+    } else {
+        snprintf(cmdline, sizeof(cmdline), "reg delete \"%s\" /f", keypath);
+        if (cg_run_process(cmdline, 1) != 0) {
+            status_msg(app, "reg delete 失败");
+            log_line(app, "reg.exe 失败：%s", cmdline);
+            return;
+        }
+    }
+
+    s_rm_installed[idx] = on;
+    rm_sync(app);
+    status_msg(app, "%s：%s", k_rmenu[idx].title, on ? "已装上" : "已撤掉");
+    log_line(app, "右键菜单「%s」%s（reg.exe）", k_rmenu[idx].title, on ? "装上" : "撤掉");
+}
+
+/**
+ * @brief 「扫描右键菜单」：五个区域枚举子键，逐项读 MUIVerb / command / LegacyDisable
+ * @param self 被点的按钮
+ * @param ev 事件类型
+ * @param user 未使用
+ * @return void 无返回值
+ * @note 纯只读，但按自检红线（不开窗不碰注册表）照样跳过。
+ *       状态判定：command 有值且没有 LegacyDisable = 在用；有 LegacyDisable = 已隐藏；
+ *       读不到 command = 无命令（多为 shellex 残键，原版里那类是 DLL 扩展项，本页只读不删）。
+ */
+static void on_btn_regmenu_scan_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t    *app = cg_app_of(self);
+    cg_widget_t *tbl = cg_find(app, "tbl_regmenu");
+    char         buf[8192];
+    char         stat[128];
+    int          a, total = 0, active = 0, hidden = 0, nocommand = 0;
+
+    (void)ev;
+    (void)user;
+
+    if (!cg_app_has_window(app)) {
+        log_line(app, "自检模式：跳过扫描右键菜单（不碰注册表）");
+        return;
+    }
+    if (tbl) cg_table_clear(tbl);
+
+    for (a = 0; a < K_RM_AREA_COUNT; a++) {
+        char key[256];
+        int  n, i = 0;
+
+        snprintf(key, sizeof(key), "Software\\Classes\\%s", k_rm_areas[a].key);
+        n = cg_reg_subkeys(key, buf, sizeof(buf));
+        while (i < n) {
+            int  j = i;
+            char sub[512];
+            char cmdkey[600];
+            char state[24];
+            char *title, *def, *cmd, *legacy;
+            const char *cells[4];
+
+            while (j < n && buf[j] != '\n') j++;
+            buf[j] = '\0';                        /* buf[i..j) 是一个子键名 */
+
+            snprintf(sub, sizeof(sub), "%s\\%s", key, &buf[i]);
+            title  = cg_reg_read(sub, "MUIVerb", NULL);          /* 菜单标题优先 MUIVerb */
+            def    = cg_reg_read(sub, "", NULL);                 /* 没有就用默认值 */
+            snprintf(cmdkey, sizeof(cmdkey), "%s\\command", sub);
+            cmd    = cg_reg_read(cmdkey, "", NULL);              /* 命令在 command 子键的默认值 */
+            legacy = cg_reg_read(sub, "LegacyDisable", NULL);    /* 空值存在 = 菜单被隐藏 */
+
+            if (!title || !*title) {
+                cg_free(title);
+                title = (def && *def) ? def : NULL;
+                def = NULL;
+            }
+            if (!title || !*title) {
+                cg_free(title);
+                title = cg_str_dup(&buf[i]);
+            }
+
+            if (!cmd || !*cmd) {
+                snprintf(state, sizeof(state), "无命令");
+                nocommand++;
+            } else if (legacy) {
+                snprintf(state, sizeof(state), "已隐藏");
+                hidden++;
+            } else {
+                snprintf(state, sizeof(state), "在用");
+                active++;
+            }
+            total++;
+
+            cells[0] = k_rm_areas[a].label;
+            cells[1] = title;
+            cells[2] = (cmd && *cmd) ? cmd : "—";
+            cells[3] = state;
+            if (tbl) cg_table_add_row(tbl, cells, 4);
+
+            cg_free(title);
+            cg_free(def);
+            cg_free(cmd);
+            cg_free(legacy);
+            i = j + 1;
+        }
+    }
+
+    snprintf(stat, sizeof(stat), "共 %d 条 · 在用 %d · 已隐藏 %d · 无命令 %d",
+             total, active, hidden, nocommand);
+    cg_widget_set_text(cg_find(app, "lab_rm_stat"), stat);
+    status_msg(app, "扫描完成：%s", stat);
+    log_line(app, "扫描右键菜单（HKCU 用户区）：%s", stat);
 }
 
 /* ------------------------------------------------------------ 最近使用 */
@@ -1019,9 +1264,11 @@ static void on_ready(cg_app_t *app, void *user)
     }
 
     opt_load(has_win);
+    rm_load(has_win);
     mytools_reload(app, has_win);
     recent_reload(app);
     opt_sync(app);
+    rm_sync(app);
     search_apply(app);          /* 空关键字：显示"共 N 个工具"的提示行 */
     page_count_sync(app);
 
@@ -1052,6 +1299,8 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND("on_btn_recent_clear_click", on_btn_recent_clear_click),
     CG_BIND("on_btn_open_data_click",    on_btn_open_data_click),
     CG_BIND("on_opt_click",              on_opt_click),
+    CG_BIND("on_rmenu_click",            on_rmenu_click),
+    CG_BIND("on_btn_regmenu_scan_click", on_btn_regmenu_scan_click),
     CG_BIND("on_btn_reg_view_click",     on_btn_reg_view_click),
     CG_BIND("on_btn_reg_reset_click",    on_btn_reg_reset_click),
     CG_BIND("on_btn_my_reload_click",    on_btn_my_reload_click),
