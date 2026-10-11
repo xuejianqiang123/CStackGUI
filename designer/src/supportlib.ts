@@ -1194,6 +1194,38 @@ cg_reg_del("Software\\\\Classes\\\\*\\\\shell\\\\MyTool", "LegacyDisable");`,
             sample: `/* 卸载自建的右键菜单项（先把整棵键删干净，别留空壳） */
 cg_reg_del_key("Software\\\\Classes\\\\*\\\\shell\\\\MyTool");`,
           }),
+          c("cg_reg_read_ex", "读注册表（跨根）", "char *cg_reg_read_ex(const char *root, const char *subkey, const char *name, const char *def)", "同 cg_reg_read，但 root 可选 \"HKCU\"/\"HKLM\"/\"HKCR\"（大小写不敏感，NULL = HKCU）；扫系统区、读 CLSID 名字用它", {
+            sample: `/* 扫右键菜单的系统区（HKLM）要管理员，读到啥算啥 */
+char *pn = cg_reg_read_ex("HKLM",
+    "SOFTWARE\\\\Microsoft\\\\Windows NT\\\\CurrentVersion", "ProductName", "(未知)");
+cg_free(pn);`,
+          }),
+          c("cg_reg_write_ex", "写注册表（跨根）", "int cg_reg_write_ex(const char *root, const char *subkey, const char *name, const char *value)", "同 cg_reg_write，但 root 可选 \"HKCU\"/\"HKLM\"/\"HKCR\"；写 HKLM 需要已提权（cg_reg_is_admin()），否则返回 -1", {
+            sample: `if (cg_reg_is_admin())
+    cg_reg_write_ex("HKLM", "Software\\\\MyApp", "channel", "beta");
+else
+    cg_log_append("系统区要管理员，没写");`,
+          }),
+          c("cg_reg_subkeys_ex", "枚举注册表子键（跨根）", "int cg_reg_subkeys_ex(const char *root, const char *subkey, char *out, int cap)", "同 cg_reg_subkeys，但 root 可选 \"HKCU\"/\"HKLM\"/\"HKCR\"；返回写入字节数，键不存在返回 0", {
+            sample: `/* 扫系统区的文件右键菜单项 */
+char buf[8192];
+int  n = cg_reg_subkeys_ex("HKLM", "SOFTWARE\\\\Classes\\\\*\\\\shell", buf, sizeof(buf));`,
+          }),
+          c("cg_reg_del_ex", "删注册表值（跨根）", "int cg_reg_del_ex(const char *root, const char *subkey, const char *name)", "同 cg_reg_del，但 root 可选 \"HKCU\"/\"HKLM\"/\"HKCR\"；返回 0 = 调用后该值一定不存在（幂等）", {
+            sample: `/* 恢复系统区那条被禁用的菜单项 */
+cg_reg_del_ex("HKLM", "SOFTWARE\\\\Classes\\\\*\\\\shell\\\\MyTool", "LegacyDisable");`,
+          }),
+          c("cg_reg_del_key_ex", "删注册表键（跨根）", "int cg_reg_del_key_ex(const char *root, const char *subkey)", "同 cg_reg_del_key，但 root 可选 \"HKCU\"/\"HKLM\"/\"HKCR\"；返回 0 = 调用后该键一定不存在。破坏性，删前先备份", {
+            sample: `cg_reg_del_key_ex("HKLM", "SOFTWARE\\\\Classes\\\\*\\\\shell\\\\MyTool");`,
+          }),
+          c("cg_reg_key_exists", "问注册表键在不在", "int cg_reg_key_exists(const char *root, const char *subkey)", "root 可选 \"HKCU\"/\"HKLM\"/\"HKCR\"；1 = 存在且打得开，0 = 不存在 / 参数不合法", {
+            sample: `if (cg_reg_key_exists("HKCR", "CLSID\\\\{00021401-0000-0000-C000-000000000046}"))
+    cg_log_append("快捷方式组件已注册");`,
+          }),
+          c("cg_reg_is_admin", "是否已提权", "int cg_reg_is_admin(void)", "1 = 进程已提权（能改 HKLM 系统区）；0 = 没提权。改系统区前先问它，权限问题要提前说清而不是静默失败", {
+            sample: `if (!cg_reg_is_admin())
+    cg_log_append("系统区要管理员身份，当前只读不改");`,
+          }),
         ],
       },
       {

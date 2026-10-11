@@ -1369,6 +1369,15 @@ int   cg_run_process(const char *cmd_line, int wait);
 char *cg_time_now(const char *fmt);
 char *cg_reg_read(const char *subkey, const char *name, const char *def);
 int   cg_reg_write(const char *subkey, const char *name, const char *value);
+/* 跨根 *_ex：root = "HKCU"/"HKLM"/"HKCR"（大小写不敏感，NULL/"" = HKCU）。
+ * 右键菜单管理要扫 HKLM 系统区、读 HKCR 取 CLSID 名字，只认 HKCU 只能绕 reg.exe。 */
+char *cg_reg_read_ex   (const char *root, const char *subkey, const char *name, const char *def);
+int   cg_reg_write_ex  (const char *root, const char *subkey, const char *name, const char *value);
+int   cg_reg_subkeys_ex(const char *root, const char *subkey, char *out, int cap);
+int   cg_reg_del_ex    (const char *root, const char *subkey, const char *name);
+int   cg_reg_del_key_ex(const char *root, const char *subkey);
+int   cg_reg_key_exists(const char *root, const char *subkey);
+int   cg_reg_is_admin(void);                                /* 1 = 已提权，能改 HKLM 系统区 */
 void  cg_free(void *p);                                     /* 上面返回的都要它释放 */
 
 /* 业务数据挂载 / 定时器 / 退出 */
