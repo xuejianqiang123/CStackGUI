@@ -14,13 +14,17 @@
  *            ⑤ 我的工具 = mytools.ini 槽位（名称/命令），**加工具不用重编译**；
  *            ⑥ 右键菜单管理：扫 HKCU 用户区五个区域（cg_reg_subkeys 枚举 + 逐项读
  *               MUIVerb / command / LegacyDisable），工具箱自己的两条菜单真装真撤
- *               （reg.exe add/delete，删得干净 —— 本工程注册表接口没有删值能力）。
+ *               （reg.exe add/delete，删得干净）；扫出来的任意一条还能选中后真操作 ——
+ *               禁用（cg_reg_write 写 LegacyDisable）、恢复（cg_reg_del 删该值）、
+ *               备份并删除（reg.exe export 出 .reg 后用 cg_reg_del_key 整键删，先弹确认框）、
+ *               还原本次改动（禁用过的删值、删过的 reg import 备份），并列出「曾改动」。
  *
  *          与原版的诚实差异（照实写，不在示例里装）：
  *            - 原版按钮带彩色图标：本工程按钮没有贴图能力，用文字 + 配色区分；
  *            - 原版的系统级开关（任务栏合并/内核隔离等）要写系统注册表值并支持
- *              删值/备份，本工程注册表接口只能读写字符串值、没有删值与枚举，
- *              示例也不碰系统键 —— 所以成对开关落在自家沙箱上，模式一致、落点无害；
+ *              删值/备份，本工程注册表接口只动 HKCU、不碰系统键（HKLM），
+ *              示例也不碰 —— 所以成对开关落在自家沙箱上，模式一致、落点无害；
+ *              删值 / 删键 / 备份的能力本身在「右键增强」页真用上了；
  *            - 原版 106+ 工具：示例收在 60+，够演示全部模式。
  *
  *          自检（--selftest）红线，本文件处处遵守：
@@ -53,6 +57,12 @@
 
 /** 工具箱自建右键菜单组数 */
 #define K_RMENU_COUNT 2
+
+/** 右键扫描结果行数上限（表行与 s_rm_rows 一一对应，超出的行只显示、不可操作） */
+#define K_RM_ROW_MAX 256
+
+/** 本次会话右键改动记录上限（禁用 / 删键各占一条） */
+#define K_RM_CHG_MAX 64
 
 /** 注册表沙箱子键（相对 HKCU）——绝不写系统键 */
 #define K_REG_SUBKEY "Software\\CStackGUI\\examples\\toolbox"
@@ -535,6 +545,39 @@ static const struct {
 /** 扫描区域数 */
 #define K_RM_AREA_COUNT ((int)(sizeof k_rm_areas / sizeof k_rm_areas[0]))
 
+/** 扫描结果里一项的状态分类：在用 / 已隐藏（有 LegacyDisable）/ 无命令（shellex 残键） */
+enum { RM_ACTIVE = 0, RM_HIDDEN = 1, RM_NOCOMMAND = 2 };
+
+/**
+ * 扫描结果行：与 tbl_regmenu 的行号一一对应，用来把「选中的表行」翻回可操作的子键。
+ * 表格的 row-value 只能存 int，装不下路径，所以在业务侧用同序数组记。
+ */
+static struct {
+    char sub[512];  /**< 子键路径（相对 HKCU），如 Software\Classes\*\shell\Foo */
+    int  kind;      /**< RM_ACTIVE / RM_HIDDEN / RM_NOCOMMAND */
+} s_rm_rows[K_RM_ROW_MAX];
+
+/** 扫描结果行数（= 可操作的表行数） */
+static int s_rm_row_n;
+
+/** 本次会话动过的右键项：禁用、或整键删除（记下备份 .reg 路径） */
+static struct {
+    char sub[512];   /**< 子键路径（相对 HKCU） */
+    char bak[1024];  /**< 删除前的备份 .reg 全路径；空串 = 只禁用了、没删键 */
+} s_rm_changed[K_RM_CHG_MAX];
+
+/** 改动记录条数 */
+static int s_rm_changed_n;
+
+/** 备份 .reg 存放目录（数据目录；就绪钩子里填） */
+static char s_rm_bakdir[1024];
+
+/** 待确认删除的表行下标；-1 = 没有待确认的 */
+static int s_rm_pending = -1;
+
+/** 备份文件名去重用序号（同一秒内连删两项也不覆盖） */
+static int s_rm_bakseq;
+
 /**
  * @brief 同步自建菜单按钮的可用状态与说明文字
  * @param app 应用
@@ -649,30 +692,50 @@ static void on_rmenu_click(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
- * @brief 「扫描右键菜单」：五个区域枚举子键，逐项读 MUIVerb / command / LegacyDisable
- * @param self 被点的按钮
- * @param ev 事件类型
- * @param user 未使用
+ * @brief 刷新「曾改动」提示行：列出本次会话动过的项（只列键名末段，太长就截）
+ * @param app 应用
  * @return void 无返回值
- * @note 纯只读，但按自检红线（不开窗不碰注册表）照样跳过。
- *       状态判定：command 有值且没有 LegacyDisable = 在用；有 LegacyDisable = 已隐藏；
- *       读不到 command = 无命令（多为 shellex 残键，原版里那类是 DLL 扩展项，本页只读不删）。
  */
-static void on_btn_regmenu_scan_click(cg_widget_t *self, cg_event_t ev, void *user)
+static void rm_changed_sync(cg_app_t *app)
 {
-    cg_app_t    *app = cg_app_of(self);
+    char buf[768];
+    int  i, off = 0, del = 0;
+
+    for (i = 0; i < s_rm_changed_n; i++)
+        if (s_rm_changed[i].bak[0]) del++;
+
+    if (s_rm_changed_n == 0) {
+        snprintf(buf, sizeof(buf), "曾改动：无");
+    } else {
+        off += snprintf(buf + off, sizeof(buf) - (size_t)off,
+                        "曾改动 %d 项（删键 %d）：", s_rm_changed_n, del);
+        for (i = 0; i < s_rm_changed_n && off < (int)sizeof(buf) - 64; i++) {
+            const char *p = strrchr(s_rm_changed[i].sub, '\\');
+            off += snprintf(buf + off, sizeof(buf) - (size_t)off, "%s%s",
+                            p ? p + 1 : s_rm_changed[i].sub,
+                            (i + 1 < s_rm_changed_n) ? "、" : "");
+        }
+    }
+    cg_widget_set_text(cg_find(app, "lab_rm_changed"), buf);
+}
+
+/**
+ * @brief 扫描五个区域的右键菜单项，重填扫描结果表、s_rm_rows 与统计行
+ * @param app 应用
+ * @return void 无返回值
+ * @note 纯只读。表格整表重建，用 begin/end update 围住 —— 不围就是逐行重建，几百条会连续闪。
+ *       状态判定：command 有值且没有 LegacyDisable = 在用；有 LegacyDisable = 已隐藏；
+ *       读不到 command = 无命令（多为 shellex 残键，本页不给它做禁用/删除）。
+ */
+static void rm_scan(cg_app_t *app)
+{
     cg_widget_t *tbl = cg_find(app, "tbl_regmenu");
     char         buf[8192];
-    char         stat[128];
+    char         stat[160];
     int          a, total = 0, active = 0, hidden = 0, nocommand = 0;
 
-    (void)ev;
-    (void)user;
-
-    if (!cg_app_has_window(app)) {
-        log_line(app, "自检模式：跳过扫描右键菜单（不碰注册表）");
-        return;
-    }
+    s_rm_row_n = 0;
+    if (tbl) cg_table_begin_update(tbl);
     if (tbl) cg_table_clear(tbl);
 
     for (a = 0; a < K_RM_AREA_COUNT; a++) {
@@ -688,6 +751,7 @@ static void on_btn_regmenu_scan_click(cg_widget_t *self, cg_event_t ev, void *us
             char state[24];
             char *title, *def, *cmd, *legacy;
             const char *cells[4];
+            int  kind;
 
             while (j < n && buf[j] != '\n') j++;
             buf[j] = '\0';                        /* buf[i..j) 是一个子键名 */
@@ -710,12 +774,15 @@ static void on_btn_regmenu_scan_click(cg_widget_t *self, cg_event_t ev, void *us
             }
 
             if (!cmd || !*cmd) {
+                kind = RM_NOCOMMAND;
                 snprintf(state, sizeof(state), "无命令");
                 nocommand++;
             } else if (legacy) {
+                kind = RM_HIDDEN;
                 snprintf(state, sizeof(state), "已隐藏");
                 hidden++;
             } else {
+                kind = RM_ACTIVE;
                 snprintf(state, sizeof(state), "在用");
                 active++;
             }
@@ -727,6 +794,14 @@ static void on_btn_regmenu_scan_click(cg_widget_t *self, cg_event_t ev, void *us
             cells[3] = state;
             if (tbl) cg_table_add_row(tbl, cells, 4);
 
+            /* 行号与 s_rm_rows 同步记，操作按钮靠它把「选中行」翻回子键；
+             * 超出上限的行照显示，但点它会被 rm_sel_row 挡掉 */
+            if (s_rm_row_n < K_RM_ROW_MAX) {
+                snprintf(s_rm_rows[s_rm_row_n].sub, sizeof(s_rm_rows[0].sub), "%s", sub);
+                s_rm_rows[s_rm_row_n].kind = kind;
+                s_rm_row_n++;
+            }
+
             cg_free(title);
             cg_free(def);
             cg_free(cmd);
@@ -735,11 +810,339 @@ static void on_btn_regmenu_scan_click(cg_widget_t *self, cg_event_t ev, void *us
         }
     }
 
+    if (tbl) cg_table_end_update(tbl);
+
     snprintf(stat, sizeof(stat), "共 %d 条 · 在用 %d · 已隐藏 %d · 无命令 %d",
              total, active, hidden, nocommand);
     cg_widget_set_text(cg_find(app, "lab_rm_stat"), stat);
+    rm_changed_sync(app);
     status_msg(app, "扫描完成：%s", stat);
     log_line(app, "扫描右键菜单（HKCU 用户区）：%s", stat);
+}
+
+/**
+ * @brief 「扫描右键菜单」按钮：按自检红线先挡掉无窗（不开窗不碰注册表）
+ * @param self 被点的按钮
+ * @param ev 事件类型
+ * @param user 未使用
+ * @return void 无返回值
+ */
+static void on_btn_regmenu_scan_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+
+    (void)ev;
+    (void)user;
+
+    if (!cg_app_has_window(app)) {
+        log_line(app, "自检模式：跳过扫描右键菜单（不碰注册表）");
+        return;
+    }
+    rm_scan(app);
+}
+
+/**
+ * @brief 取当前选中的扫描结果行
+ * @param app 应用
+ * @return int 行下标；没选中或超出可操作范围返回 -1
+ */
+static int rm_sel_row(cg_app_t *app)
+{
+    cg_widget_t *tbl = cg_find(app, "tbl_regmenu");
+    int          r   = tbl ? cg_table_selected(tbl) : -1;
+
+    return (r >= 0 && r < s_rm_row_n) ? r : -1;
+}
+
+/**
+ * @brief 把一条改动记进 s_rm_changed（同一子键不重复记）
+ * @param sub 子键路径（相对 HKCU）
+ * @param bak 删除前的备份 .reg 路径；传 NULL 表示只禁用、没删键
+ * @return void 无返回值
+ */
+static void rm_changed_add(const char *sub, const char *bak)
+{
+    int i;
+
+    for (i = 0; i < s_rm_changed_n; i++)
+        if (strcmp(s_rm_changed[i].sub, sub) == 0) {
+            if (bak && *bak) snprintf(s_rm_changed[i].bak, sizeof(s_rm_changed[0].bak), "%s", bak);
+            return;
+        }
+    if (s_rm_changed_n >= K_RM_CHG_MAX) return;
+    snprintf(s_rm_changed[s_rm_changed_n].sub, sizeof(s_rm_changed[0].sub), "%s", sub);
+    snprintf(s_rm_changed[s_rm_changed_n].bak, sizeof(s_rm_changed[0].bak), "%s", bak ? bak : "");
+    s_rm_changed_n++;
+}
+
+/**
+ * @brief 把一条改动从 s_rm_changed 去掉（单项恢复成功之后）
+ * @param sub 子键路径（相对 HKCU）
+ * @return void 无返回值
+ */
+static void rm_changed_remove(const char *sub)
+{
+    int i;
+
+    for (i = 0; i < s_rm_changed_n; i++)
+        if (strcmp(s_rm_changed[i].sub, sub) == 0) {
+            s_rm_changed[i] = s_rm_changed[s_rm_changed_n - 1];
+            s_rm_changed_n--;
+            return;
+        }
+}
+
+/**
+ * @brief 对一个扫描结果行做「导出备份 + 整键删除」
+ * @param app 应用
+ * @param r 扫描结果行下标
+ * @return void 无返回值
+ * @note 备份先成功才敢删 —— reg export 没过就中止，绝不出现"删了没备份"。
+ *       reg.exe export 落在数据目录，文件名带时间戳 + 序号，同秒连删也不互相覆盖。
+ */
+static void rm_delete_row(cg_app_t *app, int r)
+{
+    char  rel[1200];
+    char  name[96];
+    char *ts, *bak = NULL;
+    char  cmd[2600];
+    int   attempt;
+
+    ts = cg_time_now("rmenu-%Y%m%d-%H%M%S");
+    for (attempt = 0; attempt < 100; attempt++) {
+        snprintf(name, sizeof(name), "%s-%d.reg", ts ? ts : "rmenu-backup", s_rm_bakseq++);
+        bak = cg_path_join(s_rm_bakdir[0] ? s_rm_bakdir : ".", name);
+        if (bak && !cg_file_exists(bak)) break;
+        cg_free(bak);
+        bak = NULL;
+    }
+    cg_free(ts);
+    if (!bak) {
+        status_msg(app, "备份失败：拿不到可用的备份文件名");
+        log_line(app, "备份失败：文件名冲突或路径不可用");
+        return;
+    }
+
+    snprintf(rel, sizeof(rel), "HKCU\\%s", s_rm_rows[r].sub);
+    snprintf(cmd, sizeof(cmd), "reg export \"%s\" \"%s\" /y", rel, bak);
+    if (cg_run_process(cmd, 1) != 0) {
+        status_msg(app, "备份失败：reg export 没成功，已中止删除");
+        log_line(app, "reg export 失败：%s", cmd);
+        cg_free(bak);
+        return;
+    }
+
+    if (cg_reg_del_key(s_rm_rows[r].sub) != 0) {
+        status_msg(app, "删除失败（备份仍留在 %s）", cg_path_name(bak));
+        log_line(app, "删键失败（备份已留）：HKCU\\%s", s_rm_rows[r].sub);
+        rm_changed_add(s_rm_rows[r].sub, bak);
+        cg_free(bak);
+        rm_changed_sync(app);
+        return;
+    }
+
+    rm_changed_add(s_rm_rows[r].sub, bak);
+    log_line(app, "已删除右键菜单项并备份：HKCU\\%s -> %s", s_rm_rows[r].sub, bak);
+    status_msg(app, "已删除并备份到 %s", cg_path_name(bak));
+    cg_free(bak);
+    rm_scan(app);
+}
+
+/**
+ * @brief 「禁用选中（隐藏）」：给选中项写 LegacyDisable 空值
+ * @param self 被点的按钮
+ * @param ev 事件类型
+ * @param user 未使用
+ * @return void 无返回值
+ * @note 写空串 = 值「存在」= 菜单项被隐藏；恢复要删掉这个值（见 on_rm_enable_click）。
+ */
+static void on_rm_disable_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    int       r;
+
+    (void)ev;
+    (void)user;
+
+    if (!cg_app_has_window(app)) {
+        log_line(app, "自检模式：跳过禁用右键菜单项（不碰注册表）");
+        return;
+    }
+    r = rm_sel_row(app);
+    if (r < 0) { status_msg(app, "先在扫描结果里点一行选中"); return; }
+    if (s_rm_rows[r].kind == RM_HIDDEN) { status_msg(app, "该项已经是隐藏状态"); return; }
+    if (s_rm_rows[r].kind == RM_NOCOMMAND) {
+        status_msg(app, "该项没有命令（多为 shellex 残键），禁用没有意义");
+        return;
+    }
+    if (cg_reg_write(s_rm_rows[r].sub, "LegacyDisable", "") != 0) {
+        status_msg(app, "禁用失败：写不进 LegacyDisable");
+        log_line(app, "禁用失败：HKCU\\%s", s_rm_rows[r].sub);
+        return;
+    }
+    rm_changed_add(s_rm_rows[r].sub, NULL);
+    log_line(app, "已隐藏右键菜单项：HKCU\\%s", s_rm_rows[r].sub);
+    rm_scan(app);
+    status_msg(app, "已隐藏该项（写了 LegacyDisable，可用「恢复选中」还原）");
+}
+
+/**
+ * @brief 「恢复选中」：删掉选中项的 LegacyDisable 值，菜单项重新出现
+ * @param self 被点的按钮
+ * @param ev 事件类型
+ * @param user 未使用
+ * @return void 无返回值
+ */
+static void on_rm_enable_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    int       r;
+
+    (void)ev;
+    (void)user;
+
+    if (!cg_app_has_window(app)) {
+        log_line(app, "自检模式：跳过恢复右键菜单项（不碰注册表）");
+        return;
+    }
+    r = rm_sel_row(app);
+    if (r < 0) { status_msg(app, "先在扫描结果里点一行选中"); return; }
+    if (s_rm_rows[r].kind != RM_HIDDEN) { status_msg(app, "该项不是隐藏状态，无需恢复"); return; }
+    if (cg_reg_del(s_rm_rows[r].sub, "LegacyDisable") != 0) {
+        status_msg(app, "恢复失败：删不掉 LegacyDisable");
+        log_line(app, "恢复失败：HKCU\\%s", s_rm_rows[r].sub);
+        return;
+    }
+    rm_changed_remove(s_rm_rows[r].sub);
+    log_line(app, "已恢复右键菜单项：HKCU\\%s", s_rm_rows[r].sub);
+    rm_scan(app);
+    status_msg(app, "已恢复该项（删掉了 LegacyDisable）");
+}
+
+/**
+ * @brief 「备份并删除选中」：先弹模态确认框，确认后才导出备份 + 整键删除
+ * @param self 被点的按钮
+ * @param ev 事件类型
+ * @param user 未使用
+ * @return void 无返回值
+ * @note 破坏性操作用 cg_dialog_open 做真确认（cg_message_box 没有返回值，
+ *       拿不到"用户点了哪个"）。待删行号放 s_rm_pending，确认框回调只负责关框。
+ */
+static void on_rm_backup_del_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t    *app = cg_app_of(self);
+    cg_widget_t *dlg;
+    char         txt[640];
+    int          r;
+
+    (void)ev;
+    (void)user;
+
+    if (!cg_app_has_window(app)) {
+        log_line(app, "自检模式：跳过删除右键菜单项（不碰注册表）");
+        return;
+    }
+    r = rm_sel_row(app);
+    if (r < 0) { status_msg(app, "先在扫描结果里点一行选中"); return; }
+
+    s_rm_pending = r;
+    snprintf(txt, sizeof(txt),
+             "将整键删除这个右键菜单项：\r\n\r\nHKCU\\%s\r\n\r\n"
+             "删除前会先把整棵键导出成 .reg 存到数据目录，之后可用"
+             "「还原本次改动」或直接双击那个 .reg 文件导回。",
+             s_rm_rows[r].sub);
+    dlg = cg_find(app, "dlg_rm_confirm");
+    if (dlg) cg_widget_set_text(cg_find(app, "edt_rmc_text"), txt);
+
+    if (cg_dialog_open(dlg) != 1) {
+        s_rm_pending = -1;
+        log_line(app, "删除右键菜单项：用户取消");
+        status_msg(app, "已取消删除");
+        return;
+    }
+
+    r = s_rm_pending;
+    s_rm_pending = -1;
+    if (r < 0 || r >= s_rm_row_n) return;
+    rm_delete_row(app, r);
+}
+
+/**
+ * @brief 「还原本次改动」：禁用过的删掉 LegacyDisable、删过的从备份 .reg 导回
+ * @param self 被点的按钮
+ * @param ev 事件类型
+ * @param user 未使用
+ * @return void 无返回值
+ * @note 逐项处理，成功的从改动记录里剔除；失败的留在记录里（提示与「曾改动」都对得上）。
+ */
+static void on_rm_restore_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    int       i, keep = 0, done = 0, fail = 0;
+
+    (void)ev;
+    (void)user;
+
+    if (!cg_app_has_window(app)) {
+        log_line(app, "自检模式：跳过还原右键改动（不碰注册表）");
+        return;
+    }
+    if (s_rm_changed_n == 0) {
+        status_msg(app, "本次会话还没有改动过右键菜单");
+        return;
+    }
+
+    for (i = 0; i < s_rm_changed_n; i++) {
+        int good;
+
+        if (s_rm_changed[i].bak[0]) {
+            char cmd[1400];
+            snprintf(cmd, sizeof(cmd), "reg import \"%s\"", s_rm_changed[i].bak);
+            good = (cg_run_process(cmd, 1) == 0);
+            if (!good) log_line(app, "reg import 失败：%s", cmd);
+        } else {
+            good = (cg_reg_del(s_rm_changed[i].sub, "LegacyDisable") == 0);
+            if (!good) log_line(app, "取消隐藏失败：HKCU\\%s", s_rm_changed[i].sub);
+        }
+        if (good) done++;
+        else { fail++; s_rm_changed[keep++] = s_rm_changed[i]; }   /* 只留没还原成功的 */
+    }
+    s_rm_changed_n = keep;
+
+    log_line(app, "还原本次右键改动：成功 %d / 失败 %d", done, fail);
+    rm_scan(app);
+    /* 两条分支各自带自己的占位符：写成「三目 + 两个实参」时编译器查不了非字面量的格式串，
+     * 以后改文案很容易留一个多余的 %d 而没人发现 */
+    if (fail == 0) status_msg(app, "已还原本次改动（%d 项）", done);
+    else status_msg(app, "还原了 %d 项，%d 项失败（仍记在「曾改动」里）", done, fail);
+}
+
+/**
+ * @brief 删除确认框的「备份并删除」按钮：关框并带回结果 1
+ * @param self 确认框里的按钮
+ * @param ev 事件类型
+ * @param user 未使用
+ * @return void 无返回值
+ */
+static void on_rmc_ok_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev;
+    (void)user;
+    cg_dialog_close(self, 1);
+}
+
+/**
+ * @brief 删除确认框的「取消」按钮：关框并带回结果 0
+ * @param self 确认框里的按钮
+ * @param ev 事件类型
+ * @param user 未使用
+ * @return void 无返回值
+ */
+static void on_rmc_cancel_click(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    (void)ev;
+    (void)user;
+    cg_dialog_close(self, 0);
 }
 
 /* ------------------------------------------------------------ 最近使用 */
@@ -1258,9 +1661,12 @@ static void on_ready(cg_app_t *app, void *user)
         char *full = cg_path_join(dir, K_MY_INI);
         snprintf(s_myini, sizeof(s_myini), "%s", full ? full : K_MY_INI);
         cg_free(full);
+        /* 右键菜单备份 .reg 也放数据目录（那儿一定存在，reg export 才写得进） */
+        snprintf(s_rm_bakdir, sizeof(s_rm_bakdir), "%s", dir);
         cg_free(dir);
     } else {
         snprintf(s_myini, sizeof(s_myini), K_MY_INI);
+        s_rm_bakdir[0] = '\0';
     }
 
     opt_load(has_win);
@@ -1301,6 +1707,12 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND("on_opt_click",              on_opt_click),
     CG_BIND("on_rmenu_click",            on_rmenu_click),
     CG_BIND("on_btn_regmenu_scan_click", on_btn_regmenu_scan_click),
+    CG_BIND("on_rm_disable_click",       on_rm_disable_click),
+    CG_BIND("on_rm_enable_click",        on_rm_enable_click),
+    CG_BIND("on_rm_backup_del_click",    on_rm_backup_del_click),
+    CG_BIND("on_rm_restore_click",       on_rm_restore_click),
+    CG_BIND("on_rmc_ok_click",           on_rmc_ok_click),
+    CG_BIND("on_rmc_cancel_click",       on_rmc_cancel_click),
     CG_BIND("on_btn_reg_view_click",     on_btn_reg_view_click),
     CG_BIND("on_btn_reg_reset_click",    on_btn_reg_reset_click),
     CG_BIND("on_btn_my_reload_click",    on_btn_my_reload_click),
