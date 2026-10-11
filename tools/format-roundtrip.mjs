@@ -244,6 +244,15 @@ let roleHostId = "";
   }
 }
 
+/* include[]（F3 多文件组装）：字段本身要双向无损 —— 画布只做保真（读进来原样写回去），
+ * 真正的展开由运行时在加载期做。丢了 include 的表现是"引用来的界面整块消失"，
+ * 而且 C 侧自检发现不了（没有 include 的文档照样能通过）—— 必须在这里盯住。 */
+const probeInclude = { path: "../common/port_dlg.cgui", pick: "dlg_port" };
+{
+  doc.include = [...(doc.include ?? []), probeInclude];
+  touched += 1;
+}
+
 const written = serializeDoc(doc);
 fs.mkdirSync(path.dirname(output), { recursive: true });
 fs.writeFileSync(output, written, "utf8");
@@ -409,6 +418,23 @@ console.log(`[ok] 画布改动 ${touched} 处，写出 ${output}（${written.len
           console.log(`[ok] 恒等回写：dialog 子树无损（${gotChildren.length} 个子控件，含探针按钮）`);
         }
       }
+    }
+  }
+
+  /* include[]（F3）逐字核对：path 与 pick 一个都不能丢 —— 丢了 = 引用来的界面整块消失，
+   * C 侧自检对此无感（它只校验能解析的部分）。 */
+  {
+    const want = doc.include?.[doc.include.length - 1];
+    const gotList = back.doc?.include;
+    const got = gotList?.find((x) => x.path === want?.path);
+    if (!want) {
+      console.error("[fail] 探针没把 include 写进文档（自测脚本问题）");
+      lost += 1;
+    } else if (!got || got.pick !== want.pick) {
+      console.error(`[fail] 恒等回写丢了 include：${JSON.stringify(want)} -> ${JSON.stringify(gotList ?? null)}`);
+      lost += 1;
+    } else {
+      console.log(`[ok] 恒等回写：include "${want.path}"（pick=${want.pick}）无损`);
     }
   }
 
