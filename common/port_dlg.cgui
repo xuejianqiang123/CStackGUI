@@ -1,0 +1,22 @@
+{
+  "cgui": 1,
+  "widgets": [
+    {
+      "id": "dlg_port",
+      "type": "dialog",
+      "rect": { "x": 120, "y": 120, "w": 380, "h": 220 },
+      "text": "端口设置",
+      "children": [
+        { "id": "dlg_port_lab_com", "type": "label", "rect": { "x": 16, "y": 20, "w": 64, "h": 24 },
+          "text": "端口" },
+        { "id": "dlg_port_edt_com", "type": "edit", "rect": { "x": 88, "y": 16, "w": 160, "h": 28 },
+          "text": "COM1",
+          "hint": "示例片段：真实工程里由打开它的代码读取" },
+        { "id": "dlg_port_lab_baud", "type": "label", "rect": { "x": 16, "y": 60, "w": 64, "h": 24 },
+          "text": "波特率" },
+        { "id": "dlg_port_edt_baud", "type": "edit", "rect": { "x": 88, "y": 56, "w": 160, "h": 28 },
+          "text": "115200" }
+      ]
+    }
+  ]
+}
