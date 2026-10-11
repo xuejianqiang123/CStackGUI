@@ -1,0 +1,333 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "工具箱启动器",
+    "width": 820,
+    "height": 648,
+    "bg": "#EFF3F7",
+    "info": {
+      "product": "CStackGUI 工具箱启动器",
+      "desc": "多页签按钮墙 + 搜索 + 一键启动外部程序（参照 mxx1-toolbox 的功能面）",
+      "version": "1.0.0.0",
+      "author": "CStackGUI"
+    }
+  },
+  "widgets": [
+    {
+      "id": "sb_main",
+      "type": "statusbar",
+      "rect": { "x": 0, "y": 624, "w": 820, "h": 24 },
+      "items": ["就绪", "工具箱", "—"]
+    },
+    {
+      "id": "lab_find",
+      "type": "label",
+      "rect": { "x": 12, "y": 16, "w": 48, "h": 24 },
+      "text": "搜索",
+      "style": { "bold": true }
+    },
+    {
+      "id": "edt_search",
+      "type": "edit",
+      "rect": { "x": 64, "y": 12, "w": 320, "h": 28 },
+      "text": "",
+      "hint": "按名称或命令过滤；回车启动第一个匹配",
+      "events": { "change": "on_edt_search_change", "submit": "on_edt_search_submit" }
+    },
+    {
+      "id": "lab_find_hint",
+      "type": "label",
+      "rect": { "x": 396, "y": 16, "w": 412, "h": 24 },
+      "text": "加一个工具：本文件加一个按钮 + main.c 的 k_tools 表加一行"
+    },
+    {
+      "id": "tab_main",
+      "type": "tabs",
+      "rect": { "x": 12, "y": 50, "w": 796, "h": 452 },
+      "items": ["搜索", "常用", "系统工具", "命令行", "网络"],
+      "events": { "select": "on_tab_main_select" },
+      "children": [
+        {
+          "id": "lab_search_t",
+          "type": "label",
+          "page": 0,
+          "rect": { "x": 8, "y": 36, "w": 300, "h": 24 },
+          "text": "搜索结果",
+          "style": { "bold": true }
+        },
+        {
+          "id": "lst_search",
+          "type": "listbox",
+          "page": 0,
+          "rect": { "x": 8, "y": 64, "w": 776, "h": 336 },
+          "hint": "输入关键字即时过滤；回车启动第一个匹配；双击行启动"
+        },
+        {
+          "id": "lab_search_hint",
+          "type": "label",
+          "page": 0,
+          "rect": { "x": 8, "y": 412, "w": 776, "h": 24 },
+          "text": "在上方搜索框敲字即出结果；双击结果行或回车启动"
+        },
+        {
+          "id": "lab_recent_t",
+          "type": "label",
+          "page": 1,
+          "rect": { "x": 8, "y": 36, "w": 300, "h": 24 },
+          "text": "最近使用",
+          "style": { "bold": true }
+        },
+        {
+          "id": "lst_recent",
+          "type": "listbox",
+          "page": 1,
+          "rect": { "x": 8, "y": 64, "w": 600, "h": 336 },
+          "hint": "最近启动过的工具，最新在最上面；双击行再次启动"
+        },
+        {
+          "id": "btn_recent_clear",
+          "type": "button",
+          "page": 1,
+          "rect": { "x": 616, "y": 64, "w": 168, "h": 28 },
+          "text": "清空记录",
+          "hint": "清空最近使用（内存记录，程序退出即消失）",
+          "events": { "click": "on_btn_recent_clear_click" }
+        },
+        {
+          "id": "lab_recent_hint",
+          "type": "label",
+          "page": 1,
+          "rect": { "x": 8, "y": 412, "w": 776, "h": 24 },
+          "text": "记录只存内存、最多 8 条；本工程没有「启动项落盘」接口，所以不做持久化"
+        },
+        {
+          "id": "lab_sys_t",
+          "type": "label",
+          "page": 2,
+          "rect": { "x": 8, "y": 36, "w": 300, "h": 24 },
+          "text": "系统工具",
+          "style": { "bold": true }
+        },
+        {
+          "id": "tool_notepad",
+          "type": "button",
+          "page": 2,
+          "rect": { "x": 8, "y": 64, "w": 180, "h": 40 },
+          "text": "记事本",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_calc",
+          "type": "button",
+          "page": 2,
+          "rect": { "x": 196, "y": 64, "w": 180, "h": 40 },
+          "text": "计算器",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_mspaint",
+          "type": "button",
+          "page": 2,
+          "rect": { "x": 384, "y": 64, "w": 180, "h": 40 },
+          "text": "画图",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_taskmgr",
+          "type": "button",
+          "page": 2,
+          "rect": { "x": 572, "y": 64, "w": 180, "h": 40 },
+          "text": "任务管理器",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_regedit",
+          "type": "button",
+          "page": 2,
+          "rect": { "x": 8, "y": 112, "w": 180, "h": 40 },
+          "text": "注册表编辑器",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_devmgmt",
+          "type": "button",
+          "page": 2,
+          "rect": { "x": 196, "y": 112, "w": 180, "h": 40 },
+          "text": "设备管理器",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_services",
+          "type": "button",
+          "page": 2,
+          "rect": { "x": 384, "y": 112, "w": 180, "h": 40 },
+          "text": "服务",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_control",
+          "type": "button",
+          "page": 2,
+          "rect": { "x": 572, "y": 112, "w": 180, "h": 40 },
+          "text": "控制面板",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "lab_sys_hint",
+          "type": "label",
+          "page": 2,
+          "rect": { "x": 8, "y": 412, "w": 776, "h": 24 },
+          "text": "点按钮即真实启动系统自带程序（cg_run_process，不等待）"
+        },
+        {
+          "id": "lab_cmd_t",
+          "type": "label",
+          "page": 3,
+          "rect": { "x": 8, "y": 36, "w": 300, "h": 24 },
+          "text": "命令行",
+          "style": { "bold": true }
+        },
+        {
+          "id": "tool_dir",
+          "type": "button",
+          "page": 3,
+          "rect": { "x": 8, "y": 64, "w": 180, "h": 40 },
+          "text": "当前目录",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_ver",
+          "type": "button",
+          "page": 3,
+          "rect": { "x": 196, "y": 64, "w": 180, "h": 40 },
+          "text": "系统版本",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_hostname",
+          "type": "button",
+          "page": 3,
+          "rect": { "x": 384, "y": 64, "w": 180, "h": 40 },
+          "text": "主机名",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_env",
+          "type": "button",
+          "page": 3,
+          "rect": { "x": 572, "y": 64, "w": 180, "h": 40 },
+          "text": "环境变量",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_tasklist",
+          "type": "button",
+          "page": 3,
+          "rect": { "x": 8, "y": 112, "w": 180, "h": 40 },
+          "text": "进程列表",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_systeminfo",
+          "type": "button",
+          "page": 3,
+          "rect": { "x": 196, "y": 112, "w": 180, "h": 40 },
+          "text": "系统信息",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_datetime",
+          "type": "button",
+          "page": 3,
+          "rect": { "x": 384, "y": 112, "w": 180, "h": 40 },
+          "text": "时间日期",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_cmdhelp",
+          "type": "button",
+          "page": 3,
+          "rect": { "x": 572, "y": 112, "w": 180, "h": 40 },
+          "text": "命令帮助",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "lab_cmd_hint",
+          "type": "label",
+          "page": 3,
+          "rect": { "x": 8, "y": 412, "w": 776, "h": 24 },
+          "text": "命令用 cmd /k 启动，控制台窗口保持打开，方便看清输出"
+        },
+        {
+          "id": "lab_net_t",
+          "type": "label",
+          "page": 4,
+          "rect": { "x": 8, "y": 36, "w": 300, "h": 24 },
+          "text": "网络",
+          "style": { "bold": true }
+        },
+        {
+          "id": "tool_ipconfig",
+          "type": "button",
+          "page": 4,
+          "rect": { "x": 8, "y": 64, "w": 180, "h": 40 },
+          "text": "IP 配置",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_ping",
+          "type": "button",
+          "page": 4,
+          "rect": { "x": 196, "y": 64, "w": 180, "h": 40 },
+          "text": "回环测试",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_ncpa",
+          "type": "button",
+          "page": 4,
+          "rect": { "x": 384, "y": 64, "w": 180, "h": 40 },
+          "text": "网络连接",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_route",
+          "type": "button",
+          "page": 4,
+          "rect": { "x": 572, "y": 64, "w": 180, "h": 40 },
+          "text": "路由表",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_netstat",
+          "type": "button",
+          "page": 4,
+          "rect": { "x": 8, "y": 112, "w": 180, "h": 40 },
+          "text": "端口占用",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "tool_dns",
+          "type": "button",
+          "page": 4,
+          "rect": { "x": 196, "y": 112, "w": 180, "h": 40 },
+          "text": "DNS 缓存",
+          "events": { "click": "on_tool_click" }
+        },
+        {
+          "id": "lab_net_hint",
+          "type": "label",
+          "page": 4,
+          "rect": { "x": 8, "y": 412, "w": 776, "h": 24 },
+          "text": "诊断类命令全部只读；启动失败会在状态栏提示"
+        }
+      ]
+    },
+    {
+      "id": "lst_log",
+      "type": "listbox",
+      "rect": { "x": 12, "y": 512, "w": 796, "h": 100 },
+      "hint": "逐行记录操作；长到 400 条会自动清一次，免得无限增长"
+    }
+  ]
+}
