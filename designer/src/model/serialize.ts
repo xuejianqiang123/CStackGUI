@@ -15,6 +15,7 @@ import {
   type CgAction,
   type CgApp,
   type CgDoc,
+  type CgInclude,
   type CgInfo,
   type CgNode,
   type CgRole,
@@ -124,6 +125,22 @@ function cleanRoles(roles: Record<string, CgRole> | undefined): Record<string, C
     if (item.light || item.dark) out[key] = item;
   }
   return Object.keys(out).length ? out : undefined;
+}
+
+/** 顶层 include[]（F3）：path 必须非空（trim 后），pick 可选。
+ *  这层**只保真**：展开由运行时在加载期做（f3-window-ref-prd.md）—— 画布在这里展开的话，
+ *  保存时就得想办法把引用来的子树摘掉，反而会引入"静默丢 / 重复一份"的风险。 */
+function cleanInclude(include: CgInclude[] | undefined): CgInclude[] | undefined {
+  if (!include || !include.length) return undefined;
+  const out: CgInclude[] = [];
+  for (const it of include) {
+    const path = typeof it?.path === "string" ? it.path.trim() : "";
+    if (!path) continue;
+    const one: CgInclude = { path };
+    if (typeof it.pick === "string" && it.pick.trim()) one.pick = it.pick;
+    out.push(one);
+  }
+  return out.length ? out : undefined;
 }
 
 /** 去掉 undefined 和空字段，让存出来的文件干净、可读、diff 友好 */
@@ -292,16 +309,19 @@ function cleanDoc(doc: CgDoc): CgDoc {
     if (Object.keys(ev).length) app.events = ev;
   }
 
-  /* 动作表、样式表紧跟在 app 后面：顶层四个东西，读起来是「窗口 → 命令 → 样式 → 界面」 */
+  /* 动作表、样式表紧跟在 app 后面：顶层四个东西，读起来是「窗口 → 命令 → 样式 → 界面」。
+   * include[]（F3）放 widgets 前面：它展开出来的就是 widgets 的一部分。 */
   const actions = cleanActions(doc.actions);
   const styles = cleanStyles(doc.styles);
   const roles = cleanRoles(doc.roles);
+  const include = cleanInclude(doc.include);
   return {
     cgui: 1,
     app,
     ...(actions ? { actions } : {}),
     ...(styles ? { styles } : {}),
     ...(roles ? { roles } : {}),
+    ...(include ? { include } : {}),
     widgets: doc.widgets.map(cleanNode),
   };
 }

@@ -281,6 +281,20 @@ export type CgDoc = {
    *  值缺失 = 该槽当没写）。 */
   roles?: Record<string, CgRole>;
   widgets: CgNode[];
+  /** 引用别的 .cgui（F3 多文件组装）：按顺序展开，后面的盖前面的（与 widgets 同口径）。
+   *  缺省 = 不引用任何文件，老 .cgui 行为不变。
+   *  画布只做**保真**（读进来原样写回去）；真正的展开由运行时在加载期做
+   *  （见 .codebuddy/plans/f3-window-ref-prd.md）。 */
+  include?: CgInclude[];
+};
+
+/** include[] 的一条：从 path 那个 .cgui 里把界面取过来。
+ *  有了 pick，任何现有 .cgui 都能当来源（不必另发明一种"片段文件"）。 */
+export type CgInclude = {
+  /** 相对**主 .cgui 所在目录**的路径（运行时按它解析；发布态由编译展开后编进资源） */
+  path: string;
+  /** 只取那个文件里的某一个顶层节点（按 id）；不写 = 取它全部顶层控件 */
+  pick?: string;
 };
 
 /** roles{} 的一条：同一个语义色在浅色 / 深色下的两份值（都可选，至少一个有意义）。

@@ -17,6 +17,7 @@ import {
   type CgBind,
   type CgColumn,
   type CgDoc,
+  type CgInclude,
   type CgInfo,
   type CgNode,
   type CgRole,
@@ -478,6 +479,24 @@ function coerceNode(raw: unknown, index: number): CgNode | null {
   return node;
 }
 
+/** 顶层 include[]（F3）：每条要有个非空 path，pick 可选。
+ *  读入宽容与 styles{} 同口径：不是数组 / 条目不是对象 / path 不是非空字符串 —— 丢该条，
+ *  不报错、不中断加载（画布不能因为一份引用写歪了就打不开整个界面）。
+ *  **保真优先**：认出来的字段原样带在 doc 上，写回时再原样落盘。 */
+function coerceInclude(raw: unknown): CgInclude[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: CgInclude[] = [];
+  for (const it of raw) {
+    if (!it || typeof it !== "object" || Array.isArray(it)) continue;
+    const o = it as Record<string, unknown>;
+    if (typeof o.path !== "string" || !o.path.trim()) continue;
+    const one: CgInclude = { path: o.path };
+    if (typeof o.pick === "string" && o.pick.trim()) one.pick = o.pick;
+    out.push(one);
+  }
+  return out.length ? out : undefined;
+}
+
 export function parseDoc(text: string): { doc?: CgDoc; error?: string } {
   /* 跳过 UTF-8 BOM：运行时那边（`cg_json.c`）明确"自动跳过 BOM，编辑器保存的 .cgui 常带"，
      画布原先不跳 —— 结果是同一份文件 exe 跑得好、画布却说"不是合法 JSON"。
@@ -572,5 +591,10 @@ export function parseDoc(text: string): { doc?: CgDoc; error?: string } {
   if (styles) doc.styles = styles;
   const roles = coerceRoles(o.roles);
   if (roles) doc.roles = roles;
+  /* include[]（F3）：**只保真** —— 原样带在 doc 上、写回时原样落盘。真正的展开由运行时
+   * 在加载期做（见 .codebuddy/plans/f3-window-ref-prd.md），画布这里展开的话，
+   * 保存时就得想办法把引用来的子树摘掉，反而会引入"静默丢/重复一份"的风险。 */
+  const include = coerceInclude(o.include);
+  if (include) doc.include = include;
   return { doc };
 }
