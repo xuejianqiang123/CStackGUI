@@ -1174,6 +1174,18 @@ cg_reg_write("Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run", "MyApp
              cg_path_join(dir, "MyApp.exe"));
 cg_free(dir);`,
           }),
+          c("cg_reg_subkeys", "枚举注册表子键", "int cg_reg_subkeys(const char *subkey, char *out, int cap)", "列 HKCU\\subkey 的直接子键名，'\\n' 分隔；返回写入字节数，键不存在返回 0", {
+            sample: `/* 扫出右键菜单项（子键），再逐个读 MUIVerb / command */
+char buf[8192];
+int  n = cg_reg_subkeys("Software\\\\Classes\\\\Directory\\\\shell", buf, sizeof(buf));
+for (int i = 0; i < n; ) {
+    int j = i;
+    while (j < n && buf[j] != '\\n') j++;
+    buf[j] = '\\0';
+    /* buf[i..j) 是一个子键名 */
+    i = j + 1;
+}`,
+          }),
         ],
       },
       {

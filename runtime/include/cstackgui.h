@@ -2876,6 +2876,17 @@ char *cg_reg_read(const char *subkey, const char *name, const char *def);
  * @return int 0 成功、非 0 失败
  */
 int   cg_reg_write(const char *subkey, const char *name, const char *value);
+/**
+ * @brief 枚举一个键的直接子键名（HKCU 下），'\n' 分隔
+ * @param subkey 子键路径，如 "Software\\Classes\\Directory\\shell"
+ * @param out 输出缓冲，由调用方提供并保证至少 cap 字节可写
+ * @param cap 输出缓冲容量（字节），必须 > 1
+ * @return int 写入的字节数（不含结尾 \0）；参数不合法、键不存在或一行都装不下时返回 0 ——
+ *         键不存在是"没有"，不是错误
+ * @note 只列**直接**子键、不递归；装不下时宁可少列也不截断半行（与 cg_serial_list 同口径）。
+ *       配合 cg_reg_read 能做"扫出右键菜单项再逐项读 MUIVerb / command"这类管理工具。
+ */
+int   cg_reg_subkeys(const char *subkey, char *out, int cap);
 
 /* ---- 系统信息 ----
  * 来历：精易 `系统_` 一族有 254 条，其中**头 34 条就是"每个环境变量一个命令"**

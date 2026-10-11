@@ -226,6 +226,59 @@ int cg_reg_write(const char *subkey, const char *name, const char *value)
     return ok;
 }
 
+/**
+ * @brief 枚举 HKCU 下一个键的直接子键名，'\n' 分隔（风格与边界语义同 cg_serial_list）
+ * @param subkey 子键路径
+ * @param out 输出缓冲
+ * @param cap 输出缓冲容量（字节），必须 > 1
+ * @return int 写入的字节数（不含结尾 \0）；键不存在 = "没有"，返回 0 不算错误
+ */
+int cg_reg_subkeys(const char *subkey, char *out, int cap)
+{
+    wchar_t *wsub;
+    HKEY     key   = NULL;
+    DWORD    nsub  = 0, maxsub = 0, i;
+    int      used  = 0;
+
+    if (!subkey || !out || cap <= 1) return 0;
+    out[0] = '\0';
+
+    wsub = kit_w(subkey);
+    if (!wsub) return 0;
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, wsub, 0, KEY_READ, &key) != ERROR_SUCCESS) {
+        free(wsub);
+        return 0;
+    }
+    free(wsub);
+
+    /* 子键名可以很长（COM 注册的 GUID 键名 38+ 字符很常见），缓冲按键里最长的名开 */
+    RegQueryInfoKeyW(key, NULL, NULL, NULL, &nsub, &maxsub, NULL, NULL, NULL, NULL, NULL, NULL);
+    {
+        wchar_t *wname = (wchar_t *)malloc((maxsub + 2) * sizeof(wchar_t));
+        if (!wname) {
+            RegCloseKey(key);
+            return used;
+        }
+        for (i = 0; i < nsub; i++) {
+            DWORD nlen = maxsub + 2;
+            char *name;
+
+            if (RegEnumKeyExW(key, i, wname, &nlen, NULL, NULL, NULL, NULL) != ERROR_SUCCESS) break;
+            name = kit_u8(wname);
+            if (!name || !*name) {
+                free(name);
+                continue;
+            }
+            if (used + (int)strlen(name) + 2 > cap) break;   /* 装不下：宁可少列也不截断半行 */
+            used += snprintf(out + used, (size_t)(cap - used), "%s\n", name);
+            free(name);
+        }
+        free(wname);
+    }
+    RegCloseKey(key);
+    return used;
+}
+
 /* ------------------------------------------------------------ 系统信息
  *
  * 来历与取舍见 .codebuddy/plans/kit-sysinfo.md。要点：精易 `系统_` 那 254 条里

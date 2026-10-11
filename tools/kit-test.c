@@ -159,6 +159,28 @@ int main(void)
         cg_free(v);
         cg_free(d);
     }
+    /* ---- 枚举子键：造两个子键再枚举（用完删掉；cg_run_process 不经 cmd，& 无效，逐条跑） ---- */
+    cg_run_process("reg add \"HKCU\\Software\\CStackGUITest\\alpha\" /f", 1);
+    cg_run_process("reg add \"HKCU\\Software\\CStackGUITest\\beta\" /f", 1);
+    cg_run_process("reg add \"HKCU\\Software\\CStackGUITest\\alpha\\command\" /ve /d \"echo hi\" /f", 1);
+    {
+        char buf[1024];
+        int  n = cg_reg_subkeys("Software\\CStackGUITest", buf, sizeof(buf));
+        int  got_alpha, got_beta, i = 0, rows = 0;
+        check(n > 0, "cg_reg_subkeys 枚举到子键");
+        while (i < n) {
+            int j = i;
+            while (j < n && buf[j] != '\n') j++;
+            buf[j] = '\0';
+            if (strcmp(&buf[i], "alpha") == 0) got_alpha = 1;
+            if (strcmp(&buf[i], "beta")  == 0) got_beta  = 1;
+            rows++;
+            i = j + 1;
+        }
+        check(got_alpha && got_beta && rows == 2, "cg_reg_subkeys 两个子键名都枚举到（含中文/无遗漏）");
+        check(cg_reg_subkeys("Software\\CStackGUITest\\没有这个键", buf, sizeof(buf)) == 0,
+              "cg_reg_subkeys 键不存在返回 0（不是错误）");
+    }
     cg_run_process("reg delete \"HKCU\\Software\\CStackGUITest\" /f", 1);
 
     printf("\n%s（失败 %d 项）\n", fails ? "kit test FAILED" : "kit test OK", fails);
