@@ -36,6 +36,76 @@ const listExt = (dir, ext) =>
     : [];
 const newest = (files) => files.reduce((a, f) => Math.max(a, mtime(f)), -Infinity);
 
+/* ---------------------------------------------------------------- include 展开（F3）
+ * 语义与 runtime 的 cg_doc_expand_includes 同一套（pick / 三张表合并主文档优先 /
+ * id 冲突报错 / 循环与重复引用跳过）；改这里请同步改那边。差异仅两点：
+ *   - 构建期**没有**"跳过"：循环/重复引用直接构建失败（能报错的时机就别放过）；
+ *   - 展开完成后删掉 include 字段（嵌进资源的就是自包含版，运行时不会再走 include 分支）。 */
+
+function cguiCollectIds(nodes, set) {
+  for (const n of nodes ?? []) {
+    if (n.id) set.add(n.id);
+    cguiCollectIds(n.children, set);
+  }
+}
+
+function cguiExpandIncludes(text, mainDir) {
+  const visited = new Set();
+  const walk = (jsonText, dir, fileLabel) => {
+    let doc;
+    try {
+      doc = JSON.parse(jsonText);
+    } catch (e) {
+      return { error: `${fileLabel} 不是合法 JSON：${e.message}` };
+    }
+    /* 先递归展开它自己的 include（并入它自己），再挑节点进主文档 */
+    if (Array.isArray(doc.include)) {
+      for (const inc of doc.include) {
+        if (!inc || typeof inc.path !== "string" || !inc.path.trim())
+          continue; /* 与 runtime 的宽容口径一致：path 非空字符串才收 */
+        const file = path.resolve(dir, inc.path);
+        const norm = path.normalize(file).toLowerCase();
+        if (visited.has(norm)) continue; /* 循环 / 重复：跳过 */
+        visited.add(norm);
+        if (!fs.existsSync(file)) return { error: `include 引用的文件打不开：${file}（来自 ${fileLabel}）` };
+        const r = walk(fs.readFileSync(file, "utf8"), path.dirname(file), file);
+        if (r.error) return r;
+        const sub = r.doc;
+        /* pick：按 id 只取一个顶层节点；没命中 = 报错（不静默丢） */
+        let nodes = sub.widgets ?? [];
+        if (inc.pick) {
+          nodes = nodes.filter((w) => w.id === inc.pick);
+          if (!nodes.length) return { error: `include：${file} 里没有 id 为「${inc.pick}」的顶层节点` };
+        }
+        /* id 冲突：报错（主文档已有同名 id 的控件树里查一遍） */
+        const hostIds = new Set();
+        cguiCollectIds(doc.widgets, hostIds);
+        for (const n of nodes) {
+          const ids = new Set();
+          cguiCollectIds([n], ids);
+          for (const id of ids)
+            if (hostIds.has(id))
+              return { error: `include 冲突：id「${id}」（来自 ${file}）在主文档里已经存在。id 是事件绑定与 cg_find 的钥匙，不能静默改名` };
+        }
+        /* 三张表合并：同名 = 主文档优先 */
+        for (const tbl of ["styles", "roles", "actions"]) {
+          for (const [k, v] of Object.entries(sub[tbl] ?? {})) {
+            if (doc[tbl] && Object.hasOwn(doc[tbl], k)) continue;
+            (doc[tbl] ??= {})[k] = v;
+          }
+        }
+        doc.widgets = [...(doc.widgets ?? []), ...nodes];
+      }
+    }
+    delete doc.include; /* 嵌进资源的自包含版：运行时不再走 include 分支 */
+    return { doc };
+  };
+
+  const first = walk(text, mainDir, path.join(mainDir, "<主 .cgui>"));
+  if (first.error) return first;
+  return { text: JSON.stringify(first.doc, null, 2) };
+}
+
 /* 一个工程可以纯 C、纯 C++，也可以混着来：后缀决定用 gcc 还是 g++ 编这一个文件 */
 const CXX_EXTS = [".cpp", ".cc", ".cxx"];
 const isCxx = (src) => CXX_EXTS.includes(path.extname(src).toLowerCase());
@@ -228,17 +298,38 @@ async function buildApp(ctx, root, tk, appDir, release) {
      .cgui 时才读它）。用资源而不是"生成一个几百 KB 的 C 数组"：
        - 不用改工程代码 —— 手写工程（examples/*）也能直接单文件发布；
        - 不生成中间源码，不污染工程目录。
-     旁边放一份 .cgui 仍然优先，所以"改界面不必重新编译"照旧成立。 */
+     旁边放一份 .cgui 仍然优先，所以"改界面不必重新编译"照旧成立。
+
+     include[]（F3）：工程 .cgui 写了 include 时，**嵌进资源的必须是展开后的完整版** ——
+     运行时从资源加载拿不到目录，解析不了相对路径。展开语义与 runtime 的
+     cg_doc_expand_includes 同一套（pick / 三张表合并主文档优先 / id 冲突报错 /
+     循环与重复引用跳过）；改动请两处同步。工程 .cgui 本身不动（保留 include），
+     开发态"改片段重开即见"照旧。 */
   const cguiPath = path.join(appDir, `${name}.cgui`);
   let cguiRes = null;
   if (fs.existsSync(cguiPath) && fs.statSync(cguiPath).size > 0) {
     const objDir = path.join(root, "build", "obj");
     const rcFile = path.join(objDir, `${name}_cgui_res.rc`);
     const objFile = path.join(objDir, `${name}_cgui_res.o`);
+    let embedPath = cguiPath;
+
+    /* --- include 展开（仅当写了 include；展开版写到 obj 目录，工程文件不动） --- */
+    const raw = fs.readFileSync(cguiPath, "utf8");
+    if (/"include"\s*:/.test(raw)) {
+      const exp = cguiExpandIncludes(raw, appDir);
+      if (exp.error) {
+        ctx.log(`  [fail] include 展开：${exp.error}`);
+        return 1;
+      }
+      fs.writeFileSync(path.join(objDir, `${name}_cgui_expanded.cgui`), exp.text, "utf8");
+      embedPath = path.join(objDir, `${name}_cgui_expanded.cgui`);
+      ctx.log("  include 已展开后编进资源（单文件发布自包含）");
+    }
+
     fs.mkdirSync(objDir, { recursive: true });
-    /* 资源内容只取决于 .cgui 的字节，所以增量判据拿 obj 比 .cgui 就够 */
-    fs.writeFileSync(rcFile, `CGUI RCDATA "${cguiPath.replace(/\\/g, "/")}"\r\n`, "utf8");
-    if (!(mtime(objFile) > mtime(cguiPath))) {
+    /* 资源内容只取决于嵌入文件的字节，增量判据拿 obj 比嵌入文件就够 */
+    fs.writeFileSync(rcFile, `CGUI RCDATA "${embedPath.replace(/\\/g, "/")}"\r\n`, "utf8");
+    if (!(mtime(objFile) > mtime(embedPath))) {
       ctx.log("  RC 把界面编进 exe（单文件发布）");
       const rc = await ctx.run(["windres", "--codepage=65001", "-O", "coff", rcFile, "-o", objFile]);
       if (rc) return rc;
