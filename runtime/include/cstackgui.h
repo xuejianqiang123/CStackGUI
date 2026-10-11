@@ -2908,6 +2908,75 @@ int   cg_reg_del(const char *subkey, const char *name);
  *       「参数没填就删掉一大片」这种事不能指望调用方自觉。
  */
 int   cg_reg_del_key(const char *subkey);
+/* ---- 注册表（跨根 *_ex）----
+ * 右键菜单管理这类工具要扫 HKLM（系统区）、读 HKCR（取 CLSID 名字），只认 HKCU
+ * 就只能绕 reg.exe 拼命令行。上面 5 个老函数 = 下面 *_ex(root = NULL) 的薄壳，
+ * 语义一字不变。 */
+/**
+ * @brief 读注册表字符串值（指定根）
+ * @param root 注册表根，"HKCU" / "HKLM" / "HKCR"（大小写不敏感，也接受 "HKEY_CURRENT_USER" 等全称）；
+ *             NULL 或空串 = HKCU；认不出的串 = 参数不合法，直接走回退
+ * @param subkey 子键路径，如 "Software\\Classes\\CLSID"
+ * @param name 值名
+ * @param def 取不到时用它的副本顶上；可传 NULL
+ * @return char * 堆串，用完 cg_free；取不到时返回 def 的副本
+ * @note 保持系统默认注册表视图（不加 KEY_WOW64_64KEY）：64 位进程就是原生视图。
+ */
+char *cg_reg_read_ex(const char *root, const char *subkey, const char *name, const char *def);
+/**
+ * @brief 写注册表字符串值（指定根，没有就新建）
+ * @param root 同 cg_reg_read_ex
+ * @param subkey 子键路径
+ * @param name 值名
+ * @param value 要写的字符串；NULL 当空串写
+ * @return int 0 成功、-1 失败
+ * @note 写 HKLM 需要进程已提权，否则 -1（先查 cg_reg_is_admin()）。
+ */
+int   cg_reg_write_ex(const char *root, const char *subkey, const char *name, const char *value);
+/**
+ * @brief 枚举一个键的直接子键名（指定根），'\n' 分隔
+ * @param root 同 cg_reg_read_ex
+ * @param subkey 子键路径
+ * @param out 输出缓冲，由调用方提供并保证至少 cap 字节可写
+ * @param cap 输出缓冲容量（字节），必须 > 1
+ * @return int 写入的字节数（不含结尾 \0）；参数不合法、键不存在或一行都装不下时返回 0
+ * @note 边界语义与 cg_reg_subkeys 完全一致：键不存在是"没有"，不是错误；
+ *       装不下宁可少列也不截断半行。
+ */
+int   cg_reg_subkeys_ex(const char *root, const char *subkey, char *out, int cap);
+/**
+ * @brief 删注册表字符串值（指定根；cg_reg_write_ex 的"恢复"半边）
+ * @param root 同 cg_reg_read_ex
+ * @param subkey 子键路径；NULL 直接失败
+ * @param name 值名；NULL 直接失败；空串 "" 删默认值
+ * @return int 0 = 调用之后这个值一定不存在（删掉了，或本来就「没有」—— 幂等）；
+ *             -1 = 参数不合法、编码转换失败，或键在但删不掉
+ * @note 恢复走「删」而不是「写空串」—— 空值在注册表里仍是一条**存在**的记录。
+ */
+int   cg_reg_del_ex(const char *root, const char *subkey, const char *name);
+/**
+ * @brief 删一整棵键（指定根，连子键带值，等效 reg delete /f）
+ * @param root 同 cg_reg_read_ex
+ * @param subkey 子键路径；NULL 或空串直接失败
+ * @return int 0 = 调用之后这棵键一定不存在（删掉了，或本来就「没有」）；
+ *             -1 = 参数不合法 / 编码失败 / 删不掉
+ * @note **破坏性**：删之前自己先备份（示例里走 `reg.exe export`）。空串被挡掉是有意的：
+ *       RegDeleteTreeW(HKEY_CURRENT_USER, NULL) 会删掉整个 HKCU 子树。
+ */
+int   cg_reg_del_key_ex(const char *root, const char *subkey);
+/**
+ * @brief 问一棵键在不在（指定根）
+ * @param root 同 cg_reg_read_ex
+ * @param subkey 子键路径；NULL 或空串返回 0
+ * @return int 1 = 打得开（有读权限且存在）；0 = 不存在 / 参数不合法 / 打不开
+ */
+int   cg_reg_key_exists(const char *root, const char *subkey);
+/**
+ * @brief 当前进程是否已提权（管理员）
+ * @return int 1 = 已提权（能改 HKLM 系统区）；0 = 没提权
+ * @note 用来在改 HKLM 之前给出明确提示，而不是让注册表操作静默返回失败。
+ */
+int   cg_reg_is_admin(void);
 
 /* ---- 系统信息 ----
  * 来历：精易 `系统_` 一族有 254 条，其中**头 34 条就是"每个环境变量一个命令"**

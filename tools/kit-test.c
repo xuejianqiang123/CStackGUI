@@ -206,6 +206,57 @@ int main(void)
     }
     cg_run_process("reg delete \"HKCU\\Software\\CStackGUITest\" /f", 1);
 
+    /* ---- 跨根 *_ex：真读 HKLM / HKCR、root 大小写不敏感、认不出的 root 走回退/报错 ----
+     * 只做读与"不存在"判断，写系统区那条按是否提权分支，不留垃圾键。 */
+    {
+        char *ver  = cg_reg_read_ex("HKLM", "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
+                                    "ProductName", "?");
+        char *bad  = cg_reg_read_ex("NOPE", "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
+                                    "ProductName", "回退");
+        char buf[4096];
+        check(ver && strcmp(ver, "?") != 0, "cg_reg_read_ex 读到 HKLM 系统区的 ProductName");
+        check(bad && strcmp(bad, "回退") == 0, "cg_reg_read_ex 认不出的 root 走回退（不是崩、不是读错根）");
+        cg_free(ver);
+        cg_free(bad);
+        check(cg_reg_subkeys_ex("HKCR", "CLSID", buf, sizeof(buf)) > 0,
+              "cg_reg_subkeys_ex 枚举 HKCR\\CLSID（root 大小写不敏感）");
+        check(cg_reg_subkeys_ex("NOPE", "CLSID", buf, sizeof(buf)) == 0,
+              "cg_reg_subkeys_ex 认不出的 root 返回 0");
+        check(cg_reg_key_exists("HKCR", "CLSID\\{00021401-0000-0000-C000-000000000046}") == 1,
+              "cg_reg_key_exists HKCR 下快捷方式 CLSID 存在");
+        check(cg_reg_key_exists("HKLM", "SOFTWARE\\CStackGUITestNoKey") == 0,
+              "cg_reg_key_exists 不存在的键返回 0");
+        check(cg_reg_key_exists(NULL, "") == 0 && cg_reg_key_exists("NOPE", "x") == 0,
+              "cg_reg_key_exists 空参数 / 非法 root 返回 0");
+        check(cg_reg_is_admin() == 0 || cg_reg_is_admin() == 1,
+              "cg_reg_is_admin 只回 0 / 1");
+        check(cg_reg_write_ex("NOPE", "x", "y", "z") == -1 &&
+              cg_reg_del_ex("NOPE", "x", "y") == -1 &&
+              cg_reg_del_key_ex("NOPE", "x") == -1,
+              "写/删/删键的非法 root 都报 -1（不许静默落到别处）");
+    }
+    /* ---- 写路径：root 大小写不敏感的用户区往返 + 是否提权决定 HKLM 写入成败 ---- */
+    check(cg_reg_write_ex("hKcU", "Software\\CStackGUITest2", "v", "跨根") == 0,
+          "cg_reg_write_ex root 大小写不敏感（hKcU）");
+    {
+        char *v = cg_reg_read_ex(NULL, "Software\\CStackGUITest2", "v", "?");
+        check(v && strcmp(v, "跨根") == 0, "root 传 NULL = HKCU（与老函数同义）");
+        cg_free(v);
+    }
+    if (cg_reg_is_admin()) {
+        check(cg_reg_write_ex("HKLM", "Software\\CStackGUITest2", "v", "1") == 0,
+              "已提权写 HKLM 成功");
+        check(cg_reg_del_ex("HKLM", "Software\\CStackGUITest2", "v") == 0,
+              "已提权删 HKLM 值成功");
+        check(cg_reg_del_key_ex("HKLM", "Software\\CStackGUITest2") == 0,
+              "已提权删 HKLM 测试键成功（清干净）");
+    } else {
+        check(cg_reg_write_ex("HKLM", "Software\\CStackGUITest2", "v", "1") == -1,
+              "未提权写 HKLM 明确返回 -1（权限问题不许静默）");
+    }
+    check(cg_reg_del_key_ex(NULL, "Software\\CStackGUITest2") == 0,
+          "cg_reg_del_key_ex 清掉用户区测试键（幂等）");
+
     printf("\n%s（失败 %d 项）\n", fails ? "kit test FAILED" : "kit test OK", fails);
     return fails ? 1 : 0;
 }

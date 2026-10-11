@@ -159,17 +159,42 @@ char *cg_time_now(const char *fmt)
     return cg_str_dup(buf);
 }
 
-/* ------------------------------------------------------------ 注册表 */
+/* ------------------------------------------------------------ 注册表
+ *
+ * 带 root 的 *_ex 版本在前，老函数 = *_ex(root = NULL) 的薄壳（语义一字不变，
+ * 现有 kit 用例与示例不受影响）。起因：右键菜单管理这类工具要扫 HKLM 系统区、
+ * 读 HKCR 取 CLSID 名字，只认 HKCU 就只能绕 reg.exe 拼命令行。 */
 
 /**
- * @brief 读 HKCU 下的字符串值
+ * @brief root 字符串 → HKEY 根句柄（认不出的串返回 NULL = "参数不合法"）
+ * @param root "HKCU" / "HKLM" / "HKCR"，大小写不敏感，也接受全称（"HKEY_CURRENT_USER" 等）；
+ *             NULL 或空串 = HKCU（与老函数同义）
+ * @return HKEY 根句柄；NULL = 参数不合法
+ */
+static HKEY kit_hkey(const char *root)
+{
+    if (!root || !*root) return HKEY_CURRENT_USER;
+    if (!_stricmp(root, "HKCU") || !_stricmp(root, "HKEY_CURRENT_USER"))  return HKEY_CURRENT_USER;
+    if (!_stricmp(root, "HKLM") || !_stricmp(root, "HKEY_LOCAL_MACHINE")) return HKEY_LOCAL_MACHINE;
+    if (!_stricmp(root, "HKCR") || !_stricmp(root, "HKEY_CLASSES_ROOT"))  return HKEY_CLASSES_ROOT;
+    return NULL;
+}
+
+/**
+ * @brief 读注册表字符串值（指定根）
+ * @param root 注册表根："HKCU" / "HKLM" / "HKCR"（大小写不敏感）；NULL 或空串 = HKCU；
+ *             认不出的串 = 参数不合法，直接走回退
  * @param subkey 子键路径（如 "Software\\Foo"）；NULL 时直接走回退
  * @param name 值名；NULL 时直接走回退
  * @param def 键 / 值不存在（或不是字符串类型）时的回退内容，允许 NULL（那就返回 NULL）
  * @return char * 堆串，用完 cg_free；取不到时是 def 的副本
+ * @note 不加 KEY_WOW64_64KEY：保持系统默认视图（64 位进程本身就是原生视图）。
+ *       32 位进程读 HKLM\SOFTWARE 会被 WOW64 重定向到 Wow6432Node —— 这是系统默认行为，
+ *       要强制原生视图请在调用方自己指定编译位数，别让通用 API 悄悄改视图。
  */
-char *cg_reg_read(const char *subkey, const char *name, const char *def)
+char *cg_reg_read_ex(const char *root, const char *subkey, const char *name, const char *def)
 {
+    HKEY     hroot = kit_hkey(root);
     wchar_t *wsub;
     wchar_t *wname;
     wchar_t  wbuf[2048];
@@ -178,11 +203,11 @@ char *cg_reg_read(const char *subkey, const char *name, const char *def)
     HKEY     key = NULL;
     char    *out = NULL;
 
-    if (!subkey || !name) return cg_str_dup(def);
+    if (!hroot || !subkey || !name) return cg_str_dup(def);
     wsub = kit_w(subkey);
     wname = kit_w(name);
     if (wsub && wname &&
-        RegOpenKeyExW(HKEY_CURRENT_USER, wsub, 0, KEY_QUERY_VALUE, &key) == ERROR_SUCCESS) {
+        RegOpenKeyExW(hroot, wsub, 0, KEY_QUERY_VALUE, &key) == ERROR_SUCCESS) {
         if (RegQueryValueExW(key, wname, NULL, &type, (LPBYTE)wbuf, &size) == ERROR_SUCCESS &&
             type == REG_SZ) {
             out = kit_u8(wbuf);
@@ -195,14 +220,32 @@ char *cg_reg_read(const char *subkey, const char *name, const char *def)
 }
 
 /**
- * @brief 写 HKCU 下的字符串值（没有就新建）
+ * @brief 读 HKCU 下的字符串值（cg_reg_read_ex(root=NULL) 的薄壳）
+ * @param subkey 子键路径（如 "Software\\Foo"）；NULL 时直接走回退
+ * @param name 值名；NULL 时直接走回退
+ * @param def 键 / 值不存在（或不是字符串类型）时的回退内容，允许 NULL（那就返回 NULL）
+ * @return char * 堆串，用完 cg_free；取不到时是 def 的副本
+ */
+char *cg_reg_read(const char *subkey, const char *name, const char *def)
+{
+    return cg_reg_read_ex(NULL, subkey, name, def);
+}
+
+/**
+ * @brief 写注册表字符串值（指定根，没有就新建）
+ * @param root 注册表根："HKCU" / "HKLM" / "HKCR"（大小写不敏感）；NULL 或空串 = HKCU；
+ *             认不出的串 = 参数不合法
  * @param subkey 子键路径；NULL 直接失败
  * @param name 值名；NULL 直接失败
  * @param value 要写的字符串；NULL 当空串写
- * @return int 0 成功；-1 参数为空、编码转换失败或注册表操作失败
+ * @return int 0 成功；-1 参数不合法、编码转换失败或注册表操作失败
+ * @note 写 HKLM 需要进程已提权（cg_reg_is_admin()），否则 RegCreateKeyExW 返回
+ *       ACCESS_DENIED → 本函数 -1；写 HKCR 的落点由系统决定（提权写 HKLM\SOFTWARE\Classes，
+ *       未提权写 HKCU\Software\Classes），本函数不改这个规则。
  */
-int cg_reg_write(const char *subkey, const char *name, const char *value)
+int cg_reg_write_ex(const char *root, const char *subkey, const char *name, const char *value)
 {
+    HKEY     hroot = kit_hkey(root);
     wchar_t *wsub;
     wchar_t *wname;
     wchar_t *wval;
@@ -210,12 +253,12 @@ int cg_reg_write(const char *subkey, const char *name, const char *value)
     int      ok = -1;
     size_t   bytes;
 
-    if (!subkey || !name) return -1;
+    if (!hroot || !subkey || !name) return -1;
     wsub = kit_w(subkey);
     wname = kit_w(name);
     wval = kit_w(value ? value : "");
     if (wsub && wname && wval &&
-        RegCreateKeyExW(HKEY_CURRENT_USER, wsub, 0, NULL, 0, KEY_SET_VALUE, NULL, &key, NULL) == ERROR_SUCCESS) {
+        RegCreateKeyExW(hroot, wsub, 0, NULL, 0, KEY_SET_VALUE, NULL, &key, NULL) == ERROR_SUCCESS) {
         bytes = (wcslen(wval) + 1) * sizeof(wchar_t);
         if (RegSetValueExW(key, wname, 0, REG_SZ, (const BYTE *)wval, (DWORD)bytes) == ERROR_SUCCESS) ok = 0;
         RegCloseKey(key);
@@ -227,24 +270,39 @@ int cg_reg_write(const char *subkey, const char *name, const char *value)
 }
 
 /**
- * @brief 删 HKCU 下的字符串值（cg_reg_write 的"恢复"半边）
+ * @brief 写 HKCU 下的字符串值（cg_reg_write_ex(root=NULL) 的薄壳）
+ * @param subkey 子键路径；NULL 直接失败
+ * @param name 值名；NULL 直接失败
+ * @param value 要写的字符串；NULL 当空串写
+ * @return int 0 成功；-1 参数为空、编码转换失败或注册表操作失败
+ */
+int cg_reg_write(const char *subkey, const char *name, const char *value)
+{
+    return cg_reg_write_ex(NULL, subkey, name, value);
+}
+
+/**
+ * @brief 删注册表字符串值（指定根；cg_reg_write_ex 的"恢复"半边）
+ * @param root 注册表根："HKCU" / "HKLM" / "HKCR"（大小写不敏感）；NULL 或空串 = HKCU；
+ *             认不出的串 = 参数不合法
  * @param subkey 子键路径；NULL 直接失败
  * @param name 值名；NULL 直接失败；空串 "" 删默认值
  * @return int 0 = 调用之后这个值一定不存在（删掉了，或本来就「没有」—— 幂等）；
- *             -1 = 参数为空、编码转换失败，或键在但删不掉
+ *             -1 = 参数不合法、编码转换失败，或键在但删不掉
  */
-int cg_reg_del(const char *subkey, const char *name)
+int cg_reg_del_ex(const char *root, const char *subkey, const char *name)
 {
+    HKEY     hroot = kit_hkey(root);
     wchar_t *wsub;
     wchar_t *wname;
     HKEY     key = NULL;
     int      ok  = -1;
 
-    if (!subkey || !name) return -1;
+    if (!hroot || !subkey || !name) return -1;
     wsub  = kit_w(subkey);
     wname = kit_w(name);
     if (wsub && wname) {
-        LSTATUS st = RegOpenKeyExW(HKEY_CURRENT_USER, wsub, 0, KEY_SET_VALUE, &key);
+        LSTATUS st = RegOpenKeyExW(hroot, wsub, 0, KEY_SET_VALUE, &key);
         if (st == ERROR_FILE_NOT_FOUND || st == ERROR_PATH_NOT_FOUND) {
             ok = 0;                      /* 连键都不在：该值必然不存在，目标已达成 */
         } else if (st == ERROR_SUCCESS) {
@@ -261,20 +319,38 @@ int cg_reg_del(const char *subkey, const char *name)
 }
 
 /**
- * @brief 删 HKCU 下一整棵键（连子键带值，等效 reg delete /f）
- * @param subkey 子键路径；NULL 或空串直接失败
- * @return int 0 = 调用之后这棵键一定不存在（删掉了，或本来就「没有」）；-1 = 参数为空 / 编码失败 / 删不掉
- * @note 空串挡掉是有意的：RegDeleteTreeW(HKCU, NULL) 会删掉 HKCU 整个子树。
+ * @brief 删 HKCU 下的字符串值（cg_reg_del_ex(root=NULL) 的薄壳）
+ * @param subkey 子键路径；NULL 直接失败
+ * @param name 值名；NULL 直接失败；空串 "" 删默认值
+ * @return int 0 = 调用之后这个值一定不存在（删掉了，或本来就「没有」—— 幂等）；
+ *             -1 = 参数为空、编码转换失败，或键在但删不掉
+ * @note 和 cg_reg_write 配对用：写上 = 打开开关，删掉 = 恢复原样。
+ *       右键菜单的 LegacyDisable 尤其如此：写空串是「禁用」，删掉才叫「恢复」。
  */
-int cg_reg_del_key(const char *subkey)
+int cg_reg_del(const char *subkey, const char *name)
 {
+    return cg_reg_del_ex(NULL, subkey, name);
+}
+
+/**
+ * @brief 删一整棵键（指定根，连子键带值，等效 reg delete /f）
+ * @param root 注册表根："HKCU" / "HKLM" / "HKCR"（大小写不敏感）；NULL 或空串 = HKCU
+ * @param subkey 子键路径；NULL 或空串直接失败
+ * @return int 0 = 调用之后这棵键一定不存在（删掉了，或本来就「没有」）；
+ *             -1 = 参数不合法 / 编码失败 / 删不掉
+ * @note **破坏性**：删之前自己先备份（示例里走 `reg.exe export`）。
+ *       空串挡掉是有意的：RegDeleteTreeW(HKEY_CURRENT_USER, NULL) 会删掉 HKCU 整个子树。
+ */
+int cg_reg_del_key_ex(const char *root, const char *subkey)
+{
+    HKEY     hroot = kit_hkey(root);
     wchar_t *wsub;
     int      ok = -1;
 
-    if (!subkey || !*subkey) return -1;
+    if (!hroot || !subkey || !*subkey) return -1;
     wsub = kit_w(subkey);
     if (wsub) {
-        LSTATUS st = RegDeleteTreeW(HKEY_CURRENT_USER, wsub);
+        LSTATUS st = RegDeleteTreeW(hroot, wsub);
         if (st == ERROR_SUCCESS || st == ERROR_FILE_NOT_FOUND) ok = 0;
         free(wsub);
     }
@@ -282,25 +358,39 @@ int cg_reg_del_key(const char *subkey)
 }
 
 /**
- * @brief 枚举 HKCU 下一个键的直接子键名，'\n' 分隔（风格与边界语义同 cg_serial_list）
+ * @brief 删 HKCU 下一整棵键（cg_reg_del_key_ex(root=NULL) 的薄壳）
+ * @param subkey 子键路径；NULL 或空串直接失败
+ * @return int 0 = 调用之后这棵键一定不存在（删掉了，或本来就「没有」）；-1 = 参数为空 / 编码失败 / 删不掉
+ * @note **破坏性**：删之前自己先备份（示例里走 `reg.exe export`）。
+ */
+int cg_reg_del_key(const char *subkey)
+{
+    return cg_reg_del_key_ex(NULL, subkey);
+}
+
+/**
+ * @brief 枚举一个键的直接子键名（指定根），'\n' 分隔（风格与边界语义同 cg_serial_list）
+ * @param root 注册表根："HKCU" / "HKLM" / "HKCR"（大小写不敏感）；NULL 或空串 = HKCU；
+ *             认不出的串 = 参数不合法
  * @param subkey 子键路径
  * @param out 输出缓冲
  * @param cap 输出缓冲容量（字节），必须 > 1
- * @return int 写入的字节数（不含结尾 \0）；键不存在 = "没有"，返回 0 不算错误
+ * @return int 写入的字节数（不含结尾 \0）；参数不合法、键不存在或一行都装不下时返回 0（不算错误）
  */
-int cg_reg_subkeys(const char *subkey, char *out, int cap)
+int cg_reg_subkeys_ex(const char *root, const char *subkey, char *out, int cap)
 {
+    HKEY     hroot = kit_hkey(root);
     wchar_t *wsub;
     HKEY     key   = NULL;
     DWORD    nsub  = 0, maxsub = 0, i;
     int      used  = 0;
 
-    if (!subkey || !out || cap <= 1) return 0;
+    if (!hroot || !subkey || !out || cap <= 1) return 0;
     out[0] = '\0';
 
     wsub = kit_w(subkey);
     if (!wsub) return 0;
-    if (RegOpenKeyExW(HKEY_CURRENT_USER, wsub, 0, KEY_READ, &key) != ERROR_SUCCESS) {
+    if (RegOpenKeyExW(hroot, wsub, 0, KEY_READ, &key) != ERROR_SUCCESS) {
         free(wsub);
         return 0;
     }
@@ -332,6 +422,63 @@ int cg_reg_subkeys(const char *subkey, char *out, int cap)
     }
     RegCloseKey(key);
     return used;
+}
+
+/**
+ * @brief 枚举 HKCU 下一个键的直接子键名，'\n' 分隔（cg_reg_subkeys_ex(root=NULL) 的薄壳）
+ * @param subkey 子键路径
+ * @param out 输出缓冲
+ * @param cap 输出缓冲容量（字节），必须 > 1
+ * @return int 写入的字节数（不含结尾 \0）；键不存在 = "没有"，返回 0 不算错误
+ * @note 只列**直接**子键、不递归；配合 cg_reg_read 能做"扫出右键菜单项再逐项读 MUIVerb /
+ *       command"这类管理工具。
+ */
+int cg_reg_subkeys(const char *subkey, char *out, int cap)
+{
+    return cg_reg_subkeys_ex(NULL, subkey, out, cap);
+}
+
+/**
+ * @brief 问一棵键在不在（指定根）
+ * @param root 注册表根："HKCU" / "HKLM" / "HKCR"（大小写不敏感）；NULL 或空串 = HKCU
+ * @param subkey 子键路径；NULL 或空串返回 0
+ * @return int 1 = 打得开（存在且有读权限）；0 = 不存在 / 参数不合法 / 打不开
+ */
+int cg_reg_key_exists(const char *root, const char *subkey)
+{
+    HKEY     hroot = kit_hkey(root);
+    wchar_t *wsub;
+    HKEY     key = NULL;
+    int      has = 0;
+
+    if (!hroot || !subkey || !*subkey) return 0;
+    wsub = kit_w(subkey);
+    if (wsub) {
+        has = (RegOpenKeyExW(hroot, wsub, 0, KEY_READ, &key) == ERROR_SUCCESS);
+        if (has) RegCloseKey(key);
+        free(wsub);
+    }
+    return has;
+}
+
+/**
+ * @brief 当前进程是否已提权（管理员）
+ * @return int 1 = 已提权（能改 HKLM 系统区）；0 = 没提权
+ * @note 用来在改 HKLM **之前**给出明确提示，而不是让注册表操作静默返回失败。
+ */
+int cg_reg_is_admin(void)
+{
+    HANDLE            tok = NULL;
+    TOKEN_ELEVATION   elev;
+    DWORD             sz  = 0;
+    int               yes = 0;
+
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &tok)) {
+        if (GetTokenInformation(tok, TokenElevation, &elev, sizeof(elev), &sz))
+            yes = elev.TokenIsElevated ? 1 : 0;
+        CloseHandle(tok);
+    }
+    return yes;
 }
 
 /* ------------------------------------------------------------ 系统信息
