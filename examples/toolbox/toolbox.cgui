@@ -1,333 +1,231 @@
 {
   "cgui": 1,
   "app": {
-    "title": "工具箱启动器",
-    "width": 820,
-    "height": 648,
-    "bg": "#EFF3F7",
+    "title": "工具箱启动器 1.1.0",
+    "width": 860,
+    "height": 668,
+    "bg": "#EEF1F4",
     "info": {
       "product": "CStackGUI 工具箱启动器",
-      "desc": "多页签按钮墙 + 搜索 + 一键启动外部程序（参照 mxx1-toolbox 的功能面）",
-      "version": "1.0.0.0",
+      "desc": "8 页签按钮墙 + 分组条 + 成对装/撤开关 + 搜索 + 最近使用 + 我的工具（INI 槽位）+ 深浅主题；功能面对标 mxx1-toolbox",
+      "version": "1.1.0.0",
       "author": "CStackGUI"
     }
   },
+  "styles": {
+    "sect":    { "font": "Microsoft YaHei UI", "size": 10, "bold": true, "fg": "#33383D", "bg": "#D9DEE3" },
+    "install": { "font": "Microsoft YaHei UI", "size": 10, "bold": true, "fg": "#1B6E33", "bg": "#E7F5EC" },
+    "remove":  { "font": "Microsoft YaHei UI", "size": 10, "bold": true, "fg": "#C03030", "bg": "#FBEAEA" },
+    "note":    { "font": "Microsoft YaHei UI", "size": 9 }
+  },
   "widgets": [
+    { "id": "sb_main", "type": "statusbar", "rect": { "x": 0, "y": 640, "w": 860, "h": 24 },
+      "items": ["就绪", "工具箱", "v1.1.0.0"] },
+
+    { "id": "lab_find", "type": "label", "rect": { "x": 12, "y": 16, "w": 48, "h": 24 },
+      "text": "搜索", "style": { "bold": true } },
+    { "id": "edt_search", "type": "edit", "rect": { "x": 64, "y": 12, "w": 320, "h": 28 },
+      "text": "", "hint": "按名称或命令过滤；回车启动第一个匹配",
+      "events": { "change": "on_edt_search_change", "submit": "on_edt_search_submit" } },
+    { "id": "lab_find_hint", "type": "label", "rect": { "x": 396, "y": 16, "w": 452, "h": 24 },
+      "text": "加工具：本文件加按钮 + main.c 的 k_tools 加一行；我的工具改 mytools.ini 即可", "style": "note" },
+
     {
-      "id": "sb_main",
-      "type": "statusbar",
-      "rect": { "x": 0, "y": 624, "w": 820, "h": 24 },
-      "items": ["就绪", "工具箱", "—"]
-    },
-    {
-      "id": "lab_find",
-      "type": "label",
-      "rect": { "x": 12, "y": 16, "w": 48, "h": 24 },
-      "text": "搜索",
-      "style": { "bold": true }
-    },
-    {
-      "id": "edt_search",
-      "type": "edit",
-      "rect": { "x": 64, "y": 12, "w": 320, "h": 28 },
-      "text": "",
-      "hint": "按名称或命令过滤；回车启动第一个匹配",
-      "events": { "change": "on_edt_search_change", "submit": "on_edt_search_submit" }
-    },
-    {
-      "id": "lab_find_hint",
-      "type": "label",
-      "rect": { "x": 396, "y": 16, "w": 412, "h": 24 },
-      "text": "加一个工具：本文件加一个按钮 + main.c 的 k_tools 表加一行"
-    },
-    {
-      "id": "tab_main",
-      "type": "tabs",
-      "rect": { "x": 12, "y": 50, "w": 796, "h": 452 },
-      "items": ["搜索", "常用", "系统工具", "命令行", "网络"],
+      "id": "tab_main", "type": "tabs", "rect": { "x": 12, "y": 50, "w": 836, "h": 546 },
+      "items": ["常用", "常用设置", "我的工具", "系统工具", "清理优化", "隐私设置", "应用管理", "右键增强"],
       "events": { "select": "on_tab_main_select" },
       "children": [
-        {
-          "id": "lab_search_t",
-          "type": "label",
-          "page": 0,
-          "rect": { "x": 8, "y": 36, "w": 300, "h": 24 },
-          "text": "搜索结果",
-          "style": { "bold": true }
-        },
-        {
-          "id": "lst_search",
-          "type": "listbox",
-          "page": 0,
-          "rect": { "x": 8, "y": 64, "w": 776, "h": 336 },
-          "hint": "输入关键字即时过滤；回车启动第一个匹配；双击行启动"
-        },
-        {
-          "id": "lab_search_hint",
-          "type": "label",
-          "page": 0,
-          "rect": { "x": 8, "y": 412, "w": 776, "h": 24 },
-          "text": "在上方搜索框敲字即出结果；双击结果行或回车启动"
-        },
-        {
-          "id": "lab_recent_t",
-          "type": "label",
-          "page": 1,
-          "rect": { "x": 8, "y": 36, "w": 300, "h": 24 },
-          "text": "最近使用",
-          "style": { "bold": true }
-        },
-        {
-          "id": "lst_recent",
-          "type": "listbox",
-          "page": 1,
-          "rect": { "x": 8, "y": 64, "w": 600, "h": 336 },
-          "hint": "最近启动过的工具，最新在最上面；双击行再次启动"
-        },
-        {
-          "id": "btn_recent_clear",
-          "type": "button",
-          "page": 1,
-          "rect": { "x": 616, "y": 64, "w": 168, "h": 28 },
-          "text": "清空记录",
-          "hint": "清空最近使用（内存记录，程序退出即消失）",
-          "events": { "click": "on_btn_recent_clear_click" }
-        },
-        {
-          "id": "lab_recent_hint",
-          "type": "label",
-          "page": 1,
-          "rect": { "x": 8, "y": 412, "w": 776, "h": 24 },
-          "text": "记录只存内存、最多 8 条；本工程没有「启动项落盘」接口，所以不做持久化"
-        },
-        {
-          "id": "lab_sys_t",
-          "type": "label",
-          "page": 2,
-          "rect": { "x": 8, "y": 36, "w": 300, "h": 24 },
-          "text": "系统工具",
-          "style": { "bold": true }
-        },
-        {
-          "id": "tool_notepad",
-          "type": "button",
-          "page": 2,
-          "rect": { "x": 8, "y": 64, "w": 180, "h": 40 },
-          "text": "记事本",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_calc",
-          "type": "button",
-          "page": 2,
-          "rect": { "x": 196, "y": 64, "w": 180, "h": 40 },
-          "text": "计算器",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_mspaint",
-          "type": "button",
-          "page": 2,
-          "rect": { "x": 384, "y": 64, "w": 180, "h": 40 },
-          "text": "画图",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_taskmgr",
-          "type": "button",
-          "page": 2,
-          "rect": { "x": 572, "y": 64, "w": 180, "h": 40 },
-          "text": "任务管理器",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_regedit",
-          "type": "button",
-          "page": 2,
-          "rect": { "x": 8, "y": 112, "w": 180, "h": 40 },
-          "text": "注册表编辑器",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_devmgmt",
-          "type": "button",
-          "page": 2,
-          "rect": { "x": 196, "y": 112, "w": 180, "h": 40 },
-          "text": "设备管理器",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_services",
-          "type": "button",
-          "page": 2,
-          "rect": { "x": 384, "y": 112, "w": 180, "h": 40 },
-          "text": "服务",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_control",
-          "type": "button",
-          "page": 2,
-          "rect": { "x": 572, "y": 112, "w": 180, "h": 40 },
-          "text": "控制面板",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "lab_sys_hint",
-          "type": "label",
-          "page": 2,
-          "rect": { "x": 8, "y": 412, "w": 776, "h": 24 },
-          "text": "点按钮即真实启动系统自带程序（cg_run_process，不等待）"
-        },
-        {
-          "id": "lab_cmd_t",
-          "type": "label",
-          "page": 3,
-          "rect": { "x": 8, "y": 36, "w": 300, "h": 24 },
-          "text": "命令行",
-          "style": { "bold": true }
-        },
-        {
-          "id": "tool_dir",
-          "type": "button",
-          "page": 3,
-          "rect": { "x": 8, "y": 64, "w": 180, "h": 40 },
-          "text": "当前目录",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_ver",
-          "type": "button",
-          "page": 3,
-          "rect": { "x": 196, "y": 64, "w": 180, "h": 40 },
-          "text": "系统版本",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_hostname",
-          "type": "button",
-          "page": 3,
-          "rect": { "x": 384, "y": 64, "w": 180, "h": 40 },
-          "text": "主机名",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_env",
-          "type": "button",
-          "page": 3,
-          "rect": { "x": 572, "y": 64, "w": 180, "h": 40 },
-          "text": "环境变量",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_tasklist",
-          "type": "button",
-          "page": 3,
-          "rect": { "x": 8, "y": 112, "w": 180, "h": 40 },
-          "text": "进程列表",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_systeminfo",
-          "type": "button",
-          "page": 3,
-          "rect": { "x": 196, "y": 112, "w": 180, "h": 40 },
-          "text": "系统信息",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_datetime",
-          "type": "button",
-          "page": 3,
-          "rect": { "x": 384, "y": 112, "w": 180, "h": 40 },
-          "text": "时间日期",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_cmdhelp",
-          "type": "button",
-          "page": 3,
-          "rect": { "x": 572, "y": 112, "w": 180, "h": 40 },
-          "text": "命令帮助",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "lab_cmd_hint",
-          "type": "label",
-          "page": 3,
-          "rect": { "x": 8, "y": 412, "w": 776, "h": 24 },
-          "text": "命令用 cmd /k 启动，控制台窗口保持打开，方便看清输出"
-        },
-        {
-          "id": "lab_net_t",
-          "type": "label",
-          "page": 4,
-          "rect": { "x": 8, "y": 36, "w": 300, "h": 24 },
-          "text": "网络",
-          "style": { "bold": true }
-        },
-        {
-          "id": "tool_ipconfig",
-          "type": "button",
-          "page": 4,
-          "rect": { "x": 8, "y": 64, "w": 180, "h": 40 },
-          "text": "IP 配置",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_ping",
-          "type": "button",
-          "page": 4,
-          "rect": { "x": 196, "y": 64, "w": 180, "h": 40 },
-          "text": "回环测试",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_ncpa",
-          "type": "button",
-          "page": 4,
-          "rect": { "x": 384, "y": 64, "w": 180, "h": 40 },
-          "text": "网络连接",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_route",
-          "type": "button",
-          "page": 4,
-          "rect": { "x": 572, "y": 64, "w": 180, "h": 40 },
-          "text": "路由表",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_netstat",
-          "type": "button",
-          "page": 4,
-          "rect": { "x": 8, "y": 112, "w": 180, "h": 40 },
-          "text": "端口占用",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "tool_dns",
-          "type": "button",
-          "page": 4,
-          "rect": { "x": 196, "y": 112, "w": 180, "h": 40 },
-          "text": "DNS 缓存",
-          "events": { "click": "on_tool_click" }
-        },
-        {
-          "id": "lab_net_hint",
-          "type": "label",
-          "page": 4,
-          "rect": { "x": 8, "y": 412, "w": 776, "h": 24 },
-          "text": "诊断类命令全部只读；启动失败会在状态栏提示"
-        }
+        { "id": "lab_recent_t", "type": "label", "page": 0, "rect": { "x": 8, "y": 36, "w": 804, "h": 22 },
+          "text": "  最近使用（最新在前）", "style": "sect" },
+        { "id": "lst_recent", "type": "listbox", "page": 0, "rect": { "x": 8, "y": 64, "w": 600, "h": 400 },
+          "hint": "最近启动过的工具；双击行再次启动" },
+        { "id": "btn_recent_clear", "type": "button", "page": 0, "rect": { "x": 616, "y": 64, "w": 196, "h": 30 },
+          "text": "清空记录", "hint": "清空最近使用（内存记录）",
+          "events": { "click": "on_btn_recent_clear_click" } },
+        { "id": "btn_open_data", "type": "button", "page": 0, "rect": { "x": 616, "y": 100, "w": 196, "h": 30 },
+          "text": "打开数据目录", "hint": "mytools.ini 所在目录",
+          "events": { "click": "on_btn_open_data_click" } },
+        { "id": "lab_recent_hint", "type": "label", "page": 0, "rect": { "x": 8, "y": 470, "w": 804, "h": 22 },
+          "text": "记录只存内存、最多 8 条；记不记可在「常用设置」里开关。", "style": "note" },
+
+        { "id": "lab_sect_opt", "type": "label", "page": 1, "rect": { "x": 8, "y": 36, "w": 804, "h": 22 },
+          "text": "  行为开关（装上 / 撤掉，落点：本工具箱沙箱键，真实可逆）", "style": "sect" },
+        { "id": "opt0_on",  "type": "button", "page": 1, "rect": { "x": 8,   "y": 64, "w": 192, "h": 34 }, "text": "装上：日志镜像到控制台", "style": "install", "events": { "click": "on_opt_click" } },
+        { "id": "opt0_off", "type": "button", "page": 1, "rect": { "x": 206, "y": 64, "w": 192, "h": 34 }, "text": "撤掉", "style": "remove", "events": { "click": "on_opt_click" } },
+        { "id": "lab_opt0", "type": "label", "page": 1, "rect": { "x": 404, "y": 72, "w": 408, "h": 20 }, "text": "", "style": "note" },
+        { "id": "opt1_on",  "type": "button", "page": 1, "rect": { "x": 8,   "y": 106, "w": 192, "h": 34 }, "text": "装上：日志行首加时间戳", "style": "install", "events": { "click": "on_opt_click" } },
+        { "id": "opt1_off", "type": "button", "page": 1, "rect": { "x": 206, "y": 106, "w": 192, "h": 34 }, "text": "撤掉", "style": "remove", "events": { "click": "on_opt_click" } },
+        { "id": "lab_opt1", "type": "label", "page": 1, "rect": { "x": 404, "y": 114, "w": 408, "h": 20 }, "text": "", "style": "note" },
+        { "id": "opt2_on",  "type": "button", "page": 1, "rect": { "x": 8,   "y": 148, "w": 192, "h": 34 }, "text": "装上：敲字自动切搜索页", "style": "install", "events": { "click": "on_opt_click" } },
+        { "id": "opt2_off", "type": "button", "page": 1, "rect": { "x": 206, "y": 148, "w": 192, "h": 34 }, "text": "撤掉", "style": "remove", "events": { "click": "on_opt_click" } },
+        { "id": "lab_opt2", "type": "label", "page": 1, "rect": { "x": 404, "y": 156, "w": 408, "h": 20 }, "text": "", "style": "note" },
+        { "id": "opt3_on",  "type": "button", "page": 1, "rect": { "x": 8,   "y": 190, "w": 192, "h": 34 }, "text": "装上：记录最近使用", "style": "install", "events": { "click": "on_opt_click" } },
+        { "id": "opt3_off", "type": "button", "page": 1, "rect": { "x": 206, "y": 190, "w": 192, "h": 34 }, "text": "撤掉", "style": "remove", "events": { "click": "on_opt_click" } },
+        { "id": "lab_opt3", "type": "label", "page": 1, "rect": { "x": 404, "y": 198, "w": 408, "h": 20 }, "text": "", "style": "note" },
+        { "id": "opt4_on",  "type": "button", "page": 1, "rect": { "x": 8,   "y": 232, "w": 192, "h": 34 }, "text": "装上：右键沙箱标记", "style": "install", "events": { "click": "on_opt_click" } },
+        { "id": "opt4_off", "type": "button", "page": 1, "rect": { "x": 206, "y": 232, "w": 192, "h": 34 }, "text": "撤掉", "style": "remove", "events": { "click": "on_opt_click" } },
+        { "id": "lab_opt4", "type": "label", "page": 1, "rect": { "x": 404, "y": 240, "w": 408, "h": 20 }, "text": "", "style": "note" },
+        { "id": "btn_reg_view", "type": "button", "page": 1, "rect": { "x": 8,   "y": 274, "w": 192, "h": 34 },
+          "text": "查看曾改动", "hint": "把沙箱键里 5 个开关的当前值弹出来看",
+          "events": { "click": "on_btn_reg_view_click" } },
+        { "id": "btn_reg_reset", "type": "button", "page": 1, "rect": { "x": 206, "y": 274, "w": 192, "h": 34 },
+          "text": "还原全部开关", "hint": "5 个值全写空串（本工程没有删值接口，值空 = 未设）",
+          "events": { "click": "on_btn_reg_reset_click" } },
+        { "id": "lab_reg_note", "type": "label", "page": 1, "rect": { "x": 404, "y": 282, "w": 408, "h": 20 },
+          "text": "沙箱键：HKCU\\Software\\CStackGUI\\examples\\toolbox", "style": "note" },
+
+        { "id": "lab_sect_entry", "type": "label", "page": 1, "rect": { "x": 8, "y": 320, "w": 804, "h": 22 },
+          "text": "  常用入口", "style": "sect" },
+        { "id": "tool_taskmgr", "type": "button", "page": 1, "rect": { "x": 8,   "y": 348, "w": 192, "h": 34 }, "text": "任务管理器",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_control", "type": "button", "page": 1, "rect": { "x": 206, "y": 348, "w": 192, "h": 34 }, "text": "控制面板",     "events": { "click": "on_tool_click" } },
+        { "id": "tool_env",     "type": "button", "page": 1, "rect": { "x": 404, "y": 348, "w": 192, "h": 34 }, "text": "环境变量",     "events": { "click": "on_tool_click" } },
+        { "id": "tool_userpwd", "type": "button", "page": 1, "rect": { "x": 602, "y": 348, "w": 192, "h": 34 }, "text": "用户账户",     "events": { "click": "on_tool_click" } },
+        { "id": "tool_regedit", "type": "button", "page": 1, "rect": { "x": 8,   "y": 390, "w": 192, "h": 34 }, "text": "注册表编辑器", "events": { "click": "on_tool_click" } },
+        { "id": "tool_cmd",     "type": "button", "page": 1, "rect": { "x": 206, "y": 390, "w": 192, "h": 34 }, "text": "命令提示符",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_ps",      "type": "button", "page": 1, "rect": { "x": 404, "y": 390, "w": 192, "h": 34 }, "text": "PowerShell",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_calc",    "type": "button", "page": 1, "rect": { "x": 602, "y": 390, "w": 192, "h": 34 }, "text": "计算器",       "events": { "click": "on_tool_click" } },
+        { "id": "tool_notepad", "type": "button", "page": 1, "rect": { "x": 8,   "y": 432, "w": 192, "h": 34 }, "text": "记事本",       "events": { "click": "on_tool_click" } },
+        { "id": "tool_mspaint", "type": "button", "page": 1, "rect": { "x": 206, "y": 432, "w": 192, "h": 34 }, "text": "画图",         "events": { "click": "on_tool_click" } },
+        { "id": "tool_snip",    "type": "button", "page": 1, "rect": { "x": 404, "y": 432, "w": 192, "h": 34 }, "text": "截图工具",     "events": { "click": "on_tool_click" } },
+        { "id": "tool_magnify", "type": "button", "page": 1, "rect": { "x": 602, "y": 432, "w": 192, "h": 34 }, "text": "放大镜",       "events": { "click": "on_tool_click" } },
+        { "id": "lab_opt_hint", "type": "label", "page": 1, "rect": { "x": 8, "y": 478, "w": 804, "h": 34 },
+          "text": "开关控制的是本工具箱自身行为。系统级开关（任务栏合并 / 内核隔离那种）要写系统注册表值并支持删值备份 —— 本工程注册表接口只能读写字符串值、没有删值与枚举，示例不碰系统键。", "style": "note" },
+
+        { "id": "lab_sect_my", "type": "label", "page": 2, "rect": { "x": 8, "y": 36, "w": 804, "h": 22 },
+          "text": "  我的工具（编辑数据目录下 mytools.ini，加工具不用重编译）", "style": "sect" },
+        { "id": "tool_my1", "type": "button", "page": 2, "rect": { "x": 8,   "y": 64, "w": 192, "h": 34 }, "text": "空槽位", "events": { "click": "on_tool_click" } },
+        { "id": "tool_my2", "type": "button", "page": 2, "rect": { "x": 206, "y": 64, "w": 192, "h": 34 }, "text": "空槽位", "events": { "click": "on_tool_click" } },
+        { "id": "tool_my3", "type": "button", "page": 2, "rect": { "x": 404, "y": 64, "w": 192, "h": 34 }, "text": "空槽位", "events": { "click": "on_tool_click" } },
+        { "id": "tool_my4", "type": "button", "page": 2, "rect": { "x": 602, "y": 64, "w": 192, "h": 34 }, "text": "空槽位", "events": { "click": "on_tool_click" } },
+        { "id": "tool_my5", "type": "button", "page": 2, "rect": { "x": 8,   "y": 106, "w": 192, "h": 34 }, "text": "空槽位", "events": { "click": "on_tool_click" } },
+        { "id": "tool_my6", "type": "button", "page": 2, "rect": { "x": 206, "y": 106, "w": 192, "h": 34 }, "text": "空槽位", "events": { "click": "on_tool_click" } },
+        { "id": "tool_my7", "type": "button", "page": 2, "rect": { "x": 404, "y": 106, "w": 192, "h": 34 }, "text": "空槽位", "events": { "click": "on_tool_click" } },
+        { "id": "tool_my8", "type": "button", "page": 2, "rect": { "x": 602, "y": 106, "w": 192, "h": 34 }, "text": "空槽位", "events": { "click": "on_tool_click" } },
+        { "id": "btn_my_reload", "type": "button", "page": 2, "rect": { "x": 8,   "y": 148, "w": 192, "h": 34 },
+          "text": "重新载入", "hint": "重读 mytools.ini 并刷新槽位",
+          "events": { "click": "on_btn_my_reload_click" } },
+        { "id": "btn_my_edit", "type": "button", "page": 2, "rect": { "x": 206, "y": 148, "w": 192, "h": 34 },
+          "text": "编辑 mytools.ini", "hint": "没有就先生成带注释的模板，再用记事本打开",
+          "events": { "click": "on_btn_my_edit_click" } },
+        { "id": "lab_my_hint", "type": "label", "page": 2, "rect": { "x": 404, "y": 156, "w": 408, "h": 44 },
+          "text": "首次点「编辑」会自动生成模板，里面 t1 是现成示例。", "style": "note" },
+        { "id": "lab_my_fmt", "type": "label", "page": 2, "rect": { "x": 8, "y": 200, "w": 804, "h": 56 },
+          "text": "mytools.ini 格式（8 个槽位 [t1]..[t8]）：\n  [t1]\n  name=显示的名字\ncmd=要执行的命令行\n空槽位灰着；name 或 cmd 留空都算空槽位。", "style": "note" },
+
+        { "id": "lab_sect_dev", "type": "label", "page": 3, "rect": { "x": 8, "y": 36, "w": 804, "h": 22 },
+          "text": "  设备与硬件", "style": "sect" },
+        { "id": "tool_devmgmt",  "type": "button", "page": 3, "rect": { "x": 8,   "y": 64, "w": 192, "h": 34 }, "text": "设备管理器",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_sound",    "type": "button", "page": 3, "rect": { "x": 206, "y": 64, "w": 192, "h": 34 }, "text": "声音",       "events": { "click": "on_tool_click" } },
+        { "id": "tool_printer",  "type": "button", "page": 3, "rect": { "x": 404, "y": 64, "w": 192, "h": 34 }, "text": "设备和打印机", "events": { "click": "on_tool_click" } },
+        { "id": "tool_tasks",    "type": "button", "page": 3, "rect": { "x": 602, "y": 64, "w": 192, "h": 34 }, "text": "计划任务",     "events": { "click": "on_tool_click" } },
+        { "id": "tool_diskmgmt", "type": "button", "page": 3, "rect": { "x": 8,   "y": 106, "w": 192, "h": 34 }, "text": "磁盘管理",     "events": { "click": "on_tool_click" } },
+        { "id": "tool_power",    "type": "button", "page": 3, "rect": { "x": 206, "y": 106, "w": 192, "h": 34 }, "text": "电源选项",     "events": { "click": "on_tool_click" } },
+        { "id": "tool_display",  "type": "button", "page": 3, "rect": { "x": 404, "y": 106, "w": 192, "h": 34 }, "text": "显示设置",     "events": { "click": "on_tool_click" } },
+        { "id": "tool_mouse",    "type": "button", "page": 3, "rect": { "x": 602, "y": 106, "w": 192, "h": 34 }, "text": "鼠标",         "events": { "click": "on_tool_click" } },
+        { "id": "lab_sect_reg", "type": "label", "page": 3, "rect": { "x": 8, "y": 150, "w": 804, "h": 22 },
+          "text": "  注册表 · 服务 · 策略", "style": "sect" },
+        { "id": "tool_services", "type": "button", "page": 3, "rect": { "x": 8,   "y": 178, "w": 192, "h": 34 }, "text": "服务",         "events": { "click": "on_tool_click" } },
+        { "id": "tool_gpedit",   "type": "button", "page": 3, "rect": { "x": 206, "y": 178, "w": 192, "h": 34 }, "text": "组策略",       "events": { "click": "on_tool_click" } },
+        { "id": "tool_appwiz",   "type": "button", "page": 3, "rect": { "x": 404, "y": 178, "w": 192, "h": 34 }, "text": "程序和功能",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_firewall", "type": "button", "page": 3, "rect": { "x": 602, "y": 178, "w": 192, "h": 34 }, "text": "防火墙",       "events": { "click": "on_tool_click" } },
+        { "id": "tool_sysdm",    "type": "button", "page": 3, "rect": { "x": 8,   "y": 220, "w": 192, "h": 34 }, "text": "系统属性",     "events": { "click": "on_tool_click" } },
+        { "id": "tool_timedate", "type": "button", "page": 3, "rect": { "x": 206, "y": 220, "w": 192, "h": 34 }, "text": "日期和时间",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_defender", "type": "button", "page": 3, "rect": { "x": 404, "y": 220, "w": 192, "h": 34 }, "text": "Windows 安全中心", "events": { "click": "on_tool_click" } },
+        { "id": "tool_update",   "type": "button", "page": 3, "rect": { "x": 602, "y": 220, "w": 192, "h": 34 }, "text": "Windows 更新", "events": { "click": "on_tool_click" } },
+        { "id": "lab_sect_info", "type": "label", "page": 3, "rect": { "x": 8, "y": 264, "w": 804, "h": 22 },
+          "text": "  系统信息与诊断", "style": "sect" },
+        { "id": "tool_msinfo",   "type": "button", "page": 3, "rect": { "x": 8,   "y": 292, "w": 192, "h": 34 }, "text": "系统信息",     "events": { "click": "on_tool_click" } },
+        { "id": "tool_dxdiag",   "type": "button", "page": 3, "rect": { "x": 206, "y": 292, "w": 192, "h": 34 }, "text": "DirectX 诊断", "events": { "click": "on_tool_click" } },
+        { "id": "tool_winver",   "type": "button", "page": 3, "rect": { "x": 404, "y": 292, "w": 192, "h": 34 }, "text": "系统版本",     "events": { "click": "on_tool_click" } },
+        { "id": "tool_resmon",   "type": "button", "page": 3, "rect": { "x": 602, "y": 292, "w": 192, "h": 34 }, "text": "资源监视器",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_perfmon",  "type": "button", "page": 3, "rect": { "x": 8,   "y": 334, "w": 192, "h": 34 }, "text": "性能监视器",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_eventvwr", "type": "button", "page": 3, "rect": { "x": 206, "y": 334, "w": 192, "h": 34 }, "text": "事件查看器",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_charmap",  "type": "button", "page": 3, "rect": { "x": 404, "y": 334, "w": 192, "h": 34 }, "text": "字符映射表",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_sndvol",   "type": "button", "page": 3, "rect": { "x": 602, "y": 334, "w": 192, "h": 34 }, "text": "音量合成器",   "events": { "click": "on_tool_click" } },
+
+        { "id": "lab_sect_disk", "type": "label", "page": 4, "rect": { "x": 8, "y": 36, "w": 804, "h": 22 },
+          "text": "  磁盘与空间", "style": "sect" },
+        { "id": "tool_cleanmgr", "type": "button", "page": 4, "rect": { "x": 8,   "y": 64, "w": 192, "h": 34 }, "text": "磁盘清理", "events": { "click": "on_tool_click" } },
+        { "id": "tool_dfrgui",   "type": "button", "page": 4, "rect": { "x": 206, "y": 64, "w": 192, "h": 34 }, "text": "碎片整理", "events": { "click": "on_tool_click" } },
+        { "id": "tool_storage",  "type": "button", "page": 4, "rect": { "x": 404, "y": 64, "w": 192, "h": 34 }, "text": "存储感知",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_recycle",  "type": "button", "page": 4, "rect": { "x": 602, "y": 64, "w": 192, "h": 34 }, "text": "回收站",     "events": { "click": "on_tool_click" } },
+        { "id": "lab_sect_tmp", "type": "label", "page": 4, "rect": { "x": 8, "y": 108, "w": 804, "h": 22 },
+          "text": "  临时与缓存（只打开 / 只查看，不自动删）", "style": "sect" },
+        { "id": "tool_temp",     "type": "button", "page": 4, "rect": { "x": 8,   "y": 136, "w": 192, "h": 34 }, "text": "用户临时目录",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_wintemp",  "type": "button", "page": 4, "rect": { "x": 206, "y": 136, "w": 192, "h": 34 }, "text": "系统临时目录",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_wucache",  "type": "button", "page": 4, "rect": { "x": 404, "y": 136, "w": 192, "h": 34 }, "text": "更新缓存目录",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_flushdns", "type": "button", "page": 4, "rect": { "x": 602, "y": 136, "w": 192, "h": 34 }, "text": "刷新 DNS 缓存", "events": { "click": "on_tool_click" } },
+        { "id": "lab_sect_maint", "type": "label", "page": 4, "rect": { "x": 8, "y": 180, "w": 804, "h": 22 },
+          "text": "  系统维护（校验类，不改动）", "style": "sect" },
+        { "id": "tool_sfc",      "type": "button", "page": 4, "rect": { "x": 8,   "y": 208, "w": 192, "h": 34 }, "text": "系统文件校验",     "events": { "click": "on_tool_click" } },
+        { "id": "tool_dism",     "type": "button", "page": 4, "rect": { "x": 206, "y": 208, "w": 192, "h": 34 }, "text": "映像完整性检查", "events": { "click": "on_tool_click" } },
+        { "id": "tool_rstrui",   "type": "button", "page": 4, "rect": { "x": 404, "y": 208, "w": 192, "h": 34 }, "text": "系统还原",         "events": { "click": "on_tool_click" } },
+        { "id": "tool_trouble",  "type": "button", "page": 4, "rect": { "x": 602, "y": 208, "w": 192, "h": 34 }, "text": "疑难解答",         "events": { "click": "on_tool_click" } },
+        { "id": "lab_clean_hint", "type": "label", "page": 4, "rect": { "x": 8, "y": 252, "w": 804, "h": 34 },
+          "text": "本页全部「只打开 / 只查看」：真清理请在磁盘清理界面里自己勾选，示例不自动删任何文件。sfc 用 /verifyonly 只校验不修复。", "style": "note" },
+
+        { "id": "lab_sect_priv", "type": "label", "page": 5, "rect": { "x": 8, "y": 36, "w": 804, "h": 22 },
+          "text": "  隐私入口（直达系统设置页，不改任何设置）", "style": "sect" },
+        { "id": "tool_privacy",  "type": "button", "page": 5, "rect": { "x": 8,   "y": 64, "w": 192, "h": 34 }, "text": "隐私总览",       "events": { "click": "on_tool_click" } },
+        { "id": "tool_mic",      "type": "button", "page": 5, "rect": { "x": 206, "y": 64, "w": 192, "h": 34 }, "text": "麦克风",         "events": { "click": "on_tool_click" } },
+        { "id": "tool_cam",      "type": "button", "page": 5, "rect": { "x": 404, "y": 64, "w": 192, "h": 34 }, "text": "摄像头",         "events": { "click": "on_tool_click" } },
+        { "id": "tool_loc",      "type": "button", "page": 5, "rect": { "x": 602, "y": 64, "w": 192, "h": 34 }, "text": "位置",           "events": { "click": "on_tool_click" } },
+        { "id": "tool_acthist",  "type": "button", "page": 5, "rect": { "x": 8,   "y": 106, "w": 192, "h": 34 }, "text": "活动历史记录", "events": { "click": "on_tool_click" } },
+        { "id": "tool_diag",     "type": "button", "page": 5, "rect": { "x": 206, "y": 106, "w": 192, "h": 34 }, "text": "诊断和反馈",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_adid",     "type": "button", "page": 5, "rect": { "x": 404, "y": 106, "w": 192, "h": 34 }, "text": "广告 ID",       "events": { "click": "on_tool_click" } },
+        { "id": "tool_speech",   "type": "button", "page": 5, "rect": { "x": 602, "y": 106, "w": 192, "h": 34 }, "text": "语音",           "events": { "click": "on_tool_click" } },
+        { "id": "lab_priv_note", "type": "label", "page": 5, "rect": { "x": 8, "y": 150, "w": 804, "h": 34 },
+          "text": "原版在这一页放的是真开关（改系统注册表 + 备份还原）。本工程注册表接口只能读写字符串值、没有删值与枚举，示例不碰系统键 —— 所以入口直达对应设置页，改不改由你在系统设置里决定；「装上/撤掉」模式在常用设置页用沙箱键完整演示。", "style": "note" },
+
+        { "id": "lab_sect_apps", "type": "label", "page": 6, "rect": { "x": 8, "y": 36, "w": 804, "h": 22 },
+          "text": "  已装应用与启动项", "style": "sect" },
+        { "id": "tool_apps",      "type": "button", "page": 6, "rect": { "x": 8,   "y": 64, "w": 192, "h": 34 }, "text": "应用和功能",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_optfeat",   "type": "button", "page": 6, "rect": { "x": 206, "y": 64, "w": 192, "h": 34 }, "text": "可选功能",     "events": { "click": "on_tool_click" } },
+        { "id": "tool_default",   "type": "button", "page": 6, "rect": { "x": 404, "y": 64, "w": 192, "h": 34 }, "text": "默认应用",     "events": { "click": "on_tool_click" } },
+        { "id": "tool_startup",   "type": "button", "page": 6, "rect": { "x": 602, "y": 64, "w": 192, "h": 34 }, "text": "启动应用",     "events": { "click": "on_tool_click" } },
+        { "id": "tool_starupdir", "type": "button", "page": 6, "rect": { "x": 8,   "y": 106, "w": 192, "h": 34 }, "text": "启动文件夹",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_progs",     "type": "button", "page": 6, "rect": { "x": 206, "y": 106, "w": 192, "h": 34 }, "text": "程序安装目录", "events": { "click": "on_tool_click" } },
+        { "id": "tool_appsflr",   "type": "button", "page": 6, "rect": { "x": 404, "y": 106, "w": 192, "h": 34 }, "text": "应用文件夹",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_tasklist",  "type": "button", "page": 6, "rect": { "x": 602, "y": 106, "w": 192, "h": 34 }, "text": "进程列表",     "events": { "click": "on_tool_click" } },
+
+        { "id": "lab_sect_rmenu", "type": "label", "page": 7, "rect": { "x": 8, "y": 36, "w": 804, "h": 22 },
+          "text": "  资源管理器入口", "style": "sect" },
+        { "id": "tool_sendto",    "type": "button", "page": 7, "rect": { "x": 8,   "y": 64, "w": 192, "h": 34 }, "text": "发送到文件夹",     "events": { "click": "on_tool_click" } },
+        { "id": "tool_desktop",   "type": "button", "page": 7, "rect": { "x": 206, "y": 64, "w": 192, "h": 34 }, "text": "桌面目录",         "events": { "click": "on_tool_click" } },
+        { "id": "tool_downloads", "type": "button", "page": 7, "rect": { "x": 404, "y": 64, "w": 192, "h": 34 }, "text": "下载目录",         "events": { "click": "on_tool_click" } },
+        { "id": "tool_terminal",  "type": "button", "page": 7, "rect": { "x": 602, "y": 64, "w": 192, "h": 34 }, "text": "在此处打开终端",   "events": { "click": "on_tool_click" } },
+        { "id": "tool_rmenu_loc", "type": "button", "page": 7, "rect": { "x": 8,   "y": 106, "w": 192, "h": 34 }, "text": "右键菜单位置", "hint": "打开 regedit 自己看；示例不代改", "events": { "click": "on_tool_click" } },
+        { "id": "tool_fonts",     "type": "button", "page": 7, "rect": { "x": 206, "y": 106, "w": 192, "h": 34 }, "text": "字体目录", "events": { "click": "on_tool_click" } },
+        { "id": "tool_recent",    "type": "button", "page": 7, "rect": { "x": 404, "y": 106, "w": 192, "h": 34 }, "text": "最近使用项目", "events": { "click": "on_tool_click" } },
+        { "id": "lab_sect_rmenu2", "type": "label", "page": 7, "rect": { "x": 8, "y": 150, "w": 804, "h": 22 },
+          "text": "  为什么这页没有「装上/撤掉」", "style": "sect" },
+        { "id": "lab_rmenu_note", "type": "label", "page": 7, "rect": { "x": 8, "y": 178, "w": 804, "h": 44 },
+          "text": "真右键集成要写 HKCR 下的 shell 键并支持删干净，本工程注册表接口只能读写字符串值、没有删值 —— 写上去就撤不干净，所以示例不碰系统右键。完整的「装上/撤掉 + 查看曾改动 + 还原」模式在「常用设置」页，落点是本工具箱自己的沙箱键。", "style": "note" }
       ]
     },
+
+    { "id": "lab_page", "type": "label", "rect": { "x": 12, "y": 608, "w": 340, "h": 22 },
+      "text": "本页 0 个（共 0 个）" },
+    { "id": "btn_search", "type": "button", "rect": { "x": 400, "y": 604, "w": 80, "h": 28 },
+      "text": "搜索", "hint": "切到搜索页并聚焦输入框", "events": { "click": "on_btn_search_click" } },
+    { "id": "btn_log", "type": "button", "rect": { "x": 488, "y": 604, "w": 80, "h": 28 },
+      "text": "日志", "hint": "开非模态日志窗口", "events": { "click": "on_btn_log_click" } },
+    { "id": "btn_theme", "type": "button", "rect": { "x": 576, "y": 604, "w": 104, "h": 28 },
+      "text": "切换到深色", "hint": "cg_theme_set_dark 运行时切换", "events": { "click": "on_btn_theme_click" } },
+    { "id": "btn_about", "type": "button", "rect": { "x": 688, "y": 604, "w": 72, "h": 28 },
+      "text": "关于", "events": { "click": "on_btn_about_click" } },
+    { "id": "btn_update", "type": "button", "rect": { "x": 768, "y": 604, "w": 80, "h": 28 },
+      "text": "检查更新", "events": { "click": "on_btn_update_click" } },
+
     {
-      "id": "lst_log",
-      "type": "listbox",
-      "rect": { "x": 12, "y": 512, "w": 796, "h": 100 },
-      "hint": "逐行记录操作；长到 400 条会自动清一次，免得无限增长"
+      "id": "dlg_log", "type": "dialog", "rect": { "x": 200, "y": 160, "w": 460, "h": 330 },
+      "text": "运行日志",
+      "children": [
+        { "id": "lst_log", "type": "listbox", "rect": { "x": 8, "y": 8, "w": 444, "h": 250 },
+          "hint": "逐行记录操作；长到 400 条自动清一次" },
+        { "id": "btn_log_clear", "type": "button", "rect": { "x": 8, "y": 264, "w": 110, "h": 30 },
+          "text": "清空日志", "events": { "click": "on_btn_log_clear_click" } }
+      ]
     }
   ]
 }
