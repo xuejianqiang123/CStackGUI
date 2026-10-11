@@ -431,6 +431,7 @@ CStackGUI\
     encconv\                   编码与换行转换器（GBK ↔ UTF-8 + 换行统一：先按严格 UTF-8 校验判定，超限只跳过不截断）
     drawpad\                   画板（拖拽作图 / 撤销重做 / 导出 PNG；讲清"图形是被录制的绘制命令"）
     palette\                   调色板（取色 + HEX/rgb/hsl/相对亮度/对比度换算 + 8 格调色板 + 导出 CSS）
+    toolbox\                   工具箱启动器（多页签按钮墙 + 搜索过滤 + 一键启动外部程序 + 最近使用，参照 mxx1-toolbox）
   apps\                        你自己的工程（画布导出的默认位置）
     README.md                  这个目录是干嘛的
   build-runtime.bat            编译运行时库
