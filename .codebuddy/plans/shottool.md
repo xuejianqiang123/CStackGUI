@@ -88,8 +88,9 @@
 - [x] P2a runtime（6 个 API：`cg_screen_capture`/`cg_screen_size`/`cg_clip_set_image`/
       `cg_hotkey_set`/`cg_win_set_border`/`cg_scale_px`）
 - [x] P2b 示例（`examples/shottool/` 面板 + 画布 + 托盘 + 热键动作）
-- [ ] P2c 文档 **未做**：README 示例清单 / 教学使用说明 §6§7 / supportlib.ts 收录 6 个新函数
-      都没挂（`check-support` 只提示不红、`check-examples --docs` 只有既有的"六课 0 课"10 处红）
+- [x] P2c 文档：README §1.2 清单 + §4.1 目录树、教学使用说明 §6 行 + §7 详解、
+      supportlib.ts 收 6 条新 API、示例 `shottool/README.md`。
+      补挂时踩到 `check-support` 逮的"手写条数 305 ≠ 真值 311"，已改 311 复跑 [ok]
 - [x] P3 门禁（2026-10-13 代为复验后提交）：`build-app shottool`/`calculator` 零警告；
       两个 `--selftest` 五项全 0；`run-tests` all checks passed；dispatch 20 条 /
       layers 314 项 / support / kinds 45 种 全绿
@@ -99,3 +100,27 @@
       秒级文件名 UI 不可达……）。修复后 run-tests/dispatch/layers/selftest 全绿。
       未验证假设：撞号正反例没做运行时复现（单热键复现不了，依据是逻辑推演）。
 - [x] P5 提交（2026-10-13 由另一会话代提交：进度段在此回写）
+- [x] P5 补提交（同一天：`8bb0886` 抓选区隔一拍 + 收尾日志、`45cbf2f` 示例 README、
+      `d05ef12` 文档三件、`3c0752a` 审查报告合并两轮结论）
+
+## 收敛（P7）
+
+**Converged**。spec 六条验收逐条有证据，见 `.codebuddy/code-reviews/2026-10-13-shottool.md` 第二/三节：
+
+1. `build-app shottool` 零警告 ✓（含本轮补的 `crop_tick` 前向声明后复编）
+2. `shottool --selftest` 22 控件 / 9 回调 / 五项全 0 ✓
+3. `build-all` 18/18 示例（含 shottool）✓，唯一红项 `examples\base` 是既有重组遗留
+4. `run-tests` `all checks passed` ✓；`check-format` 各子步骤逐个跑过全 [ok]，
+   复合脚本的 lesson 路径红项与 `--docs` 10 处红项**均为既有遗留、与本功能无关**
+5. 真机闭环 ✓：热键（后台触发）→ 框选（坐标与拖拽一致）→ 标注（red=1824）→
+   存图（400x260、yellow=0）+ 剪贴板有图；取消路径不存图
+6. 文档四件 + 支持库 6 条已挂，条数同步 311 ✓
+
+**与计划的偏离（2 处）**：
+1. 热键表没放进 `cg_win_state_t`，改为 `cg_win_window.c` 文件私有静态 +
+   `cg_win_internal.h` 两个后端声明（少动一处内部结构体）。
+2. 框选松手后**先隔一拍再抓选区**（新增 `s_cropping` + `crop_tick`）：计划里没有，
+   是真机实测发现"橡皮筋/提示行会被截进成品"后补的（修前 yellow=1971 → 修后 0）。
+
+**遗留**：门禁对 `examples\base` 的路径过期（建议单开修 bug 旁路）；
+文字工具双击会落两个（已写进 README）；非 100% DPI 与多屏未实测。
