@@ -1210,6 +1210,41 @@
           },
           "page": 2,
           "src": "about:blank"
+        },
+        {
+          "id": "il_demo",
+          "type": "iconlist",
+          "rect": {
+            "x": 20,
+            "y": 584,
+            "w": 460,
+            "h": 164
+          },
+          "page": 2,
+          "check": true,
+          "hint": "图标列表：点行选中、点勾选框、上下键换行、双击触发 dblclick",
+          "items": [
+            "复制文件路径",
+            "解除文件占用",
+            "用记事本打开"
+          ],
+          "events": {
+            "select": "on_il_select",
+            "check": "on_il_check",
+            "dblclick": "on_il_dblclick"
+          }
+        },
+        {
+          "id": "lab_il",
+          "type": "label",
+          "rect": {
+            "x": 496,
+            "y": 584,
+            "w": 196,
+            "h": 160
+          },
+          "page": 2,
+          "text": "图标列表（iconlist）：\n点左边的行 / 勾选框，\n或按上下键与空格。"
         }
       ]
     },

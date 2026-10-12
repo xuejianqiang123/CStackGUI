@@ -983,6 +983,91 @@ static void on_rate_change(cg_widget_t *self, cg_event_t ev, void *user)
     lab_statusf(cg_app_of(self), "评分: %d / %d", cg_widget_value(self), 5);
 }
 
+/* ------------------------------------------------------------ 图标列表（iconlist） */
+
+/**
+ * @brief 页 2 图标列表初始化：给 .cgui 预置的三行补图标/副标题/状态，再追加三行完整数据
+ * @param app 所属应用
+ * @return void 无返回值
+ * @note 演示两种数据来源：.cgui 的 items（只有主标题，用 set_row 补全）+ 运行时 add；
+ *       图标只在绘制时才加载，所以自检（无窗）跑这段也零副作用。
+ */
+static void il_ready(cg_app_t *app)
+{
+    cg_widget_t *il = cg_find(app, "il_demo");
+
+    if (!il) return;
+    /* 前三行来自 .cgui 的 items：这里补图标 / 副标题 / 右侧状态 */
+    cg_iconlist_set_row(il, 0, "assets/icon.png", "复制文件路径",
+                        "\"...\\Mxx1Toolbox.exe\" copypath --name \"%1\"", "在用 · 用户区");
+    cg_iconlist_set_row(il, 1, "assets/icon.png", "解除文件占用",
+                        "\"...\\Mxx1Toolbox.exe\" rightmenu unlock \"%1\"", "在用 · 用户区");
+    cg_iconlist_set_row(il, 2, NULL, "用记事本打开", "notepad %1", "在用 · 系统区（要管理员）");
+    cg_iconlist_set_checked(il, 1, 1);
+    /* 运行时追加的三行：图标 / 副标题 / 状态一次给全 */
+    cg_iconlist_add(il, "assets/icon.png", "使用微信输入法隔空传送",
+                    "\"...\\WeType_update.exe\" --filetransfer \"%1\"", "已禁用 · 用户区");
+    cg_iconlist_add(il, NULL, "获取管理员所有权限",
+                    "cmd.exe /c takeown /f \"%1\" & icacls \"%1\" /grant administrators:F",
+                    "在用 · 系统区（要管理员）");
+    cg_iconlist_add(il, "assets/icon.png", "7-Zip Shell Extension（扩展项）",
+                    "CLSID {23170F69-3C4C-1000-0001-000000000000} · 7-zip.dll",
+                    "扩展项 · 系统区");
+    cg_iconlist_set_checked(il, 4, 1);
+    log_line(app, "iconlist 就绪：%d 行（3 行来自 .cgui items + 3 行运行时 add）",
+           cg_iconlist_count(il));
+}
+
+/**
+ * @brief 图标列表点行选中：状态标签与日志写出选中的行
+ * @param self 图标列表控件
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
+ */
+static void on_il_select(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    int row = cg_widget_value(self);
+
+    (void)ev; (void)user;
+    lab_statusf(cg_app_of(self), "图标列表选中第 %d 行", row + 1);
+    log_line(cg_app_of(self), "iconlist select: row=%d / 共 %d 行", row, cg_iconlist_count(self));
+}
+
+/**
+ * @brief 图标列表勾选变化：数一遍勾选行数写进日志
+ * @param self 图标列表控件
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
+ */
+static void on_il_check(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    int i, n = cg_iconlist_count(self), chk = 0;
+
+    (void)ev; (void)user;
+    for (i = 0; i < n; i++)
+        if (cg_iconlist_checked(self, i)) chk++;
+    lab_statusf(cg_app_of(self), "勾选 %d / %d 行", chk, n);
+    log_line(cg_app_of(self), "iconlist check: 勾选 %d 行", chk);
+}
+
+/**
+ * @brief 图标列表双击：写出双击的那一行标题（双击由运行时从 click 合成，不用自己判时间）
+ * @param self 图标列表控件
+ * @param ev 事件类型（本回调不用）
+ * @param user 调用方传进来的业务数据（本回调不用）
+ * @return void 无返回值
+ */
+static void on_il_dblclick(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    int row = cg_widget_value(self);
+
+    (void)ev; (void)user;
+    lab_statusf(cg_app_of(self), "双击了第 %d 行", row + 1);
+    log_line(cg_app_of(self), "iconlist dblclick: row=%d", row);
+}
+
 /**
  * @brief 分页控件翻页时把页号（从 1 起）写到页内状态标签
  * @param self 该分页控件
@@ -1183,6 +1268,7 @@ static void on_ready(cg_app_t *app, void *user)
     hello_ready(app, biz);
     gallery_ready(app, biz);
     lab_ready(app, user);
+    il_ready(app);
 }
 
 /* ------------------------------------------------------------ 多窗体（对话框）
@@ -1269,6 +1355,9 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND("on_lab_table_select", on_lab_table_select),
     CG_BIND("on_canvas_click",  on_canvas_click),
     CG_BIND("on_rate_change",   on_rate_change),
+    CG_BIND("on_il_select",     on_il_select),
+    CG_BIND("on_il_check",      on_il_check),
+    CG_BIND("on_il_dblclick",   on_il_dblclick),
     CG_BIND("on_page_change",   on_page_change),
     CG_BIND("on_tag_click",     on_tag_click),
     CG_BIND("on_switch_change", on_switch_change),
