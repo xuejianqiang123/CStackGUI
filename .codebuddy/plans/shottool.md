@@ -93,6 +93,9 @@
 - [x] P3 门禁（2026-10-13 代为复验后提交）：`build-app shottool`/`calculator` 零警告；
       两个 `--selftest` 五项全 0；`run-tests` all checks passed；dispatch 20 条 /
       layers 314 项 / support / kinds 45 种 全绿
-- [ ] P4 审查 **未做**：三角色审查报告没落盘 —— 遗留（新 API 含 BitBlt/热键注册/
-      剪贴板句柄，建议补一轮 memory_leak + error_handling 审查）
+- [x] P4 审查（2026-10-13）：报告 `.codebuddy/code-reviews/2026-10-13-shottool.md`。
+      修 1 条 🟠（热键 id 按下标分配在 swap 删除后撞存留条目 → 改查表挑空闲 id）；
+      R2 驳倒 8 条（CreateCompatibleDC 与全仓 7 处惯例一致、set_image 拷贝已证、
+      秒级文件名 UI 不可达……）。修复后 run-tests/dispatch/layers/selftest 全绿。
+      未验证假设：撞号正反例没做运行时复现（单热键复现不了，依据是逻辑推演）。
 - [x] P5 提交（2026-10-13 由另一会话代提交：进度段在此回写）
