@@ -259,7 +259,7 @@ actions）并进本文档——同一块界面（端口设置、页眉页脚）�
 | `input` | 整数 | 否 | `edit`：输入方式。`1` 只读（能选中、改不了）/ `2` 密码（显示成圆点）/ `3` 整数文本 / `4` 小数文本 / `5` 字节 / `6` 短整数 / `7` 整数 / `8` 长整数 / `9` 小数 / `10` 双精度小数 / `11` 日期时间。**不写 = 0 = 通常方式**。`3` 靠 `ES_NUMBER`；`4`~`11` 由运行时把关：**按键**只放行该类型可能出现的字符（数字、负号、小数点、日期分隔符，非法字符连 `char` 事件都不发），**失焦**时能解析就夹到类型范围（字节 0~255、短整数 ±32767、整数 ±21 亿）并重写文本，解析不了就清空（"没填"是合法状态，运行时不会弹窗）|
 | `border` | 整数 | 否 | `edit`：边框样式 `1` 无边框 / `2` 凹入式 / `3` 凸出式 / `4` 浅凹入式 / `5` 镜框式 / `6` 单线边框式。**不写 = 0 = 本工程原本的 M3 圆角描边**（和上面六种并列，方便老文件不动） |
 | `spin` | 整数 | 否 | `edit`：右侧上下调节器 `1` 自动（点一下按 ±1 改值并夹到 `min`/`max`）/ `2` 手动（只派发 `spin` 事件，值由业务自己改）。**不写 = 0 = 无调节器**；**写了它就是数值框**：`value` 是真相、显示文本由它派生（`text` 对它不生效），`cg_widget_value()`/`set_value()`/绑定都按值走 —— 这就是原来独立类型 `spinner` 的能力。多行输入框没有调节器 |
-| `items` | 字符串数组 | 否 | `listbox` / `combo` / `tabs`（页签文字）/ `statusbar`（分段文字）/ `toolbar`（按钮文字）的内容 |
+| `items` | 字符串数组 | 否 | `listbox` / `combo` / `tabs`（页签文字）/ `statusbar`（分段文字）/ `toolbar`（按钮文字）/ `iconlist`（每项 = 一行主标题，图标/副标题/状态由 `cg_iconlist_*` 运行时灌）的内容 |
 | `nodes` | 对象数组 | 否 | `tree` 的节点树（2.5）或 `menu`/`menubutton` 的菜单项（2.7）|
 | `columns` / `rows` | 数组 | 否 | `table` 的列与行，见 2.6 |
 
@@ -886,6 +886,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `tabs` | 标签页 | **是** | 320×220 | — | `select`、`gotfocus`、`lostfocus` | `SysTabControl32`；子控件按 `page` 显隐 |
 | `tree` | 树 | 否 | 220×180 | — | `select`、`dblclick`、`expand`、`collapse`、`gotfocus`、`lostfocus` | `SysTreeView32` |
 | `table` | 表格 | 否 | 360×180 | — | `select`、`dblclick`、`check`、`gotfocus`、`lostfocus` | `SysListView32` 报表模式（`check`/`multi` 开勾选列与多选）|
+| `iconlist` | 图标列表 | 否 | 240×180 | — | `click`、`dblclick`（由 `click` 按系统双击间隔合成）、`select`、`check`、`gotfocus`、`lostfocus` | 自绘窗口类 `CStackGUIIconList`：行 = 〔复选框（`check` 开关，与 `table` 同名字段同义）〕+ 图标 + 主/副标题两行 + 右侧状态，可滚动（`WS_VSCROLL` 自己滚内容）；数据走 `cg_iconlist_*`，`items` 每项 = 一行主标题 |
 | `statusbar` | 状态栏 | 否 | 400×24 | — | **无** | `msctls_statusbar32` |
 | `terminal` | 终端 | 否 | 360×200 | — | **无** | 只读 RichEdit：按行着色（RX 绿 / TX 蓝 / 自己记的灰）、可选中复制，见 2.9 |
 | `chart` | 图表 | 否 | 320×160 | — | **无** | 自绘折线 / 柱状图：滑动窗口 + 超像素密度时按列画 min/max，见 2.10 |

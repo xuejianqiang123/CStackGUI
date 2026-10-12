@@ -164,7 +164,7 @@ void cb(cg_widget_t *self, cg_event_t ev, void *user);
 | `separator` | 分割线 | 否 | `STATIC` + `SS_ETCHEDHORZ` |
 | `image` | 图片 | 否 | 自注册窗口类 `CStackGUIImage`，GDI+ 读图 + 自绘缩放 |
 
-> 这里只是常用控件的速览。**完整 44 行类型表**（含 `progressring` / `timer` / `canvas` / `colorpicker` /
+> 这里只是常用控件的速览。**完整 45 行类型表**（含 `progressring` / `timer` / `canvas` / `colorpicker` /
 > `browser` / `shape` / `badge` / `tag` / `rate` / `pagination`）见
 > [docs/CGUI-FORMAT.md](CGUI-FORMAT.md) 第 4 节。
 
@@ -278,6 +278,7 @@ runtime/
       cg_widget_list.c  列表 / 状态栏 / 菜单 / 提示·周期 / 图片，外加 cg_widget_add（零散属主）
       cg_widget_tree.c  树，外加跨文件共用的 want_type
       cg_widget_table.c 表格
+      cg_widget_iconlist.c 图标列表（iconlist）的行数据 API（add/clear/checked/set_row）
       cg_widget_tabs.c  标签页
       cg_widget_split.c 分隔条
       cg_layout.c       余量分配：按 .cgui 的 grow，把容器尺寸变化分给兄弟控件（纯整数，可纯单测）
@@ -309,6 +310,7 @@ runtime/
       cg_win_draw_canvas.c  image / 圆环 / 进度条 / 画板（各自的窗口类与窗口过程）
       cg_win_draw_panel.c   面板（group/box/card/shape）与分隔条
       cg_win_draw_chart.c   图表
+      cg_win_draw_iconlist.c 图标列表（自绘行列表：绘制 / 点选勾选 / 滚动 / 键盘导航）
       cg_win_draw_gauge.c   状态灯与仪表盘
       cg_win_ownerdraw.c owner-draw 项绘制与 WM_DRAWITEM 分发
       cg_win_menu.c     菜单与工具栏
