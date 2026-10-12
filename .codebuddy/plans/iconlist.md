@@ -154,8 +154,16 @@
 
 ## 6. 进度段（换会话续跑先读这里）
 
-- [x] P0 上下文：两轮 code-explorer 挖底（触点清单在会话记录，关键位置已抄进 §2 各步）
+- [x] P0 上下文：两轮 code-explorer 挖底
 - [x] P1 计划：本文件
-- [ ] S1..S9 实现与门禁
-- [ ] S10 审查 + 提交
-- 遗留（本轮不做）：toolbox 接入 iconlist（`lst_recent` 换装）、exe 图标提取、分组标题行、ctrl/shift 多选
+- [x] S1..S9 实现与门禁（全部通过；build-all/check-format 有 3 处**既有红**由 2026-10-12 `temp` 提交 657cc2c 的 examples/base 半迁移造成，与本改动无关，逐条证据见审查报告「既有红」节）
+- [x] S10 审查 + 提交：报告 `.codebuddy/code-reviews/2026-10-12-iconlist.md`；提交 5 批
+      6f56f94（运行时+单测+契约）/ 3bb2544（画布）/ 9c7e4d7（示例）/ b31a05e（文档）/ 7601b39（计划与报告）
+- **已 Converged**（spec §1.3 逐条核对：1~7 全过，第 1/3 条带既有红说明）
+- 计划偏离（2 处，均已就地说明）：
+  1. API `set_status` → 实现为更通用的 `cg_iconlist_set_row`（一次改整行，勾选态保持）；
+  2. 计划外新增 1 条 check-dispatch 锚定（`cgw_create_native` 的 GWLP_USERDATA 白名单）——
+     实现时真踩了"新自绘控件漏登记 → 首帧兜底灰"（截图+探针日志定位），按机器兜底原则就地钉住。
+- 遗留（本轮不做）：toolbox 接入 iconlist（`lst_recent` 换装）、exe/DLL 图标提取（ExtractIconEx）、
+  分组标题行、ctrl/shift 多选；截图探针脚本在 `build\shot-page2.ps1` / `build\shot-ilpage.ps1`（含
+  mouse_event 必须先 SetCursorPos、gallery.exe 单文件 RC 内嵌 .cgui 优先于磁盘文件两条坑）
