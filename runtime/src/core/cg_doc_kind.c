@@ -59,6 +59,9 @@ static const cg_kind_info_t k_kinds[] = {
     { "tabs",       CG_K_TABS,       1, 320, 220, "",     CG_EV_SELECT | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
     { "tree",       CG_K_TREE,       0, 220, 180, "",     CG_EV_SELECT | CG_EV_DBLCLICK | CG_EV_EXPAND | CG_EV_COLLAPSE | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
     { "table",      CG_K_TABLE,      0, 360, 180, "",     CG_EV_SELECT | CG_EV_DBLCLICK | CG_EV_CHECK | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
+    /* 图标列表：自绘行列表（复选框 + 图标 + 两行文字 + 右侧状态）。事件抄 table 一套外加 click ——
+     * dblclick 不是原生通知，是 cg_dispatch 按系统双击间隔从 click 合成的（见 cg_event.c），必须发 click 才有双击。 */
+    { "iconlist",    CG_K_ICONLIST,   0, 240, 180, "",     CG_EV_CLICK | CG_EV_DBLCLICK | CG_EV_SELECT | CG_EV_CHECK | CG_EV_GOTFOCUS | CG_EV_LOSTFOCUS },
     { "statusbar",  CG_K_STATUS,     0, 400,  24, "",     0 },
     { "menu",       CG_K_MENU,       0,   0,   0, "",     CG_EV_CLICK },
     { "menubutton", CG_K_MENUBUTTON, 0, 130,  32, "菜单", CG_EV_CLICK },

@@ -168,6 +168,7 @@ void cgw_layout_reset(cg_app_t *app);
 #define CG_CHART_CLASS  L"CStackGUIChart"
 #define CG_LED_CLASS    L"CStackGUILed"
 #define CG_METER_CLASS  L"CStackGUIMeter"
+#define CG_ICONLIST_CLASS L"CStackGUIIconList"
 
 /* 时钟（timer）控件没有自己的窗口，Win32 定时器 id 直接复用 ctrl_id，
  * 这样 WM_TIMER 里按 wp 反查一次就能找到控件。 */
@@ -466,6 +467,17 @@ void cgw_register_meter_class(void);
  * @return void 无返回值（重复注册由系统忽略）
  */
 void cgw_register_panel_class(void);
+/**
+ * @brief 注册图标列表自绘窗口类（iconlist）
+ * @return void 无返回值（重复注册由系统忽略）
+ */
+void cgw_register_iconlist_class(void);
+/**
+ * @brief 释放一个 iconlist 控件的全部行图标位图（DestroyWindow 与关窗两条路径调）
+ * @param w 控件；非 iconlist 时空操作
+ * @return void 无返回值（行字符串归 core 的 cg_widget_free）
+ */
+void cgw_iconlist_free_bmps(cg_widget_t *w);
 /**
  * @brief 面板窗口过程（group / box / card / shape）：转发子控件通知 + 自绘底板
  * @param hwnd 面板窗口

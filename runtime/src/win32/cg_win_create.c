@@ -83,6 +83,7 @@ void cgw_create_native(cg_widget_t *w)
     if (!strcmp(type, "chart")) cgw_register_chart_class();
     if (!strcmp(type, "led")) cgw_register_led_class();
     if (!strcmp(type, "meter")) cgw_register_meter_class();
+    if (!strcmp(type, "iconlist")) cgw_register_iconlist_class();
 
     /* browser 的窗口名就是起始地址（AtlAxWin 的约定） */
     if (!strcmp(type, "browser") && w->src && *w->src) {
@@ -123,7 +124,7 @@ void cgw_create_native(cg_widget_t *w)
         !strcmp(type, "image") || !strcmp(type, "progressring") ||
         !strcmp(type, "progress") || !strcmp(type, "splitter") ||
         !strcmp(type, "chart") || !strcmp(type, "led") || !strcmp(type, "meter") ||
-        !strcmp(type, "canvas")) {
+        !strcmp(type, "canvas") || !strcmp(type, "iconlist")) {
         SetWindowLongPtrW(h, GWLP_USERDATA, (LONG_PTR)app);
     }
 
@@ -224,6 +225,7 @@ void cgw_destroy_native(cg_widget_t *w)
         DeleteObject((HGDIOBJ)w->bitmap);
         w->bitmap = NULL;
     }
+    cgw_iconlist_free_bmps(w);                  /* 图标列表的行图标位图（字符串归 core） */
     if (w->imglist) {                           /* 表格行图标 */
         ImageList_Destroy((HIMAGELIST)w->imglist);
         w->imglist = NULL;

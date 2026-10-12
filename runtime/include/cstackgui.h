@@ -757,6 +757,8 @@ const char *cg_widget_list_item(const cg_widget_t *w, int index);
  * @note 日志类控件常用
  */
 void cg_widget_list_scroll_bottom(cg_widget_t *w);
+/* 图标列表（iconlist，带图标的行列表）的 cg_iconlist_add / clear / count /
+   set_checked / checked / set_row 见下面「图标列表（iconlist）」分节（chart 分节之前）。 */
 
 /* ---------------------------------------------------------------- 树 */
 /**
@@ -1351,6 +1353,70 @@ int  cg_term_count(const cg_widget_t *w);
  * @return int 0 成功、非 0 失败
  */
 int  cg_term_save(cg_widget_t *w, const char *path);
+
+/* ------------------------------------------------------------ 图标列表（iconlist）
+ * 一列可滚动的行列表：〔复选框〕+ 左图标 + 主标题（大字）+ 副标题（第二行小字）+ 右侧状态，
+ * 对标设置页那种"图标 + 两行说明 + 右边一句状态"的行。全自绘（Win32 原生没有这种控件）。
+ *
+ *   cg_iconlist_add(il, "assets/app.png", "复制文件路径", "\"...\\x.exe\" copypath", "在用 · 用户区");
+ *
+ * 这几个字段在这个控件上有专门含义：
+ *   check   = 1 时每行左侧显示复选框（.cgui 写 "check": true，与 table 的同名字段同义）
+ *   items   = 初始行（每个字符串是一行的**主标题**，图标/副标题/状态留空，运行时再灌）
+ *   value   = 当前选中行下标（读 cg_widget_value，写 cg_widget_set_value）
+ * 勾选态是**每行**的（cg_iconlist_set_row 一族），与 checkbox 控件的整控件 checked 无关。
+ * 双击由运行时按系统双击间隔从 click 合成 —— 业务只绑 dblclick 即可，不用自己判时间。
+ */
+/**
+ * @brief 往图标列表末尾加一行
+ * @param w iconlist 控件；类型不符返回 -1
+ * @param icon 图标路径（png/jpg/bmp/gif，相对 .cgui 目录或绝对；NULL / 空 = 无图标画占位框）
+ * @param title 主标题（单行，超长省略号裁剪）
+ * @param sub 副标题（第二行小灰字；NULL / 空 = 不画）
+ * @param status 右侧状态文字（右对齐；NULL / 空 = 不画）
+ * @return int 新行号；内存不足或类型不符返回 -1
+ */
+int  cg_iconlist_add(cg_widget_t *w, const char *icon, const char *title,
+                     const char *sub, const char *status);
+/**
+ * @brief 清空全部行
+ * @param w iconlist 控件；类型不符忽略
+ * @return void 无返回值
+ */
+void cg_iconlist_clear(cg_widget_t *w);
+/**
+ * @brief 当前有多少行
+ * @param w iconlist 控件；NULL 或类型不符返回 0
+ * @return int 行数
+ */
+int  cg_iconlist_count(const cg_widget_t *w);
+/**
+ * @brief 改一行的勾选态
+ * @param w iconlist 控件
+ * @param row 行号（越界忽略）
+ * @param checked 1 = 勾选，0 = 取消
+ * @return void 无返回值
+ */
+void cg_iconlist_set_checked(cg_widget_t *w, int row, int checked);
+/**
+ * @brief 读一行的勾选态
+ * @param w iconlist 控件
+ * @param row 行号
+ * @return int 1 = 已勾选；行无效返回 0
+ */
+int  cg_iconlist_checked(const cg_widget_t *w, int row);
+/**
+ * @brief 改写一行的内容（勾选态保持不变）
+ * @param w iconlist 控件
+ * @param row 行号（越界忽略）
+ * @param icon 新图标路径；NULL / 空 = 清成无图标
+ * @param title 新主标题；NULL / 空 = 清空
+ * @param sub 新副标题；NULL / 空 = 清空
+ * @param status 新状态文字；NULL / 空 = 清空
+ * @return void 无返回值
+ */
+void cg_iconlist_set_row(cg_widget_t *w, int row, const char *icon, const char *title,
+                         const char *sub, const char *status);
 
 /* ------------------------------------------------------------ 折线 / 柱状图（chart）
  * 实时数据可视化的那块：业务按采样节奏 push 点，窗口、范围、网格与绘制都由控件管。

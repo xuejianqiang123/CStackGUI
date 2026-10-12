@@ -24,6 +24,26 @@ typedef struct {
     int   expanded;
 } cg_tree_row_t;
 
+/** 图标列表（iconlist）的一行：图标 + 主标题 + 副标题 + 右侧状态文字 + 勾选态。
+ *  前四个为 NULL / 空串都表示"这一段没有"，绘制时各自跳过。 */
+typedef struct {
+    char *icon;    /**< 图标文件路径（png/jpg/bmp/gif；NULL = 无图标，画占位框） */
+    char *title;   /**< 主标题（大字，单行，超长省略号裁剪） */
+    char *sub;     /**< 副标题（第二行小灰字，可空） */
+    char *status;  /**< 右侧状态文字（右对齐，可空） */
+    int   checked; /**< 勾选态（控件的 check 字段决定显不显示复选框列） */
+    void *bmp;     /**< 后端：图标 HBITMAP 缓存（win32 维护，core 只经 cgw_iconlist_row_free 碰它） */
+    char *bmp_src; /**< 后端：位图对应的路径（变了才重新加载，仿 sync_bitmap 的口径） */
+} cg_ilrow_t;
+
+/**
+ * @brief 释放一行的后端图标位图（DeleteObject + 释放 bmp_src），行的字符串归 core
+ * @param row 目标行；NULL 安全
+ * @return void 无返回值
+ * @note 由 cg_widget_iconlist.c 的 clear/set_row/free 调；无窗（自检）时 bmp 恒 NULL，是空操作
+ */
+void cgw_iconlist_row_free(cg_ilrow_t *row);
+
 /** 画板的一条绘制命令（WM_PAINT 时按记录顺序回放） */
 typedef struct cg_canvas_op {
     int      type;      /* CG_CANVAS_OP_* */
@@ -265,6 +285,14 @@ struct cg_widget {
     char         **row_icon;     /* 每行图标路径（NULL = 无） */
     int            row_icon_n;
     void          *imglist;      /* HIMAGELIST，惰性创建 */
+
+    /* 图标列表（iconlist）：行数据在 il_rows（唯一真相，绘制时读）；
+       check 字段复用 table 的"显示复选框列"语义，这里不再单开一个 */
+    cg_ilrow_t *il_rows;
+    int         il_n;
+    int         il_cap;
+    int         il_scroll;   /* 首个可见行（行单位；滚动条与滚轮都动它） */
+    int         il_hover;    /* 悬停行（-1 = 无），WM_MOUSEMOVE 维护 */
 
     /* 画板：绘制命令记录（重绘时按序回放） */
     struct cg_canvas_op *ops;

@@ -89,6 +89,20 @@ const RULES = [
        + "2026-09-23 之前这里是空的：给图片绑 click 永远不触发。",
   },
   {
+    scope: "func", file: "runtime/src/win32/cg_win_draw_iconlist.c", func: "IconListProc",
+    must: ["CG_EVENT_SELECT", "CG_EVENT_CHECK", "CG_EVENT_CLICK"],
+    why: "iconlist 的 select/check/dblclick 是 k_kinds 承诺过的，而这个自绘类没有任何原生通知 —— "
+       + "三个派发点（点行 / 点复选框 / 左键抬起）丢了哪个，对应事件就静默失效"
+       + "（--selftest 直接调函数指针，看不出派发点没了）。",
+  },
+  {
+    scope: "func", file: "runtime/src/win32/cg_win_create.c", func: "cgw_create_native",
+    must: ['!strcmp(type, "iconlist")', "GWLP_USERDATA"],
+    why: "自绘窗口类的窗口过程靠 GWLP_USERDATA 反查 app —— 新增自绘控件不登记进这张白名单，"
+       + "窗口过程拿到 NULL 的 app，控件首帧只画兜底灰（2026-10-12 iconlist 首版就漏了这里，"
+       + "是靠截图 + 探针日志定位出来的）。",
+  },
+  {
     scope: "func", file: "runtime/src/win32/cg_win_event.c", func: "cgw_FocusProc",
     must: ['cgw_is_t(w, "edit")', "CG_EVENT_CLICK", "* 100 / sc"],
     why: "edit 声明了 dblclick，但 EDIT 既不发 BN_CLICKED、也不产生 WM_LBUTTONDBLCLK"

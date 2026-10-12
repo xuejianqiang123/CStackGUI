@@ -505,6 +505,7 @@ static void win_shutdown(cg_app_t *app)
             DeleteObject((HGDIOBJ)w->bitmap);
             w->bitmap = NULL;
         }
+        cgw_iconlist_free_bmps(w);              /* 图标列表的行图标位图（关窗路径不走 destroy） */
         if (w->imglist) {                 /* 表格/列表的图标列表：关窗路径不走 cgw_destroy_native
              * （cgw_destroy_native 只在单个控件动态删除时调），必须在这里收，
              * 否则每次关窗漏一个 HIMAGELIST */

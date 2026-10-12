@@ -142,6 +142,14 @@ void cg_widget_free(cg_widget_t *w)
     free(w->row_val);
     for (int i = 0; i < w->row_icon_n; i++) free(w->row_icon[i]);
     free(w->row_icon);
+    for (int i = 0; i < w->il_n; i++) {          /* 图标列表：先还后端位图，再放行字符串 */
+        cgw_iconlist_row_free(&w->il_rows[i]);
+        free(w->il_rows[i].icon);
+        free(w->il_rows[i].title);
+        free(w->il_rows[i].sub);
+        free(w->il_rows[i].status);
+    }
+    free(w->il_rows);
     free(w->item_map);
     free(w->src);
     free(w->bitmap_src);
@@ -366,6 +374,21 @@ static cg_widget_t *build_node(cg_app_t *app, cg_widget_t *parent, const cg_node
     if (n->nodes && n->nnodes && strcmp(n->type, "tree") == 0) {
         tree_push_doc(w, n->nodes, n->nnodes, -1);
         w->items_dirty = 1;
+    }
+    /* iconlist：items 里的每个字符串是**一行的主标题**（图标/副标题/状态留空，
+       运行时用 cg_iconlist_add/set_row 灌完整数据）。转成行结构后 w->items 就不再参与
+       绘制 —— 图标列表的唯一真相是 il_rows。 */
+    if (n->items && n->nitems && strcmp(n->type, "iconlist") == 0) {
+        w->il_rows = (cg_ilrow_t *)calloc(n->nitems, sizeof(cg_ilrow_t));
+        if (w->il_rows) {
+            for (size_t i = 0; i < n->nitems; i++) {
+                w->il_rows[i].title = cg_str_dup(n->items[i]);
+            }
+            w->il_n    = (int)n->nitems;
+            w->il_cap  = (int)n->nitems;
+            w->il_hover = -1;
+            w->items_dirty = 1;
+        }
     }
     if (n->cols && n->ncols) {
         w->cols = (cg_col_t *)calloc(n->ncols, sizeof(cg_col_t));
@@ -718,6 +741,14 @@ void cg_widget_set_value(cg_widget_t *w, int value)
             /* 空列表没有合法的下标上限：把越界的正数封顶到 0（不当成 -1，也不会落到
              * items[] 之外），等条目补齐后 0 自然就是一个合法选择。 */
             if (value > 0) value = 0;
+        }
+    } else if (!strcmp(w->type, "iconlist")) {
+        /* 图标列表的行数在 il_rows，不在 items —— 夹取按 il_n，行号才不会越过行数组 */
+        if (value < 0) value = 0;
+        if (w->il_n > 0) {
+            if (value > w->il_n - 1) value = w->il_n - 1;
+        } else if (value > 0) {
+            value = 0;
         }
     } else {
         if (value < w->vmin) value = w->vmin;
