@@ -192,6 +192,7 @@ int cg_hotkey_set(cg_app_t *app, const char *combo, const char *action)
     WORD       vk;
     DWORD      mods = 0;
     HWND       hwnd;
+    unsigned   id;
     int        i;
 
     if (!combo) { cgw_hotkey_clear(app); return 1; }   /* NULL = 全部解绑 */
@@ -222,14 +223,29 @@ int cg_hotkey_set(cg_app_t *app, const char *combo, const char *action)
         cg_log(CG_LOG_WARN, "全局热键 %s 注册失败：已挂满 %d 条", combo, CGW_HOTKEY_MAX);
         return 0;
     }
-    if (!RegisterHotKey(hwnd, (int)(CGW_HOTKEY_ID_BASE + s_nhotkey), mods, vk)) {
+    /* 挑一个表里没人用的 id，别按下标直接算 —— 上面"删中间条目"用的是 swap，
+     * 下标会复用：重注册 A（表里还有 B、C）时新 id = BASE+2 会撞 C 的号，
+     * RegisterHotKey 同 id 直接失败、日志还会误报"被别的程序占用"。4 个 id 对
+     * 4 个槽位，表满已在上面拦掉，这里必能挑出一个。 */
+    for (i = 0; i < CGW_HOTKEY_MAX; i++) {
+        int j, used = 0;
+        for (j = 0; j < s_nhotkey; j++)
+            if (s_hotkeys[j].id == CGW_HOTKEY_ID_BASE + (unsigned)i) { used = 1; break; }
+        if (!used) break;
+    }
+    if (i >= CGW_HOTKEY_MAX) {          /* 到不了：表满在上面已拦（防的是以后改逻辑） */
+        cg_log(CG_LOG_WARN, "全局热键 %s 注册失败：找不到空闲 id", combo);
+        return 0;
+    }
+    id = CGW_HOTKEY_ID_BASE + (unsigned)i;
+    if (!RegisterHotKey(hwnd, (int)id, mods, vk)) {
         cg_log(CG_LOG_WARN, "全局热键 %s 注册失败：组合键可能已被别的程序占用", combo);
         return 0;
     }
-    s_hotkeys[s_nhotkey].id     = CGW_HOTKEY_ID_BASE + s_nhotkey;
+    s_hotkeys[s_nhotkey].id     = id;
     s_hotkeys[s_nhotkey].action = cg_str_dup(action);
     if (!s_hotkeys[s_nhotkey].action) {
-        UnregisterHotKey(hwnd, (int)(CGW_HOTKEY_ID_BASE + s_nhotkey));
+        UnregisterHotKey(hwnd, (int)id);
         return 0;
     }
     s_nhotkey++;
