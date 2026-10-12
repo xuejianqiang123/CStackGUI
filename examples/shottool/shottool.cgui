@@ -1,0 +1,208 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "截图工具",
+    "width": 600,
+    "height": 440,
+    "bg": "#F3EDF7",
+    "border": "sizable",
+    "taskbar": false,
+    "tray": true,
+    "info": {
+      "product": "CStackGUI 截图工具",
+      "desc": "QQ 风格截图：托盘 + 全局热键 + 屏幕区域框选 + 标注 + 保存 / 复制 / 贴图",
+      "comments": "示例 shottool：截图为底、标注为命令，成品抓画板自己；屏幕抓取与全局热键是 runtime 新增的两条能力",
+      "version": "1.0.0.0",
+      "author": "CStackGUI"
+    },
+    "events": {
+      "close": "on_close",
+      "tray": "on_tray",
+      "keydown": "on_key",
+      "size": "on_size",
+      "move": "on_move"
+    }
+  },
+  "actions": {
+    "shot": { "text": "开始截图(&S)", "accel": "Ctrl+Alt+A", "handler": "on_action" },
+    "quit": { "text": "退出(&Q)", "accel": "Ctrl+Shift+Q", "handler": "on_action" }
+  },
+  "widgets": [
+    {
+      "id": "sb_main",
+      "type": "statusbar",
+      "rect": { "x": 0, "y": 416, "w": 600, "h": 24 },
+      "items": ["就绪", "热键 Ctrl+Alt+A", "截图 0 张"]
+    },
+    {
+      "id": "lab_title",
+      "type": "label",
+      "rect": { "x": 12, "y": 10, "w": 576, "h": 22 },
+      "text": "QQ 风格截图工具：托盘常驻 · 全局热键 · 框选 · 标注 · 一键复制",
+      "style": { "font": "Microsoft YaHei UI", "size": 10, "bold": true }
+    },
+    {
+      "id": "lab_tip1",
+      "type": "label",
+      "rect": { "x": 12, "y": 38, "w": 576, "h": 20 },
+      "text": "按 Ctrl+Alt+A（或「开始截图」/ 左键点托盘图标）→ 屏幕上按住拖动框选 → 松手进标注"
+    },
+    {
+      "id": "lab_tip2",
+      "type": "label",
+      "rect": { "x": 12, "y": 60, "w": 576, "h": 20 },
+      "text": "标注条在选区下方：「完成」= 存 PNG + 复制到剪贴板；Esc = 取消；「贴图」把结果钉在屏幕上"
+    },
+    {
+      "id": "btn_shot",
+      "type": "button",
+      "rect": { "x": 12, "y": 88, "w": 160, "h": 32 },
+      "text": "开始截图(&S)",
+      "action": "shot",
+      "hint": "等价于全局热键 Ctrl+Alt+A（热键被占用时的兜底入口）"
+    },
+    {
+      "id": "btn_quit",
+      "type": "button",
+      "rect": { "x": 180, "y": 88, "w": 96, "h": 32 },
+      "text": "退出(&Q)",
+      "action": "quit"
+    },
+    {
+      "id": "lst_log",
+      "type": "listbox",
+      "rect": { "x": 12, "y": 130, "w": 576, "h": 278 },
+      "hint": "每一步都有日志：注册热键 / 抓屏 / 框选尺寸 / 存图路径 / 失败原因"
+    },
+    {
+      "id": "cv_shot",
+      "type": "canvas",
+      "rect": { "x": 0, "y": 0, "w": 600, "h": 400 },
+      "visible": false,
+      "style": { "bg": "#FFFFFF", "font": "Microsoft YaHei UI", "size": 12 },
+      "hint": "截图背景 + 标注都画在它身上：背景图 = 刚抓的屏幕，标注 = 录制的绘制命令",
+      "events": {
+        "mousedown": "on_shot_mouse",
+        "mousemove": "on_shot_mouse",
+        "mouseup": "on_shot_mouse",
+        "dblclick": "on_shot_mouse"
+      }
+    },
+    {
+      "id": "lab_mode",
+      "type": "label",
+      "rect": { "x": 8, "y": 8, "w": 584, "h": 22 },
+      "text": "框选 / 标注 / 贴图三种状态下显示不同提示",
+      "visible": false,
+      "hint": "overlay 提示行：必须排在 cv_shot **之后**（后创建的窗口才压在画布上面）",
+      "style": { "font": "Microsoft YaHei UI", "size": 9, "bold": true }
+    },
+    {
+      "id": "lab_tool",
+      "type": "label",
+      "rect": { "x": 8, "y": 404, "w": 32, "h": 24 },
+      "text": "工具",
+      "visible": false
+    },
+    {
+      "id": "cbo_tool",
+      "type": "combo",
+      "rect": { "x": 44, "y": 402, "w": 96, "h": 28 },
+      "items": ["矩形", "椭圆", "箭头", "画笔", "文字"],
+      "value": 0,
+      "visible": false,
+      "hint": "标注工具：拖出来的形状 / 点一下落文字"
+    },
+    {
+      "id": "lab_color",
+      "type": "label",
+      "rect": { "x": 146, "y": 404, "w": 36, "h": 24 },
+      "text": "颜色",
+      "visible": false
+    },
+    {
+      "id": "cbo_color",
+      "type": "combo",
+      "rect": { "x": 186, "y": 402, "w": 76, "h": 28 },
+      "items": ["红", "橙", "黄", "绿", "蓝", "白"],
+      "value": 0,
+      "visible": false
+    },
+    {
+      "id": "lab_width",
+      "type": "label",
+      "rect": { "x": 268, "y": 404, "w": 36, "h": 24 },
+      "text": "粗细",
+      "visible": false
+    },
+    {
+      "id": "cbo_width",
+      "type": "combo",
+      "rect": { "x": 308, "y": 402, "w": 64, "h": 28 },
+      "items": ["细", "中", "粗"],
+      "value": 1,
+      "visible": false
+    },
+    {
+      "id": "lab_text",
+      "type": "label",
+      "rect": { "x": 378, "y": 404, "w": 36, "h": 24 },
+      "text": "文字",
+      "visible": false
+    },
+    {
+      "id": "edt_text",
+      "type": "edit",
+      "rect": { "x": 418, "y": 402, "w": 120, "h": 28 },
+      "text": "重点",
+      "visible": false,
+      "maxlen": 24,
+      "hint": "「文字」工具要写上去的内容（最多 24 字）"
+    },
+    {
+      "id": "btn_undo",
+      "type": "button",
+      "rect": { "x": 546, "y": 401, "w": 54, "h": 30 },
+      "text": "撤销",
+      "visible": false,
+      "hint": "撤掉最后一笔（一笔可能由多条命令拼成，按整笔撤）",
+      "events": { "click": "on_tool_btn" }
+    },
+    {
+      "id": "btn_clear",
+      "type": "button",
+      "rect": { "x": 604, "y": 401, "w": 54, "h": 30 },
+      "text": "清除",
+      "visible": false,
+      "hint": "清掉全部标注（截图背景不动）",
+      "events": { "click": "on_tool_btn" }
+    },
+    {
+      "id": "btn_finish",
+      "type": "button",
+      "rect": { "x": 662, "y": 401, "w": 64, "h": 30 },
+      "text": "完成",
+      "visible": false,
+      "hint": "抓画板存 PNG（ScreenShot+日期）+ 写进剪贴板，然后回面板",
+      "events": { "click": "on_tool_btn" }
+    },
+    {
+      "id": "btn_pin",
+      "type": "button",
+      "rect": { "x": 730, "y": 401, "w": 56, "h": 30 },
+      "text": "贴图",
+      "visible": false,
+      "hint": "存图 + 复制后**留在屏幕上**当贴图；双击贴图或 Esc 回面板",
+      "events": { "click": "on_tool_btn" }
+    },
+    {
+      "id": "btn_cancel",
+      "type": "button",
+      "rect": { "x": 790, "y": 401, "w": 60, "h": 30 },
+      "text": "取消",
+      "visible": false,
+      "hint": "不存图直接回面板（等价于 Esc）",
+      "events": { "click": "on_tool_btn" }
+    }
+  ]
+}
