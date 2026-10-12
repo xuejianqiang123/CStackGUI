@@ -37,7 +37,7 @@
       "children": [
         { "id": "lab_recent_t", "type": "label", "page": 0, "rect": { "x": 8, "y": 36, "w": 804, "h": 22 },
           "text": "  最近使用（最新在前）", "style": "sect" },
-        { "id": "lst_recent", "type": "listbox", "page": 0, "rect": { "x": 8, "y": 64, "w": 600, "h": 400 },
+        { "id": "lst_recent", "type": "iconlist", "page": 0, "rect": { "x": 8, "y": 64, "w": 600, "h": 400 },
           "hint": "最近启动过的工具；双击行再次启动" },
         { "id": "btn_recent_clear", "type": "button", "page": 0, "rect": { "x": 616, "y": 64, "w": 196, "h": 30 },
           "text": "清空记录", "hint": "清空最近使用（内存记录）",
@@ -216,15 +216,9 @@
         { "id": "rmf2", "type": "button", "page": 7, "rect": { "x": 452, "y": 226, "w": 114, "h": 26 }, "text": "程序装的", "size": 9, "hint": "不是本工具箱装的那一组", "events": { "click": "on_rm_filter_click" } },
         { "id": "rmf3", "type": "button", "page": 7, "rect": { "x": 570, "y": 226, "w": 114, "h": 26 }, "text": "已禁用", "size": 9, "hint": "只看被隐藏的（LegacyDisable 在）", "events": { "click": "on_rm_filter_click" } },
         { "id": "rmf4", "type": "button", "page": 7, "rect": { "x": 688, "y": 226, "w": 114, "h": 26 }, "text": "扩展项", "size": 9, "hint": "DLL 扩展项（shellex，只显示不给动）", "events": { "click": "on_rm_filter_click" } },
-        { "id": "tbl_regmenu", "type": "table", "page": 7, "rect": { "x": 8, "y": 258, "w": 804, "h": 188 },
-          "multi": true, "check": true,
-          "columns": [
-            { "title": "标题", "w": 210 },
-            { "title": "分组", "w": 90 },
-            { "title": "命令" },
-            { "title": "状态", "w": 170 }
-          ],
-          "hint": "勾选框可多选（批量禁用 / 恢复 / 删除，不勾选就操作选中行）；扩展项只显示不给动；系统区未提权会逐条跳过并写日志",
+        { "id": "tbl_regmenu", "type": "iconlist", "page": 7, "rect": { "x": 8, "y": 258, "w": 804, "h": 188 },
+          "check": true,
+          "hint": "勾选框可多选（批量禁用 / 恢复 / 删除，不勾选就操作选中行）；图标按分组三色：绿=工具箱装的 / 蓝=程序装的 / 灰=扩展项；扩展项只显示不给动；系统区未提权会逐条跳过并写日志",
           "events": { "check": "on_rm_check" } },
         { "id": "btn_rm_disable", "type": "button", "page": 7, "rect": { "x": 8, "y": 450, "w": 180, "h": 30 },
           "text": "禁用选中项", "style": "remove", "hint": "给目标项写 LegacyDisable：右键菜单里不再出现，键仍在，可原样恢复；勾选多行即批量",

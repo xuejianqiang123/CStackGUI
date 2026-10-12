@@ -20,7 +20,11 @@
  *               还原本次改动（禁用过的删值、删过的 reg import 备份），并列出「曾改动」。
  *
  *          与原版的诚实差异（照实写，不在示例里装）：
- *            - 原版按钮带彩色图标：本工程按钮没有贴图能力，用文字 + 配色区分；
+ *            - 原版按钮带彩色图标：按钮墙仍无贴图能力，用文字 + 配色区分；
+ *              但**列表行有真图标了**（2026-10-13 换装 iconlist 控件）：最近使用页每行
+ *              带工具图标，右键菜单页按分组三色（绿=工具箱装的 / 蓝=程序装的 / 灰=扩展项），
+ *              行形态 = 图标 + 标题 + 命令副标题 + 右侧状态；分组列由图标色承担，
+ *              分组统计仍在底部统计行；图标是 assets 下的分类图，不是从 exe 里提取的（那是遗留项）；
  *            - 原版的系统级开关（任务栏合并/内核隔离等）要写系统注册表值并支持
  *              删值/备份，本工程注册表接口只动 HKCU、不碰系统键（HKLM），
  *              示例也不碰 —— 所以成对开关落在自家沙箱上，模式一致、落点无害；
@@ -561,9 +565,10 @@ static const struct {
 /** 扫描结果里一项的状态分类：在用 / 已隐藏（有 LegacyDisable）/ 无命令（只有容器壳） */
 enum { RM_ACTIVE = 0, RM_HIDDEN = 1, RM_NOCOMMAND = 2 };
 
-/** 分组（参考实现的三组）：工具箱自己装的 / 程序装的 / DLL 扩展项（只显示不给动） */
+/** 分组（参考实现的三组）：工具箱自己装的 / 程序装的 / DLL 扩展项（只显示不给动）。
+ *  分组名不再单独占一列 —— 列表换装 iconlist 后由行图标三色承担（rm_icon_of），
+ *  分组统计在 lab_rm_stat 的文字里。 */
 enum { RM_G_OURS = 0, RM_G_PROG = 1, RM_G_EXT = 2 };
-static const char *k_rm_groups[] = { "工具箱装的", "程序装的", "扩展项" };
 
 /** 过滤按钮（与 .cgui 里 rmf0..rmf4 同序：全部 / 未禁用 / 程序装的 / 已禁用 / 扩展项） */
 enum { RM_F_ALL = 0, RM_F_ON, RM_F_PROG, RM_F_OFF, RM_F_EXT, RM_F_COUNT };
@@ -585,6 +590,13 @@ static struct {
 
 /** 扫描到的全部行数（含没显示在当前页签上的） */
 static int s_rm_row_n;
+
+/**
+ * 视图行 -> s_rm_rows 下标 的映射（页签/过滤/搜索筛完才上表，两者不再同序）。
+ * 原来由 table 的 row-value 字段记；列表换成 iconlist 后它没有这个字段，
+ * 改由这里自己记 —— rm_fill 重建时逐行填，读行数据的一律走它。
+ */
+static int s_rm_view[K_RM_ROW_MAX];
 
 /** 行数到上限被截断（K_RM_ROW_MAX 满了）；日志里要说明"共 N 条"是截断值 */
 static int s_rm_row_limit;
@@ -970,6 +982,18 @@ static int rm_match(int i)
 }
 
 /**
+ * @brief 按分组选这一行的图标（绿=工具箱装的 / 蓝=程序装的 / 灰=扩展项）
+ * @param group RM_G_OURS / RM_G_PROG / RM_G_EXT
+ * @return const char* assets 下的图标路径（iconlist 要求文件路径，这里给仓库自带的分类图）
+ */
+static const char *rm_icon_of(int group)
+{
+    return group == RM_G_OURS ? "assets/rm_ours.png"
+         : group == RM_G_EXT  ? "assets/rm_ext.png"
+         :                      "assets/rm_prog.png";
+}
+
+/**
  * @brief 刷新页签数字、过滤按钮的「当前」标记、统计行与批量按钮文案（只动文字，不重建表）
  * @param app 应用
  * @return void 无返回值
@@ -978,13 +1002,13 @@ static void rm_stat_sync(cg_app_t *app)
 {
     cg_widget_t  *tbl = cg_find(app, "tbl_regmenu");
     char          buf[420];
-    int           rows = tbl ? cg_table_row_count(tbl) : 0;
+    int           rows = tbl ? cg_iconlist_count(tbl) : 0;
     int           i, chk = 0, on = 0, off = 0, noc = 0, ext = 0, sys = 0;
     static const char *flab[RM_F_COUNT] = { "全部", "未禁用", "程序装的", "已禁用", "扩展项" };
 
     for (i = 0; i < rows; i++) {
-        int di = cg_table_row_value(tbl, i);
-        if (cg_table_checked(tbl, i)) chk++;
+        int di = s_rm_view[i];          /* 视图行 -> s_rm_rows（过滤/搜索后不同序） */
+        if (cg_iconlist_checked(tbl, i)) chk++;
         if (di < 0 || di >= s_rm_row_n) continue;
         if (s_rm_rows[di].root == RM_ROOT_SYS) sys++;
         if (s_rm_rows[di].group == RM_G_EXT) ext++;
@@ -1040,13 +1064,15 @@ static void rm_fill(cg_app_t *app)
     cg_widget_t *tbl = cg_find(app, "tbl_regmenu");
     int          i;
 
-    if (tbl) cg_table_begin_update(tbl);
-    if (tbl) cg_table_clear(tbl);
+    /* iconlist 没有 begin/end update：逐行 add 只是把重绘失效排队，
+     * 整批在同一条消息里加完才画一次，不会像原生 ListView 那样逐行闪。
+     * 行形态 = 主标题（菜单标题）+ 副标题（命令）+ 右侧状态（在用·用户区…）；
+     * 原来的「分组」列由图标三色承担（rm_icon_of），分组统计在 lab_rm_stat。 */
+    if (tbl) cg_iconlist_clear(tbl);
     for (i = 0; i < s_rm_row_n; i++) {
         char        title[300];
         char        cmd[600];
         char        state[64];
-        const char *cells[4];
 
         if (!rm_match(i)) continue;
         snprintf(title, sizeof(title), "%s", s_rm_rows[i].title);
@@ -1060,16 +1086,11 @@ static void rm_fill(cg_app_t *app)
             snprintf(state, sizeof(state), "%s·%s", k,
                      s_rm_rows[i].root == RM_ROOT_SYS ? "系统区" : "用户区");
         }
-        cells[0] = title;
-        cells[1] = k_rm_groups[s_rm_rows[i].group];
-        cells[2] = cmd;
-        cells[3] = state;
         if (tbl) {
-            int r = cg_table_add_row(tbl, cells, 4);
-            if (r >= 0) cg_table_set_row_value(tbl, r, i);
+            int r = cg_iconlist_add(tbl, rm_icon_of(s_rm_rows[i].group), title, cmd, state);
+            if (r >= 0) s_rm_view[r] = i;   /* 视图行 -> s_rm_rows（读行数据的都靠它） */
         }
     }
-    if (tbl) cg_table_end_update(tbl);
     rm_stat_sync(app);
 }
 
@@ -1189,11 +1210,11 @@ static void on_rm_check(cg_widget_t *self, cg_event_t ev, void *user)
 static int rm_sel_row(cg_app_t *app)
 {
     cg_widget_t *tbl = cg_find(app, "tbl_regmenu");
-    int          r   = tbl ? cg_table_selected(tbl) : -1;
+    int          r   = tbl ? cg_widget_value(tbl) : -1;   /* iconlist 的选中行 = value */
     int          di;
 
-    if (!tbl || r < 0 || r >= cg_table_row_count(tbl)) return -1;
-    di = cg_table_row_value(tbl, r);     /* 表行 → s_rm_rows 下标（页签/过滤/搜索筛过就不同序） */
+    if (!tbl || r < 0 || r >= cg_iconlist_count(tbl)) return -1;
+    di = s_rm_view[r];                 /* 视图行 → s_rm_rows 下标（页签/过滤/搜索筛过就不同序） */
     return (di >= 0 && di < s_rm_row_n) ? di : -1;
 }
 
@@ -1211,10 +1232,10 @@ static int rm_target_rows(cg_app_t *app, int *out, int cap)
     int         i, sel;
 
     if (tbl) {
-        for (i = 0; i < cg_table_row_count(tbl) && n < cap; i++) {
+        for (i = 0; i < cg_iconlist_count(tbl) && n < cap; i++) {
             int di;
-            if (!cg_table_checked(tbl, i)) continue;
-            di = cg_table_row_value(tbl, i);
+            if (!cg_iconlist_checked(tbl, i)) continue;
+            di = s_rm_view[i];
             if (di >= 0 && di < s_rm_row_n) out[n++] = di;
         }
     }
@@ -1669,16 +1690,18 @@ static void recent_reload(cg_app_t *app)
     cg_widget_t *lst = cg_find(app, "lst_recent");
     int         i;
 
-    if (lst) cg_widget_list_clear(lst);
+    if (lst) cg_iconlist_clear(lst);
     for (i = 0; i < s_recent_n; i++) {
         int         idx = s_recent[i];
         const char *name = (strcmp(k_tools[idx].cmd, "__my__") == 0)
                            ? s_my[k_tools[idx].id[7] - '1'].name : k_tools[idx].name;
-        if (lst) cg_widget_list_addf(lst, "%s    (%s)", name,
-                                     strcmp(k_tools[idx].cmd, "__my__") == 0
-                                     ? s_my[k_tools[idx].id[7] - '1'].cmd : k_tools[idx].cmd);
+        const char *cmd  = (strcmp(k_tools[idx].cmd, "__my__") == 0)
+                           ? s_my[k_tools[idx].id[7] - '1'].cmd : k_tools[idx].cmd;
+        /* 行 = 工具图标 + 主标题（名字）+ 副标题（命令行）；双击行为不变（on_lst_recent_dblclick） */
+        if (lst) cg_iconlist_add(lst, "assets/recent.png", name, cmd, NULL);
     }
-    if (lst && s_recent_n == 0) cg_widget_list_add(lst, "（还没有记录）");
+    if (lst && s_recent_n == 0)
+        cg_iconlist_add(lst, NULL, "（还没有记录）", NULL, NULL);
 }
 
 /* ------------------------------------------------------------ 启动 */
