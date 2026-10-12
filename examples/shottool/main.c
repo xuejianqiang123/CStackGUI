@@ -115,6 +115,7 @@ static int s_sel_x, s_sel_y, s_sel_w, s_sel_h;    /**< 选区（逻辑像素，�
 static int s_pan_x, s_pan_y;                      /**< 面板窗口位置（**物理**像素，move 事件给的） */
 static int s_pan_w, s_pan_h;                      /**< 面板客户区尺寸（**逻辑**像素，size 事件给的） */
 static int s_pan_valid;                           /**< 1 = 面板矩形记到过 */
+static int s_cropping;                            /**< 1 = 框选已结束、正在等"重画干净"后抓选区 */
 static int s_hot_ok;                              /**< 全局热键是否注册成功 */
 static int s_shots;                               /**< 本次运行存下的张数 */
 static int s_last_rw, s_last_rh;                  /**< 框选尺寸标签上次显示值（没变不重画） */
@@ -461,8 +462,9 @@ static void restore_panel(cg_app_t *app)
     int was = s_mode;
     cg_widget_t *cv;
 
-    if (!cg_app_has_window(app)) { s_mode = MODE_IDLE; return; }
+    if (!cg_app_has_window(app)) { s_mode = MODE_IDLE; s_cropping = 0; return; }
     s_mode = MODE_IDLE;
+    s_cropping = 0;                             /* 那一拍（等重画后抓选区）作废：收尾了就不需要了 */
     cg_win_show(app, 0);                        /* 挪位置期间先藏着，免得肉眼看见"跳过去" */
 
     cv = cg_find(app, "cv_shot");
@@ -481,8 +483,9 @@ static void restore_panel(cg_app_t *app)
     cg_win_show(app, 1);
 
     status_refresh(app);
-    log_line(app, (was == MODE_PIN) ? "贴图已收回，回面板"
-                                    : (was == MODE_ANNOTATE ? "已回面板（未存图）" : "已取消"));
+    /* 只说"回面板"：存没存图是调用方的事（完成 / 取消 / 贴图收回各有各的说法），
+     * 这里猜一句"未存图"会在"完成"那条路上写错 —— 实测就是这么错的 */
+    log_line(app, (was == MODE_PIN) ? "贴图已收回，回面板" : "已回面板");
 }
 
 /* ------------------------------------------------------------ 截图流程 */
@@ -564,6 +567,27 @@ static void capture_tick(void *user)
     status_refresh(app);
     log_line(app, "整屏已抓取（%dx%d 逻辑像素），按住拖动框选", sw, sh);
     cg_free(path);
+}
+
+/* 前向声明：crop_tick 排在 annotate_begin 前面（定时器回调要用它） */
+static void annotate_begin(cg_app_t *app);
+
+/**
+ * @brief 框选结束后隔的那一拍：画面已经重画干净，这时才抓选区
+ * @param user cg_app_t*（定时器只给 void*，这里转回来）
+ * @return void 无返回值
+ * @note 为什么要隔一拍：取消预览与藏提示行都只是"标脏"，要等下一次重画才真正消失；
+ *       立刻抓会把橡皮筋 / 提示行截进成品（实测成品图边缘带一圈黄框就是这个原因）。
+ *       期间用户已经取消（Esc / 托盘）时 s_cropping 会被清掉，这一拍就空转
+ */
+static void crop_tick(void *user)
+{
+    cg_app_t *app = (cg_app_t *)user;
+
+    if (!app || !s_cropping) return;
+    s_cropping = 0;
+    if (!cg_app_has_window(app) || s_mode != MODE_SELECT) return;
+    annotate_begin(app);
 }
 
 /**
@@ -657,6 +681,7 @@ static void finish_shot(cg_app_t *app, int pin)
         else                        log_line(app, "复制到剪贴板失败（原因见日志），文件在：%s", path);
     }
     if (!pin) {
+        log_line(app, "完成：已存图并复制到剪贴板，回面板");
         cg_free(path);
         restore_panel(app);
         return;
@@ -774,7 +799,13 @@ static void on_shot_mouse(cg_widget_t *self, cg_event_t ev, void *user)
             s_sel_y = ry;
             s_sel_w = rw;
             s_sel_h = rh;
-            annotate_begin(app);
+
+            /* 抓选区之前先让画面干净：取消预览那一帧还没重画出去，立刻抓的话橡皮筋
+             * （以及压在画板上、同样会被抓进去的提示行）会留在成品里。藏掉提示行 + 隔
+             * 一拍再抓（一次性定时器），抓到的就是纯桌面，不是"我们的 overlay"。 */
+            mode_hint(app, NULL);
+            s_cropping = 1;
+            cg_set_timer(app, 120, crop_tick, app);
         }
         return;
     }
