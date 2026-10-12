@@ -59,17 +59,6 @@ wchar_t *cgw_wc_from_utf8_crlf(const char *s)
 
 /* ------------------------------------------------------------ 字体缓存与缩放 */
 
-/** @brief 逻辑像素转物理像素（app->scale 用百分比存，100 = 96dpi）
- *  @param app 所属应用；scale <= 0 时按 100 处理
- *  @param logical 逻辑像素值（可正可负）
- *  @return int 物理像素值（四舍五入）
- */
-int cgw_scale_px(const cg_app_t *app, int logical)
-{
-    int s = app->scale > 0 ? app->scale : 100;
-    return (int)(((long long)logical * s + 50) / 100);
-}
-
 /**
  * @brief 取（或缓存创建）一个 HFONT
  * @param app 所属应用；提供 DPI 与字体缓存
@@ -134,12 +123,6 @@ HFONT cgw_font_for(cg_app_t *app, const char *family, int size_pt, int bold, int
 
 /* ------------------------------------------------------------ 颜色 */
 
-/** @brief 0xRRGGBB 转 COLORREF
- *  @param c 0xRRGGBB 形式的颜色
- *  @return COLORREF 系统 COLORREF(0x00BBGGRR)
- */
-COLORREF cgw_to_colorref(unsigned c) { return RGB((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF); }
-
 /** @brief 一组小画刷缓存，给 WM_CTLCOLOR* 返回用；颜色数量有限，固定表足够
  *  @param rgb 颜色 0xRRGGBB
  *  @return HBRUSH 缓存的实心画刷（共享缓存，勿删）
@@ -161,16 +144,6 @@ HBRUSH cgw_brush_for(unsigned rgb)
 }
 
 /* ------------------------------------------------------------ 类型判断 */
-
-/** @brief 控件类型判断（NULL 安全）
- *  @param w 待判断控件；NULL 直接返回 0
- *  @param type 目标类型名（如 "edit"）
- *  @return int 非 0 = 类型匹配，0 = 不匹配或 w 为 NULL
- */
-int cgw_is_t(const cg_widget_t *w, const char *type)
-{
-    return w && w->type && strcmp(w->type, type) == 0;
-}
 
 /** @brief 是否输入类控件（edit/richtext，文字要拉回模型的那类）。
  *  多行与数值框都是 edit，所以这里只剩两种类型 —— 要区分是不是数值框用

@@ -214,12 +214,19 @@ __declspec(dllimport) GpStatus WINAPI GdipSaveImageToFile(void *image, const WCH
  */
 wchar_t *cgw_wc_from_utf8(const char *s);
 /**
- * @brief 逻辑像素转物理像素（按 app 的 DPI 百分比四舍五入）
- * @param app 应用（读缩放比）
- * @param logical 逻辑像素值
- * @return int 物理像素值
+ * @brief 逻辑像素转物理像素（app->scale 用百分比存，100 = 96dpi）
+ * @param app 所属应用；scale <= 0 时按 100 处理
+ * @param logical 逻辑像素值（可正可负）
+ * @return int 物理像素值（四舍五入）
+ * @details 热路径小函数：定义收进本头文件按 static inline 展开——-O2 无 LTO 时跨编译
+ *          单元不会内联，每次调用都是真实 call/ret（2026-10-12 内联改造；函数体与原
+ *          cg_win_util.c 版本一字不差，行为不变）
  */
-int cgw_scale_px(const cg_app_t *app, int logical);
+static inline int cgw_scale_px(const cg_app_t *app, int logical)
+{
+    int s = app->scale > 0 ? app->scale : 100;
+    return (int)(((long long)logical * s + 50) / 100);
+}
 /**
  * @brief 取（或缓存创建）一个 HFONT
  * @param app 应用（字体按 app 缓存，退出时统一销毁）
@@ -234,8 +241,13 @@ HFONT cgw_font_for(cg_app_t *app, const char *family, int size_pt, int bold, int
  * @brief 0xRRGGBB 转 COLORREF
  * @param c 0xRRGGBB
  * @return COLORREF Win32 的 0x00BBGGRR
+ * @details 热路径小函数：收进本头文件按 static inline 展开（2026-10-12 内联改造；
+ *          函数体与原 cg_win_util.c 版本一字不差，行为不变）
  */
-COLORREF cgw_to_colorref(unsigned c);
+static inline COLORREF cgw_to_colorref(unsigned c)
+{
+    return RGB((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF);
+}
 /**
  * @brief 取一个按颜色缓存的实心画刷
  * @param rgb 0xRRGGBB
@@ -260,12 +272,17 @@ HBRUSH cgw_brush_for(unsigned rgb);
 void cgw_paint_buffered(HDC dc, const RECT *rc,
                         void (*fn)(HDC, const RECT *, void *), void *ctx);
 /**
- * @brief 控件类型判断
- * @param w 控件
- * @param type 期望的类型名
+ * @brief 控件类型判断（NULL 安全）
+ * @param w 待判断的控件；NULL 直接返回 0
+ * @param type 目标类型名（如 "edit"）
  * @return int 1 相符、0 不符或 w 为 NULL
+ * @details 热路径小函数（调用点最多的后端工具函数）：收进本头文件按 static inline
+ *          展开（2026-10-12 内联改造；函数体与原 cg_win_util.c 版本一字不差，行为不变）
  */
-int cgw_is_t(const cg_widget_t *w, const char *type);
+static inline int cgw_is_t(const cg_widget_t *w, const char *type)
+{
+    return w && w->type && strcmp(w->type, type) == 0;
+}
 /**
  * @brief 是不是输入类控件（edit / richtext）
  * @param w 控件
