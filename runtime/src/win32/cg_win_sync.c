@@ -775,7 +775,10 @@ static void sync_widget_body(cg_widget_t *w)
             SendMessageW(up, UDM_SETPOS32, 0, (LPARAM)w->value);
         }
     } else if (!strcmp(w->type, "image") || !strcmp(w->type, "iconbutton") ||
-               !strcmp(w->type, "button")) {
+               !strcmp(w->type, "button") || !strcmp(w->type, "canvas")) {
+        /* canvas 也在列：`cg_widget_set_image()` 设在画板上 = **背景图**
+         * （draw_canvas 有位图时先 StretchBlt 打底再回放绘制命令）。
+         * 区域截图 + 标注就是靠这条：截图当背景、标注是命令，成品 = 抓画板自己 */
         sync_bitmap(w);
     } else if (!strcmp(w->type, "monthcal")) {
         /* text 写日期就定位到那天，没写就用今天（.cgui 里通常留空） */

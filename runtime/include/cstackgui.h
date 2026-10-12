@@ -338,6 +338,26 @@ void cg_win_set_topmost(cg_app_t *app, int on);
  * @return void 无返回值
  */
 void cg_win_set_icon(cg_app_t *app, const char *ico_path);
+/**
+ * @brief 逻辑像素换算成物理像素（DPI 换算）
+ * @param app 应用（取当前缩放比）；NULL 按不缩放处理
+ * @param logical 逻辑像素值（可正可负）
+ * @return int 物理像素值（四舍五入）
+ * @note 只为 `cg_win_set_pos()` 这类**按物理像素收参**的接口换算用；
+ *       尺寸类接口（`cg_win_set_size` / `cg_widget_set_rect` / 事件坐标）收的
+ *       本来就是逻辑像素，**不要**再过这层换算
+ */
+int  cg_scale_px(const cg_app_t *app, int logical);
+/**
+ * @brief 运行时改主窗口边框（`.cgui` 的 `app.border` 的运行时版）
+ * @param app 应用
+ * @param mode "sizable" 可调整 / "fixed" 普通固定 / "dialog" 对话框固定 / "none" 无边框
+ * @return int 1 成功；0 失败（没有窗口 / mode 认不出来）
+ * @note 只换边框样式，**不改**窗口位置与尺寸（全屏 overlay 这类用法要自己
+ *       `cg_win_set_pos` + `cg_win_set_size`）；标题栏按钮的开关仍按 .cgui 的设置；
+ *       `--selftest` 没有窗口时返回 0
+ */
+int  cg_win_set_border(cg_app_t *app, const char *mode);
 
 /* ------------------------------------------------------------ 模态对话框 */
 
@@ -443,6 +463,33 @@ char *cg_drop_file(cg_app_t *app, int index);
  */
 int cg_widget_screenshot(cg_widget_t *w, const char *path);
 
+/* ---- 屏幕抓取（区域截图） ----
+ * 与上面 `cg_win_screenshot`（抓**自己**的窗口）不同，这两个抓的是**屏幕**像素。
+ * 坐标与尺寸一律是**逻辑像素**（与 .cgui、控件坐标、事件坐标同一套），DPI 换算
+ * 在内部做；只覆盖**主显示器** —— 多屏虚拟桌面是遗留项，别在业务里假装支持。
+ */
+/**
+ * @brief 主显示器尺寸（逻辑像素）
+ * @param app 应用（取 DPI 缩放比；NULL 按不缩放算）
+ * @param w 出参：宽；可为 NULL
+ * @param h 出参：高；可为 NULL
+ * @return int 1 成功；0 失败（屏幕查询返回非正值）
+ */
+int cg_screen_size(const cg_app_t *app, int *w, int *h);
+/**
+ * @brief 把屏幕上一块区域存成 PNG（区域截图）
+ * @param app 应用（取 DPI 缩放比；NULL 直接失败）
+ * @param x 区域左上角屏幕坐标（逻辑像素）
+ * @param y 区域左上角屏幕坐标（逻辑像素）
+ * @param w 区域宽（逻辑像素）
+ * @param h 区域高（逻辑像素）
+ * @param path 输出路径（UTF-8，目录必须已存在；编码固定 PNG）
+ * @return int 1 成功；0 失败（app/path 为空、区域夹完整体为 0、取 DC 或写盘失败）
+ * @note 区域先换算成物理像素再**夹进主屏范围** —— 越出屏幕的部分 BitBlt 抓不到，
+ *       不夹的话落盘是黑块。GDI+ 没起来的机器返回 0（原因写日志）
+ */
+int cg_screen_capture(const cg_app_t *app, int x, int y, int w, int h, const char *path);
+
 /* ------------------------------------------------------------ 托盘
  * .cgui 的 app 里写 tray:true 会自动建托盘图标；也可以运行时代码调用。
  * 托盘被点（左键单击 / 左键双击 / 右键单击）时派发 window 的 tray 事件，
@@ -470,6 +517,25 @@ void cg_tray_remove(cg_app_t *app);
  * @return void 无返回值
  */
 void cg_tray_balloon(cg_app_t *app, const char *tip_title, const char *text);
+
+/* ------------------------------------------------------------ 全局热键
+ * 与 `.cgui` 里动作的 `accel`（**应用内**加速键：只在本窗口持有焦点时生效）不同，
+ * 全局热键走 `RegisterHotKey`：**程序在后台 / 最小化到托盘时也按得到** —— 截图工具
+ * 这类"常驻后台、一按就出来"的程序靠它。组合键被别的程序先注册了就会失败，
+ * 所以返回 0 不算异常，业务要留兜底入口（面板按钮 / 托盘点击）。
+ * 组合键写法与动作 accel 相同："Ctrl+Alt+A" / "Ctrl+Shift+F5"（至少要有一个修饰键）。
+ */
+/**
+ * @brief 注册全局热键：按下组合键 = 触发同名动作（回调里用 cg_action_name 取）
+ * @param app 应用
+ * @param combo 组合键；传 NULL = 解绑本程序注册的**全部**全局热键（action 被忽略）
+ * @param action 动作名（.cgui 的 actions 里要有、且回调已登记，否则失败）
+ * @return int 1 成功（或 NULL 时清空成功）；0 失败（没有窗口 / 组合键看不懂 /
+ *         动作不存在 / 键被别的程序占用 —— 失败原因写日志）
+ * @note 同一动作重复注册会先解绑旧的再挂新的；关窗时自动清空，业务不用自己收；
+ *       `--selftest` 没有窗口，返回 0
+ */
+int  cg_hotkey_set(cg_app_t *app, const char *combo, const char *action);
 
 /* ------------------------------------------------------------ 程序配置（版本信息）
  * 来自 .cgui 的 app.info（画布「程序配置」对话框填的那些），
@@ -987,15 +1053,19 @@ int  cg_tabs_selected(const cg_widget_t *w);
 
 /* ------------------------------------------------------------ 图片 */
 /**
- * @brief 换图片控件的图片文件
- * @param w image 控件
- * @param path 图片路径（png/jpg/bmp/gif）；路径不存在时控件显示成占位框
+ * @brief 换图片文件
+ * @param w image 控件；**也接受 canvas（画板）**
+ * @param path 图片路径（png/jpg/bmp/gif）；路径不存在时 image 显示成占位框
+ *             （canvas 没有占位框：读不到就退回底色，不报错）
  * @return void 无返回值
+ * @note 设在 **canvas** 上 = 画板**背景图**：按画板大小拉伸打底，绘制命令照常
+ *       叠在它上面回放 —— "截图当底 + 标注当命令，成品抓画板自己"就是靠这条
+ *       （示例见 `examples\shottool`）
  */
 void cg_widget_set_image(cg_widget_t *w, const char *path);
 /**
- * @brief 取图片控件当前的图片路径
- * @param w image 控件
+ * @brief 取控件当前的图片路径
+ * @param w image / canvas 控件
  * @return const char* 控件内部的字符串，别 free；未设置返回 NULL
  */
 const char *cg_widget_image(const cg_widget_t *w);
@@ -2905,6 +2975,16 @@ int   cg_clip_set_text(const char *text);
  *       所以**需要 exe 真的在跑**（`--selftest` 里 GDI+ 还没起，会返回 0）
  */
 int   cg_clip_get_image(const char *path);
+/**
+ * @brief 把一张**图片文件**写进剪贴板（截图工具"复制"那一半）
+ * @param path 图片路径（UTF-8；png/jpg/bmp/gif 都行）
+ * @return int 1 成功；0 失败（读不到图 / 打不开剪贴板 / 一个格式都没写进去，都写日志）
+ * @note 写 **CF_DIB（24 位）+ CF_BITMAP** 两个格式：CF_DIB 各类软件都认，
+ *       CF_BITMAP 给只认位图句柄的老程序。与 `cg_clip_get_image` 对称，同样**需要
+ *       exe 真的在跑**（`--selftest` 下 GDI+ 还没起，返回 0）；剪贴板是系统级共享
+ *       状态，自检里先问 `cg_app_has_window()` 再调
+ */
+int   cg_clip_set_image(const char *path);
 /**
  * @brief 用系统默认程序打开文件 / 文件夹 / 网址
  * @param path_or_url 路径或网址

@@ -481,6 +481,12 @@ LRESULT CALLBACK cgw_MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         if (win) win->ev_key = (int)wp;
         cgw_win_emit(win, CG_EVENT_CHAR);
         break;
+    case WM_HOTKEY:
+        /* 全局热键（cg_hotkey_set 注册的）：**后台 / 托盘里也收得到** ——
+         * 这正是它与动作 accel（应用内加速键，窗口失焦就不生效）的区别。
+         * 号是注册时给的 id，动作名只有 cg_win_window.c 里那张表知道。 */
+        cgw_hotkey_fire(app, (unsigned)(WORD)LOWORD(wp));
+        break;
     case CG_TRAY_CALLBACK:
         tray_callback(app, hwnd, wp, lp);
         return 0;

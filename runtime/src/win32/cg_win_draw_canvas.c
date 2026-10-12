@@ -408,12 +408,31 @@ static int canvas_scale(const cg_widget_t *w, int logical)
  */
 static void draw_canvas(HDC dc, cg_widget_t *w, const RECT *rc)
 {
-    COLORREF bgc = (w->style.bg != CG_COLOR_NONE)
-                       ? cgw_to_colorref(w->style.bg)
-                       : cgw_to_colorref(cg_win_behind_rgb(w->app, w->native));
-    HBRUSH bg = CreateSolidBrush(bgc);
-    FillRect(dc, rc, bg);
-    DeleteObject(bg);
+    if (w->bitmap) {
+        /* 背景图（cg_widget_set_image 设在 canvas 上）：按控件大小拉伸打底，
+         * 与图片控件同一套画法（HALFTONE + 置刷原点）。位图铺满 rc —— 双缓冲
+         * 要求这一帧画满整块，露底色就是垃圾像素（见 cgw_paint_buffered 的注释）。 */
+        BITMAP bm;
+        HDC    mem = CreateCompatibleDC(dc);
+        HGDIOBJ old = SelectObject(mem, (HGDIOBJ)w->bitmap);
+
+        if (GetObjectW((HGDIOBJ)w->bitmap, sizeof(bm), &bm)) {
+            int prev = SetStretchBltMode(dc, HALFTONE);
+            SetBrushOrgEx(dc, 0, 0, NULL);
+            StretchBlt(dc, rc->left, rc->top, rc->right - rc->left, rc->bottom - rc->top,
+                       mem, 0, 0, bm.bmWidth, bm.bmHeight, SRCCOPY);
+            SetStretchBltMode(dc, prev);
+        }
+        SelectObject(mem, old);
+        DeleteDC(mem);
+    } else {
+        COLORREF bgc = (w->style.bg != CG_COLOR_NONE)
+                           ? cgw_to_colorref(w->style.bg)
+                           : cgw_to_colorref(cg_win_behind_rgb(w->app, w->native));
+        HBRUSH bg = CreateSolidBrush(bgc);
+        FillRect(dc, rc, bg);
+        DeleteObject(bg);
+    }
 
     for (int i = 0; i < w->nops; i++) {
         const cg_canvas_op_t *op = &w->ops[i];
@@ -519,6 +538,25 @@ static LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         EndPaint(hwnd, &ps);
         return 0;
+    }
+    case WM_PRINT: {
+        /* PrintWindow（cg_widget_screenshot / cg_win_screenshot 的底）发的是 WM_PRINT
+         * 而不是 WM_PAINT：不接这一条，DefWindowProc 只画非客户区 —— 画板没有非客户区，
+         * 抓出来就是一张空图（且 PrintWindow 照样返回"成功"，兜底抓屏都不会发生）。
+         * 画法与 WM_PAINT 同一条路（双缓冲回放），只是目标 DC 换成消息给的那个；
+         * 不看 PRF_* 标志位：本工程的截图路径永远要客户区，多画非客户区不存在这个场景。 */
+        HDC            dc = (HDC)wp;
+        RECT           rc;
+        cg_widget_t   *w  = cgw_widget_by_hwnd(app, hwnd);
+        canvas_ctx_t   ctx;
+
+        if (!w || !dc) break;
+        GetClientRect(hwnd, &rc);
+        ctx.app  = app;
+        ctx.hwnd = hwnd;
+        ctx.w    = w;
+        cgw_paint_buffered(dc, &rc, canvas_body, &ctx);
+        return 1;
     }
     case WM_LBUTTONDOWN:
     case WM_MOUSEMOVE:

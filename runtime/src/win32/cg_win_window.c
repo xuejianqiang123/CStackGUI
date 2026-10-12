@@ -6,16 +6,18 @@
 #include "cg_win_internal.h"
 
 /**
- * @brief .cgui 的窗口属性 -> Win32 窗口样式
- * @param d 文档（取 border/controlBox/minimizeBox/maximizeBox/topmost/taskbar）
+ * @brief 边框名 -> Win32 窗口样式（.cgui 的 app.border 与运行时 cg_win_set_border 共用一条路）
+ * @param d 文档（取 controlBox/minimizeBox/maximizeBox/topmost/taskbar）
+ * @param bd 边框名："none" / "dialog" / "fixed" / "sizable"；NULL / 空按 "sizable"
  * @param exstyle 出参：扩展样式
  * @return DWORD 窗口样式
  * @note border 不写按 "sizable"（可拉伸），和加属性之前的老行为一致
  */
-static DWORD style_of_doc(const cg_doc_t *d, DWORD *exstyle)
+static DWORD style_of_border(const cg_doc_t *d, const char *bd, DWORD *exstyle)
 {
-    const char *bd = (d->border && *d->border) ? d->border : "sizable";
     DWORD style = WS_OVERLAPPED | WS_CAPTION;
+
+    if (!bd || !*bd) bd = "sizable";
 
     if (!strcmp(bd, "none")) {
         style = WS_POPUP;                 /* 无边框：自己画标题栏那种 */
@@ -43,6 +45,18 @@ static DWORD style_of_doc(const cg_doc_t *d, DWORD *exstyle)
     if (d->topmost) *exstyle |= WS_EX_TOPMOST;      /* 总在最前 */
     if (!d->taskbar) *exstyle |= WS_EX_TOOLWINDOW;  /* 不在任务栏出现（Alt-Tab 也不出现） */
     return style;
+}
+
+/**
+ * @brief .cgui 的窗口属性 -> Win32 窗口样式
+ * @param d 文档（取 border/controlBox/minimizeBox/maximizeBox/topmost/taskbar）
+ * @param exstyle 出参：扩展样式
+ * @return DWORD 窗口样式
+ * @note border 不写按 "sizable"（可拉伸），和加属性之前的老行为一致
+ */
+static DWORD style_of_doc(const cg_doc_t *d, DWORD *exstyle)
+{
+    return style_of_border(d, (d->border && *d->border) ? d->border : NULL, exstyle);
 }
 
 /* ------------------------------------------------------------ 加速键（动作的快捷键） */
@@ -143,6 +157,119 @@ void cgw_accel_destroy(cg_app_t *app)
         DestroyAcceleratorTable(st->accel);
         st->accel = NULL;
     }
+}
+
+/* ------------------------------------------------------------ 全局热键（RegisterHotKey）
+ * 与加速键表（应用内 accel）分开的两件事：加速键在消息循环里由 TranslateAccelerator
+ * 吃，**窗口失焦就不生效**；全局热键是系统级的，程序在托盘里也按得到。
+ * 热键表放**文件私有静态**：一个进程一个应用，id -> 动作名这张表只有本文件需要知道
+ * （主窗口过程收到 WM_HOTKEY 只回过来报个 id，见 cgw_hotkey_fire）。
+ */
+
+/** @brief 热键表槽位：注册 id -> 动作名 */
+typedef struct { unsigned id; char *action; } cgw_hotkey_slot_t;
+/** 热键表槽位数（截图工具这类程序一两条够用，给四条余量） */
+#define CGW_HOTKEY_MAX 4
+/** 热键 id 基址：与菜单 / 加速键的命令 id 空间错开，免得日志里看着像撞号 */
+#define CGW_HOTKEY_ID_BASE 0x4300
+
+static cgw_hotkey_slot_t s_hotkeys[CGW_HOTKEY_MAX];
+static int               s_nhotkey;
+
+/**
+ * @brief 注册全局热键：按下组合键 = 触发同名动作（公共 API cg_hotkey_set 的实现）
+ * @param app 应用
+ * @param combo 组合键（与动作 accel 同一写法）；NULL = 解绑全部
+ * @param action 动作名
+ * @return int 1 成功 / 0 失败（原因写日志）
+ * @note RegisterHotKey 失败的头号原因是**键已被别的程序占用** —— 那不是 bug，
+ *       业务必须留兜底入口（面板按钮 / 托盘），所以这里只报日志、不弹框
+ */
+int cg_hotkey_set(cg_app_t *app, const char *combo, const char *action)
+{
+    cg_accel_t k;
+    BYTE       fVirt;
+    WORD       vk;
+    DWORD      mods = 0;
+    HWND       hwnd;
+    int        i;
+
+    if (!combo) { cgw_hotkey_clear(app); return 1; }   /* NULL = 全部解绑 */
+    if (!app || !app->hwnd || !action || !*action) return 0;
+    if (cg_action_index(app, action) < 0) {
+        cg_log(CG_LOG_WARN, "全局热键 %s 注册失败：没有叫 \"%s\" 的动作", combo, action);
+        return 0;
+    }
+    if (!cg_accel_parse(combo, &k) || !accel_to_win(&k, &fVirt, &vk)) {
+        cg_log(CG_LOG_WARN, "全局热键注册失败：组合键 \"%s\" 看不懂", combo);
+        return 0;
+    }
+    /* accel_to_win 给的是 TranslateAccelerator 的标志位，映射成 RegisterHotKey 的 MOD_* */
+    if (fVirt & FCONTROL) mods |= MOD_CONTROL;
+    if (fVirt & FSHIFT)   mods |= MOD_SHIFT;
+    if (fVirt & FALT)     mods |= MOD_ALT;
+
+    hwnd = (HWND)app->hwnd;
+    /* 同一动作重复注册：先解绑旧的那条再挂新的，表里不会越积越多 */
+    for (i = 0; i < s_nhotkey; i++) {
+        if (strcmp(s_hotkeys[i].action, action) != 0) continue;
+        UnregisterHotKey(hwnd, (int)s_hotkeys[i].id);
+        free(s_hotkeys[i].action);
+        s_hotkeys[i] = s_hotkeys[--s_nhotkey];
+        break;
+    }
+    if (s_nhotkey >= CGW_HOTKEY_MAX) {
+        cg_log(CG_LOG_WARN, "全局热键 %s 注册失败：已挂满 %d 条", combo, CGW_HOTKEY_MAX);
+        return 0;
+    }
+    if (!RegisterHotKey(hwnd, (int)(CGW_HOTKEY_ID_BASE + s_nhotkey), mods, vk)) {
+        cg_log(CG_LOG_WARN, "全局热键 %s 注册失败：组合键可能已被别的程序占用", combo);
+        return 0;
+    }
+    s_hotkeys[s_nhotkey].id     = CGW_HOTKEY_ID_BASE + s_nhotkey;
+    s_hotkeys[s_nhotkey].action = cg_str_dup(action);
+    if (!s_hotkeys[s_nhotkey].action) {
+        UnregisterHotKey(hwnd, (int)(CGW_HOTKEY_ID_BASE + s_nhotkey));
+        return 0;
+    }
+    s_nhotkey++;
+    cg_log(CG_LOG_INFO, "全局热键已注册：%s -> 动作 %s", combo, action);
+    return 1;
+}
+
+/**
+ * @brief 把 WM_HOTKEY 带回的 id 换算成动作并触发（主窗口过程调）
+ * @param app 应用
+ * @param id 注册时分配的热键 id
+ * @return void 无返回值（不认识的 id 静默忽略）
+ */
+void cgw_hotkey_fire(cg_app_t *app, unsigned id)
+{
+    if (!app) return;
+    for (int i = 0; i < s_nhotkey; i++) {
+        if (s_hotkeys[i].id != id) continue;
+        cg_action_invoke(app, s_hotkeys[i].action);
+        return;
+    }
+}
+
+/**
+ * @brief 解绑全部全局热键并释放表（关窗收尾时调）
+ * @param app 应用
+ * @return void 无返回值（幂等、NULL 安全；没窗口时只释放内存）
+ * @note 少这一步：进程退出前系统会替我们解绑，但表里的动作名就漏了 —— 按"谁申请谁释放"
+ *       收在这里，和加速键表 cgw_accel_destroy 成对
+ */
+void cgw_hotkey_clear(cg_app_t *app)
+{
+    HWND hwnd = (app && app->hwnd) ? (HWND)app->hwnd : NULL;
+
+    for (int i = 0; i < s_nhotkey; i++) {
+        if (hwnd) UnregisterHotKey(hwnd, (int)s_hotkeys[i].id);
+        free(s_hotkeys[i].action);
+        s_hotkeys[i].action = NULL;
+    }
+    s_nhotkey = 0;
 }
 
 /* ------------------------------------------------------------ 后端入口 */
@@ -479,6 +606,7 @@ static void win_shutdown(cg_app_t *app)
     if (!st) return;
     cg_tray_remove(app);   /* 托盘图标不主动摘，会一直留在通知区里 */
     cgw_accel_destroy(app);   /* 加速键表不是窗口对象，关窗不会替我们收 */
+    cgw_hotkey_clear(app);    /* 全局热键表同理：解绑 + 释放动作名 */
     if (st->timer_id) KillTimer((HWND)app->hwnd, CG_TIMER_ID);
     for (cg_widget_t *w = app->widgets; w; w = w->next) {
         if (cgw_is_t(w, "timer")) KillTimer((HWND)app->hwnd, (UINT_PTR)w->ctrl_id);
@@ -660,6 +788,47 @@ void cg_win_set_topmost(cg_app_t *app, int on)
     if (!h) return;
     SetWindowPos(h, on ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+}
+
+/**
+ * @brief 逻辑像素换算成物理像素（公共 API，实现就是 cgw_scale_px 那一层）
+ * @param app 应用；NULL 按不缩放处理
+ * @param logical 逻辑像素值（可正可负）
+ * @return int 物理像素值（四舍五入）
+ * @note 只为 `cg_win_set_pos`（按物理像素收参）这类接口换算；尺寸类接口收逻辑像素，别多此一举
+ */
+int cg_scale_px(const cg_app_t *app, int logical)
+{
+    return app ? cgw_scale_px(app, logical) : logical;
+}
+
+/**
+ * @brief 运行时改主窗口边框（公共 API，样式拼装与建窗时共用 style_of_border）
+ * @param app 应用
+ * @param mode "sizable" / "fixed" / "dialog" / "none"
+ * @return int 1 成功；0 失败（没有窗口 / mode 认不出来）
+ * @note **只换 GWL_STYLE**：扩展样式（TOPMOST / TOOLWINDOW）一个位都不碰 —— 置顶与
+ *       任务栏显隐有各自的接口（cg_win_set_topmost / .cgui 的 taskbar），混在这里改会让
+ *       "exstyle 里的 TOPMOST 位"与真实 z 序对不上。改样式必须带 SWP_FRAMECHANGED，
+ *       否则非客户区还按旧样式画（表现为无边框了标题栏还赖着不走）
+ */
+int cg_win_set_border(cg_app_t *app, const char *mode)
+{
+    HWND  h = win_hwnd_of(app);
+    DWORD style, ex;
+
+    if (!h || !mode || !*mode) return 0;
+    if (strcmp(mode, "sizable") && strcmp(mode, "fixed") &&
+        strcmp(mode, "dialog")  && strcmp(mode, "none")) {
+        cg_log(CG_LOG_WARN, "改边框失败：mode \"%s\" 认不出来（sizable/fixed/dialog/none）", mode);
+        return 0;
+    }
+    style = style_of_border(&app->doc, mode, &ex);
+    (void)ex;                       /* 扩展样式按上面的注释：不落盘、不覆盖 */
+    SetWindowLongPtrW(h, GWL_STYLE, (LONG_PTR)style);
+    SetWindowPos(h, NULL, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    return 1;
 }
 
 /**

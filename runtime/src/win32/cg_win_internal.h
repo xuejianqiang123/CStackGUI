@@ -756,5 +756,19 @@ void cgw_accel_build(cg_app_t *app);
  * @return void 无返回值（幂等、NULL 安全）
  */
 void cgw_accel_destroy(cg_app_t *app);
+/**
+ * @brief 把一个全局热键 id 换算回动作并触发（主窗口过程收到 WM_HOTKEY 时调）
+ * @param app 应用
+ * @param id 注册时分配的热键 id；不认识的 id 静默忽略
+ * @return void 无返回值
+ * @note 热键表（id -> 动作名）是 cg_win_window.c 的文件私有状态，只有它自己知道
+ */
+void cgw_hotkey_fire(cg_app_t *app, unsigned id);
+/**
+ * @brief 解绑全部全局热键并释放热键表（关窗收尾时调，幂等、NULL 安全）
+ * @param app 应用
+ * @return void 无返回值
+ */
+void cgw_hotkey_clear(cg_app_t *app);
 
 #endif /* CG_WIN_INTERNAL_H */
