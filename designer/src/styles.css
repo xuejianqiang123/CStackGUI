@@ -1073,6 +1073,47 @@ input.narrow {
   border-right: none;
 }
 
+/* 图标列表（iconlist）：行 = 〔勾选框〕+ 图标位 + 标题，与运行时同一布局口径 */
+.ctl-iconlist {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+.ctl-iconlist-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 6px;
+  border-bottom: 1px solid #efeaf2;
+}
+.ctl-iconlist-chk {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--outline);
+  border-radius: 3px;
+}
+.ctl-iconlist-ico {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--seed-weak);
+  border: 1px solid var(--outline);
+}
+.ctl-iconlist-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: var(--on-surface-var);
+}
+
 /* 链接 */
 .ctl-link {
   display: flex;
@@ -1668,6 +1709,12 @@ input.narrow {
   border-radius: 50% 50% 40% 40%;
   background: conic-gradient(from 225deg, #6750a4 0 75%, transparent 75% 100%);
   border: none;
+}
+.glyph-iconlist {
+  /* 左边一个小方点（图标位）+ 右边几条线（行文字）：一眼是"带图标的列表" */
+  background:
+    linear-gradient(#6750a4, #6750a4) no-repeat 3px center / 5px 5px,
+    repeating-linear-gradient(to bottom, #fff 0 3px, var(--outline) 3px 4px);
 }
 
 /* 选中手柄 */

@@ -158,6 +158,8 @@ export const KIND_EVENTS: Record<string, CgEvent[]> = {
   tabs: ["select", "gotfocus", "lostfocus"],
   tree: ["select", "dblclick", "expand", "collapse", "gotfocus", "lostfocus"],
   table: ["select", "dblclick", "check", "gotfocus", "lostfocus"],
+  /* 图标列表：比 table 多 click —— dblclick 是 cg_dispatch 按系统双击间隔从 click 合成的 */
+  iconlist: ["click", "dblclick", "select", "check", "gotfocus", "lostfocus"],
   statusbar: [],
   menu: ["click"],
   menubutton: ["click"],

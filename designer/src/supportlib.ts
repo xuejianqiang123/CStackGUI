@@ -500,6 +500,22 @@ cg_widget_list_addf(cg_find(cg_app_of(self), "lst_log"), "第 %d 次点击", ++n
         ],
       },
       {
+        label: "图标列表",
+        cmds: [
+          c("cg_iconlist_add", "加一行", "int cg_iconlist_add(cg_widget_t *w, const char *icon, const char *title, const char *sub, const char *status)",
+            "行 = 图标 + 主标题 + 第二行小字 + 右侧状态；icon 是 png/jpg/bmp/gif 路径（NULL 画占位框），四个文字参数都可为 NULL", {
+            sample: `cg_iconlist_add(cg_find(cg_app_of(self), "il_demo"),
+                 "assets/app.png", "复制文件路径", "\\"...x.exe\\" copypath", "在用");`,
+          }),
+          c("cg_iconlist_clear", "清空", "void cg_iconlist_clear(cg_widget_t *w)", "删掉所有行（滚动位置一并复位）"),
+          c("cg_iconlist_count", "行数", "int cg_iconlist_count(const cg_widget_t *w)", "当前有多少行"),
+          c("cg_iconlist_set_checked", "设勾选", "void cg_iconlist_set_checked(cg_widget_t *w, int row, int checked)", "行级勾选；要 .cgui 写 \"check\": true 才显示勾选框列，行号越界忽略"),
+          c("cg_iconlist_checked", "读勾选", "int cg_iconlist_checked(const cg_widget_t *w, int row)", "1 = 该行被勾选；行无效返回 0"),
+          c("cg_iconlist_set_row", "改一行", "void cg_iconlist_set_row(cg_widget_t *w, int row, const char *icon, const char *title, const char *sub, const char *status)",
+            "整行改写，勾选态保持；NULL / 空串把该段清掉"),
+        ],
+      },
+      {
         label: "状态栏",
         cmds: [
           c("cg_status_set", "改第 N 段", "void cg_status_set(cg_widget_t *w, int part, const char *text)", "分段下标从 0 起；等于段数时相当于追加", {

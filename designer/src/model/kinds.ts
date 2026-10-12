@@ -49,6 +49,11 @@ export const KINDS: KindInfo[] = [
   { type: "tabs", label: "标签页", group: "数据", container: true, w: 320, h: 220, text: "", listLike: true },
   { type: "tree", label: "树", group: "数据", container: false, w: 220, h: 180, text: "" },
   { type: "table", label: "表格", group: "数据", container: false, w: 360, h: 180, text: "" },
+  /* 图标列表：行 = 〔复选框〕+ 图标 + 主/副标题两行 + 右侧状态（运行时全自绘）。
+     listLike 用「条目」编辑器写初始行（每条 = 一行主标题，图标/副标题由运行时灌）。
+     **不标 checklist** —— 它的 .cgui 字段是 check（列开关，与 table 同名同义），
+     而 checklist 弹的是绑「整控件 checked」的勾选框，语义对不上（table 也没标）。 */
+  { type: "iconlist", label: "图标列表", group: "数据", container: false, w: 240, h: 180, text: "", listLike: true },
   { type: "statusbar", label: "状态栏", group: "数据", container: false, w: 400, h: 24, text: "", listLike: true },
   { type: "group", label: "分组框", group: "容器", container: true, w: 260, h: 180, text: "分组" },
   { type: "box", label: "容器块", group: "容器", container: true, w: 200, h: 120, text: "" },

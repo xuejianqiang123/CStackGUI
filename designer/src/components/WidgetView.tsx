@@ -260,6 +260,23 @@ function inner(node: CgNode, img: Preview, st: CgStyle) {
       );
     }
 
+    case "iconlist": {
+      /* 示意渲染：只画前 6 行的标题（图标/副标题/状态是运行时灌的，画布不假装知道），
+         布局口径与运行时一致 —— 〔复选框〕+ 图标位 + 标题。 */
+      const rows = (node.items ?? []).slice(0, 6);
+      return (
+        <div className="ctl-iconlist">
+          {rows.map((t, i) => (
+            <div key={i} className="ctl-iconlist-row">
+              {node.check ? <span className="ctl-iconlist-chk" /> : null}
+              <span className="ctl-iconlist-ico" />
+              <span className="ctl-iconlist-title">{t}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
     case "link":
       return <div className="ctl-link">{node.text || "链接"}</div>;
 
