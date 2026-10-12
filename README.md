@@ -103,6 +103,11 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
   通用骨架 + 实时预览 —— 替掉 XCOM 那个写死厂商私有格式的「协议传输」页签）；
   不抄它的私有 IAP「协议传输」——通用件是 `cg_crc16` + `cg_modbus_*`。
   自测不需要硬件：`serialterm.exe --demo`（灌合成字节，结论打到 stdout）。
+- `examples\shottool\` —— **QQ 风格截图工具**：托盘常驻 + 全局热键 `Ctrl+Alt+A` + 屏幕区域
+  框选 + 矩形/椭圆/箭头/画笔/文字标注 + 完成即存 PNG 并复制剪贴板 + 贴图钉屏。演示 runtime
+  的三条"界面之外"能力 —— **屏幕抓取**（`cg_screen_capture`）、**全局热键**（`cg_hotkey_set`，
+  后台也按得到）、**图片写剪贴板**（`cg_clip_set_image`），以及**画板背景图**（截图当底、
+  标注当命令，成品 = 抓画板自己）。
 - `examples\modbus\` —— **工控向样板（Modbus/TCP 上位机）**：`cg_modbus_*` 拼请求帧 / 解响应帧，
   `cg_net_*` 收发，切帧交给 **`cg_frame_*`**（长度字段模式；串口上的 Modbus/RTU 换成
   `CG_FRAME_SILENCE` 即可），异常响应翻成人话，等回应超时报一句 —— 顺带带了 `mock-slave.mjs`
@@ -420,6 +425,7 @@ CStackGUI\
     hextool\                   进制与校验工具箱（HEX/文本互转 + 大小端 + CRC16/CRC32/MD5/SHA + Base64/URL + 报文组装）
     filecheck\                 文件核对工具（两个文件的大小与五种摘要比对 + 逐字节差异定位 + 报告导出）
     traytool\                  托盘常驻小工具（托盘图标 + 关窗即最小化 + 5 条全局快捷键 + 剪贴板 + 截图 + 切深色）
+    shottool\                  截图工具（托盘 + 全局热键 Ctrl+Alt+A + 屏幕框选 + 矩形/椭圆/箭头/画笔/文字标注 + 存图/复制/贴图）
     syspanel\                  系统与配置面板（系统位数/版本/磁盘占用/环境变量/进程存在性/串口枚举 + INI 读写）
     datarec\                   采集记录器（模拟数据源 + 实时双曲线 + CSV 分块落盘 + 回放 + 内存上限保护）
     logfilter\                 日志过滤器（大日志关键字过滤 + 行号表 + 导出，说清"整读 + 32 MB 上限"的能力边界）

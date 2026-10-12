@@ -204,6 +204,20 @@ cg_action_set_checked(cg_app_of(self), "grid", !cg_action_is_checked(cg_app_of(s
             "const char *cg_action_accel(const cg_app_t *app, const char *name)",
             "取规范化后的快捷键显示串（如 \"Ctrl+S\"）；没写或动作不存在返回空串",
           ),
+          c(
+            "cg_hotkey_set",
+            "注册全局热键",
+            "int cg_hotkey_set(cg_app_t *app, const char *combo, const char *action)",
+            "按下组合键 = 触发同名动作；**后台 / 托盘里也按得到**（与动作 accel 的区别：accel 只在本窗口有焦点时生效）。组合键被别的程序占用会注册失败，业务要留按钮 / 托盘兜底",
+            {
+              params: [
+                "combo：\"Ctrl+Alt+A\" 这类写法（与动作 accel 相同）；传 NULL = 解绑全部",
+                "action：.cgui 顶层 actions 里的动作名",
+              ],
+              ret: "1 = 成功；0 = 失败（没窗口 / 组合键看不懂 / 动作不存在 / 键被占用，原因写日志）",
+              sample: `/* 就绪钩子里注册；失败只写日志，面板按钮是兜底入口 */\nif (!cg_hotkey_set(app, "Ctrl+Alt+A", "shot"))\n    cg_log(CG_LOG_WARN, "热键被占用，用按钮触发");`,
+            },
+          ),
         ],
       },
       {
@@ -252,6 +266,24 @@ if (lab) cg_widget_set_text(lab, "已处理");`,
           c("cg_widget_screenshot", "把某个控件存成 PNG", "int cg_widget_screenshot(cg_widget_t *w, const char *path)",
             "「这个框里到底显示成什么样」取证用；日期时间这类两个原生窗口拼的控件存的是主窗口那个", {
               ret: "1 = 成功；0 = 失败（原因写进日志）",
+            }),
+          c("cg_screen_size", "主显示器尺寸", "int cg_screen_size(const cg_app_t *app, int *w, int *h)",
+            "逻辑像素；区域截图铺满全屏前先问它。只覆盖**主显示器**", {
+              params: ["w / h：出参，可为 NULL"],
+              ret: "1 = 成功；0 = 失败",
+            }),
+          c("cg_screen_capture", "屏幕区域截图", "int cg_screen_capture(const cg_app_t *app, int x, int y, int w, int h, const char *path)",
+            "抓**屏幕**（不是窗口）一块存 PNG：坐标是逻辑像素、DPI 内部换算，越界自动夹进主屏", {
+              params: ["x, y：区域左上角屏幕坐标（逻辑像素）", "w, h：区域宽高", "path：输出 PNG 路径（目录须已存在）"],
+              ret: "1 = 成功；0 = 失败（原因写进日志）",
+              sample: `/* 截图当画板背景 + 标注，成品抓画板 —— 完整链路见 examples\\shottool */\ncg_screen_capture(app, x, y, w, h, "cap.png");\ncg_widget_set_image(cv_shot, "cap.png");`,
+            }),
+          c("cg_scale_px", "逻辑像素换算物理像素", "int cg_scale_px(const cg_app_t *app, int logical)",
+            "只为 cg_win_set_pos（按**物理**像素收参）这类接口换算；尺寸类接口收的本来就是逻辑像素，别多此一举"),
+          c("cg_win_set_border", "运行时改窗口边框", "int cg_win_set_border(cg_app_t *app, const char *mode)",
+            "mode：\"sizable\" / \"fixed\" / \"dialog\" / \"none\"；只换边框样式，位置与尺寸自己再设 —— 面板 ↔ 全屏 overlay 的开关", {
+              params: ["mode：边框名（与 .cgui 的 app.border 同一套取值）"],
+              ret: "1 = 成功；0 = 失败（没窗口 / mode 认不出来）",
             }),
         ],
       },
@@ -1163,6 +1195,12 @@ cg_message_box(self, "已复制到剪贴板", "提示", 0);`,
               params: ["path：输出路径（UTF-8，编码固定 PNG）"],
               ret: "1 = 成功；0 = 剪贴板里没有图片 / 打不开剪贴板 / 存盘失败",
               sample: `/* 例：按 Ctrl+V 时把剪贴板里的图存下来（.cgui 里给 keydown 绑 on_paste）*/\nchar *p = cg_path_join(cg_app_dir(), "paste.png");\nif (!cg_clip_get_image(p)) cg_status_set(sb, 0, "剪贴板里没有图片");\ncg_free(p);`,
+            }),
+          c("cg_clip_set_image", "把图片文件写进剪贴板", "int cg_clip_set_image(const char *path)",
+            "截图\"复制\"那一半：写 CF_DIB（24 位，各软件都认）+ CF_BITMAP 双格式。与 cg_clip_get_image 对称，需要 exe 真的在跑（--selftest 下返回 0）", {
+              params: ["path：图片路径（png/jpg/bmp/gif）"],
+              ret: "1 = 成功；0 = 失败（读不到图 / 打不开剪贴板 / 一个格式都没写进去，写日志）",
+              sample: `/* 存图后直接可粘贴（完整链路见 examples\\shottool） */\nif (cg_widget_screenshot(cv, path) && cg_clip_set_image(path))\n    cg_log(CG_LOG_INFO, "已存图并复制：%s", path);`,
             }),
           c("cg_shell_open", "用默认程序打开", "int cg_shell_open(const char *path_or_url)", "打开文件 / 文件夹 / 网址（浏览器、记事本……都行）", {
             sample: `cg_shell_open("https://www.example.com");
