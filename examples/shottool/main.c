@@ -481,6 +481,7 @@ static void restore_panel(cg_app_t *app)
     cg_win_set_size(app, s_pan_w > 0 ? s_pan_w : kPanelW, s_pan_h > 0 ? s_pan_h : kPanelH);
     cg_win_set_topmost(app, 0);
     cg_win_show(app, 1);
+    cg_win_focus(app);                          /* 回面板也抢一下：Ctrl+Shift+Q 这类快捷键要前台 */
 
     status_refresh(app);
     /* 只说"回面板"：存没存图是调用方的事（完成 / 取消 / 贴图收回各有各的说法），
@@ -560,16 +561,27 @@ static void capture_tick(void *user)
     s_said_full = 0;
     s_last_rw = s_last_rh = 0;
     cg_canvas_clear(cv);
-    mode_hint(app, "按住左键拖动框选，松手进入标注（Esc 取消）");
+    /* 框选态**不放**取消按钮：画板铺满全屏，任何子控件都在它下面接不到点击
+     * （实测 WindowFromPoint 落在画板上）。取消走 Esc，或先框一块进标注态再点「取消」 */
+    mode_hint(app, "按住左键拖动框选，松手进入标注；Esc 取消（取消按钮在标注态的工具条上）");
 
     s_mode = MODE_SELECT;
     cg_win_show(app, 1);
+    /* 抢前台：不抢的话键盘消息不进本进程，表现为"按 Esc 没反应"（点过画布又好了）。
+     * 被系统拒绝就照实说一句，用户还有鼠标与按钮两条路。 */
+    if (!cg_win_focus(app)) {
+        log_line(app, "没抢到前台（系统拒绝了这次请求）：Esc / 回车可能收不到，用鼠标或按钮操作");
+    }
     status_refresh(app);
     log_line(app, "整屏已抓取（%dx%d 逻辑像素），按住拖动框选", sw, sh);
     cg_free(path);
 }
 
-/* 前向声明：crop_tick 排在 annotate_begin 前面（定时器回调要用它） */
+/** @brief 前向声明：crop_tick 排在 annotate_begin 前面（定时器回调要用它）
+ *  @param app 应用
+ *  @return void 无返回值
+ *  @note 声明上的注释也要写全 @param / @return：tools\check-comments.mjs 按定义处的规矩查
+ */
 static void annotate_begin(cg_app_t *app);
 
 /**
