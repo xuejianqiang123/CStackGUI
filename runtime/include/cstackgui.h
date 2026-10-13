@@ -349,6 +349,16 @@ void cg_win_set_icon(cg_app_t *app, const char *ico_path);
  */
 int  cg_scale_px(const cg_app_t *app, int logical);
 /**
+ * @brief 把主窗口提到前台并拿到键盘焦点（最小化时先还原）
+ * @param app 应用
+ * @return int 1 成功；0 失败（没有窗口，或系统拒绝这次抢前台）
+ * @note 截图工具这类"弹一个全屏 overlay 等着按键（Esc 取消 / 回车完成）"的程序必须调它：
+ *       只 `cg_win_show()` 不抢前台时，键盘消息不进本进程 —— 表现为"按 Esc 没反应"，
+ *       而用户点过画布之后又好了（点击顺带把窗口激活了），最像"快捷键坏了"的那类坑。
+ *       系统在前台锁生效时有权拒绝（返回 0），业务要留鼠标/按钮兜底入口
+ */
+int  cg_win_focus(cg_app_t *app);
+/**
  * @brief 运行时改主窗口边框（`.cgui` 的 `app.border` 的运行时版）
  * @param app 应用
  * @param mode "sizable" 可调整 / "fixed" 普通固定 / "dialog" 对话框固定 / "none" 无边框

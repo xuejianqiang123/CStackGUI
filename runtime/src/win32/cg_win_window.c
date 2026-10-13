@@ -807,6 +807,23 @@ void cg_win_set_topmost(cg_app_t *app, int on)
 }
 
 /**
+ * @brief 把主窗口提到前台并拿键盘焦点（公共 API cg_win_focus 的实现）
+ * @param app 应用
+ * @return int 1 成功；0 失败（没有窗口 / SetForegroundWindow 被系统拒绝）
+ * @note 最小化时先还原再抢：托盘图标调回来的窗口常常是最小化的，直接抢前台不会生效。
+ *       被系统拒绝（前台锁）不是 bug —— 返回 0 让业务知道"这次没抢到"，别把后续
+ *       键盘交互当成必然可用
+ */
+int cg_win_focus(cg_app_t *app)
+{
+    HWND h = win_hwnd_of(app);
+
+    if (!h) return 0;
+    if (IsIconic(h)) ShowWindow(h, SW_RESTORE);
+    return SetForegroundWindow(h) ? 1 : 0;
+}
+
+/**
  * @brief 逻辑像素换算成物理像素（公共 API，实现就是 cgw_scale_px 那一层）
  * @param app 应用；NULL 按不缩放处理
  * @param logical 逻辑像素值（可正可负）
