@@ -285,6 +285,11 @@ if (lab) cg_widget_set_text(lab, "已处理");`,
               params: ["mode：边框名（与 .cgui 的 app.border 同一套取值）"],
               ret: "1 = 成功；0 = 失败（没窗口 / mode 认不出来）",
             }),
+          c("cg_win_focus", "把主窗口提到前台", "int cg_win_focus(cg_app_t *app)",
+            "最小化时先还原再抢前台。截图工具这类\"弹 overlay 等着按键\"的程序必须调它：只 show 不抢前台，"
+            + "键盘消息不进本进程（表现为\"按 Esc 没反应\"，点过画布又好了）；系统前台锁生效时会被拒绝（返回 0）", {
+              ret: "1 = 成功；0 = 没有窗口 / 系统拒绝",
+            }),
         ],
       },
       {
