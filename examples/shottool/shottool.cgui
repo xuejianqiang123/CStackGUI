@@ -111,7 +111,8 @@
       "items": ["矩形", "椭圆", "箭头", "画笔", "文字"],
       "value": 0,
       "visible": false,
-      "hint": "标注工具：拖出来的形状 / 点一下落文字"
+      "hint": "标注工具：拖出来的形状 / 点一下落文字",
+      "events": { "select": "on_tool_change" }
     },
     {
       "id": "lab_color",

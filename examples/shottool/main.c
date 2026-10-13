@@ -110,6 +110,10 @@ static int s_drag;                                /**< 1 = 正按下拖动 */
 static int s_x0, s_y0, s_lx, s_ly;                /**< 按下点 / 自由笔上一点 */
 static int s_base;                                /**< 起笔时的命令数（算这一笔加了几条） */
 static int s_tool, s_penw;                        /**< 起笔时冻结的工具 / 笔宽 */
+static int s_tool_sel;                            /**< 工具下拉框最近一次选中的下标 */
+static int s_tool_known;                          /**< 1 = 收到过下拉框 select，s_tool_sel 可信 */
+/** 工具名（日志用；下标必须与 shottool.cgui 里 cbo_tool 的 items 顺序一致） */
+static const char *const k_tool_names[5] = { "矩形", "椭圆", "箭头", "画笔", "文字" };
 static unsigned s_ink;                            /**< 起笔时冻结的颜色 */
 static int s_sel_x, s_sel_y, s_sel_w, s_sel_h;    /**< 选区（逻辑像素，屏幕坐标 = 画板坐标） */
 static int s_pan_x, s_pan_y;                      /**< 面板窗口位置（**物理**像素，move 事件给的） */
@@ -751,8 +755,18 @@ static void on_shot_mouse(cg_widget_t *self, cg_event_t ev, void *user)
     (void)user;
     if (!cg_app_has_window(app)) return;         /* 自检合成事件：不画也不报错 */
 
-    if (ev == CG_EVENT_DBLCLICK) {               /* 双击只在贴图态有意义（回面板） */
-        if (s_mode == MODE_PIN) restore_panel(app);
+    if (ev == CG_EVENT_DBLCLICK) {
+        if (s_mode == MODE_PIN) {                /* 贴图态：双击贴图 = 回面板 */
+            restore_panel(app);
+            return;
+        }
+        /* 标注态：双击 = 两次 mousedown，文字工具会连着落两个。双击事件比第二次落笔
+         * 晚到一步，这里把重复的那笔撤掉（只撤"最后落的是文字"这一种，别误伤刚画的形状） */
+        if (s_mode == MODE_ANNOTATE && s_nstroke > 0 && s_ops[s_live - 1].type == OP_TEXT) {
+            undo_stroke();
+            replay_n(cv, s_live);
+            log_line(app, "双击按一次算：已撤掉重复落的那一笔文字");
+        }
         return;
     }
     x = cg_event_x(self);
@@ -830,7 +844,7 @@ static void on_shot_mouse(cg_widget_t *self, cg_event_t ev, void *user)
 
         if (s_drag) return;
         clamp_xy(cv, &x, &y);
-        s_tool = cbo_int(app, "cbo_tool", TOOL_RECT);
+        s_tool = s_tool_known ? s_tool_sel : cbo_int(app, "cbo_tool", TOOL_RECT);
         s_ink  = k_colors[cbo_int(app, "cbo_color", 0) % 6];
         s_penw = k_widths[cbo_int(app, "cbo_width", 1) % 3];
         s_base = s_live;
@@ -1014,6 +1028,31 @@ static void on_tool_btn(cg_widget_t *self, cg_event_t ev, void *user)
 }
 
 /**
+ * @brief 工具下拉框换了选项：记一行日志，并把当前工具存下来
+ * @param self 下拉框
+ * @param ev 恒为 select
+ * @param user 未使用
+ * @return void 无返回值
+ * @note 起笔时用的工具以这里存的值为准：下拉框的**选择变化**由这条事件通知，
+ *       比"落笔那一刻再去读"更能说清"用户到底选了什么"（也便于排查"选了没生效"）
+ */
+static void on_tool_change(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    cg_app_t *app = cg_app_of(self);
+    int       idx;
+
+    (void)ev;
+    (void)user;
+    if (!cg_app_has_window(app)) return;
+
+    idx = cbo_int(app, "cbo_tool", TOOL_RECT);
+    if (idx > TOOL_TEXT) idx = TOOL_RECT;
+    s_tool_sel = idx;
+    s_tool_known = 1;
+    log_line(app, "工具：%s", k_tool_names[idx]);
+}
+
+/**
  * @brief 窗口级键盘：Esc = 取消 / 退出贴图，回车 = 完成
  * @param self 窗口伪控件
  * @param ev 恒为 keydown
@@ -1183,6 +1222,7 @@ static const cg_binding_t k_bindings[] = {
     CG_BIND("on_action",     on_action),
     CG_BIND("on_shot_mouse", on_shot_mouse),
     CG_BIND("on_tool_btn",   on_tool_btn),
+    CG_BIND("on_tool_change", on_tool_change),
     CG_BIND_END
 };
 
