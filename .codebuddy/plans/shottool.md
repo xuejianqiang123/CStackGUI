@@ -165,6 +165,18 @@ PostMessage(main, WM_COMMAND, id | (CBN_SELCHANGE << 16), combo)   # 补发通�
 但那轮环境又漂了（拖拽没生成选区，窗口停在框选态，工具条没摆出来）——按探针规矩停止，
 不再反复试。形状类标注的像素证据由**矩形**那几轮覆盖（red=1824 / 2784，与椭圆/箭头同一条
 `draw_canvas` 回放路径），加上本轮日志里的形状名与坐标，判定为已验证。
+
+## 第六轮：补 `shottool.rc` 与发布版核验（2026-10-14）
+
+- **发现**：发布版（`--release`）编得过、自检过，但 exe 版本信息是通用默认值
+  （`OriginalFilename=CStackGUI.exe`）——因为**画布导出才会从 `app.info` 生成 `<工程>.rc`**
+  （`designer/src/codegen.ts` 的 `rcFile()`），手写 `.cgui` 没有这一步（`build-app.bat`
+  / `cgbuild.mjs` 只负责"见到 `.rc` 就编译它"）。
+- **修**：照 `gallery.rc` 的手写样板补 `examples/shottool/shottool.rc`（图标 + v6 清单 + 版本信息，
+  内容取自 `.cgui` 的 `app.info`）。
+- **核验**：`RC shottool.rc` 出现在构建输出里；调试版与发布版的 exe 都带上
+  `ProductName=CStackGUI 截图工具` / `FileVersion=1.0.0.0` / `OriginalFilename=shottool.exe`
+  / `FileDescription=…`；两版 `--selftest` 均 22 控件 / 10 回调 / 五项全 0。
 - 文字工具双击会落两个：已加"双击撤掉重复那笔"的修复，同样待人工确认。
 - 非 100% DPI 与多屏未实测（本轮日志显示抓屏口径为主屏，与 README 声明一致）。
 
