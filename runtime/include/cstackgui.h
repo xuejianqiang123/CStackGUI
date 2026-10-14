@@ -496,7 +496,8 @@ int cg_screen_size(const cg_app_t *app, int *w, int *h);
  * @param app 应用（取 DPI 缩放比；NULL 按不缩放算）
  * @param x 出参：左上角横坐标（**可能为负**：左边竖了屏时）；可为 NULL
  * @param y 出参：左上角纵坐标（可能为负）；可为 NULL
- * @return int 1 成功；0 失败（屏幕查询返回非正值）
+ * @return int 1 成功（当前实现**不失败**：虚拟桌面原点任何系统上都拿得到；
+ *          留返回值是与 `cg_screen_size` 对称，也方便以后加失败路径）
  * @note 单屏且主屏在左上时返回 (0, 0)，与老行为一致；多屏时是
  *       `SM_XVIRTUALSCREEN`/`SM_YVIRTUALSCREEN` 折算后的逻辑像素。
  *       配 `cg_win_set_pos`（按**物理**像素收参）用时要过 `cg_scale_px`
