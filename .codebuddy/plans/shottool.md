@@ -122,8 +122,28 @@
 2. 框选松手后**先隔一拍再抓选区**（新增 `s_cropping` + `crop_tick`）：计划里没有，
    是真机实测发现"橡皮筋/提示行会被截进成品"后补的（修前 yellow=1971 → 修后 0）。
 
-**遗留**：门禁对 `examples\base` 的路径过期（建议单开修 bug 旁路）；
-文字工具双击会落两个（已写进 README）；非 100% DPI 与多屏未实测。
+## 第四轮：把门禁遗留（examples\base 路径过期）修掉（2026-10-14）
+
+诊断：`examples\base` 是**容器目录**（教学六课等被收在它下面，它自己没有源文件），
+而 `build-all` / `check-format` / `check-examples` 都还按"顶层平铺"认路。三处修复：
+
+1. `build-all.bat`：有 `main.c/cpp` 就编它自己，没有就往下编一层（新增 `:build_one` 子过程）。
+   → **30 个示例全部构建 + `--selftest` 通过，[ok] 全部构建完成**（此前每跑必红在 base 那行）
+2. `tools\check-format.bat`：两处往返样本路径改到 `examples\base\lesson01_basics` / `lesson06_window`。
+   → `[ok] format contract check passed`（此前停在 ENOENT）
+3. `tools\check-examples.mjs`：`lessonDirs()` 两层都扫、新增 `lessonHome()`，`lessonFacts()` / `selftestNumbers()`
+   按实际目录取。→ `[ok] 文档口径与现状一致：6 课、10 篇文章（共检查 122 条声明）`（此前 10 处红）
+
+动过 .bat 已跑 `tools\bat-utf8.ps1 -Mode fix`（0 处需修）。
+
+**遗留**：
+- **四种工具（椭圆 / 箭头 / 画笔 / 文字）的实际绘制未自动化验证**：坐标基准这轮是对的
+  （选区精确 600x500、标注落点 (100,100)-(300,250)），但下拉框的**选择变化通知造不出来**
+  （`CB_SETCURSEL` + 手动投 `CBN_SETCURSEL...` 都没让 `select` 事件触发，日志无「工具：…」）。
+  运行时侧确认会处理（`cg_win_notify.c:134` 接 `CBN_SELCHANGE/SELENDOK/CLOSEUP`），
+  示例读法与 drawpad 相同 —— 需人工点一次确认。
+- 文字工具双击会落两个：已加"双击撤掉重复那笔"的修复，同样待人工确认。
+- 非 100% DPI 与多屏未实测（本轮日志显示抓屏口径为主屏，与 README 声明一致）。
 
 ## 第三轮：剩余功能路径横扫（2026-10-14）
 
