@@ -42,7 +42,7 @@
 ## 四、关键接口
 
 - `cg_hotkey_set` / `WM_HOTKEY`：注册全局热键 = 触发同名动作；**与动作 accel 的区别**（accel 在消息循环里由 TranslateAccelerator 吃，窗口失焦就不生效）。NULL 解绑全部，关窗自动收。
-- `cg_screen_size` / `cg_screen_capture`：主屏逻辑尺寸、屏幕区域抓 PNG（逻辑像素入参，DPI 内部换算，越界自动夹进主屏）。
+- `cg_screen_size` / `cg_screen_origin` / `cg_screen_capture`：**虚拟桌面**的逻辑尺寸 / 原点 / 区域抓 PNG（坐标入参，DPI 内部换算，越界自动夹进虚拟桌面；多屏时坐标可为负）。
 - `cg_win_set_border(app,"none"/"sizable")`：面板 ↔ 无边框 overlay 的开关；配套 `cg_win_set_pos`（**物理**像素）+ `cg_win_set_size`（**逻辑**像素）+ `cg_scale_px`（两者之间的换算）。
 - `cg_widget_set_image(cv, path)`：设在 **canvas** 上 = **画板背景图**（本示例的立身之本）。
 - `cg_widget_screenshot(cv, path)`：抓画板 = 成品（画板的 WM_PRINT 已接，PrintWindow 不会抓出空图）。
@@ -69,7 +69,10 @@
 ## 六、能力边界（QQScreenShot 有、本示例明确不做）
 
 - **OCR / 录屏 / 截长图**：它靠逆向的 QQ DLL 与外部引擎（PaddleOCR、百度 API）；本工程不做，也不假装做。
-- **多显示器**：只覆盖**主显示器**（`GetSystemMetrics(SM_CXSCREEN)` 口径），跨屏拖选不在范围内。
+- **混 DPI 多屏的像素级对齐**：**多显示器是支持的**（口径 = 整个虚拟桌面，`cg_screen_size` /
+  `cg_screen_origin` / `cg_screen_capture` 都按 `SM_XVIRTUALSCREEN` 系列算，副屏区域抓得到、
+  坐标可以是负的）；但窗口的 DPI 上下文跟随主屏，**副屏缩放与主屏不一致时**，副屏上的
+  物理↔逻辑换算会差一点，跨屏拖选的边缘可能差 1px 级。同 DPI 多屏（或单屏）没这个问题。
 - **半透明遮罩**：runtime 没有分层窗口（`WS_EX_LAYERED`），选区外不会变暗 —— 靠黄色橡皮筋 + 尺寸提示说话。
 - **独立贴图窗口**：框架只有一个顶层窗口，贴图与主面板**不能同时显示**（贴图态按 `Esc`/双击先回面板）。
 - **高 DPI 边缘**：100% 缩放下逐像素对齐；150% 这类缩放下选区右/下沿可能有 ±1px 的取整缝（抓屏与铺窗走的是同一套换算，肉眼基本不可见）。

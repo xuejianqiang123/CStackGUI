@@ -115,7 +115,8 @@ static int s_tool_known;                          /**< 1 = 收到过下拉框 se
 /** 工具名（日志用；下标必须与 shottool.cgui 里 cbo_tool 的 items 顺序一致） */
 static const char *const k_tool_names[5] = { "矩形", "椭圆", "箭头", "画笔", "文字" };
 static unsigned s_ink;                            /**< 起笔时冻结的颜色 */
-static int s_sel_x, s_sel_y, s_sel_w, s_sel_h;    /**< 选区（逻辑像素，屏幕坐标 = 画板坐标） */
+static int s_sel_x, s_sel_y, s_sel_w, s_sel_h;    /**< 选区（逻辑像素，**画板坐标**） */
+static int s_org_x, s_org_y;                     /**< 虚拟桌面原点（逻辑像素，可能为负） */
 static int s_pan_x, s_pan_y;                      /**< 面板窗口位置（**物理**像素，move 事件给的） */
 static int s_pan_w, s_pan_h;                      /**< 面板客户区尺寸（**逻辑**像素，size 事件给的） */
 static int s_pan_valid;                           /**< 1 = 面板矩形记到过 */
@@ -529,13 +530,13 @@ static void capture_tick(void *user)
     if (!app || s_mode != MODE_CAPTURING) return;
     if (!cg_app_has_window(app)) { s_mode = MODE_IDLE; return; }
 
-    if (!cg_screen_size(app, &sw, &sh)) {
-        log_line(app, "抓屏失败：取不到主屏尺寸");
+    if (!cg_screen_size(app, &sw, &sh) || !cg_screen_origin(app, &s_org_x, &s_org_y)) {
+        log_line(app, "抓屏失败：取不到虚拟桌面尺寸 / 原点");
         restore_panel(app);
         return;
     }
     path = shot_temp_path(app, "shot_full");
-    if (!path || !cg_screen_capture(app, 0, 0, sw, sh, path)) {
+    if (!path || !cg_screen_capture(app, s_org_x, s_org_y, sw, sh, path)) {
         log_line(app, "抓屏失败：cg_screen_capture 返回 0（原因见日志）");
         cg_free(path);
         restore_panel(app);
@@ -550,9 +551,11 @@ static void capture_tick(void *user)
         return;
     }
 
-    /* 面板 → 无边框全屏：先样式、再位置、后尺寸（尺寸按当前样式算非客户区） */
+    /* 面板 → 无边框全屏：先样式、再位置、后尺寸（尺寸按当前样式算非客户区）。
+     * 位置是**虚拟桌面原点**（左边竖了屏时是负的），过 cg_scale_px 换成物理像素 ——
+     * cg_win_set_pos 按物理像素收参 */
     cg_win_set_border(app, "none");
-    cg_win_set_pos(app, 0, 0);
+    cg_win_set_pos(app, cg_scale_px(app, s_org_x), cg_scale_px(app, s_org_y));
     cg_win_set_size(app, sw, sh);
     cg_win_set_topmost(app, 1);
     panel_widgets(app, 0);
@@ -610,18 +613,21 @@ static void crop_tick(void *user)
  * @brief 框选结束：按选区重抓一块、窗口贴到选区原点、进标注态
  * @param app 应用
  * @return void 无返回值
- * @note 选区坐标 = 画板坐标 = 屏幕逻辑坐标（窗口无边框在 0,0 铺满，三者同一套），
- *       所以这里不用换算，直接把 s_sel_* 当抓屏参数与窗口位置用
+ * @note 选区坐标是**画板坐标**（overlay 无边框铺满虚拟桌面、画板在客户区 0,0）。
+ *       换成虚拟桌面坐标要加原点 s_org_*：抓屏参数与窗口位置都用加过偏移的那套 ——
+ *       左边竖了屏时原点为负，不加偏移就会抓到主屏左上角那块去
  */
 static void annotate_begin(cg_app_t *app)
 {
     cg_widget_t *cv = cg_find(app, "cv_shot");
     int          bw = (s_sel_w < kBarMinW) ? kBarMinW : s_sel_w;
     int          bh = s_sel_h + kBarExtra;
+    int          dx = s_org_x + s_sel_x;        /* 选区的虚拟桌面坐标 */
+    int          dy = s_org_y + s_sel_y;
     char        *path;
 
     path = shot_temp_path(app, "shot_sel");
-    if (!path || !cg_screen_capture(app, s_sel_x, s_sel_y, s_sel_w, s_sel_h, path)) {
+    if (!path || !cg_screen_capture(app, dx, dy, s_sel_w, s_sel_h, path)) {
         log_line(app, "选区抓屏失败：cg_screen_capture 返回 0（原因见日志）");
         cg_free(path);
         restore_panel(app);
@@ -635,7 +641,7 @@ static void annotate_begin(cg_app_t *app)
     }
 
     s_mode = MODE_ANNOTATE;                     /* 先置：接下来的 move/size 不许记成面板矩形 */
-    cg_win_set_pos(app, cg_scale_px(app, s_sel_x), cg_scale_px(app, s_sel_y));
+    cg_win_set_pos(app, cg_scale_px(app, dx), cg_scale_px(app, dy));
     cg_win_set_size(app, bw, bh);
 
     cg_widget_set_rect(cv, 0, 0, s_sel_w, s_sel_h);
@@ -650,7 +656,7 @@ static void annotate_begin(cg_app_t *app)
     mode_hint(app, "标注：完成 = 存图并复制｜贴图 = 钉在屏幕｜取消或 Esc = 不存");
 
     status_refresh(app);
-    log_line(app, "选区 %d,%d %dx%d：进标注（工具条在选区下方）", s_sel_x, s_sel_y, s_sel_w, s_sel_h);
+    log_line(app, "选区 %d,%d %dx%d：进标注（工具条在选区下方）", dx, dy, s_sel_w, s_sel_h);
     cg_free(path);
 }
 

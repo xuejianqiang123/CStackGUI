@@ -213,11 +213,13 @@ int cg_clip_get_image(const char *path)
  * （GetDC(NULL) + BitBlt）。坐标按本工程的统一口径收**逻辑像素**，内部按 DPI
  * 换成物理像素再抓 —— 业务层（examples/、apps/）禁止 include Windows 头
  * （tools/check-layers.mjs 规则 7），屏幕抓取与图片剪贴板只能长在 win32 层。
- * 只覆盖**主显示器**：多屏虚拟桌面坐标是遗留项，示例里也不许假装支持。
+ * 口径是**整个虚拟桌面**（SM_CXVIRTUALSCREEN 系列，多屏拼起来那一整块）：
+ * GetDC(NULL) 拿到的 DC 本来就覆盖整个桌面，副屏区域 BitBlt 一样抓得到；
+ * 老写法按 SM_CXSCREEN（主屏）夹，副屏区域会被夹成 0 —— 那是唯一要改的地方。
  */
 
 /**
- * @brief 主显示器尺寸（逻辑像素）
+ * @brief 虚拟桌面尺寸（逻辑像素；单屏时就是那块屏的尺寸）
  * @param app 应用（取 DPI 缩放比；可为 NULL，按不缩放算）
  * @param w 出参：宽；可为 NULL
  * @param h 出参：高；可为 NULL
@@ -228,14 +230,38 @@ int cg_screen_size(const cg_app_t *app, int *w, int *h)
     int sc, pw, ph;
 
     sc  = (app && app->scale > 0) ? app->scale : 100;
-    pw  = GetSystemMetrics(SM_CXSCREEN);
-    ph  = GetSystemMetrics(SM_CYSCREEN);
+    pw  = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+    ph  = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+    if (pw <= 0 || ph <= 0) {
+        /* 没有虚拟桌面指标的老系统：退回主屏，行为与改之前一致 */
+        pw = GetSystemMetrics(SM_CXSCREEN);
+        ph = GetSystemMetrics(SM_CYSCREEN);
+    }
     if (pw <= 0 || ph <= 0) {
         cg_log(CG_LOG_WARN, "取屏幕尺寸失败：%dx%d", pw, ph);
         return 0;
     }
     if (w) *w = (int)(((long long)pw * 100 + sc / 2) / sc);
     if (h) *h = (int)(((long long)ph * 100 + sc / 2) / sc);
+    return 1;
+}
+
+/**
+ * @brief 虚拟桌面原点（逻辑像素）—— 全屏 overlay 要摆的位置
+ * @param app 应用（取 DPI 缩放比；可为 NULL，按不缩放算）
+ * @param x 出参：左上角横坐标（可能为负）；可为 NULL
+ * @param y 出参：左上角纵坐标（可能为负）；可为 NULL
+ * @return int 1 成功；0 失败（本实现不失败，留着与 cg_screen_size 对称）
+ * @note 单屏且主屏在左上时是 (0, 0)；左边竖了一块屏时 x 为负。
+ *       配 `cg_win_set_pos`（按**物理**像素收参）用时要过 `cg_scale_px` ——
+ *       那个函数对负数也做四舍五入（见 cg_win_internal.h 的注释）， round-trip 不丢像素
+ */
+int cg_screen_origin(const cg_app_t *app, int *x, int *y)
+{
+    int sc = (app && app->scale > 0) ? app->scale : 100;
+
+    if (x) *x = (int)(((long long)GetSystemMetrics(SM_XVIRTUALSCREEN) * 100 + sc / 2) / sc);
+    if (y) *y = (int)(((long long)GetSystemMetrics(SM_YVIRTUALSCREEN) * 100 + sc / 2) / sc);
     return 1;
 }
 
@@ -253,23 +279,28 @@ int cg_screen_size(const cg_app_t *app, int *w, int *h)
  */
 int cg_screen_capture(const cg_app_t *app, int x, int y, int w, int h, const char *path)
 {
-    int     sx, sy, sw, sh, scrw, scrh, ok = 0;
+    int     sx, sy, sw, sh, ok = 0;
+    int     vx, vy, vw, vh;         /* 虚拟桌面范围（物理像素，原点可能为负） */
     HDC     scr = NULL, mem = NULL;
     HBITMAP bmp = NULL, old = NULL;
 
     if (!app || !path || !*path) return 0;
-    scrw = GetSystemMetrics(SM_CXSCREEN);
-    scrh = GetSystemMetrics(SM_CYSCREEN);
+    vx = GetSystemMetrics(SM_XVIRTUALSCREEN);
+    vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
+    vw = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+    vh = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+    if (vw <= 0 || vh <= 0) { vx = vy = 0; vw = GetSystemMetrics(SM_CXSCREEN); vh = GetSystemMetrics(SM_CYSCREEN); }
     sx = cgw_scale_px(app, x);
     sy = cgw_scale_px(app, y);
     sw = cgw_scale_px(app, w);
     sh = cgw_scale_px(app, h);
-    if (sx < 0)           { sw += sx; sx = 0; }
-    if (sy < 0)           { sh += sy; sy = 0; }
-    if (sx + sw > scrw)   sw = scrw - sx;
-    if (sy + sh > scrh)   sh = scrh - sy;
+    /* 夹进虚拟桌面：原点可能为负，所以上下界都按 vx/vy 算，不能拿 0 当下界 */
+    if (sx < vx)           { sw += sx - vx; sx = vx; }
+    if (sy < vy)           { sh += sy - vy; sy = vy; }
+    if (sx + sw > vx + vw) sw = vx + vw - sx;
+    if (sy + sh > vy + vh) sh = vy + vh - sy;
     if (sw <= 0 || sh <= 0) {
-        cg_log(CG_LOG_WARN, "抓屏失败：区域 %dx%d（逻辑像素）不在主屏内", w, h);
+        cg_log(CG_LOG_WARN, "抓屏失败：区域 %dx%d（逻辑像素）不在虚拟桌面内", w, h);
         return 0;
     }
 

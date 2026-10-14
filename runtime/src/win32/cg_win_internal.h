@@ -218,15 +218,20 @@ wchar_t *cgw_wc_from_utf8(const char *s);
  * @brief 逻辑像素转物理像素（app->scale 用百分比存，100 = 96dpi）
  * @param app 所属应用；scale <= 0 时按 100 处理
  * @param logical 逻辑像素值（可正可负）
- * @return int 物理像素值（四舍五入）
+ * @return int 物理像素值（四舍五入，**负数往负向**）
  * @details 热路径小函数：定义收进本头文件按 static inline 展开——-O2 无 LTO 时跨编译
- *          单元不会内联，每次调用都是真实 call/ret（2026-10-12 内联改造；函数体与原
- *          cg_win_util.c 版本一字不差，行为不变）
+ *          单元不会内联，每次调用都是真实 call/ret（2026-10-12 内联改造）。
+ *          2026-10-14 多屏支持时改了负数的舍入：老写法 `(v + 50) / 100` 对负数向零
+ *          截断，-1920 会算成 -1919 —— 虚拟桌面原点是负的（左边竖了屏）时，全屏
+ *          overlay 的左边缘会漏出一条桌面。**正数行为一字未动**。
  */
 static inline int cgw_scale_px(const cg_app_t *app, int logical)
 {
     int s = app->scale > 0 ? app->scale : 100;
-    return (int)(((long long)logical * s + 50) / 100);
+    long long v = (long long)logical * s;
+
+    if (v >= 0) return (int)((v + 50) / 100);
+    return (int)((v - 50) / 100);   /* 负数往负向舍：-1919.5 该是 -1920 */
 }
 /**
  * @brief 取（或缓存创建）一个 HFONT

@@ -267,14 +267,19 @@ if (lab) cg_widget_set_text(lab, "已处理");`,
             "「这个框里到底显示成什么样」取证用；日期时间这类两个原生窗口拼的控件存的是主窗口那个", {
               ret: "1 = 成功；0 = 失败（原因写进日志）",
             }),
-          c("cg_screen_size", "主显示器尺寸", "int cg_screen_size(const cg_app_t *app, int *w, int *h)",
-            "逻辑像素；区域截图铺满全屏前先问它。只覆盖**主显示器**", {
+          c("cg_screen_size", "虚拟桌面尺寸", "int cg_screen_size(const cg_app_t *app, int *w, int *h)",
+            "逻辑像素；口径是**整个虚拟桌面**（多屏拼起来那一整块），副屏区域同样算在内。区域截图铺满全屏前先问它", {
               params: ["w / h：出参，可为 NULL"],
               ret: "1 = 成功；0 = 失败",
             }),
+          c("cg_screen_origin", "虚拟桌面原点", "int cg_screen_origin(const cg_app_t *app, int *x, int *y)",
+            "逻辑像素；全屏 overlay 要摆的位置。**可能为负**（左边竖了屏时）；配 cg_win_set_pos（按物理像素收参）要过 cg_scale_px", {
+              params: ["x / y：出参，可为 NULL"],
+              ret: "1 = 成功；0 = 失败（与 cg_screen_size 对称，当前不失败）",
+            }),
           c("cg_screen_capture", "屏幕区域截图", "int cg_screen_capture(const cg_app_t *app, int x, int y, int w, int h, const char *path)",
-            "抓**屏幕**（不是窗口）一块存 PNG：坐标是逻辑像素、DPI 内部换算，越界自动夹进主屏", {
-              params: ["x, y：区域左上角屏幕坐标（逻辑像素）", "w, h：区域宽高", "path：输出 PNG 路径（目录须已存在）"],
+            "抓**屏幕**（不是窗口）一块存 PNG：坐标是逻辑像素、DPI 内部换算，越界自动夹进虚拟桌面（副屏区域也抓得到）", {
+              params: ["x, y：区域左上角屏幕坐标（逻辑像素，可为负）", "w, h：区域宽高", "path：输出 PNG 路径（目录须已存在）"],
               ret: "1 = 成功；0 = 失败（原因写进日志）",
               sample: `/* 截图当画板背景 + 标注，成品抓画板 —— 完整链路见 examples\\shottool */\ncg_screen_capture(app, x, y, w, h, "cap.png");\ncg_widget_set_image(cv_shot, "cap.png");`,
             }),

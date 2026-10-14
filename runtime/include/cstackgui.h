@@ -476,10 +476,15 @@ int cg_widget_screenshot(cg_widget_t *w, const char *path);
 /* ---- 屏幕抓取（区域截图） ----
  * 与上面 `cg_win_screenshot`（抓**自己**的窗口）不同，这两个抓的是**屏幕**像素。
  * 坐标与尺寸一律是**逻辑像素**（与 .cgui、控件坐标、事件坐标同一套），DPI 换算
- * 在内部做；只覆盖**主显示器** —— 多屏虚拟桌面是遗留项，别在业务里假装支持。
+ * 在内部做。口径是**整个虚拟桌面**（多块屏拼起来的那一整块），不是主显示器：
+ * 副屏上的区域同样抓得到，坐标可以是负数（虚拟桌面原点未必在 (0,0) —— 左边
+ * 还竖了一块屏时原点就是负的）。
+ * 已知边界：**混 DPI 多屏**下窗口的 DPI 上下文跟随主屏，副屏上的物理↔逻辑换算
+ * 会差一点，跨屏拖选在缩放不一致的屏幕上边缘可能差 1px 级（示例 shottool 的
+ * README 把这条写进了能力边界）。
  */
 /**
- * @brief 主显示器尺寸（逻辑像素）
+ * @brief 虚拟桌面尺寸（逻辑像素；单屏时就是那块屏的尺寸）
  * @param app 应用（取 DPI 缩放比；NULL 按不缩放算）
  * @param w 出参：宽；可为 NULL
  * @param h 出参：高；可为 NULL
@@ -487,16 +492,27 @@ int cg_widget_screenshot(cg_widget_t *w, const char *path);
  */
 int cg_screen_size(const cg_app_t *app, int *w, int *h);
 /**
+ * @brief 虚拟桌面原点（逻辑像素）—— 全屏 overlay 要摆的位置
+ * @param app 应用（取 DPI 缩放比；NULL 按不缩放算）
+ * @param x 出参：左上角横坐标（**可能为负**：左边竖了屏时）；可为 NULL
+ * @param y 出参：左上角纵坐标（可能为负）；可为 NULL
+ * @return int 1 成功；0 失败（屏幕查询返回非正值）
+ * @note 单屏且主屏在左上时返回 (0, 0)，与老行为一致；多屏时是
+ *       `SM_XVIRTUALSCREEN`/`SM_YVIRTUALSCREEN` 折算后的逻辑像素。
+ *       配 `cg_win_set_pos`（按**物理**像素收参）用时要过 `cg_scale_px`
+ */
+int cg_screen_origin(const cg_app_t *app, int *x, int *y);
+/**
  * @brief 把屏幕上一块区域存成 PNG（区域截图）
  * @param app 应用（取 DPI 缩放比；NULL 直接失败）
- * @param x 区域左上角屏幕坐标（逻辑像素）
- * @param y 区域左上角屏幕坐标（逻辑像素）
+ * @param x 区域左上角屏幕坐标（逻辑像素，**虚拟桌面坐标**，可为负）
+ * @param y 区域左上角屏幕坐标（逻辑像素，可为负）
  * @param w 区域宽（逻辑像素）
  * @param h 区域高（逻辑像素）
  * @param path 输出路径（UTF-8，目录必须已存在；编码固定 PNG）
  * @return int 1 成功；0 失败（app/path 为空、区域夹完整体为 0、取 DC 或写盘失败）
- * @note 区域先换算成物理像素再**夹进主屏范围** —— 越出屏幕的部分 BitBlt 抓不到，
- *       不夹的话落盘是黑块。GDI+ 没起来的机器返回 0（原因写日志）
+ * @note 区域先换算成物理像素再**夹进虚拟桌面范围** —— 越出桌面的部分 BitBlt
+ *       抓不到，不夹的话落盘是黑块。GDI+ 没起来的机器返回 0（原因写日志）
  */
 int cg_screen_capture(const cg_app_t *app, int x, int y, int w, int h, const char *path);
 

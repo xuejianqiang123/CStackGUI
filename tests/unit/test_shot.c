@@ -90,6 +90,11 @@ static void test_screen_capture_contract(void)
     cg_test_int("栈上 app（scale=100）同样问得到", rc, 1);
     cg_test_ok("  -> 尺寸和 NULL 时一致", w > 0 && h > 0);
 
+    /* 虚拟桌面原点（2026-10-14 多屏支持新增）：同样不需要窗口。
+     * 值随机器而异（单屏在左上就是 0,0；左边竖了屏是负的），所以只钉返回码 */
+    cg_test_int("app 传 NULL 也能问到虚拟桌面原点", cg_screen_origin(NULL, &w, &h), 1);
+    cg_test_int("栈上 app 同样问得到原点", cg_screen_origin(&app, &w, &h), 1);
+
     cg_file_delete("build/_should_not_exist.png");
     cg_test_int("app 传 NULL：报失败不崩", cg_screen_capture(NULL, 0, 0, 4, 4, "build/_should_not_exist.png"), 0);
     cg_test_int("路径传 NULL：报失败不崩", cg_screen_capture(&app, 0, 0, 4, 4, NULL), 0);
@@ -97,6 +102,10 @@ static void test_screen_capture_contract(void)
     /* 整块在屏幕外：先夹后判，夹完宽高为 0 —— 这条在任何 GDI 调用之前返回，不依赖环境 */
     cg_test_int("区域整块在屏外：报失败不崩",
                 cg_screen_capture(&app, 100000, 100000, 50, 50, "build/_should_not_exist.png"), 0);
+    /* 原点**左界**外（虚拟桌面左界是原点、未必是 0）：同样夹成 0。
+     * 多屏口径改的就是这条 —— 老写法拿 0 当下界，副屏区域会被夹没了 */
+    cg_test_int("区域整块在桌面左界外：报失败不崩",
+                cg_screen_capture(&app, -100000, 0, 50, 50, "build/_should_not_exist.png"), 0);
     cg_test_int("  -> 且没留下半个文件", cg_file_exists("build/_should_not_exist.png"), 0);
 }
 
@@ -129,6 +138,15 @@ static void test_shot_misc_contract(void)
     cg_test_int("换算：scale=150 时四舍五入（123*1.5=184.5 -> 185）", cg_scale_px(&app, 123), 185);
     app.scale = 50;
     cg_test_int("换算：scale=50 时减半", cg_scale_px(&app, 120), 60);
+
+    /* 负值也要四舍五入到正确一侧（2026-10-14 多屏支持时修的）：老写法对负数向零截断，
+     * -1920 会算成 -1919，虚拟桌面原点是负时 overlay 左边缘会漏一条桌面 */
+    app.scale = 100;
+    cg_test_int("换算：负值 scale=100 时不被向零截断", cg_scale_px(&app, -1920), -1920);
+    app.scale = 150;
+    cg_test_int("换算：负值 scale=150 时（-1920*1.5）", cg_scale_px(&app, -1920), -2880);
+    app.scale = 50;
+    cg_test_int("换算：负值 scale=50 时（-1920/2）", cg_scale_px(&app, -1920), -960);
 }
 
 CG_TEST_SUITE("截图：参数不合法时的接口契约", test_shot_contract);
