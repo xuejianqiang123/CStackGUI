@@ -29,16 +29,19 @@ set FAIL=0
 
 rem 逐个编译示例，编完立刻跑一次 --selftest：编译过只能说明语法没问题，
 rem 自检过才说明 .cgui 里的事件名都能对上 C 函数。
+rem
+rem examples\ 下有两种目录：**工程目录**（自带 main.c / main.cpp）和**容器目录**
+rem （目前是 examples\base\，教学六课与其它示例被收在它下面，它自己没有源文件）。
+rem 老写法一律按"工程目录"处理，于是每跑必红在 examples\base 这一行、它下面的示例
+rem 还一个都没编 —— 现在：有源文件就编它自己，没有就往下编一层（2026-10-14 修）。
 for /d %%a in (examples\*) do (
-    echo.
-    echo == 示例 %%a ==
-    call build-app.bat %%~nxa %~1
-    if errorlevel 1 (
-        set FAIL=1
-    ) else (
-        echo   SELFTEST %%~nxa
-        "%%a\%%~nxa.exe" --selftest "%%a\%%~nxa.cgui"
-        if errorlevel 1 set FAIL=1
+    if exist "%%a\main.c"   call :build_one "%%a" %~1
+    if exist "%%a\main.cpp" call :build_one "%%a" %~1
+    if not exist "%%a\main.c" if not exist "%%a\main.cpp" (
+        for /d %%b in (%%a\*) do (
+            if exist "%%b\main.c"   call :build_one "%%b" %~1
+            if exist "%%b\main.cpp" call :build_one "%%b" %~1
+        )
     )
 )
 
@@ -48,4 +51,18 @@ if "%FAIL%"=="1" (
     exit /b 1
 )
 echo [ok] 全部构建完成
+exit /b 0
+
+rem 编一个示例工程并立刻自检；%~1 = 工程目录（相对 examples\ 的路径），%~2 = 附加参数
+:build_one
+echo.
+echo == 示例 %~1 ==
+call build-app.bat %~1 %~2
+if errorlevel 1 (
+    set FAIL=1
+) else (
+    echo   SELFTEST %~nx1
+    "%~1\%~nx1.exe" --selftest "%~1\%~nx1.cgui"
+    if errorlevel 1 set FAIL=1
+)
 exit /b 0
