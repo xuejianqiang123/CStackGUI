@@ -86,7 +86,8 @@ argument-hint: [request]
 - **DoD**：无 critical/high 未修复项；**每条 issue 都附自证证据**；报告已落盘。
 
 ### P5 提交 —— `git-commit-style`
-- **必做**：`[类型][模块] 描述`（模块：运行时/画布/示例/构建/发布/文档/技能）；按逻辑分批原子提交。
+- **必做**：`[类型][模块] 描述`（模块：运行时/画布/示例/构建/发布/文档/技能）；按逻辑分批原子提交；
+  **文档（计划/报告/README）跟着代码走、不单独提交**（用户 2026-10-14 指定，细则见 `git-commit-style`）。
 - **DoD**：`git --no-pager log --oneline` 复核通过；动过 `.bat` 已跑 `bat-utf8.ps1 -Mode fix`。
 
 ### P6 PR —— `piv-create-pr`

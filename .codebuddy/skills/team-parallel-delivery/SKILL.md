@@ -74,7 +74,8 @@ argument-hint: [需求描述]
 
 ### 阶段 6：按模块分批提交
 
-- [ ] 按 `[类型][模块] 描述` 分批：**运行时 / 画布 / 示例 / 构建 / 文档** 各归各类（配合 skill `git-commit-style`）
+- [ ] 按 `[类型][模块] 描述` 分批：**运行时 / 画布 / 示例 / 构建** 各归各类（配合 skill `git-commit-style`）；
+      **文档（计划/报告/README）不单独立批**，跟着它所记录的代码改动进同一个 commit
 - [ ] 每批提交前跑该批门禁；中文多行消息写 `build\_msgN.txt` + `git commit -F`
 - [ ] 提交后 `git log --oneline` + `git status` 复核
 
