@@ -50,13 +50,13 @@ if errorlevel 1 exit /b 1
 rem lesson01 是输入框全功能例程：multiline/scroll/maxlen/conv/input/border/spin 这些字段
 rem 用户最先从这个文件抄，所以要进这条回归，别让新字段在示例里悄悄丢。
 echo   roundtrip lesson01
-node tools\format-roundtrip.mjs examples\lesson01_basics\lesson01_basics.exe examples\lesson01_basics\lesson01_basics.cgui build\roundtrip_lesson01.cgui
+node tools\format-roundtrip.mjs examples\base\lesson01_basics\lesson01_basics.exe examples\base\lesson01_basics\lesson01_basics.cgui build\roundtrip_lesson01.cgui
 if errorlevel 1 exit /b 1
 
 rem 第六课的 .cgui 带一整套 app.* 窗口配置（center/border/topmost/escClose/tray/events/info），
 rem 拿它当"窗口级字段"的回归样本：字段语义一变，这条往返就会红。
 echo   roundtrip lesson06
-node tools\format-roundtrip.mjs examples\lesson06_window\lesson06_window.exe examples\lesson06_window\lesson06_window.cgui build\roundtrip_lesson06.cgui
+node tools\format-roundtrip.mjs examples\base\lesson06_window\lesson06_window.exe examples\base\lesson06_window\lesson06_window.cgui build\roundtrip_lesson06.cgui
 if errorlevel 1 exit /b 1
 
 echo   roundtrip netterm

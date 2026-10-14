@@ -114,17 +114,32 @@ const LESSON_DOCS = [
 const ARTICLES_DIR = path.join(root, "docs", "articles");
 const CN_NUM = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
 
-/** 教学示例目录名（examples/lessonNN_xxx，按课号排序） */
+/**
+ * 教学示例目录名（按课号排序）
+ * 教训目录现在收在 examples/base/ 下（重组后不再平铺在 examples/ 顶层），
+ * 所以两层都要扫 —— 只扫顶层会得到 0 课，门禁里所有"六课"的声明就全红了。
+ */
 function lessonDirs() {
-  return fs.readdirSync(EX_DIR, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && LESSON_RE.test(e.name))
-    .map((e) => e.name)
-    .sort();
+  const names = new Set();
+  for (const sub of ["", "base"]) {
+    const dir = sub ? path.join(EX_DIR, sub) : EX_DIR;
+    if (!fs.existsSync(dir)) continue;
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory() && LESSON_RE.test(e.name)) names.add(e.name);
+    }
+  }
+  return [...names].sort();
+}
+
+/** 某一课的实际目录：优先 examples/<名>，其次 examples/base/<名> */
+function lessonHome(dir) {
+  const direct = path.join(EX_DIR, dir);
+  return fs.existsSync(path.join(direct, dir + ".cgui")) ? direct : path.join(EX_DIR, "base", dir);
 }
 
 /** 真跑一次 --selftest 取规模数字（规模真相在运行时，不是我们数 JSON 的结果） */
 function selftestNumbers(dir) {
-  const base = path.join(EX_DIR, dir, dir);
+  const base = path.join(lessonHome(dir), dir);
   try {
     const out = execFileSync(base + ".exe", ["--selftest", base + ".cgui"], {
       encoding: "utf8",
@@ -142,7 +157,7 @@ function selftestNumbers(dir) {
 function lessonFacts() {
   const rows = [];
   for (const dir of lessonDirs()) {
-    const cgui = path.join(EX_DIR, dir, dir + ".cgui");
+    const cgui = path.join(lessonHome(dir), dir + ".cgui");
     let doc = {};
     try { doc = JSON.parse(fs.readFileSync(cgui, "utf8")); } catch { doc = {}; }
     const title = (doc.app && doc.app.title) || "";
