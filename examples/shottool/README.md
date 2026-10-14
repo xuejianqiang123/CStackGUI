@@ -1,6 +1,6 @@
 # 截图工具：托盘 + 全局热键的 QQ 风格截图链路
 
-> 目录 `examples\shottool\`　编译 `build-app.bat shottool`　运行 `examples\shottool\shottool.exe`　自检 `shottool.exe --selftest` → 控件 22 个 / 回调 10 次 /（未登记·事件不支持·绑定出错·动作出错·样式引用失效 全 0）→ `selftest OK`
+> 目录 `examples\shottool\`　编译 `build-app.bat shottool`　运行 `examples\shottool\shottool.exe`　自检 `shottool.exe --selftest` → 控件 25 个 / 回调 10 次 /（未登记·事件不支持·绑定出错·动作出错·样式引用失效 全 0）→ `selftest OK`
 
 > 另有一份 `shottool.rc`：画布导出时会从 `.cgui` 的 `app.info` 生成 `<工程>.rc`，**手写 `.cgui` 不会**——
 > 补上它，exe 的右键属性 → 详细信息里才有产品名 / 版本 / 说明（写法与 `gallery.rc` 同源，
@@ -15,6 +15,10 @@
 - **标注**：按选区重抓一块 → 窗口贴到选区原点 → 截图当底、标注是录制的绘制命令（矩形 / 椭圆 / 箭头 / 画笔 / 文字，撤销按"整笔"走）。标注条摆在**选区下方额外撑出来的那行**：不盖画面、不进成品。
 - **成品 = 抓画板自己**（`cg_widget_screenshot(cv_shot)`）：背景图 + 命令回放恰好就是"选区 + 标注"，不用裁剪、也不用把工具条藏来藏去。文件名 QQ 口味：`ScreenShot<日期时间>.png`，落在用户数据目录，**完成即写进剪贴板**（`cg_clip_set_image`）。
 - **贴图**：存图后留在屏幕上当贴图（窗口缩到选区本身），双击贴图或 `Esc` 回面板。
+- **GIF 录屏**：「录屏 GIF」按钮或 `Ctrl+Alt+G` —— **复用同一套框选**（先框一块区域），松手即开始录；
+  按帧率定时抓屏、逐帧喂给 runtime 的 GIF 编码器；点「停止」存成动画 GIF（`Rec<日期时间>.gif`）。
+  编码器有**脏矩形优化**：只编码与上一帧不同的那一块，没变的像素走透明索引 ——
+  录一段界面操作，静止部分几乎不占体积（实测：41 帧里 28 帧因无变化被跳过，成品 25 KB）。
 
 ## 二、怎么用
 
@@ -24,6 +28,14 @@
    换工具时日志会记一行「工具：椭圆」这类 —— 用来确认"你选的工具确实生效了"（事件 `select`）。
 4. 「完成」= 存 PNG + 复制到剪贴板（可直接粘贴）+ 回面板；「贴图」= 同样存/复制但留在屏幕上；「取消」或 `Esc` = 不存图回面板。
 5. 真正退出：「退出」按钮或 `Ctrl+Shift+Q` —— 先摘托盘图标再关消息循环。关窗口只是藏进托盘。
+
+**录屏**（`Ctrl+Alt+G` 或「录屏 GIF」按钮）：面板上先用「帧率」下拉选 5/10/15/20 fps（默认 10）→
+触发后同样是先框一块区域 → 松手**立刻开始录**。录制时窗口收成**只有工具条那一行**、摆在选区
+**下方**（这样才不会盖住要录的画面），工具条只剩「停止」「取消」：
+
+- 「停止」= 存 GIF 到用户数据目录 + 气泡提示 + 回面板；「取消」= 丢弃这一段。
+- 录制中看不到选区边框（边框会盖住画面），区域尺寸写在提示行与日志里。
+- 状态栏显示「录制中」，日志逐条记：区域 / 帧率 / 结束时的帧数与字节数。
 
 ## 三、一屏总览
 
@@ -37,7 +49,9 @@
 | `lab_mode` | label | overlay 提示行（必须排在 `cv_shot` **之后**，后创建的窗口才压得住画布） |
 | `cbo_tool` / `cbo_color` / `cbo_width` / `edt_text` | combo×3 / edit | 标注条：工具 / 颜色 / 粗细 / 文字内容 |
 | `btn_undo` / `btn_clear` / `btn_finish` / `btn_pin` / `btn_cancel` | button×5 | 按整笔撤销 / 清空标注 / 存图复制回面板 / 贴图 / 不存图退出 |
-| `actions`（2 条） | action | `shot`（accel `Ctrl+Alt+A`，应用内兜底）/ `quit`（`Ctrl+Shift+Q`） |
+| `btn_rec` | button | 引用动作 `rec`（录屏入口，等价于热键 `Ctrl+Alt+G`） |
+| `lab_fps` / `cbo_fps` | label / combo | 录屏帧率：5 / 10 / 15 / 20 fps（默认 10；**开始那一刻**读一次） |
+| `actions`（3 条） | action | `shot`（`Ctrl+Alt+A`）/ `rec`（`Ctrl+Alt+G`）/ `quit`（`Ctrl+Shift+Q`） |
 
 ## 四、关键接口
 
@@ -48,6 +62,11 @@
 - `cg_widget_screenshot(cv, path)`：抓画板 = 成品（画板的 WM_PRINT 已接，PrintWindow 不会抓出空图）。
 - `cg_clip_set_image(path)` / `cg_clip_get_image(path)`：图片写 / 读剪贴板（CF_DIB + CF_BITMAP 双格式）。
 - `cg_set_timer(app,150,fn,app)`：一次性定时器 —— 藏窗口后**隔一拍再抓屏**，否则截到的是自己。
+- `cg_gif_rec_start` / `cg_gif_rec_stop` / `cg_gif_rec_info`：GIF 录屏三件套 —— 按区域与帧率开始、
+  停止时给路径就落盘（给 NULL 丢弃）、随时查已录帧数与毫秒。
+- `cg_gif_open` / `cg_gif_add` / `cg_gif_close` / `cg_gif_abort`：更下一层的 GIF 编码器
+  （**已有像素缓冲**时用）：把一串 24 位 RGB 帧写成动画 GIF。它是**纯 C、可单测**的，
+  也是录屏那一半赖以工作的底座（详见 `runtime/src/kit/cg_kit_gif.c` 的文件头注释）。
 - `cg_cancel_close` / `cg_tray_*`：关窗即藏进托盘；托盘左键截图、右键叫回。
 - `cg_app_has_window`：抓屏 / 剪贴板 / 托盘 / 换边框一律先问，`--selftest` 才跑得干净。
 
@@ -68,7 +87,11 @@
 
 ## 六、能力边界（QQScreenShot 有、本示例明确不做）
 
-- **OCR / 录屏 / 截长图**：它靠逆向的 QQ DLL 与外部引擎（PaddleOCR、百度 API）；本工程不做，也不假装做。
+- **OCR / 截长图**：它靠逆向的 QQ DLL 与外部引擎（PaddleOCR 等）；本工程不做，也不假装做。
+  （**录屏**原本也在这一栏，2026-10-14 已实现为 GIF 录屏，见上面二、怎么用。）
+- **GIF 的画质边界**：调色板是**固定**的（216 网页色 + 39 灰阶 + 1 透明位），不做按内容量化
+  （八叉树 / 中位切分）。录界面操作、文字、纯色块几乎无损；**录照片 / 视频这类连续色调的内容
+  会有色带**。要更好的画质就得换自适应调色板，那是改进项不是缺陷。
 - **混 DPI 多屏的像素级对齐**：**多显示器是支持的**（口径 = 整个虚拟桌面，`cg_screen_size` /
   `cg_screen_origin` / `cg_screen_capture` 都按 `SM_XVIRTUALSCREEN` 系列算，副屏区域抓得到、
   坐标可以是负的）；但窗口的 DPI 上下文跟随主屏，**副屏缩放与主屏不一致时**，副屏上的

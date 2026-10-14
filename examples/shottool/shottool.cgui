@@ -25,6 +25,7 @@
   },
   "actions": {
     "shot": { "text": "开始截图(&S)", "accel": "Ctrl+Alt+A", "handler": "on_action" },
+    "rec":  { "text": "录屏 GIF(&R)", "accel": "Ctrl+Alt+G", "handler": "on_action" },
     "quit": { "text": "退出(&Q)", "accel": "Ctrl+Shift+Q", "handler": "on_action" }
   },
   "widgets": [
@@ -67,6 +68,29 @@
       "rect": { "x": 180, "y": 88, "w": 96, "h": 32 },
       "text": "退出(&Q)",
       "action": "quit"
+    },
+    {
+      "id": "btn_rec",
+      "type": "button",
+      "rect": { "x": 284, "y": 88, "w": 110, "h": 32 },
+      "text": "录屏 GIF(&R)",
+      "action": "rec",
+      "hint": "等价于全局热键 Ctrl+Alt+G：先框一块区域，松手就开始录，点「停止」存成动画 GIF"
+    },
+    {
+      "id": "lab_fps",
+      "type": "label",
+      "rect": { "x": 402, "y": 94, "w": 40, "h": 22 },
+      "text": "帧率",
+      "hint": "录屏帧率：帧率越高越流畅，文件也越大（静止画面靠脏矩形优化，几乎不涨）"
+    },
+    {
+      "id": "cbo_fps",
+      "type": "combo",
+      "rect": { "x": 442, "y": 90, "w": 70, "h": 28 },
+      "items": ["5 fps", "10 fps", "15 fps", "20 fps"],
+      "value": 1,
+      "hint": "默认 10 fps；录屏开始时读一次，录制中改不了（改了也只能影响之后的段）"
     },
     {
       "id": "lst_log",

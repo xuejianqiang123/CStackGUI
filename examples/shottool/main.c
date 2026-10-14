@@ -53,8 +53,8 @@
 #define kBarRowH     30                   /**< 标注条行高 */
 #define kBarExtra    (kBarRowTop + kBarRowH + 8)  /**< 选区之外额外撑出的窗口高度 */
 
-/** 工作流状态：空闲 → 抓屏中（藏窗口等一拍）→ 框选 → 标注 → 贴图 */
-enum { MODE_IDLE = 0, MODE_CAPTURING, MODE_SELECT, MODE_ANNOTATE, MODE_PIN };
+/** 工作流状态：空闲 → 抓屏中（藏窗口等一拍）→ 框选 → 标注 / 录制 → 贴图 */
+enum { MODE_IDLE = 0, MODE_CAPTURING, MODE_SELECT, MODE_ANNOTATE, MODE_REC, MODE_PIN };
 /** 命令类型（画板只认这四种；箭头是 3 条线拼的，不占新类型） */
 enum { OP_LINE = 0, OP_RECT, OP_ELLIPSE, OP_TEXT };
 /** 标注工具 = cbo_tool 下标 */
@@ -93,7 +93,8 @@ static const bar_item_t k_bar[] = {
 
 /** 面板那一组控件（overlay 时全部藏起来） */
 static const char *const k_panel[] = {
-    "lab_title", "lab_tip1", "lab_tip2", "btn_shot", "btn_quit", "lst_log", "sb_main"
+    "lab_title", "lab_tip1", "lab_tip2", "btn_shot", "btn_quit", "btn_rec",
+    "lab_fps", "cbo_fps", "lst_log", "sb_main"
 };
 
 /** 标注颜色 = cbo_color 下标（截图上要能看清，红橙黄绿蓝白） */
@@ -102,6 +103,8 @@ static const unsigned k_colors[6] = {
 };
 /** 笔宽 = cbo_width 下标（细 / 中 / 粗） */
 static const int k_widths[3] = { 2, 4, 8 };
+/** 录屏帧率 = cbo_fps 下标（与 shottool.cgui 里 cbo_fps 的 items 顺序一致） */
+static const int k_fps[4] = { 5, 10, 15, 20 };
 
 /* ------------------------------------------------------------ 业务状态 */
 
@@ -121,6 +124,8 @@ static int s_pan_x, s_pan_y;                      /**< 面板窗口位置（**�
 static int s_pan_w, s_pan_h;                      /**< 面板客户区尺寸（**逻辑**像素，size 事件给的） */
 static int s_pan_valid;                           /**< 1 = 面板矩形记到过 */
 static int s_cropping;                            /**< 1 = 框选已结束、正在等"重画干净"后抓选区 */
+static int s_pending_rec;                        /**< 1 = 这次框选是要录 GIF（不是标注） */
+static int s_fps = 10;                            /**< 录制帧率（面板上可换，默认 10） */
 static int s_hot_ok;                              /**< 全局热键是否注册成功 */
 static int s_shots;                               /**< 本次运行存下的张数 */
 static int s_last_rw, s_last_rh;                  /**< 框选尺寸标签上次显示值（没变不重画） */
@@ -166,6 +171,7 @@ static const char *mode_text(int m)
     case MODE_CAPTURING: return "抓屏中…";
     case MODE_SELECT:    return "框选中";
     case MODE_ANNOTATE:  return "标注中";
+    case MODE_REC:       return "录制中";
     case MODE_PIN:       return "贴图中";
     default:             return "就绪";
     }
@@ -237,20 +243,30 @@ static void set_visible_ids(cg_app_t *app, const char *const *ids, int n, int on
 }
 
 /**
- * @brief 把标注条整行摆到"选区下沿 + kBarRowTop"处
+ * @brief 把标注条整行摆到指定的行顶处
  * @param app 应用
+ * @param row 行顶（窗口内 y）
  * @return void 无返回值
- * @note x / w 与 .cgui 一致，只有 y 是按选区高度算出来的 —— 标注条跟着选区走，
- *       且永远在**选区之外**那条撑出来的行里，所以成品（抓画板）里不会有它
+ * @note x / w 与 .cgui 一致，只有 y 是算出来的 —— 标注条跟着选区走
  */
-static void bar_layout(cg_app_t *app)
+static void bar_layout_at(cg_app_t *app, int row)
 {
-    int row = s_sel_h + kBarRowTop;
-
     for (size_t i = 0; i < sizeof(k_bar) / sizeof(k_bar[0]); i++) {
         cg_widget_t *w = cg_find(app, k_bar[i].id);
         if (w) cg_widget_set_rect(w, k_bar[i].x, row + k_bar[i].dy, k_bar[i].w, k_bar[i].h);
     }
+}
+
+/**
+ * @brief 把标注条整行摆到"选区下沿 + kBarRowTop"处
+ * @param app 应用
+ * @return void 无返回值
+ * @note 标注态：窗口 = 选区 + 撑出来的一条工具条行，标注条在这一行里 ——
+ *       永远在**选区之外**，所以成品（抓画板）里不会有它
+ */
+static void bar_layout(cg_app_t *app)
+{
+    bar_layout_at(app, s_sel_h + kBarRowTop);
 }
 
 /* ------------------------------------------------------------ 命令表（同 drawpad 的套路） */
@@ -440,6 +456,28 @@ static void bar_widgets(cg_app_t *app, int on)
 }
 
 /**
+ * @brief 录制态工具条：只摆「停止」与「取消」，其余一律藏掉
+ * @param app 应用
+ * @param on 1 显示、0 隐藏
+ * @return void 无返回值
+ * @note 录制时工具条**不能压在选区上**（会盖住要录的画面），所以窗口收成
+ *       "选区 + 一行工具条"，工具条那条行在选区下方 —— 与标注态同一招。
+ *       只留这两个按钮：录制期间改工具 / 改颜色都没意义（改了也只能影响下一笔，
+ *       而录制是自动抓屏、不落笔），留着反而让人误点。
+ */
+static void bar_rec_widgets(cg_app_t *app, int on)
+{
+    static const char *const keep[] = { "btn_finish", "btn_cancel" };
+    int k;
+
+    for (k = 0; k < (int)(sizeof(keep) / sizeof(keep[0])); k++) {
+        cg_widget_t *w = cg_find(app, keep[k]);
+
+        if (w) cg_widget_set_visible(w, on);
+    }
+}
+
+/**
  * @brief 提示条（画布左上角那行）显示一句话 / 藏起来
  * @param app 应用
  * @param text 文本；NULL = 藏起来
@@ -590,6 +628,11 @@ static void capture_tick(void *user)
  *  @note 声明上的注释也要写全 @param / @return：tools\check-comments.mjs 按定义处的规矩查
  */
 static void annotate_begin(cg_app_t *app);
+/** @brief 前向声明：同上，录制态的入口也在 crop_tick 之后
+ *  @param app 应用
+ *  @return void 无返回值
+ */
+static void rec_begin(cg_app_t *app);
 
 /**
  * @brief 框选结束后隔的那一拍：画面已经重画干净，这时才抓选区
@@ -606,6 +649,7 @@ static void crop_tick(void *user)
     if (!app || !s_cropping) return;
     s_cropping = 0;
     if (!cg_app_has_window(app) || s_mode != MODE_SELECT) return;
+    if (s_pending_rec) { s_pending_rec = 0; rec_begin(app); return; }
     annotate_begin(app);
 }
 
@@ -658,6 +702,95 @@ static void annotate_begin(cg_app_t *app)
     status_refresh(app);
     log_line(app, "选区 %d,%d %dx%d：进标注（工具条在选区下方）", dx, dy, s_sel_w, s_sel_h);
     cg_free(path);
+}
+
+/**
+ * @brief 框选结束且这次是"录屏"：按选区开始录，工具条贴在选区下方
+ * @param app 应用
+ * @return void 无返回值
+ * @note 录制期间**绝不能**让窗口盖住选区：窗口是置顶的，盖上去之后抓屏抓到的是
+ *       我们自己的窗口底（实测：录出来的 300x300 只有 28 种颜色、全程不变），
+ *       而不是桌面。所以这里把画布藏掉、窗口收成**只有工具条那一行**，摆在选区
+ *       **正下方** —— 选区露出的是真·桌面，才录得到实时变化。
+ *       代价：录制时看不到选区边框，区域信息在提示条与日志里说
+ */
+static void rec_begin(cg_app_t *app)
+{
+    cg_widget_t *cv = cg_find(app, "cv_shot");
+    int          bw = (s_sel_w < kBarMinW) ? kBarMinW : s_sel_w;
+    int          dx = s_org_x + s_sel_x;
+    int          dy = s_org_y + s_sel_y;
+
+    if (!cv) {
+        log_line(app, "找不到画板控件 cv_shot");
+        restore_panel(app);
+        return;
+    }
+    if (!cg_gif_rec_start(app, dx, dy, s_sel_w, s_sel_h, s_fps)) {
+        log_line(app, "录屏起不来（原因见日志；自检模式没有窗口就会这样）");
+        restore_panel(app);
+        return;
+    }
+    s_mode = MODE_REC;                          /* 先置：接下来的 move/size 不许记成面板矩形 */
+    cg_widget_set_visible(cv, 0);               /* 画布藏掉：它铺在选区上就是一堵墙 */
+    bar_layout_at(app, kBarRowTop);             /* 工具条就是窗口的全部内容 */
+    bar_rec_widgets(app, 1);
+    cg_win_set_size(app, bw, kBarExtra);        /* 窗口只有工具条那么高 */
+    cg_win_set_pos(app, cg_scale_px(app, dx), cg_scale_px(app, dy + s_sel_h));
+
+    {
+        char *hint = cg_str_format("录制中（区域 %dx%d）：点「停止」存 GIF；「取消」丢弃",
+                                   s_sel_w, s_sel_h);
+
+        mode_hint(app, hint ? hint : "录制中：点「停止」存 GIF；「取消」丢弃");
+        cg_free(hint);
+    }
+    status_refresh(app);
+    log_line(app, "录制开始：区域 %d,%d %dx%d @ %d fps", dx, dy, s_sel_w, s_sel_h, s_fps);
+}
+
+/**
+ * @brief 收住录制：停止并按 save 决定落盘还是丢弃
+ * @param app 应用
+ * @param save 1 = 存到用户数据目录、0 = 丢弃
+ * @return void 无返回值
+ */
+static void rec_finish(cg_app_t *app, int save)
+{
+    char *path = NULL;
+
+    if (s_mode != MODE_REC) return;
+    if (save) {
+        char *dir = cg_app_data_dir();
+        char *now = cg_time_now("Rec%Y%m%d_%H%M%S.gif");
+
+        path = (dir && now) ? cg_path_join(dir, now) : NULL;
+        cg_free(now);
+        cg_free(dir);
+    }
+    if (!cg_gif_rec_stop(app, path)) {
+        log_line(app, "录屏收尾失败（原因见日志）");
+        cg_free(path);
+        bar_widgets(app, 0);
+        mode_hint(app, NULL);
+        restore_panel(app);
+        return;
+    }
+    if (path) {
+        long long sz = cg_file_size(path);
+        char     *tip = cg_str_format("GIF 已落到：%s（%lld 字节）", path, sz);
+
+        s_shots++;
+        log_line(app, "录制结束：%lld 字节 -> %s", sz, path);
+        cg_tray_balloon(app, "录屏已存", tip ? tip : "GIF 已落到用户数据目录");
+        cg_free(tip);
+        cg_free(path);
+    } else {
+        log_line(app, "录制取消：这一段没存");
+    }
+    bar_widgets(app, 0);
+    mode_hint(app, NULL);
+    restore_panel(app);
 }
 
 /**
@@ -1012,6 +1145,13 @@ static void on_tool_btn(cg_widget_t *self, cg_event_t ev, void *user)
     (void)ev;
     (void)user;
     if (!id || !cg_app_has_window(app)) return;
+    /* 录制态只认「停止」「取消」：其余（撤销 / 清除 / 贴图）在录制期间没有意义，
+     * 而且它们整排都藏在下面，只有这两个被 bar_rec_widgets 摆出来 */
+    if (s_mode == MODE_REC) {
+        if (strcmp(id, "btn_finish") == 0)      rec_finish(app, 1);
+        else if (strcmp(id, "btn_cancel") == 0) rec_finish(app, 0);
+        return;
+    }
     if (s_mode != MODE_ANNOTATE) return;         /* 这排按钮只在标注态有意义 */
 
     if (strcmp(id, "btn_undo") == 0) {
@@ -1183,6 +1323,11 @@ static void on_action(cg_widget_t *self, cg_event_t ev, void *user)
     if (!name) return;
 
     if (strcmp(name, "shot") == 0) {
+        shot_begin(app);
+    } else if (strcmp(name, "rec") == 0) {
+        /* 帧率在**开始那一刻**读一次：录到一半改下拉没有意义（改了也只能影响之后的段） */
+        s_fps = k_fps[cbo_int(app, "cbo_fps", 1) % 4];
+        s_pending_rec = 1;                        /* 也要先框一块区域：走同一套框选 overlay */
         shot_begin(app);
     } else if (strcmp(name, "quit") == 0) {
         log_line(app, "退出：先摘托盘图标，再关消息循环");

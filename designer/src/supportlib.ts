@@ -267,6 +267,37 @@ if (lab) cg_widget_set_text(lab, "已处理");`,
             "「这个框里到底显示成什么样」取证用；日期时间这类两个原生窗口拼的控件存的是主窗口那个", {
               ret: "1 = 成功；0 = 失败（原因写进日志）",
             }),
+          c("cg_gif_open", "打开一个 GIF 准备写", "cg_gif_t *cg_gif_open(const char *path, int w, int h)",
+            "把一串 24 位 RGB 帧写成动画 GIF（GIF89a、永远循环）。**自己写的编码器**：LZW 压缩 + 固定 256 色调色板 + 脏矩形优化（只编码变化的包围盒），零新增链接依赖、可单测。已有像素缓冲时用这一族", {
+              params: ["path：输出路径（UTF-8；目录须已存在）", "w / h：画布尺寸（1..65535）"],
+              ret: "编码器；失败返回 NULL",
+            }),
+          c("cg_gif_add", "向 GIF 追加一帧", "int cg_gif_add(cg_gif_t *g, const void *rgb, int stride, int delay_ms)",
+            "rgb 是 w*h 个像素、每像素 R,G,B 三字节（自上而下）。**只编码变化的那一块**：框内没变的像素走透明索引让上一帧透出来；整帧没变则跳过（不占地方）", {
+              params: ["stride：每行字节数；<= 0 按 w*3 算", "delay_ms：这一帧的延时"],
+              ret: "1 = 已写入；2 = 整帧没变、跳过；0 = 失败",
+            }),
+          c("cg_gif_close", "收尾并关掉 GIF", "int cg_gif_close(cg_gif_t *g)",
+            "写 trailer + fclose + 释放。**一帧都没写时算失败并删掉文件**（空 GIF 没用）", {
+              ret: "1 = 成功；0 = 失败",
+            }),
+          c("cg_gif_abort", "放弃这次 GIF 编码", "void cg_gif_abort(cg_gif_t *g)",
+            "关文件、删掉半成品、释放；NULL 时什么都不做"),
+          c("cg_gif_rec_start", "开始录一块屏幕区域（GIF 录屏）", "int cg_gif_rec_start(cg_app_t *app, int x, int y, int w, int h, int fps)",
+            "定时按 fps 抓屏、逐帧喂给 GIF 编码器；先写在用户数据目录的临时文件里。一个进程同时只录一条。**不弹任何界面**，进度用 cg_gif_rec_info 自己显示", {
+              params: ["x / y：区域左上角（逻辑像素，可为负 —— 副屏）", "w / h：区域尺寸", "fps：名义帧率（1..30，超出夹进去）"],
+              ret: "1 = 成功；0 = 失败（没窗口 / 已在录 / 尺寸非法 / 打不开临时文件）",
+              sample: `/* 框选结束 -> 开始录；窗口别盖住选区，否则录到的是自己的窗口底 */\nif (!cg_gif_rec_start(app, dx, dy, w, h, 10))\n    cg_log(CG_LOG_WARN, "录屏起不来，回面板");`,
+            }),
+          c("cg_gif_rec_stop", "停止录屏", "int cg_gif_rec_stop(cg_app_t *app, const char *path)",
+            "给路径就落盘（先 fclose 再改名，顺序反了会丢尾巴 / 被系统拒绝），给 NULL 就丢弃。录制期间**绝不能**让窗口盖住被录的区域", {
+              params: ["path：成品路径（UTF-8）；NULL = 丢弃"],
+              ret: "1 = 成功；0 = 失败（没在录 / 收尾出错 / 一帧都没录到）",
+            }),
+          c("cg_gif_rec_info", "查录屏进度", "void cg_gif_rec_info(const cg_app_t *app, int *frames, int *elapsed_ms)",
+            "调用方拿它刷新工具条上的计时 / 帧数；没在录时两个出参都是 0", {
+              params: ["frames：出参，已写帧数；可为 NULL", "elapsed_ms：出参，已录毫秒；可为 NULL"],
+            }),
           c("cg_screen_size", "虚拟桌面尺寸", "int cg_screen_size(const cg_app_t *app, int *w, int *h)",
             "逻辑像素；口径是**整个虚拟桌面**（多屏拼起来那一整块），副屏区域同样算在内。区域截图铺满全屏前先问它", {
               params: ["w / h：出参，可为 NULL"],
