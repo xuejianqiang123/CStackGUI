@@ -623,6 +623,7 @@ static void win_shutdown(cg_app_t *app)
     cg_tray_remove(app);   /* 托盘图标不主动摘，会一直留在通知区里 */
     cgw_accel_destroy(app);   /* 加速键表不是窗口对象，关窗不会替我们收 */
     cgw_hotkey_clear(app);    /* 全局热键表同理：解绑 + 释放动作名 */
+    cg_gif_rec_shutdown();    /* 正在录屏就中止：托盘程序关窗后进程还在跑，不中止就漏临时文件与编码器 */
     if (st->timer_id) KillTimer((HWND)app->hwnd, CG_TIMER_ID);
     for (cg_widget_t *w = app->widgets; w; w = w->next) {
         if (cgw_is_t(w, "timer")) KillTimer((HWND)app->hwnd, (UINT_PTR)w->ctrl_id);

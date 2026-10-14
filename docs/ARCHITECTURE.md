@@ -298,6 +298,10 @@ runtime/
       cg_win_sync.c     控件状态同步与条目重建
       cg_win_layout.c   把 core 算好的 grow 布局落到原生窗口（基准取自第一次 WM_SIZE）
       cg_win_shot.c     截图：窗口 / 单个控件存成 PNG（PrintWindow 优先，抓屏兜底）
+      cg_win_gif.c      GIF 录屏：定时抓一块屏幕区域（CreateDIBSection 直取像素、负高度拿自上而下），
+                        逐帧喂给 kit 的 GIF 编码器；**先写临时文件、停止时才改名**
+                        （不先 fclose 就 MoveFile 会被系统拒绝，实测丢过尾巴）。
+                        不新开线程 —— 帧全在消息循环的定时器回调里抓（规则 8）
       cg_win_drop.c     文件拖放：WM_DROPFILES -> 路径填进 app 清单 -> 派发窗口级 drop 事件
       cg_win_theme.c    深色模式：底色 / 无底色控件的字色 / RichEdit 底色。
                         注意**清单控件（listbox/table/tree）实测在 Win11 上不跟随深色** ——
@@ -331,6 +335,10 @@ runtime/
       cg_kit_bytes.c    字节操作：反转 / 切片 / 查找 / 按字节序读写 u16·u32（拼帧拆帧的基元）
       cg_kit_check.c    校验：CRC32（IEEE 802.3）/ CRC16-Modbus（逐位算不建表 ⇒ 线程安全）、
                         MD5 / SHA-1 / SHA-256 / SHA-512（手写，零新增链接依赖；含分块文件摘要）
+      cg_kit_gif.c      GIF 动画编码（**纯 C、跨平台**）：LZW 压缩 + 固定 256 色调色板
+                        （216 网页色 + 39 灰阶 + 1 透明位）+ **脏矩形优化**（只编码变化的包围盒，
+                        没变的像素走透明索引、整帧没变就跳过）。零新增链接依赖（只用 stdio），
+                        所以能放进单测：测试合成几帧、写盘、再用 GDI+ 当独立解码器逐帧比像素
       cg_kit_wireless.c 无线状态：WiFi 网卡/当前 SSID·信号/周边网络（可用 cg_wifi_scan 主动刷）、
                         蓝牙无线电与已知设备（IoT 上位机先看这一眼）。
                         **零新增链接依赖**：符号全部运行期从 wlanapi.dll / BluetoothApis.dll

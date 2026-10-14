@@ -2480,6 +2480,78 @@ void cg_bytes_reverse(void *data, int len);
  */
 int cg_bytes_slice(const void *data, int len, int from, int count, void *out, int out_size);
 
+/* ---- GIF 动画编码 ----
+ * 把一串 24 位 RGB 帧写成 GIF89a：LZW 压缩、固定调色板（216 网页色 + 39 灰阶 + 1 透明位）、
+ * **脏矩形优化**（只编码与上一帧不同的那一块，没变的像素走透明索引）、永远循环。
+ * 自己写而不用 GDI+ 的 GIF 编码器，理由见 runtime/src/kit/cg_kit_gif.c 的注释：
+ * 可单测、脏矩形、零新增链接依赖。录屏的定时抓帧那一半在 cg_gif_rec_*（win32 层）。
+ */
+
+/** GIF 编码器（不透明：内部是文件句柄 + LZW 状态 + 调色板缓存） */
+typedef struct cg_gif cg_gif_t;
+
+/**
+ * @brief 打开一个 GIF 准备写（头 + 逻辑屏描述 + 全局色表 + 循环扩展）
+ * @param path 输出路径（UTF-8；目录必须已存在）
+ * @param w 画布宽（1..65535）
+ * @param h 画布高（1..65535）
+ * @return cg_gif_t* 编码器；失败返回 NULL
+ */
+cg_gif_t *cg_gif_open(const char *path, int w, int h);
+/**
+ * @brief 追加一帧（24 位 RGB，自上而下）
+ * @param g 编码器
+ * @param rgb 像素缓冲（w*h 个像素，每像素 R,G,B 三字节）
+ * @param stride 每行字节数；<= 0 按 w*3 算
+ * @param delay_ms 帧延时（毫秒）
+ * @return int 1 = 已写入；2 = 整帧没变、跳过；0 = 失败
+ */
+int cg_gif_add(cg_gif_t *g, const void *rgb, int stride, int delay_ms);
+/**
+ * @brief 收尾：写 trailer、关文件、释放编码器
+ * @param g 编码器
+ * @return int 1 成功；0 失败（写尾出错，或一帧都没写 —— 此时文件会被删掉）
+ */
+int cg_gif_close(cg_gif_t *g);
+/**
+ * @brief 放弃编码：关文件、删半成品、释放编码器
+ * @param g 编码器；NULL 时什么都不做
+ * @return void 无返回值
+ */
+void cg_gif_abort(cg_gif_t *g);
+
+/* ---- GIF 录屏（定时抓一块屏幕区域写成 GIF）----
+ * 编码在 kit 层（cg_gif_*），这里是"定时抓帧"那一半：开始 → 定时器按 fps 抓屏 →
+ * 停止时落盘。一个进程同时只录一条。录屏期间**不弹任何界面**，计时 / 帧数由调用方
+ * 用 cg_gif_rec_info 自己显示（示例见 examples\shottool 的录制态）。
+ */
+/**
+ * @brief 开始录一块屏幕区域
+ * @param app 应用（没有窗口时失败）
+ * @param x 区域左上角（逻辑像素，可为负 —— 副屏）
+ * @param y 区域左上角（逻辑像素）
+ * @param w 区域宽（逻辑像素）
+ * @param h 区域高（逻辑像素）
+ * @param fps 名义帧率（1..30，超出夹进去）
+ * @return int 1 成功；0 失败（没窗口 / 已在录 / 尺寸非法 / 打不开临时文件）
+ */
+int cg_gif_rec_start(cg_app_t *app, int x, int y, int w, int h, int fps);
+/**
+ * @brief 停止录屏
+ * @param app 应用
+ * @param path 成品路径（UTF-8）；NULL = 丢弃
+ * @return int 1 成功；0 失败（没在录 / 写出错 / 一帧都没录到）
+ */
+int cg_gif_rec_stop(cg_app_t *app, const char *path);
+/**
+ * @brief 查录屏进度（调用方拿它刷新工具条上的计时 / 帧数）
+ * @param app 应用
+ * @param frames 出参：已写帧数；可为 NULL
+ * @param elapsed_ms 出参：已录毫秒数；可为 NULL
+ * @return void 无返回值（没在录时两个出参都是 0）
+ */
+void cg_gif_rec_info(const cg_app_t *app, int *frames, int *elapsed_ms);
+
 /**
  * @brief 在数据里找子串第一次出现的位置
  * @param data 源数据

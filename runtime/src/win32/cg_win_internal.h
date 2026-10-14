@@ -775,5 +775,13 @@ void cgw_hotkey_fire(cg_app_t *app, unsigned id);
  * @return void 无返回值
  */
 void cgw_hotkey_clear(cg_app_t *app);
+/**
+ * @brief 中止正在进行的 GIF 录屏并释放其资源（幂等、NULL 安全）
+ * @return void 无返回值
+ * @note 关窗收尾时调：托盘程序关窗后进程还在跑，不中止就漏临时文件与编码器。
+ *       录屏的**开始 / 停止**是公共 API（cg_gif_rec_start / cg_gif_rec_stop），
+ *       这个"关窗兜底"只给后端自己用，所以声明在这里而不进 cstackgui.h
+ */
+void cg_gif_rec_shutdown(void);
 
 #endif /* CG_WIN_INTERNAL_H */
