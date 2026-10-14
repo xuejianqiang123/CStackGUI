@@ -192,6 +192,9 @@ PostMessage(main, WM_COMMAND, id | (CBN_SELCHANGE << 16), combo)   # 补发通�
 - **核验**：`RC shottool.rc` 出现在构建输出里；调试版与发布版的 exe 都带上
   `ProductName=CStackGUI 截图工具` / `FileVersion=1.0.0.0` / `OriginalFilename=shottool.exe`
   / `FileDescription=…`；两版 `--selftest` 均 22 控件 / 10 回调 / 五项全 0。
+- **单文件便携链路**：把发布版 exe（618 KB）单独拷到 `build\embedtest\`（旁边没有任何 `.cgui`）
+  跑 `--selftest`，照样"控件 22 个 / 五项全 0 / selftest OK" —— 证明 `.cgui` 是 **RC 内嵌**
+  （`cgbuild.mjs` 生成的 `<工程>_cgui_res.rc`），不依赖磁盘上的界面文件。临考完即删该目录。
 - 文字工具双击会落两个：已加"双击撤掉重复那笔"的修复，同样待人工确认。
 - 非 100% DPI 与多屏未实测（本轮日志显示抓屏口径为主屏，与 README 声明一致）。
 
