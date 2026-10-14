@@ -1,0 +1,49 @@
+/* shottool.rc -- 程序图标 + v6 控件清单 + 版本信息
+ *
+ * 形状与画布「程序配置」对话框生成的一模一样（生成器见 designer/src/codegen.ts 的 rcFile()）。
+ * shottool 是**手写**的 .cgui，没有经过画布导出，所以 .cgui 里 app.info 写的内容不会自动
+ * 变成 .rc —— 补上这一份，exe 的右键属性 → 详细信息里才看得到产品名 / 版本 / 说明。
+ * build-app.bat（cgbuild.mjs）见到 <工程>.rc 就会用 windres 编它、顶掉通用版本资源。
+ *
+ * 文件是 UTF-8（含中文字符串），开头有 #pragma code_page(65001)；别存成 GBK。
+ */
+#pragma code_page(65001)
+
+#include <windows.h>
+
+/* 图标：cstackgui.ico 由 -I runtime\res 找到（本工程没在 app.icon 里指定自己的图标） */
+1 ICON "cstackgui.ico"
+
+/* v6 通用控件清单：少了它，标签页 / 进度条这些会是老式外观 */
+1 RT_MANIFEST "cstackgui.manifest"
+
+VS_VERSION_INFO VERSIONINFO
+  FILEVERSION    1,0,0,0
+  PRODUCTVERSION 1,0,0,0
+  FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+  FILEFLAGS      0
+  FILEOS         VOS_NT_WINDOWS32
+  FILETYPE       VFT_APP
+  FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "080404B0"
+    BEGIN
+      VALUE "CompanyName", "CStackGUI"
+      VALUE "FileDescription", "QQ 风格截图：托盘 + 全局热键 + 屏幕区域框选 + 标注 + 保存 / 复制 / 贴图"
+      VALUE "FileVersion", "1.0.0.0"
+      VALUE "InternalName", "shottool"
+      VALUE "LegalCopyright", "CStackGUI 示例"
+      VALUE "OriginalFilename", "shottool.exe"
+      VALUE "ProductName", "CStackGUI 截图工具"
+      VALUE "ProductVersion", "1.0.0.0"
+      VALUE "Comments", "示例 shottool：截图为底、标注为命令，成品抓画板自己；屏幕抓取与全局热键是 runtime 新增的两条能力"
+      VALUE "Author", "CStackGUI"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x804, 1200
+  END
+END

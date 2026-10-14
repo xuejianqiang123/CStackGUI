@@ -1,6 +1,10 @@
 # 截图工具：托盘 + 全局热键的 QQ 风格截图链路
 
-> 目录 `examples\shottool\`　编译 `build-app.bat shottool`　运行 `examples\shottool\shottool.exe`　自检 `shottool.exe --selftest` → 控件 22 个 / 回调 9 次 /（未登记·事件不支持·绑定出错·动作出错·样式引用失效 全 0）→ `selftest OK`
+> 目录 `examples\shottool\`　编译 `build-app.bat shottool`　运行 `examples\shottool\shottool.exe`　自检 `shottool.exe --selftest` → 控件 22 个 / 回调 10 次 /（未登记·事件不支持·绑定出错·动作出错·样式引用失效 全 0）→ `selftest OK`
+
+> 另有一份 `shottool.rc`：画布导出时会从 `.cgui` 的 `app.info` 生成 `<工程>.rc`，**手写 `.cgui` 不会**——
+> 补上它，exe 的右键属性 → 详细信息里才有产品名 / 版本 / 说明（写法与 `gallery.rc` 同源，
+> 生成器见 `designer/src/codegen.ts` 的 `rcFile()`）。文件是 UTF-8，别存成 GBK。
 
 ## 一、它演示什么
 
