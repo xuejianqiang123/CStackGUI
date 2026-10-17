@@ -3,7 +3,7 @@
  * 面向新手：不用背函数名，按用途一层层点下去，选中看说明/示例，双击把调用代码复制走。
  * 数据在 ../supportlib.ts（唯一真相是 runtime/include/cstackgui.h）。
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   SUPPORT_LIBS,
   countCommands,
@@ -13,10 +13,19 @@ import {
   type SupGroup,
   type SupLib,
 } from "../supportlib";
+import { callbacksNamed, type FocusHit } from "../model/supportfocus";
+import type { CgDoc } from "../model";
 
 type Props = {
   /** 提示信息交给 App 的 toast */
   onSay: (msg: string) => void;
+  /** 界面文档：用于"这个函数被哪些控件用着"的反查（不传则不显示反查） */
+  doc?: CgDoc;
+  /** 选中控件 -> 相关关键词：切到本页签时预置搜索框（双向连接的正向一头）。
+   *  传空数组表示该控件没什么可查的，不覆盖用户已输入的搜索词。 */
+  focusKeywords?: string[];
+  /** 反查命中时选中画布上的控件（双向连接的反向一头：点函数 -> 高亮用它的控件） */
+  onFindWidgets?: (ids: string[]) => void;
 };
 
 /** 无剪贴板权限时的兜底（Electron 里一般用不到，浏览器模式可能） */
@@ -36,11 +45,19 @@ function legacyCopy(text: string): boolean {
   }
 }
 
-export default function SupportPanel({ onSay }: Props) {
+export default function SupportPanel({ onSay, doc, focusKeywords, onFindWidgets }: Props) {
   const [kw, setKw] = useState("");
   const [selected, setSelected] = useState<SupCmd | null>(null);
   /* 折叠状态按路径存；搜索时忽略它（命中都要看得见） */
   const [closed, setClosed] = useState<Set<string>>(new Set());
+  /* 反查：当前选中的支持库函数被哪些控件用着（切函数时重算，用 useMemo 而非 effect） */
+  const focus = useMemo<FocusHit[]>(() => (doc && selected ? callbacksNamed(doc, selected.fn) : []), [doc, selected]);
+
+  /* 选中控件变了 -> 预置相关搜索词。**不覆盖用户手动输入**（focusKeywords 是"切页签那一下"
+     给的默认视角，用户清空/改写后就该听他的）。空数组（label/box 这类没词可查）不动搜索框。 */
+  useEffect(() => {
+    if (focusKeywords && focusKeywords.length > 0) setKw(focusKeywords.join(" "));
+  }, [focusKeywords]);
 
   const total = useMemo(() => countCommands(), []);
   const libs = useMemo(() => filterSupportLibs(SUPPORT_LIBS, kw), [kw]);
@@ -191,6 +208,32 @@ export default function SupportPanel({ onSay }: Props) {
               <button className="mini" onClick={() => copy(shown.sample ?? "", "示例")}>
                 复制示例
               </button>
+            </>
+          ) : null}
+
+          {/* 反查（双向连接的反向一头）：这个函数当前被哪些控件/事件绑着。
+              空 = 文档里没拿它当回调（不是错误 —— 多数函数在业务代码里手写调用，
+              只有少数能当事件回调）。命中可一键选中画布上的控件。 */}
+          {focus.length > 0 ? (
+            <>
+              <div className="insp-section">用到它的控件</div>
+              <ul className="hint-list small">
+                {focus.map((f) => (
+                  <li key={`${f.widgetId}:${f.event}`}>
+                    <code>{f.widgetId === "__window" ? "主窗口" : f.widgetId}</code>
+                    <span className="muted small"> {f.widgetType} · {f.event}</span>
+                    {onFindWidgets && f.widgetId !== "__window" ? (
+                      <button
+                        className="mini"
+                        onClick={() => onFindWidgets([f.widgetId])}
+                        title="在画布上选中这个控件"
+                      >
+                        定位
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
             </>
           ) : null}
         </div>

@@ -38,6 +38,7 @@ import {
   parseDoc,
   serializeDoc,
   simulateResize,
+  supportKeywordsFor,
   templateDoc,
   type ImportRow,
   walk,
@@ -123,6 +124,9 @@ export default function App() {
   /** 主选框 = 最后点的那个（数组顺序就是点选顺序） */
   const selectedId = selectedIds.length > 0 ? selectedIds[selectedIds.length - 1] : null;
   const selected = selectedId ? findNode(doc, selectedId) : null;
+  /* 「支持库」页签的双向连接：选中控件 -> 相关关键词（正向）。每次选中都重算，
+     SupportPanel 的 effect 只在切页签/换选中那一下预置搜索框，不覆盖用户手动输入。 */
+  const supportFocus = useMemo(() => supportKeywordsFor(selected), [selected]);
 
   /** 替换整个选择集（= 老的单选语义，全部老调用点都落这里） */
   const setSelectedId = useCallback((id: string | null) => setSelectedIds(id ? [id] : []), []);
@@ -806,7 +810,17 @@ export default function App() {
                 onApply={onApply}
               />
             ) : null}
-            {tab === "support" ? <SupportPanel onSay={say} /> : null}
+            {tab === "support" ? (
+              <SupportPanel
+                onSay={say}
+                doc={doc}
+                focusKeywords={supportFocus}
+                onFindWidgets={(ids) => {
+                  selectMany(ids);
+                  if (ids.length > 0) say(`已选中 ${ids.length} 个用到它的控件`);
+                }}
+              />
+            ) : null}
             {tab === "doc" ? (
               <div className="panel-body">
                 <div className="insp-section">概览</div>

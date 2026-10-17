@@ -16,6 +16,8 @@ apps/*
 designer/node_modules/
 designer/dist/
 designer/release/
+# vite 临时构建产物（门禁里 npx vite build 落在这，不入库；正式产物是 dist/）
+designer/build/
 
 # 编辑器/系统（个人配置不入库）
 .vscode/
