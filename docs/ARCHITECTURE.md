@@ -712,8 +712,11 @@ release/
   加速键表（`HACCEL` + `TranslateAcceleratorW`），所以**焦点在输入框里也按得出来** —— 窗口级 `keydown`
   做不到这一点（按键会被 EDIT 吃掉、不冒泡）。
 - **通信层（串口 / 网口）**：`runtime/src/kit/cg_serial.c` 与 `cg_net.c`，业务用 `cg_serial_*` /
-  `cg_net_*` 建链路与收发，业务代码照旧只 include `cstackgui.h`。**运行时的工作线程只出现在这两个文件里**
-  （且只服务于串口与 TCP —— **UDP 不开读线程**）—— 读线程只把字节搬进 64KB 环形缓冲（满了丢最老），
+  `cg_net_*` 建链路与收发，业务代码照旧只 include `cstackgui.h`。**运行时的工作线程只出现在这三个文件里**
+  （串口 / TCP 的读线程 + GIF 录屏编码线程 `cg_win_gif.c`——后者只碰抓帧缓冲与编码器，抓帧仍在
+  UI 线程，白名单由 `tools/check-layers.mjs` 第 8 条锁；且只服务于串口与 TCP —— **UDP 不开读线程**）
+  —— 读线程只把字节搬进 64KB 环形缓冲（满了丢最老，丢弃计数 `cg_serial_dropped()` /
+  `cg_net_dropped()` 可查、并按 5s 节流写日志 WARN），
   业务必须在 `cg_set_timer()` 的时钟回调里 `cg_serial_read()` / `cg_net_read()` 取走再灌进 `terminal`
   控件：控件不是线程安全的，这条线不能破。
   串口：帧格式（数据位/停止位/校验）与波特率都能配、一个句柄一条线、**没有流控**、不自动重连；

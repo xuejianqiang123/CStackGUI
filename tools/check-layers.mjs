@@ -22,9 +22,11 @@
  *        查得到），但它一直只是"约定"：2026-09-27 实测现状干净（examples/apps 下一个
  *        windows.h 都没有），干净就更该锁 —— 从网上抄一段带 <windows.h> 的代码进来，
  *        编译器不会说任何话；
- *     8) **运行时的工作线程只许出现在 cg_serial.c / cg_net.c** —— 读线程只把字节搬进环形
+ *     8) **运行时的工作线程只许出现在白名单文件**（cg_serial.c / cg_net.c /
+ *        cg_win_gif.c，各自理由见第 8 段检查的注释）—— 读线程只把字节搬进环形
  *        缓冲、业务在时钟回调里取走，这条线一破就是"控件被别的线程碰"的隐性数据竞争，
- *        任何单测都测不出来（2026-09-27 实测只有这两个文件在 CreateThread）。
+ *        任何单测都测不出来（2026-09-27 实测只有这两个文件在 CreateThread；
+ *        2026-10-17 扩入录屏编码线程，它不碰控件与 app）。
  *
  * 用法：node tools\check-layers.mjs
  * 退出码：0 = 全部成立；1 = 有越界（逐条给出文件:行号与它为什么重要）
@@ -80,7 +82,8 @@ for (const f of listFiles(path.join(SRC, "core"), [".c", ".h"])) {
     if (inc.name === "windows.h") {
       problems.push(
         `${rel(f)}:${inc.n} — core 不能 include <windows.h>；` +
-          `core 是跨平台层，"能在 Linux 上编译 core"是这个工程的分层卖点之一`,
+          `core 保持平台中立是"core+kit 逻辑与 Win32 视图解耦"这条分层卖点的基石` +
+          `（2026-10-17 表述收敛：目前只有 win32 一个后端，"可跨平台"是设计属性不是已验证事实）`,
       );
     }
   }
@@ -234,16 +237,23 @@ for (const [base, files] of byName) {
   }
 }
 
-/* 8) 运行时的工作线程只许出现在 cg_serial.c / cg_net.c
+/* 8) 运行时的工作线程只许出现在白名单里的文件
  *
- *    ARCHITECTURE.md §8 把这条写成了硬约束："运行时的工作线程只出现在这两个文件里
- *    （且只服务于串口与 TCP —— UDP 不开读线程）"。它存在的原因是**控件不是线程安全的**：
- *    读线程只把字节搬进环形缓冲，业务必须在 cg_set_timer 的时钟回调里取走。
- *    在别处悄悄开一条线程去碰控件，是那种"跑一万次才崩一次"的数据竞争，
- *    单测与 --selftest 都照不到 —— 只有这条静态断言拦得住。
+ *    ARCHITECTURE.md §8 把这条写成了硬约束："运行时的工作线程只出现在这三个文件里"。
+ *    它存在的原因是**控件不是线程安全的**：读线程只把字节搬进环形缓冲，业务必须在
+ *    cg_set_timer 的时钟回调里取走。在别处悄悄开一条线程去碰控件，是那种"跑一万次
+ *    才崩一次"的数据竞争，单测与 --selftest 都照不到 —— 只有这条静态断言拦得住。
+ *
+ *    白名单三个文件与各自理由（扩白名单必须在这里写清"它为什么不碰控件"）：
+ *      cg_serial.c  串口读线程：只搬字节进 64KB 环形缓冲
+ *      cg_net.c     TCP 读线程：同上（UDP 不开线程）
+ *      cg_win_gif.c 录屏编码线程（2026-10-17 扩）：量化 + LZW + 写盘一帧几十毫秒，
+ *                   塞在 UI 线程 50ms 心跳里必掉帧还拖死输入响应（架构评审整改）。
+ *                   它只碰两块抓帧缓冲、编码器与文件；抓帧（要读 app 的 DPI）仍在
+ *                   UI 线程，交接走 cs 保护的乒乓缓冲 —— 控件与 app 都不跨线程。
  */
 {
-  const THREAD_ALLOWED = ["cg_serial.c", "cg_net.c"];
+  const THREAD_ALLOWED = ["cg_serial.c", "cg_net.c", "cg_win_gif.c"];
   const THREAD_API = /\b(CreateThread|_beginthreadex|_beginthread|CreateRemoteThread)\s*\(/;
   for (const f of listFiles(SRC, [".c"])) {
     const base = path.basename(f);
@@ -269,5 +279,5 @@ if (problems.length > 0) {
 console.log(
   `[ok] 分层契约成立：共检查 ${checks} 项（core 平台中立 / win32 只走 cg_win_internal.h / ` +
     `skin 不反向依赖 / kit 不依赖界面 / ${byName.size} 个 .c 基名唯一 / ` +
-    `业务层不 include Windows 头 / 工作线程只在 cg_serial.c·cg_net.c）`,
+    `业务层不 include Windows 头 / 工作线程只在 cg_serial.c·cg_net.c·cg_win_gif.c）`,
 );
