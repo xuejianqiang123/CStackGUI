@@ -24,6 +24,8 @@ type Props = {
   onOpenStyles: () => void;
   /** 「色彩角色」对话框：管理 roles{}（深浅两份语义色），颜色字段用 @引用 */
   onOpenRoles: () => void;
+  /** 「导入点表」对话框：粘一段 CSV（文字,类型[,值]）一次生成一网格控件 */
+  onOpenImport: () => void;
   running: boolean;
   onRun: () => void;
   publishing: boolean;
@@ -86,6 +88,12 @@ export default function Toolbar(p: Props) {
           title="色彩角色：一个语义色的浅色 / 深色两份值，颜色字段写 “@名字” 引用——切主题全套跟着走"
         >
           色彩
+        </button>
+        <button
+          onClick={p.onOpenImport}
+          title="导入点表：粘一段「文字,类型[,值]」（每行一个信号），一次生成一网格控件 —— 几百个点不用一个个拖"
+        >
+          导入点表
         </button>
       </div>
 

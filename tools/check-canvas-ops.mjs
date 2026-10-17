@@ -52,7 +52,9 @@ const {
   makeId,
   makeInsertCmd,
   makeRemoveCmd,
+  makeImportCmd,
   newStore,
+  parseTableCsv,
   serializeDoc,
   simApply,
   simulateResize,
@@ -239,10 +241,71 @@ const ok = (what, cond) => {
   }
 }
 
+/* ------------------------------------------------------------ 点表批量导入（tableimport） */
+{
+  /* 契约（roadmap §G4 钉死）：坏行逐行报错、好行照进；注释/空行静默跳过 */
+  const csv = [
+    "# 注释行不算",
+    "",
+    "启动,button",
+    "温度,progress,60",
+    "坏行" /* 1 列 */,
+    "无类型,notatype" /* 未知类型 */,
+    "坏值,edit,abc" /* 值不是数字 */,
+    "多列,button,1,extra" /* 4 列 */,
+    "标签,label",
+  ].join("\n");
+  const { rows, issues } = parseTableCsv(csv);
+  ok(
+    "导入：合法行照进、坏行不拖累好行",
+    rows.length === 3 && rows[0].type === "button" && rows[1].type === "progress" && rows[2].type === "label",
+  );
+  ok(
+    "导入：坏行逐行报错且行号正确（5/6/7/8）",
+    issues.length === 4 && issues[0].line === 5 && issues[1].line === 6 && issues[2].line === 7 && issues[3].line === 8,
+  );
+  ok("导入：值只进合法行", rows[1].value === 60 && rows[0].value === undefined);
+
+  /* 批量命令：网格摆位 + 唯一 id + JSON 往返重放同构（journal 纪律） */
+  const doc0 = templateDoc("blank");
+  const made = makeImportCmd(doc0, rows);
+  ok("导入命令构造成功（3 个控件）", made !== null && made.newIds.length === 3);
+  const dA = structuredClone(doc0);
+  const dB = structuredClone(doc0);
+  applyCmd(dA, made.cmd);
+  applyCmd(dB, JSON.parse(JSON.stringify(made.cmd)));
+  ok("导入命令 JSON 往返重放：serialize 逐字节同构", serializeDoc(dA) === serializeDoc(dB));
+  ok(
+    "导入网格：≤8 个排一行、列位递增（探针实测 3 个全在 y=24）",
+    dA.widgets[0].rect.y === dA.widgets[1].rect.y &&
+      dA.widgets[1].rect.y === dA.widgets[2].rect.y &&
+      dA.widgets[0].rect.x < dA.widgets[1].rect.x &&
+      dA.widgets[1].rect.x < dA.widgets[2].rect.x,
+  );
+  /* 9 行 → 第 9 个换到第二行（8 列网格的跨行边界） */
+  const many = Array.from({ length: 9 }, (_, i) => ({ text: `第${i + 1}个`, type: "label" }));
+  const madeMany = makeImportCmd(doc0, many);
+  const dM = structuredClone(doc0);
+  applyCmd(dM, madeMany.cmd);
+  ok(
+    "导入网格：第 9 个换行（8 列边界）",
+    dM.widgets[8].rect.y > dM.widgets[7].rect.y && dM.widgets[7].rect.y === dM.widgets[0].rect.y,
+  );
+  const impIds = new Set();
+  let impUniq = true;
+  for (const w of dA.widgets) {
+    if (impIds.has(w.id)) impUniq = false;
+    impIds.add(w.id);
+  }
+  ok("导入后 id 全局唯一", impUniq && made.newIds.every((id) => impIds.has(id)));
+  ok("导入：ranged 控件的值随 serialize 落盘", serializeDoc(dA).includes('"value": 60'));
+  ok("导入：无合法行构造返回 null", makeImportCmd(doc0, []) === null);
+}
+
 if (process.exitCode) {
-  console.error("[fail] 画布文档层契约被破坏（store/ops/layoutsim）");
+  console.error("[fail] 画布文档层契约被破坏（store/ops/layoutsim/tableimport）");
 } else {
   console.log(
-    `[ok] 画布文档层契约成立：${checks} 项（命令 JSON 往返重放 / 幂等 / id 唯一 / 撤销栈语义 / grow 预演镜像算法）`,
+    `[ok] 画布文档层契约成立：${checks} 项（命令 JSON 往返重放 / 幂等 / id 唯一 / 撤销栈语义 / grow 预演镜像 / 点表导入）`,
   );
 }

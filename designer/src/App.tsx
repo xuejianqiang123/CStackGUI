@@ -16,6 +16,7 @@ import Palette from "./components/Palette";
 import RolesDialog from "./components/RolesDialog";
 import StyleDialog from "./components/StyleDialog";
 import SupportPanel from "./components/SupportPanel";
+import TableImportDialog from "./components/TableImportDialog";
 import Toolbar from "./components/Toolbar";
 import WindowPanel from "./components/WindowPanel";
 import { getBridge, type GenLang } from "./bridge";
@@ -32,11 +33,13 @@ import {
   makeInsertCmd,
   makeDuplicateCmd,
   makeRemoveCmd,
+  makeImportCmd,
   newStore,
   parseDoc,
   serializeDoc,
   simulateResize,
   templateDoc,
+  type ImportRow,
   walk,
   type CanvasCmd,
   type CgDoc,
@@ -104,6 +107,8 @@ export default function App() {
   const [actionsOpen, setActionsOpen] = useState(false);
   /** 「样式」对话框开关（工具栏按钮打开）：管理顶层 styles{}（命名样式） */
   const [stylesOpen, setStylesOpen] = useState(false);
+  /** 「导入点表」对话框开关：粘一段 CSV（文字,类型[,值]）一次生成一网格控件 */
+  const [importOpen, setImportOpen] = useState(false);
   /** 「色彩角色」对话框开关：管理顶层 roles{}（深浅两份语义色，颜色字段 @引用） */
   const [rolesOpen, setRolesOpen] = useState(false);
   /** 外部把 .cgui 改了、但画布有未保存改动时挂在这里：底部出通知条问一句，绝不自动覆盖 */
@@ -218,6 +223,19 @@ export default function App() {
     dispatch(made.cmd);
     setSelectedIds(made.newIds);
   }, [dispatch, selectedIds, store]);
+
+  /** 点表批量导入（G4）：合法行一次性生成控件（一步撤销），选中新控件方便接着改 */
+  const doImportRows = useCallback(
+    (rows: ImportRow[]) => {
+      const made = makeImportCmd(store.snapshot().doc, rows);
+      if (!made) return;
+      dispatch(made.cmd);
+      setSelectedIds(made.newIds);
+      setImportOpen(false);
+      say(`已导入 ${made.newIds.length} 个控件`);
+    },
+    [dispatch, say, store],
+  );
 
   /* -------------------------------------------------- 文件操作 */
   const doNew = useCallback(async (kind: TemplateKind = "blank") => {
@@ -692,6 +710,7 @@ export default function App() {
         onOpenActions={() => setActionsOpen(true)}
         onOpenStyles={() => setStylesOpen(true)}
         onOpenRoles={() => setRolesOpen(true)}
+        onOpenImport={() => setImportOpen(true)}
         onZoom={(z) => setZoom(clamp(z, 0.2, 3))}
         onToggleGrid={() => setShowGrid((v) => !v)}
         onToggleSnap={() => setSnapOn((v) => !v)}
@@ -978,6 +997,7 @@ rect = { x:${selected.rect.x}, y:${selected.rect.y}, w:${selected.rect.w}, h:${s
         onBeginHistory={onBeginHistory}
         onApply={onApply}
       />
+      <TableImportDialog open={importOpen} onClose={() => setImportOpen(false)} onImport={doImportRows} />
     </div>
   );
 }
