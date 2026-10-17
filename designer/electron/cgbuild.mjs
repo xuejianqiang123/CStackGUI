@@ -249,7 +249,6 @@ async function buildRuntime(ctx, root, tk) {
 
   const layers = ["core", "win32", "skin", "kit"];
 
-  let changed = false;
   const objs = [];
   const tasks = [];
   for (const layer of layers) {
@@ -267,7 +266,6 @@ async function buildRuntime(ctx, root, tk) {
           ...layers.map((l) => `-I${path.join(tk.src, l)}`),
           "-MMD", "-MF", dep,
           "-c", src, "-o", obj]);
-        if (!rc) changed = true;
         return rc;
       });
     }
@@ -286,12 +284,15 @@ async function buildRuntime(ctx, root, tk) {
     ctx.log("  RC runtime/res/cstackgui.rc");
     const rc = await ctx.run(["windres", `--include-dir=${tk.resDir}`, "-O", "coff", rcSrc, "-o", resObj]);
     if (rc) return rc;
-    changed = true;
   }
 
+  /* 库新鲜度用**状态判据**（.a 是否比全部 .o 与资源对象都新），不用"本轮编过文件"
+     这种轮次判据 —— 构建被打断在 AR 之前时，轮次判据会永久跳过 AR，让 .a 悄悄落后
+     于 .o，下一轮报"已是最新"（2026-10-17 二轮评审"假绿灯"整改；app 侧"总是链接"
+     本就是这个哲学，这里对齐）。 */
   const lib = path.join(libDir, "libcstackgui.a");
-  if (!fs.existsSync(lib)) changed = true;
-  if (!changed) {
+  const newestObj = [...objs, resObj].reduce((a, f) => Math.max(a, mtime(f)), -Infinity);
+  if (fs.existsSync(lib) && mtime(lib) >= newestObj) {
     ctx.log("  （运行时库已是最新，跳过编译）");
     return 0;
   }
