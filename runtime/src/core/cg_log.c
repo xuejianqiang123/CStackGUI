@@ -60,18 +60,30 @@ static void log_rotate_if_big(const char *path)
         char   oldp[sizeof(s_path) + 8];
         char   buf[4096];
         size_t n;
+        int    copied = 0;
 
         snprintf(oldp, sizeof(oldp), "%s.old", path);
         if (in) out = fopen(oldp, "wb");
         if (in && out) {
+            copied = 1;
             while ((n = fread(buf, 1, sizeof(buf), in)) > 0) {
-                if (fwrite(buf, 1, n, out) != n) break;
+                if (fwrite(buf, 1, n, out) != n) { copied = 0; break; }
             }
+            if (ferror(in)) copied = 0;
         }
         if (in) fclose(in);
-        if (out) fclose(out);
+        if (out) {
+            if (fclose(out) != 0) copied = 0;
+            if (!copied) remove(oldp);   /* 半份 .old 没有意义：删掉它，原文件保留 = 证据还在 */
+        }
+        if (!copied) {
+            /* 拷贝失败（多半是磁盘满 —— 恰是轮转最该工作的时刻）：**绝不截断原文件**。
+             * 宁可让下一次 append 继续追加（写不进去也只是丢新日志），也绝不在最需要
+             * 证据的时刻销毁证据（2026-10-17 二轮评审"清理动作自身失败要保留现场"）。 */
+            return;
+        }
     }
-    f = fopen(path, "w");   /* 截断开新档；失败就让后面的 append 继续写旧文件，无害 */
+    f = fopen(path, "w");   /* 拷贝成功才截断开新档；失败就让后面的 append 继续写旧文件，无害 */
     if (f) {
         fprintf(f, "[log] 上一份日志（%ld 字节）已轮转到 .old\n", sz);
         fclose(f);
