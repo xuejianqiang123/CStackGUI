@@ -1,0 +1,23 @@
+# C 代码格式化配置：与 runtime/ 现行风格逐项对齐（不是拿来全仓重排的，
+# 只对"正在改动的文件"使用 —— 全仓 reformat 会造成数千行无意义 diff）。
+# 对齐依据（2026-10-17 重构批次实测的既有风格）：
+#   4 空格缩进 / 120 列（中文注释天然偏长，100 会大量折行）/ 指针星号右贴 /
+#   声明与赋值按名字对齐 / 函数一律大括号展开（不压成单行）/ include 顺序不动
+#   （顺序被 tools/check-layers.mjs 的 include 契约引用，SortIncludes 必须关）。
+BasedOnStyle: LLVM
+Language: C
+Standard: C11
+IndentWidth: 4
+ColumnLimit: 120
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: false
+PointerAlignment: Right
+AlignConsecutiveDeclarations: true
+AlignConsecutiveAssignments: true
+AlignTrailingComments: true
+SortIncludes: false
+IndentPPDirectives: None
+MaxEmptyLinesToKeep: 2
+KeepEmptyLinesAtTheStartOfBlocks: false

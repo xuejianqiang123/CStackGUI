@@ -1,0 +1,30 @@
+# 编辑器基础约定：缩进 / 编码 / 行尾（editorconfig 各 IDE 与 git 工具原生支持）
+# 与 .clang-format（C）互补；TS/JS/mjs 侧维持 vite/React 社区惯例（2 空格）。
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.c]
+indent_style = space
+indent_size = 4
+
+[*.h]
+indent_style = space
+indent_size = 4
+
+[*.{ts,tsx}]
+indent_style = space
+indent_size = 2
+
+[*.{js,mjs,cjs}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{bat,ps1}]
+charset = utf-8
