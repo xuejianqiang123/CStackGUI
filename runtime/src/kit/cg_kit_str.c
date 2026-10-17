@@ -158,6 +158,29 @@ char *cg_str_replace(const char *src, const char *from, const char *to)
     return out;
 }
 
+/** @brief 这对函数实际使用的代码页
+ *  @return UINT GBK 的 936；本机没装 936 时退化为系统 ANSI 代码页（只在第一次检查并记一条 WARN）
+ *  @note **不用 CP_ACP**：CP_ACP 跟着系统 locale 漂（英文机上是 1252），函数名字叫
+ *       gbk 就必须真按 GBK 转（2026-10-17 架构评审"名不副实"整改）。极少数裁剪系统
+ *       没装 936 时回退 CP_ACP —— 按"能转比转错好"处理，且只提示一次。
+ */
+static UINT kit_gbk_cp(void)
+{
+    static int  checked = 0;
+    static UINT cp = 936;
+
+    if (!checked) {
+        CPINFOEXW info;
+
+        checked = 1;
+        if (!GetCPInfoExW(936, 0, &info)) {
+            cp = CP_ACP;
+            cg_log(CG_LOG_WARN, "本机没有 GBK(936) 代码页，cg_*_gbk_* 退化为系统 ANSI 代码页 %u", GetACP());
+        }
+    }
+    return cp;
+}
+
 /** @brief UTF-8 -> GBK
  *  @param utf8 UTF-8 源串；为 NULL 返回 NULL
  *  @return char * 堆串（含结尾 NUL），用完 cg_free；转换失败返回 NULL
@@ -171,10 +194,10 @@ char *cg_utf8_to_gbk(const char *utf8)
     if (!utf8) return NULL;
     w = kit_w(utf8);
     if (!w) return NULL;
-    n = WideCharToMultiByte(CP_ACP, 0, w, -1, NULL, 0, NULL, NULL);
+    n = WideCharToMultiByte(kit_gbk_cp(), 0, w, -1, NULL, 0, NULL, NULL);
     if (n <= 0) { free(w); return NULL; }
     out = (char *)malloc((size_t)n);
-    if (out) WideCharToMultiByte(CP_ACP, 0, w, -1, out, n, NULL, NULL);
+    if (out) WideCharToMultiByte(kit_gbk_cp(), 0, w, -1, out, n, NULL, NULL);
     free(w);
     return out;
 }
@@ -190,11 +213,11 @@ char *cg_gbk_to_utf8(const char *gbk)
     char    *out;
 
     if (!gbk) return NULL;
-    n = MultiByteToWideChar(CP_ACP, 0, gbk, -1, NULL, 0);
+    n = MultiByteToWideChar(kit_gbk_cp(), 0, gbk, -1, NULL, 0);
     if (n <= 0) return NULL;
     w = (wchar_t *)malloc((size_t)n * sizeof(wchar_t));
     if (!w) return NULL;
-    MultiByteToWideChar(CP_ACP, 0, gbk, -1, w, n);
+    MultiByteToWideChar(kit_gbk_cp(), 0, gbk, -1, w, n);
     out = kit_u8(w);
     free(w);
     return out;

@@ -31,6 +31,53 @@ static const char *level_tag(int level)
     }
 }
 
+/** 日志轮转上限：开档前若旧文件超过它，整份挪到 "<路径>.old" 再开新档（只留一份 .old）。
+ *  长期运行的便携 exe（无人值守现场）日志只增不减，磁盘一满恰好就是最需要日志的时刻
+ *  —— 2026-10-17 架构评审"三个无界增长"整改。 */
+#define LOG_ROTATE_MAX (5 * 1024 * 1024)
+
+/**
+ * @brief 开档前的轮转检查：旧日志超过 LOG_ROTATE_MAX 就整份拷到 .old 并截断原文件
+ * @param path 日志文件路径（UTF-8）
+ * @return void 无返回值（没超限、打不开或拷贝失败都什么都不做，最坏是继续追加旧文件）
+ * @note 纯 std C 实现（core 层不许碰 Win32 API）；不用 rename —— 窄字符 rename 在
+ *       Windows 上走 ANSI 代码页，中文路径会失败，所以是"读拷+截断"两步
+ */
+static void log_rotate_if_big(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    long  sz;
+
+    if (!f) return;
+    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return; }
+    sz = ftell(f);
+    fclose(f);
+    if (sz < LOG_ROTATE_MAX) return;
+
+    {
+        FILE  *in = fopen(path, "rb");
+        FILE  *out = NULL;
+        char   oldp[sizeof(s_path) + 8];
+        char   buf[4096];
+        size_t n;
+
+        snprintf(oldp, sizeof(oldp), "%s.old", path);
+        if (in) out = fopen(oldp, "wb");
+        if (in && out) {
+            while ((n = fread(buf, 1, sizeof(buf), in)) > 0) {
+                if (fwrite(buf, 1, n, out) != n) break;
+            }
+        }
+        if (in) fclose(in);
+        if (out) fclose(out);
+    }
+    f = fopen(path, "w");   /* 截断开新档；失败就让后面的 append 继续写旧文件，无害 */
+    if (f) {
+        fprintf(f, "[log] 上一份日志（%ld 字节）已轮转到 .old\n", sz);
+        fclose(f);
+    }
+}
+
 /**
  * @brief 打开日志文件（追加）
  * @param path 日志文件路径（UTF-8）；传 NULL 或空串表示只写 stderr
@@ -45,6 +92,7 @@ void cg_log_open(const char *path)
     s_path[0] = '\0';
     if (!path || !*path) return;
 
+    log_rotate_if_big(path);
     s_log = fopen(path, "a");
     if (!s_log) return;                 /* 打不开就退化成只有 stderr，不打扰用户 */
     snprintf(s_path, sizeof(s_path), "%s", path);
