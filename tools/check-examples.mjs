@@ -409,7 +409,12 @@ if (wantDocs) {
           }
           for (const ev of mask) {
             if (!listed.has(ev)) {
-              console.log(`        提示：designer/src/model/events.ts — \`${type}\` 运行时掩码有 \`${ev}\`，画布没列（用户会以为没这个事件）`);
+              /* 2026-10-17 二轮评审硬化：反向缺口从"提示"升级为红 —— 与 check-support
+               * 同一契约同一强度（那边同日已硬化）。运行时声明了事件、画布不列，
+               * 用户在属性面板看不到它，等于半个静默失效。硬化前实测反向缺口为 0。 */
+              problems.push(
+                `designer/src/model/events.ts — 运行时给 \`${type}\` 声明了 \`${ev}\`，画布没列（用户会以为没这个事件）`,
+              );
             }
           }
         }

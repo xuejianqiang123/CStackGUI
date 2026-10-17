@@ -124,6 +124,16 @@ echo   electron main process syntax
 node tools\check-electron.mjs
 if errorlevel 1 exit /b 1
 
+rem 画布全量类型检查：本脚本前面只 tsc 了 model.ts，而 vite build（发布链）只转译
+rem 不查类型 —— App.tsx / components/ 的类型错误能一路发版（2026-10-17 二轮评审
+rem "designer 是最大盲区"整改；与 check-electron 同构：tsc 看不见的口径必须单独锁）。
+rem designer 源码不在（发布包环境）时跳过，与 check-support 同口径。
+echo   designer type check (tsc --noEmit, whole src)
+if exist designer\package.json (
+  call npm run typecheck --prefix designer
+  if errorlevel 1 exit /b 1
+)
+
 rem 骨架语言判据（designer\electron\skeleton-lang.mjs）：首次导出问 C/C++ 这条规则的
 rem "不破坏既有骨架"承诺由它兜 —— 判据写坏、另一套源文件的写保护被绕过，这里立刻红。
 echo   skeleton language guard (C or C++, never both)
