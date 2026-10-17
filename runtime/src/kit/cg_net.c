@@ -503,24 +503,26 @@ void cg_net_close(cg_net_t *n)
     if (!n) return;
 
     /* 顺序同串口：**先请读线程停、等它退出，再关套接字、再拆缓冲** ——
-     * 反过来就是"读线程往已释放的缓冲里写"，表现是偶发崩溃。 */
+     * 反过来就是"读线程往已释放的缓冲里写"，表现是偶发崩溃。
+     * shutdown 提到等线程**之前**（2026-10-17 二轮评审）：recv 会在 shutdown 后
+     * 立即返回，读线程自然退出 —— 放在等之后的话，万一收超时配置被改大，
+     * 线程要等满超时才出来，白等 3 秒还差点走进放弃分支。 */
+    if (n->s != INVALID_SOCKET) shutdown(n->s, SD_BOTH);   /* 也让对方立刻看到断开，而不是等 FIN 超时 */
     if (n->th) {
         DWORD wr;
         SetEvent(n->ev_stop);
         wr = WaitForSingleObject(n->th, 3000);
         if (wr != WAIT_OBJECT_0) {
             /* 同串口口径（2026-10-17 架构评审）：读线程没出来就继续拆 = use-after-free，
-             * 宁可泄漏整份链路到进程结束，也绝不释放一个还可能被写的内存。 */
+             * 宁可泄漏整份链路到进程结束，也绝不释放一个还可能被写的内存。
+             * shutdown 已发过，走到这里的只剩驱动级死锁，概率远低于串口侧。 */
             cg_log(CG_LOG_ERROR, "网络 %s：关闭时读线程未退出（>3s），放弃回收以避免崩溃；本链路泄漏至进程退出", n->peer);
             return;
         }
         CloseHandle(n->th);
     }
     if (n->ev_stop) CloseHandle(n->ev_stop);
-    if (n->s != INVALID_SOCKET) {
-        shutdown(n->s, SD_BOTH);        /* 让对方立刻看到断开，而不是等 FIN 超时 */
-        closesocket(n->s);
-    }
+    if (n->s != INVALID_SOCKET) closesocket(n->s);
     DeleteCriticalSection(&n->lock);
     cg_ring_free(&n->rx);
     free(n);
@@ -646,8 +648,15 @@ const char *cg_net_peer(const cg_net_t *n)
  */
 const char *cg_net_last_error(const cg_net_t *n)
 {
+    static char view[192];   /* 读侧快照：调用方全是主线程，一个视图缓冲就够 */
+
     if (!n) return g_open_err;
-    return n->err;
+    /* 读侧也加锁（2026-10-17 二轮评审，与 cg_serial_last_error 同口径）：
+     * 读线程退出前的最后一条 net_fail 与主线程的读可能并发。 */
+    EnterCriticalSection((CRITICAL_SECTION *)&n->lock);
+    memcpy(view, n->err, sizeof(view));
+    LeaveCriticalSection((CRITICAL_SECTION *)&n->lock);
+    return view;
 }
 
 /* ------------------------------------------------------------ UDP（数据报）

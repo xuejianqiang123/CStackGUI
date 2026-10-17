@@ -523,11 +523,20 @@ void cg_serial_close(cg_serial_t *s)
         SetEvent(s->ev_stop);
         wr = WaitForSingleObject(s->th, 3000);   /* 最坏一个读超时周期；超时了也不能强杀线程 */
         if (wr != WAIT_OBJECT_0) {
-            /* 读线程没出来（典型：坏 USB 驱动让 ReadFile 挂死超过 3 秒）。此刻继续拆
-             * 缓冲 / 锁 / 句柄 = 给一个还活着的线程准备 use-after-free（2026-10-17 架构
-             * 评审"close 的 3 秒幻觉"整改）：宁可把整份链路泄漏到进程结束（由系统回收），
-             * 也绝不释放一个还可能被写的内存。 */
-            cg_log(CG_LOG_ERROR, "串口 %s：关闭时读线程未退出（>3s），放弃回收以避免崩溃；本链路泄漏至进程退出", s->port);
+            /* 先试着把挂死的同步 I/O 取消掉再等 1 秒 —— ReadFile 正是
+             * CancelSynchronousIo 的目标（2026-10-17 二轮评审：此前直接放弃，
+             * 叠加 share mode 0 + 句柄永不关闭，等于把这个 COM 口烧到进程结束
+             * 都打不开，"拔线重连"在同一进程内永久不可达）。kernel32 自带该 API，
+             * 不新增链接依赖。 */
+            CancelSynchronousIo(s->th);
+            wr = WaitForSingleObject(s->th, 1000);
+        }
+        if (wr != WAIT_OBJECT_0) {
+            /* 读线程真出不来（驱动级死锁）。此刻继续拆缓冲 / 锁 / 句柄 = 给一个还活着
+             * 的线程准备 use-after-free（2026-10-17 架构评审"close 的 3 秒幻觉"整改）：
+             * 宁可把整份链路泄漏到进程结束（由系统回收），也绝不释放一个还可能被写的
+             * 内存。代价是本端口的独占权到进程结束为止 —— 日志里说清楚。 */
+            cg_log(CG_LOG_ERROR, "串口 %s：关闭时读线程未退出（取消挂死 I/O 后仍 >1s），放弃回收以避免崩溃；本链路泄漏至进程退出，该端口到进程结束前无法重开", s->port);
             return;
         }
         CloseHandle(s->th);
@@ -656,8 +665,15 @@ long long cg_serial_dropped(const cg_serial_t *s)
  */
 const char *cg_serial_last_error(const cg_serial_t *s)
 {
+    static char view[192];   /* 读侧快照：调用方全是主线程，一个视图缓冲就够 */
+
     if (!s) return g_open_err;
-    return s->err;
+    /* 读侧也加锁（2026-10-17 二轮评审）：写侧"栈上拼好再拷"只防了写撕裂，
+     * 而读线程现在每 30s 退避周期都会重写 s->err —— 不加锁可能读到没有 \0 的半截。 */
+    EnterCriticalSection((CRITICAL_SECTION *)&s->lock);
+    memcpy(view, s->err, sizeof(view));
+    LeaveCriticalSection((CRITICAL_SECTION *)&s->lock);
+    return view;
 }
 
 /* ------------------------------------------------------------ 端口枚举 */
