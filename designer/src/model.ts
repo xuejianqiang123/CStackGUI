@@ -39,3 +39,4 @@ export * from "./model/serialize.js";
 export * from "./model/math.js";
 export * from "./model/store.js";
 export * from "./model/ops.js";
+export * from "./model/layoutsim.js";

@@ -54,6 +54,8 @@ const {
   makeRemoveCmd,
   newStore,
   serializeDoc,
+  simApply,
+  simulateResize,
   templateDoc,
 } = m;
 
@@ -167,8 +169,80 @@ const ok = (what, cond) => {
   ok("markSaved 清 dirty", !st.snapshot().dirty);
 }
 
+/* ------------------------------------------------------------ grow 预演（layoutsim，镜像 runtime 算法） */
+{
+  const box = (x, y, w, h, grow) => ({ x, y, w, h, grow });
+
+  /* 两带各一个 grow：delta 100 按权重各吃 50，后带整体平移 50（带间距不变） */
+  {
+    const bs = [box(0, 0, 100, 40, 1), box(0, 50, 100, 20, 0), box(0, 80, 100, 40, 1)];
+    simApply(bs, 100, 120, 100, 220);
+    ok("预演：竖向两 grow 带按权重各吃 50", bs[0].h === 90 && bs[2].h === 90);
+    ok("预演：中间 grow=0 带被整体平移 50、自身不变", bs[1].y === 100 && bs[1].h === 20);
+  }
+
+  /* 同带两个 grow 成员各自把这一带填满（不是二选一）。
+     契约口径：「同带」= 该轴上位置区间**重叠**（左右并排不重叠 = 两条带），
+     所以这里用两块横向重叠的矩形来构造同带。 */
+  {
+    const bs = [box(0, 0, 100, 40, 1), box(60, 0, 80, 40, 1)];
+    simApply(bs, 140, 40, 240, 40);
+    ok("预演：同带两个 grow 成员各自吃满 delta", bs[0].w === 200 && bs[1].w === 180);
+    ok("预演：同带成员位置互不位移", bs[0].x === 0 && bs[1].x === 60);
+  }
+
+  /* 基准重算：来回拉伸必须原地不动（不累积误差） */
+  {
+    const mk = () => [box(0, 0, 100, 40, 2), box(0, 50, 100, 30, 1), box(0, 90, 100, 30, 0)];
+    const bs = mk();
+    simApply(bs, 100, 120, 100, 320);
+    simApply(mk(), 100, 120, 100, 320);
+    const stretch = bs.map((b) => ({ ...b }));
+    simApply(stretch, 100, 320, 100, 120);
+    ok(
+      "预演：基准重算，拉伸后缩回与原基准逐字段一致",
+      JSON.stringify(stretch) === JSON.stringify(mk()),
+    );
+  }
+
+  /* 缩小压到 0 不出负数；grow 夹取 0..99 */
+  {
+    const bs = [box(0, 0, 100, 40, 1)];
+    simApply(bs, 100, 40, 100, 10);
+    ok("预演：缩小压到 0 不出负数", bs[0].h === 10);
+    const over = [box(0, 0, 100, 40, 999)];
+    simApply(over, 100, 40, 200, 40);
+    ok("预演：grow 超上限按 99 算（吃满 delta）", over[0].w === 200);
+  }
+
+  /* simulateResize：顶层 + 面板递归；无 grow 时原样 */
+  {
+    const doc = templateDoc("blank");
+    doc.app.width = 400;
+    doc.app.height = 300;
+    const g = JSON.parse(JSON.stringify(makeInsertCmd(doc, "group", 0, 0).items[0].node));
+    g.rect = { x: 0, y: 0, w: 400, h: 300 };
+    g.grow = 1;
+    const inner = JSON.parse(JSON.stringify(makeInsertCmd(doc, "button", 10, 10).items[0].node));
+    inner.rect = { x: 10, y: 10, w: 100, h: 30 };
+    inner.grow = 1;
+    g.children = [inner];
+    doc.widgets = [g];
+    const sim = simulateResize(doc, 600, 300);
+    ok("预演：顶层 grow 容器吃宽度", sim.get(g.id).w === 600);
+    ok(
+      "预演：面板递归（子控件按面板新尺寸再算一遍，这里横向 delta 也被子控件吃到）",
+      sim.get(inner.id).w === 300 && sim.get(inner.id).x === 10,
+    );
+    const same = simulateResize(doc, 400, 300);
+    ok("预演：now == base 时全部原样", same.get(g.id).w === 400 && same.get(inner.id).w === 100);
+  }
+}
+
 if (process.exitCode) {
-  console.error("[fail] 画布文档层契约被破坏（store/ops）");
+  console.error("[fail] 画布文档层契约被破坏（store/ops/layoutsim）");
 } else {
-  console.log(`[ok] 画布文档层契约成立：${checks} 项（命令 JSON 往返重放 / 幂等 / id 唯一 / 撤销栈语义）`);
+  console.log(
+    `[ok] 画布文档层契约成立：${checks} 项（命令 JSON 往返重放 / 幂等 / id 唯一 / 撤销栈语义 / grow 预演镜像算法）`,
+  );
 }
