@@ -141,18 +141,30 @@ static DWORD WINAPI ser_thread(LPVOID p)
 {
     cg_serial_t   *s = (cg_serial_t *)p;
     unsigned char  chunk[SER_CHUNK];
+    DWORD          backoff = 200;        /* 连续失败的重试间隔：200ms 起指数退避，30s 封顶 */
+    ULONGLONG      drop_logged_at = 0;   /* 上次打"缓冲溢出"WARN 的时刻（5s 节流） */
+    long long      drop_reported = 0;    /* 上次已经写进日志的丢弃计数快照 */
 
     for (;;) {
-        DWORD got = 0;
+        DWORD      got = 0;
+        long long  drop_now;
+        ULONGLONG  tnow;
 
         if (WaitForSingleObject(s->ev_stop, 0) == WAIT_OBJECT_0) break;
 
         if (!ReadFile(s->h, chunk, SER_CHUNK, &got, NULL)) {
-            /* 设备没了（线被拔掉）或端口已经被关：记一笔，歇一下再看要不要停 ——
-             * 不歇就是拿 CPU 空转刷日志。 */
+            /* 设备没了（线被拔掉）或端口已经被关：记一笔，按指数退避再看要不要停。
+             * 拔线是现场常态故障，固定 200ms 重试 = 每秒 5 条错误把 app.log 刷满
+             * （2026-10-17 架构评审"拔线自愈缺失"整改）：200ms 起每失败一次翻倍，
+             * 30s 封顶；一旦读到数据立即归零（下面成功路径）。 */
             ser_fail(s, "读取失败");
-            if (WaitForSingleObject(s->ev_stop, 200) == WAIT_OBJECT_0) break;
+            if (WaitForSingleObject(s->ev_stop, backoff) == WAIT_OBJECT_0) break;
+            backoff = (backoff < 15000) ? backoff * 2 : 30000;
             continue;
+        }
+        if (backoff > 200) {
+            cg_log(CG_LOG_INFO, "串口 %s：读取已恢复", s->port);
+            backoff = 200;
         }
 
         if (!got) {
@@ -165,7 +177,18 @@ static DWORD WINAPI ser_thread(LPVOID p)
         EnterCriticalSection(&s->lock);
         cg_ring_push(&s->rx, chunk, (int)got);
         s->rx_total += (long long)got;
+        drop_now = s->rx.dropped;
         LeaveCriticalSection(&s->lock);
+
+        /* 缓冲溢出（业务取数跟不上）必须在日志里留痕：精确计数由 cg_serial_dropped()
+         * 随时可查，这里按 5s 节流打一条 WARN —— 不节流会反过来把日志淹掉。 */
+        tnow = GetTickCount64();
+        if (drop_now > drop_reported && tnow - drop_logged_at >= 5000) {
+            cg_log(CG_LOG_WARN, "串口 %s：接收缓冲溢出，已累计丢弃 %lld 字节（业务取数跟不上；cg_serial_dropped() 可查精确值）",
+                   s->port, drop_now);
+            drop_reported = drop_now;
+            drop_logged_at = tnow;
+        }
     }
     return 0;
 }
@@ -496,8 +519,17 @@ void cg_serial_close(cg_serial_t *s)
     /* 顺序很重要：**先请读线程停、等它真的退出，再关句柄、再拆缓冲**。
      * 反过来就是"读线程还在往一个已经释放的缓冲里写"—— 表现是偶发崩溃或数据错乱。 */
     if (s->th) {
+        DWORD wr;
         SetEvent(s->ev_stop);
-        WaitForSingleObject(s->th, 3000);   /* 最坏一个读超时周期；超时了也不能强杀线程 */
+        wr = WaitForSingleObject(s->th, 3000);   /* 最坏一个读超时周期；超时了也不能强杀线程 */
+        if (wr != WAIT_OBJECT_0) {
+            /* 读线程没出来（典型：坏 USB 驱动让 ReadFile 挂死超过 3 秒）。此刻继续拆
+             * 缓冲 / 锁 / 句柄 = 给一个还活着的线程准备 use-after-free（2026-10-17 架构
+             * 评审"close 的 3 秒幻觉"整改）：宁可把整份链路泄漏到进程结束（由系统回收），
+             * 也绝不释放一个还可能被写的内存。 */
+            cg_log(CG_LOG_ERROR, "串口 %s：关闭时读线程未退出（>3s），放弃回收以避免崩溃；本链路泄漏至进程退出", s->port);
+            return;
+        }
         CloseHandle(s->th);
     }
     if (s->ev_stop) CloseHandle(s->ev_stop);
@@ -598,6 +630,23 @@ long long cg_serial_rx_bytes(const cg_serial_t *s)
 long long cg_serial_tx_bytes(const cg_serial_t *s)
 {
     return s ? s->tx_total : 0;
+}
+
+/**
+ * @brief 取接收缓冲因溢出累计丢弃的字节数
+ * @param s 链路
+ * @return long long 自打开以来丢弃的总字节数（业务取数跟不上时才 > 0）；s 为 NULL 时返回 0
+ * @note 缓冲满时丢最老的字节，计数只增不减；读线程同时会按 5s 节流往日志写 WARN
+ */
+long long cg_serial_dropped(const cg_serial_t *s)
+{
+    long long n;
+
+    if (!s) return 0;
+    EnterCriticalSection((CRITICAL_SECTION *)&s->lock);
+    n = s->rx.dropped;
+    LeaveCriticalSection((CRITICAL_SECTION *)&s->lock);
+    return n;
 }
 
 /**

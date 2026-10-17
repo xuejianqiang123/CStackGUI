@@ -191,8 +191,10 @@ static void net_set_peer(cg_net_t *n, const struct sockaddr *sa)
  */
 static DWORD WINAPI net_thread(LPVOID p)
 {
-    cg_net_t *n = (cg_net_t *)p;
-    char      chunk[NET_CHUNK];
+    cg_net_t  *n = (cg_net_t *)p;
+    char       chunk[NET_CHUNK];
+    ULONGLONG  drop_logged_at = 0;   /* 上次打"缓冲溢出"WARN 的时刻（5s 节流） */
+    long long  drop_reported = 0;    /* 上次已经写进日志的丢弃计数快照 */
 
     for (;;) {
         int got;
@@ -201,10 +203,24 @@ static DWORD WINAPI net_thread(LPVOID p)
 
         got = recv(n->s, chunk, NET_CHUNK, 0);
         if (got > 0) {
+            long long drop_now;
+            ULONGLONG tnow;
+
             EnterCriticalSection(&n->lock);
             cg_ring_push(&n->rx, chunk, got);
             n->rx_total += got;
+            drop_now = n->rx.dropped;
             LeaveCriticalSection(&n->lock);
+
+            /* 缓冲溢出必须留痕（同串口口径）：精确计数由 cg_net_dropped() 可查，
+             * 这里按 5s 节流打一条 WARN。 */
+            tnow = GetTickCount64();
+            if (drop_now > drop_reported && tnow - drop_logged_at >= 5000) {
+                cg_log(CG_LOG_WARN, "网络 %s：接收缓冲溢出，已累计丢弃 %lld 字节（业务取数跟不上；cg_net_dropped() 可查精确值）",
+                       n->peer, drop_now);
+                drop_reported = drop_now;
+                drop_logged_at = tnow;
+            }
             continue;
         }
         if (got == 0) {                     /* 对端正常关闭 */
@@ -489,8 +505,15 @@ void cg_net_close(cg_net_t *n)
     /* 顺序同串口：**先请读线程停、等它退出，再关套接字、再拆缓冲** ——
      * 反过来就是"读线程往已释放的缓冲里写"，表现是偶发崩溃。 */
     if (n->th) {
+        DWORD wr;
         SetEvent(n->ev_stop);
-        WaitForSingleObject(n->th, 3000);
+        wr = WaitForSingleObject(n->th, 3000);
+        if (wr != WAIT_OBJECT_0) {
+            /* 同串口口径（2026-10-17 架构评审）：读线程没出来就继续拆 = use-after-free，
+             * 宁可泄漏整份链路到进程结束，也绝不释放一个还可能被写的内存。 */
+            cg_log(CG_LOG_ERROR, "网络 %s：关闭时读线程未退出（>3s），放弃回收以避免崩溃；本链路泄漏至进程退出", n->peer);
+            return;
+        }
         CloseHandle(n->th);
     }
     if (n->ev_stop) CloseHandle(n->ev_stop);
@@ -581,6 +604,23 @@ int cg_net_connected(const cg_net_t *n)
  * @return long long 累计接收字节数，只增不减；NULL 返回 0
  */
 long long cg_net_rx_bytes(const cg_net_t *n) { return n ? n->rx_total : 0; }
+
+/**
+ * @brief 取接收缓冲因溢出累计丢弃的字节数
+ * @param n 连接句柄
+ * @return long long 累计丢弃字节数（业务取数跟不上时才 > 0）；NULL 返回 0
+ * @note 缓冲满时丢最老的字节，计数只增不减；读线程同时会按 5s 节流往日志写 WARN
+ */
+long long cg_net_dropped(const cg_net_t *n)
+{
+    long long v;
+
+    if (!n) return 0;
+    EnterCriticalSection((CRITICAL_SECTION *)&n->lock);
+    v = n->rx.dropped;
+    LeaveCriticalSection((CRITICAL_SECTION *)&n->lock);
+    return v;
+}
 
 /**
  * @brief 累计发了多少字节

@@ -1405,6 +1405,11 @@ cg_term_clear(cg_find(cg_app_of(self), "term_log"));`,
             ret: "累计字节数；s 为 NULL 返回 0",
             sample: `cg_status_setf(cg_find(app, "sb_main"), 1, "RX %lld B", cg_serial_rx_bytes(g_ser));`,
           }),
+          c("cg_serial_dropped", "溢出丢弃字节", "long long cg_serial_dropped(const cg_serial_t *s)", "接收缓冲满了丢掉的字节数（业务取数跟不上时才 > 0）——怀疑「数据少了一段」先问它", {
+            ret: "累计丢弃字节数；s 为 NULL 返回 0",
+            sample: `if (cg_serial_dropped(g_ser) > 0)
+    cg_term_write(cg_find(app, "term"), CG_TERM_SYS, "接收缓冲溢出过，已丢字节", -1);`,
+          }),
           c("cg_serial_tx_bytes", "累计发出字节", "long long cg_serial_tx_bytes(const cg_serial_t *s)", "从打开到现在一共发出多少字节（同样只增不减）", {
             ret: "累计字节数；s 为 NULL 返回 0",
             sample: `cg_status_setf(cg_find(app, "sb_main"), 2, "TX %lld B", cg_serial_tx_bytes(g_ser));`,
@@ -1570,6 +1575,11 @@ if (!cg_net_connected(g_cli) && cg_net_available(g_cli) <= 0) {
           c("cg_net_rx_bytes", "累计收到字节", "long long cg_net_rx_bytes(const cg_net_t *n)", "从连上到现在这条连接一共收到多少字节（只增不减，要归零就重连）", {
             ret: "累计字节数；n 为 NULL 返回 0",
             sample: `cg_status_setf(cg_find(app, "sb_main"), 2, "RX %lld B", cg_net_rx_bytes(g_cli));`,
+          }),
+          c("cg_net_dropped", "溢出丢弃字节", "long long cg_net_dropped(const cg_net_t *n)", "接收缓冲满了丢掉的字节数（业务取数跟不上时才 > 0）——与 cg_serial_dropped 同一口径", {
+            ret: "累计丢弃字节数；n 为 NULL 返回 0",
+            sample: `if (cg_net_dropped(g_cli) > 0)
+    cg_term_write(cg_find(app, "term"), CG_TERM_SYS, "接收缓冲溢出过，已丢字节", -1);`,
           }),
           c("cg_net_tx_bytes", "累计发出字节", "long long cg_net_tx_bytes(const cg_net_t *n)", "从连上到现在这条连接一共发出多少字节（同样只增不减）", {
             ret: "累计字节数；n 为 NULL 返回 0",

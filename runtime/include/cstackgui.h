@@ -1767,7 +1767,9 @@ cg_serial_t *cg_serial_open_ex(const char *port, int baud, int bits, int stop, i
  * @brief 关掉串口并回收读线程
  * @param s cg_serial_open / cg_serial_open_ex 返回的句柄；NULL 安全（没连上时传 NULL 也行）
  * @return void 无返回值
- * @note 它会等读线程真的退出再释放缓冲，所以最坏会卡一个读超时周期（约 50ms）
+ * @note 它会等读线程真的退出再释放缓冲，所以最坏会卡一个读超时周期（约 50ms）；
+ *       若 3 秒后读线程仍未退出（坏驱动让 ReadFile 挂死），**放弃回收**——泄漏本链路
+ *       整壳但不崩溃（2026-10-17 起，日志里会有一条 ERROR 说明）
  * @note **不是"幂等"**（2026-09-27 真机实测更正，原先这行写着"幂等"，是错的）：
  *        这一调会把句柄结构**释放掉**，指针当场失效 —— **同一个句柄关两次就是 use-after-free**，
  *        实测表现是进程以 `0xC0000374`（堆损坏）退出，而且崩点离关的地方可能很远。
@@ -1818,6 +1820,14 @@ void cg_serial_flush_rx(cg_serial_t *s);
  * @return long long 只增不减；要归零就重连
  */
 long long cg_serial_rx_bytes(const cg_serial_t *s);
+/**
+ * @brief 接收缓冲因溢出累计丢弃了多少字节
+ * @param s 串口句柄
+ * @return long long 只增不减；业务取数跟不上时才 > 0，NULL 返回 0
+ * @note 缓冲满时丢最老的字节；读线程也会按 5s 节流往日志写 WARN。怀疑"数据少了一段"
+ *       时先问它：> 0 就说明是自己取慢了，不是设备没发
+ */
+long long cg_serial_dropped(const cg_serial_t *s);
 /**
  * @brief 累计发了多少字节
  * @param s 串口句柄
@@ -1965,6 +1975,13 @@ int  cg_net_connected(const cg_net_t *n);
  */
 long long cg_net_rx_bytes(const cg_net_t *n);
 /**
+ * @brief 接收缓冲因溢出累计丢弃了多少字节
+ * @param n 连接句柄
+ * @return long long 只增不减；业务取数跟不上时才 > 0，NULL 返回 0
+ * @note 与 cg_serial_dropped 同一口径；怀疑"数据少了一段"时先问它
+ */
+long long cg_net_dropped(const cg_net_t *n);
+/**
  * @brief 累计发了多少字节
  * @param n 连接句柄
  * @return long long 只增不减；状态栏用
@@ -1987,7 +2004,8 @@ const char *cg_net_last_error(const cg_net_t *n);
  * @param n 连接 / 监听句柄；NULL 安全，但**不是幂等**：这一调把句柄结构释放掉，
  *          同一个指针重复调就是释放后使用（关完请立刻把变量置空，与串口关流同一个坑）
  * @return void 无返回值
- * @note 会等读线程退出，所以最坏卡一个收超时周期（约 50ms）
+ * @note 会等读线程退出，所以最坏卡一个收超时周期（约 50ms）；
+ *       若 3 秒后读线程仍未退出，**放弃回收**——泄漏本链路整壳但不崩溃（与 cg_serial_close 同口径）
  */
 void cg_net_close(cg_net_t *n);
 
