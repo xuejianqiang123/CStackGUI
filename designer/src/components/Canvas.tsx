@@ -19,6 +19,7 @@ import {
   type CgAlignMode,
   type CgDoc,
   type CgNode,
+  type CgRect,
 } from "../model";
 import { useImage } from "../imagecache";
 
@@ -42,6 +43,9 @@ type Props = {
   externalPending: boolean;
   onLoadExternal: () => void;
   onDismissExternal: () => void;
+  /** 预演模式：非空时画布按模拟矩形渲染并**只读**（拖动/缩放/框选/拖入全部停用）。
+   *  rects 的 key = 控件 id、value = 相对父容器的模拟矩形（见 model/layoutsim.ts） */
+  sim?: { rects: ReadonlyMap<string, CgRect>; winW: number; winH: number } | null;
 };
 
 type DragState =
@@ -106,6 +110,7 @@ export default function Canvas(props: Props) {
     externalPending,
     onLoadExternal,
     onDismissExternal,
+    sim = null,
   } = props;
   const stageRef = useRef<HTMLDivElement>(null);
   /** 客户区矩形（框选与调色板落点都用它换算）：stage 矩形包含标题栏 + 菜单栏，口径差一截 */
@@ -131,6 +136,7 @@ export default function Canvas(props: Props) {
   /* -------------------------------------------------- 指针交互 */
   const startMove = (e: React.PointerEvent, node: CgNode) => {
     e.stopPropagation();
+    if (sim) return; /* 预演只读：不选也不拖（选中态交给层级树，画布只负责"看"） */
     const additive = e.shiftKey || e.ctrlKey || e.metaKey;
     /* Shift/Ctrl + 点：只做加选/减选，不进拖动 —— 否则「加选」会顺手把控件挪到吸附点上 */
     if (additive) {
@@ -161,7 +167,7 @@ export default function Canvas(props: Props) {
   };
 
   const startResize = (e: React.PointerEvent, dir: string) => {
-    if (!selected) return;
+    if (!selected || sim) return;
     e.stopPropagation();
     setDrag({
       kind: "resize",
@@ -177,7 +183,7 @@ export default function Canvas(props: Props) {
   /* 在客户区空白处按下 = 拖框选。坐标换算成**客户区内的逻辑像素** —— 控件的 rect / absRect
      就是这个口径；拿 stage 的矩形来算会整体差一个标题栏 + 菜单栏的高度。 */
   const startMarquee = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || sim) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const lx = (e.clientX - rect.left) / zoom;
     const ly = (e.clientY - rect.top) / zoom;
@@ -599,7 +605,10 @@ export default function Canvas(props: Props) {
 
       <div className="viewport" onPointerDown={() => onSelect(null)}>
         <div className="stage" ref={stageRef} style={{ transform: `scale(${zoom})` }}>
-          <div className={`app-window${showTitlebar ? "" : " borderless"}`} style={{ width: doc.app.width, height: doc.app.height, background: doc.app.bg }}>
+          <div
+            className={`app-window${showTitlebar ? "" : " borderless"}`}
+            style={{ width: sim ? sim.winW : doc.app.width, height: sim ? sim.winH : doc.app.height, background: doc.app.bg }}
+          >
             {showTitlebar ? (
               <div className="titlebar">
                 {appIcon ? (
@@ -649,6 +658,7 @@ export default function Canvas(props: Props) {
                   selected={selectedSet}
                   primaryId={primaryId}
                   onPointerDown={startMove}
+                  simRects={sim?.rects ?? null}
                 />
               ))}
               {/* 吸附线：常驻两条、显隐/位置由拖动逻辑直写（拖动中不走 React 渲染） */}
@@ -687,7 +697,7 @@ export default function Canvas(props: Props) {
               {/* 选中框画在客户区坐标系里，和控件同一套坐标。
                   多选时**只有主选框**带 8 个手柄；其余选中项由 WidgetView 的
                   .selected-2 虚线表示，免得一屏都是握点。 */}
-              {selected && (
+              {selected && !sim && (
                 <div
                   className="handles"
                   style={{

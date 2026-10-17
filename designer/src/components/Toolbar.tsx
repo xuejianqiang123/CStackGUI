@@ -31,6 +31,12 @@ type Props = {
   onZoom: (z: number) => void;
   onToggleGrid: () => void;
   onToggleSnap: () => void;
+  /** 预演模式：按 grow 契约模拟"窗口拉伸后"的布局（只读，不改设计坐标） */
+  preview: boolean;
+  onTogglePreview: () => void;
+  /** 预演窗口尺寸 = 设计尺寸 × 百分比（宽/高独立） */
+  previewPct: { w: number; h: number };
+  onPreviewPct: (p: { w: number; h: number }) => void;
   onUndo: () => void;
   onRedo: () => void;
   projectRoot: string;
@@ -126,6 +132,40 @@ export default function Toolbar(p: Props) {
         <button className={p.snapOn ? "on" : ""} onClick={p.onToggleSnap} title="拖动时吸附到 4px 栅格与邻近控件">
           吸附
         </button>
+        <button
+          className={p.preview ? "on" : ""}
+          onClick={p.onTogglePreview}
+          title="预演：按 grow 契约模拟窗口拉伸后的布局（只读视图，设计坐标一个字节都不动；对照 F5 真机看的 30 秒反馈回路，这里是 0 秒）"
+        >
+          预演
+        </button>
+        {p.preview ? (
+          <>
+            <input
+              className="sim-slider"
+              type="range"
+              min={50}
+              max={200}
+              step={5}
+              value={p.previewPct.w}
+              onChange={(e) => p.onPreviewPct({ ...p.previewPct, w: Number(e.target.value) })}
+              title="模拟窗口宽度（相对设计尺寸的百分比）"
+            />
+            <input
+              className="sim-slider"
+              type="range"
+              min={50}
+              max={200}
+              step={5}
+              value={p.previewPct.h}
+              onChange={(e) => p.onPreviewPct({ ...p.previewPct, h: Number(e.target.value) })}
+              title="模拟窗口高度（相对设计尺寸的百分比）"
+            />
+            <span className="sim-readout">
+              {Math.round((p.doc.app.width * p.previewPct.w) / 100)}×{Math.round((p.doc.app.height * p.previewPct.h) / 100)}
+            </span>
+          </>
+        ) : null}
       </div>
 
       <button onClick={p.onQqGroup} title="QQ 交流群：点击复制群号，打开 QQ 搜索即可加入">

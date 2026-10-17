@@ -35,6 +35,7 @@ import {
   newStore,
   parseDoc,
   serializeDoc,
+  simulateResize,
   templateDoc,
   walk,
   type CanvasCmd,
@@ -83,6 +84,10 @@ export default function App() {
   const [zoom, setZoom] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
   const [snapOn, setSnapOn] = useState(true); // 拖动时吸附到 4px 栅格 + 邻近控件
+  /* 预演模式（G3'-UI）：按 grow 契约模拟"窗口拉伸后"的布局 —— 只读视图，
+     doc 里的设计坐标一个字节不动；previewPct = 模拟窗口尺寸相对设计尺寸的百分比。 */
+  const [preview, setPreview] = useState(false);
+  const [previewPct, setPreviewPct] = useState({ w: 100, h: 100 });
   const [tab, setTab] = useState<Tab>("props");
   const [pendingDrop, setPendingDrop] = useState<string | null>(null);
   const [projectRoot, setProjectRoot] = useState("");
@@ -543,12 +548,15 @@ export default function App() {
         setSelectedIds(docRef.current.widgets.map((n) => n.id));
         return;
       }
+      /* 预演（preview）下空间编辑键全部停用：模拟视图只读，Ctrl+Z/保存/F5 照常 */
       if (mod && e.key.toLowerCase() === "d") {
+        if (preview) return;
         e.preventDefault();
         duplicateSelected();
         return;
       }
       if (e.key === "Delete" || e.key === "Backspace") {
+        if (preview) return;
         if (selectedIds.length > 0) {
           e.preventDefault();
           deleteNodes(selectedIds);
@@ -561,6 +569,7 @@ export default function App() {
         return;
       }
       if (e.key.startsWith("Arrow") && selectedIds.length > 0) {
+        if (preview) return;
         e.preventDefault();
         const step = e.shiftKey ? 8 : 1;
         const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
@@ -570,7 +579,7 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [doSave, doOpen, doExportC, doRun, undo, redo, duplicateSelected, deleteNodes, selectedIds, dispatch]);
+  }, [doSave, doOpen, doExportC, doRun, undo, redo, duplicateSelected, deleteNodes, selectedIds, dispatch, preview]);
 
   /* -------------------------------------------------- 标题 & 项目路径 */
   useEffect(() => {
@@ -648,6 +657,16 @@ export default function App() {
     return { count, containers, callbacks: callbacks.length, uses, actionNames, styleNames };
   }, [doc]);
 
+  /* 预演：把 simulateResize（model/layoutsim.ts，cg_layout.c 带分配算法的只读镜像）
+     接到渲染 —— 滑杆一动就从基准重算整棵树，0 秒看到 grow 界面在目标分辨率下的样子。
+     只算不写：doc 与设计坐标不动，退出预演自然回到所见即所得。 */
+  const sim = useMemo(() => {
+    if (!preview) return null;
+    const winW = Math.round((doc.app.width * previewPct.w) / 100);
+    const winH = Math.round((doc.app.height * previewPct.h) / 100);
+    return { rects: simulateResize(doc, winW, winH), winW, winH };
+  }, [preview, doc, previewPct]);
+
   return (
     <div className="app">
       <Toolbar
@@ -676,6 +695,10 @@ export default function App() {
         onZoom={(z) => setZoom(clamp(z, 0.2, 3))}
         onToggleGrid={() => setShowGrid((v) => !v)}
         onToggleSnap={() => setSnapOn((v) => !v)}
+        preview={preview}
+        onTogglePreview={() => setPreview((v) => !v)}
+        previewPct={previewPct}
+        onPreviewPct={setPreviewPct}
         onUndo={undo}
         onRedo={redo}
         projectRoot={projectRoot}
@@ -686,7 +709,14 @@ export default function App() {
 
       <div className="body">
         <div className="left">
-          <Palette onAdd={addNode} onStartDrop={(t) => setPendingDrop(t)} />
+          <Palette
+            onAdd={(t) => {
+              if (!preview) addNode(t); /* 预演只读：不从调色板新增 */
+            }}
+            onStartDrop={(t) => {
+              if (!preview) setPendingDrop(t);
+            }}
+          />
           <LayerTree
             doc={doc}
             selectedIds={selectedIds}
@@ -714,6 +744,7 @@ export default function App() {
             if (external) applyExternal(external);
           }}
           onDismissExternal={() => setExternal(null)}
+          sim={sim}
         />
 
         <div className="right">

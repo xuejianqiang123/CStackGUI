@@ -586,9 +586,12 @@ type Props = {
   /** 主选框 id（最后点的那个）：实线外框；其余选中项走虚线，主次一眼可分 */
   primaryId: string | null;
   onPointerDown: (e: React.PointerEvent, node: CgNode) => void;
+  /** 预演模式（model/layoutsim.ts 的 simulateResize 结果）：非空时**渲染位置**用
+   *  模拟矩形覆盖 node.rect —— 只读视图，doc 里的设计坐标一个字节不动 */
+  simRects?: ReadonlyMap<string, { x: number; y: number; w: number; h: number }> | null;
 };
 
-export default function WidgetView({ doc, node, depth, selected, primaryId, onPointerDown }: Props) {
+export default function WidgetView({ doc, node, depth, selected, primaryId, onPointerDown, simRects = null }: Props) {
   /* 预览图必须在**任何提前 return 之前**取：下面就有 `if (node.type === "menu") return null;`，
      hook 放到它后面就成了条件调用 —— 而控件类型是能在「属性」面板里改的，一改就"Hooks 数量不一致"崩溃
      （和 Inspector 里那条注释记的是同一个坑）。 */
@@ -597,12 +600,15 @@ export default function WidgetView({ doc, node, depth, selected, primaryId, onPo
      就是内联自己，与运行时"当没有 use"同一口径）；@角色引用再按当前模式落到具体色。 */
   const st0 = resolveStyle(doc, node.style).effective;
   const st: CgStyle = { ...st0, fg: roleColor(doc, st0.fg), bg: roleColor(doc, st0.bg) };
+  /* 预演模式下用模拟矩形渲染（递归：容器的子控件也各有一条映射，见 layoutsim）；
+     不在映射里（menu 之类无矩形的节点）或非预演时照旧用设计坐标 */
+  const r = (simRects?.get(node.id)) ?? node.rect;
   const style: CSSProperties = {
     position: "absolute",
-    left: node.rect.x,
-    top: node.rect.y,
-    width: node.rect.w,
-    height: node.rect.h,
+    left: r.x,
+    top: r.y,
+    width: r.w,
+    height: r.h,
     ...fontOf(st),
   };
   if (st.bg) style.background = st.bg;
@@ -667,6 +673,7 @@ export default function WidgetView({ doc, node, depth, selected, primaryId, onPo
               selected={selected}
               primaryId={primaryId}
               onPointerDown={onPointerDown}
+              simRects={simRects}
             />
           ))}
         </div>

@@ -216,6 +216,19 @@ input.narrow {
   font-variant-numeric: tabular-nums;
   color: var(--on-surface-var);
 }
+/* 预演模式的两条拉伸滑杆（宽/高，相对设计尺寸的百分比）：
+   只在预演开启时渲染，跟手实时重算模拟布局。控件本体用浏览器原生 range，
+   只把选中色对到主题色（accent-color 是唯一需要接管的外观属性）。 */
+.toolbar .sim-slider {
+  width: 96px;
+  accent-color: var(--seed);
+}
+.toolbar .sim-readout {
+  min-width: 76px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--on-surface-var);
+}
 .file-state {
   display: flex;
   align-items: center;
