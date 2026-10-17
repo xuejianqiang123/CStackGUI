@@ -84,6 +84,14 @@ typedef struct {
 static cg_rec_t s_rec;
 static int      s_rec_cs_inited = 0;   /* cs 进程内初始化一次（录屏可反复开始/停止） */
 
+/** 时间精度：SetTimer 粒度是 15.6ms 量子，不拉齐时 33ms 一拍实际 ~47ms（名义 30fps
+ *  被压到 ~20fps，2026-10-17 二轮评审）。timeBeginPeriod 走 LoadLibrary 取 winmm
+ *  （与 cg_kit_wireless / cg_win_theme 同一套路）——**不新增链接依赖**，既有用户
+ *  项目的链接命令一个字都不用改。 */
+static int s_time_precise = 0;
+static UINT (WINAPI *s_time_begin)(UINT) = NULL;
+static UINT (WINAPI *s_time_end)(UINT) = NULL;
+
 /**
  * @brief 抓一帧屏幕区域到调用方给的 RGB 缓冲（**只在 UI 线程调**）
  * @param r 录屏状态
@@ -162,10 +170,18 @@ static DWORD WINAPI rec_worker(LPVOID p)
 
     for (;;) {
         unsigned char *buf = NULL;
-        unsigned        now;
-        int             delay_ms, rc, done = 0, first;
+        HANDLE         h[2];
+        DWORD          wr;
+        unsigned       now;
+        int            delay_ms, rc, done = 0, first;
 
-        if (WaitForSingleObject(r->ev_stop, 50) == WAIT_OBJECT_0) break;
+        /* 真事件等待替代 50ms 轮询（2026-10-17 二轮评审：ev_work 原是没人等的死事件，
+         * SetEvent 空转）。无丢失唤醒：UI 先在 cs 内置 pending=1、离开锁后才 SetEvent，
+         * auto-reset 事件在没有等待者时保持置位，本线程醒来读 pending 必见 1。 */
+        h[0] = r->ev_stop;
+        h[1] = r->ev_work;
+        wr = WaitForMultipleObjects(2, h, FALSE, INFINITE);
+        if (wr != WAIT_OBJECT_0 + 1) break;    /* ev_stop（或异常）：退出 */
 
         EnterCriticalSection(&r->cs);
         if (r->pending) {
@@ -255,6 +271,10 @@ static void rec_tick(void *user)
 static void rec_free(cg_rec_t *r)
 {
     if (r->gif) { cg_gif_abort(r->gif); r->gif = NULL; }
+    if (s_time_precise && s_time_end) {        /* 收尾与 start 的 timeBeginPeriod 配对 */
+        s_time_end(1);
+        s_time_precise = 0;
+    }
     free(r->tmp_path);
     r->tmp_path = NULL;
     free(r->rgb);
@@ -310,6 +330,9 @@ int cg_gif_rec_start(cg_app_t *app, int x, int y, int w, int h, int fps)
 
     if (!app || !cg_app_has_window(app)) return 0;
     if (r->active) return 0;
+    /* 上一轮的线程还没 join 干净（worker 自停 / join 超时的僵尸）：绝不能重启 ——
+     * 否则两个 worker 共碰同一个编码器与同一套计数（2026-10-17 二轮评审崩溃级整改）。 */
+    if (r->th) return 0;
     if (w <= 0 || h <= 0 || w > CG_REC_DIM_MAX || h > CG_REC_DIM_MAX) return 0;
     if (fps < CG_REC_FPS_MIN) fps = CG_REC_FPS_MIN;
     if (fps > CG_REC_FPS_MAX) fps = CG_REC_FPS_MAX;
@@ -379,6 +402,16 @@ int cg_gif_rec_start(cg_app_t *app, int x, int y, int w, int h, int fps)
         return 0;
     }
 
+    /* 拉齐定时器精度到 1ms（失败不致命：只是维持 15.6ms 量子，与改造前一样） */
+    if (!s_time_precise) {
+        HMODULE wm = LoadLibraryW(L"winmm.dll");
+        if (wm) {
+            s_time_begin = (UINT(WINAPI *)(UINT))(void *)GetProcAddress(wm, "timeBeginPeriod");
+            s_time_end   = (UINT(WINAPI *)(UINT))(void *)GetProcAddress(wm, "timeEndPeriod");
+            if (s_time_begin && s_time_begin(1) == 0) s_time_precise = 1;
+        }
+    }
+
     cg_set_timer(app, r->interval_ms, rec_tick, app);
     cg_log(CG_LOG_INFO, "录屏开始：区域 %d,%d %dx%d（逻辑像素），%d fps，临时文件 %s",
            x, y, w, h, fps, r->tmp_path);
@@ -399,14 +432,17 @@ int cg_gif_rec_stop(cg_app_t *app, const char *path)
     int       frames, ok = 0;
 
     (void)app;
-    if (!r->active) return 0;
+    /* 幂等 teardown：worker 可能已自停（编码失败把 active 清零，2026-10-17 二轮评审
+     * "自停孤儿"整改），但 th / gif / 缓冲都还在 —— 此刻照样要 join + 收编码器 + 清资源，
+     * 否则每次自停泄漏一整套。真·从未开始（既没线程也没编码器）才直接返回。 */
+    if (!r->th && !r->gif) return 0;
     r->active = 0;                            /* 先熄 UI 定时器的火（rec_tick 见 0 直接返回） */
-    frames = r->frames;
 
     /* **先 join 工作线程，再收编码器，再改名** —— 顺序反了就是两条事故：
      * 编码线程还活着时收编码器 = 双方同时碰 FILE*；FILE* 还开着时 MoveFile =
      * 系统拒绝（跨盘复制也只能拿到已 flush 的那一截）。 */
     if (!rec_join_worker(r)) return 0;
+    frames = r->frames;                       /* join 后再取快照：正在编码的最后一帧不会被误判丢弃 */
     if (r->gif) {
         if (path && *path && frames > 0) ok = cg_gif_close(r->gif);
         else                             cg_gif_abort(r->gif);
@@ -480,7 +516,9 @@ void cg_gif_rec_shutdown(void)
 {
     cg_rec_t *r = &s_rec;
 
-    if (!r->active) return;
+    /* 同 stop 的幂等口径：worker 自停（active=0 但 th/gif 还在）时这里也要收尾，
+     * 否则关窗路径把孤儿资源留到进程结束（2026-10-17 二轮评审）。 */
+    if (!r->th && !r->gif) return;
     cg_log(CG_LOG_INFO, "关窗：中止录屏，丢弃 %d 帧", r->frames);
     r->active = 0;
     rec_join_worker(r);                        /* 超时则下面什么都不释放（宁泄漏不 UAF） */
