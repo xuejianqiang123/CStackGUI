@@ -1786,6 +1786,10 @@ void cg_serial_close(cg_serial_t *s);
  * @param data 要发的字节
  * @param len 字节数
  * @return int 实际写出的字节数；< 0 表示失败（原因见 cg_serial_last_error）
+ * @note **同步写的最坏代价是把调用线程冻结到写超时（1 秒）**：设备侧流控生效或
+ *       驱动缓冲满时，本函数会一直等到超时才返回 —— 在 UI 线程里调它，界面就会
+ *       冻最长 1s。v1 的边界就是这样（写队列属 v2）；大块数据请分次写并自己掌握
+ *       节奏，或接受这个卡顿。
  */
 int  cg_serial_write(cg_serial_t *s, const void *data, int len);
 
