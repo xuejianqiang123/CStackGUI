@@ -34,7 +34,6 @@ const listExt = (dir, ext) =>
   isDir(dir)
     ? fs.readdirSync(dir).filter((f) => f.toLowerCase().endsWith(ext)).sort().map((f) => path.join(dir, f))
     : [];
-const newest = (files) => files.reduce((a, f) => Math.max(a, mtime(f)), -Infinity);
 
 /* ---------------------------------------------------------------- include 展开（F3）
  * 语义与 runtime 的 cg_doc_expand_includes 同一套（pick / 三张表合并主文档优先 /
@@ -190,6 +189,56 @@ class Ctx {
   }
 }
 
+/* ---------------------------------------------------------------- 增量与并发 */
+
+/**
+ * -MMD 精确增量：obj 在、.d 在、且 .d 列出的每个依赖都不比 obj 新 —— 才跳过编译。
+ * 取代原先"任何一个头比 obj 新就全部重编"的 hdrT 规则（2026-10-17 架构评审
+ * "改公共头 = 半全量"整改）：内部头改动只波及真正 include 它的文件；
+ * 配合 runPool 并发，全量重编也快 4~6 倍。
+ * @param obj 目标文件路径
+ * @param dep gcc -MMD 生成的依赖文件（与 obj 同名 .d）
+ * @return boolean true = 可以跳过这次编译
+ */
+function upToDate(obj, dep) {
+  if (!fs.existsSync(obj) || !fs.existsSync(dep)) return false;
+  const ot = mtime(obj);
+  let text;
+  try {
+    text = fs.readFileSync(dep, "utf8");
+  } catch {
+    return false;
+  }
+  /* depfile 形如 "obj.o: src.c hdr1.h \\\n  hdr2.h"：先拼回续行，再按空白切，
+     丢掉以 ":" 结尾的目标项，剩下的都是依赖路径（本工程路径不含空格） */
+  const tokens = text.replace(/\\\r?\n/g, " ").split(/\s+/).filter((t) => t && !t.endsWith(":"));
+  for (const d of tokens) {
+    if (!fs.existsSync(d)) return false;
+    if (mtime(d) > ot) return false;
+  }
+  return true;
+}
+
+/**
+ * 并发跑一组编译任务（限流），全部完成后返回首个失败码（0 = 全部成功）
+ * @param tasks 每项是返回退出码的 async 函数
+ * @param limit 最大并发路数
+ * @return number 退出码
+ */
+async function runPool(tasks, limit) {
+  let i = 0;
+  let firstErr = 0;
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, async () => {
+    while (i < tasks.length) {
+      const k = i++;
+      const rc = await tasks[k]();
+      if (rc && !firstErr) firstErr = rc;
+    }
+  });
+  await Promise.all(workers);
+  return firstErr;
+}
+
 /* ---------------------------------------------------------------- 运行时库 */
 
 async function buildRuntime(ctx, root, tk) {
@@ -199,29 +248,36 @@ async function buildRuntime(ctx, root, tk) {
   fs.mkdirSync(libDir, { recursive: true });
 
   const layers = ["core", "win32", "skin", "kit"];
-  /* 改头文件必须让所有目标文件失效：这些头声明了整个库赖以构建的结构体布局与宏 */
-  const hdrT = newest([
-    ...listExt(path.join(root, "runtime", "include"), ".h"),
-    ...layers.flatMap((d) => listExt(path.join(tk.src, d), ".h")),
-  ]);
 
   let changed = false;
   const objs = [];
+  const tasks = [];
   for (const layer of layers) {
     for (const src of listExt(path.join(tk.src, layer), ".c")) {
-      const obj = path.join(objDir, `${path.basename(src, ".c")}.o`);
+      const base = path.basename(src, ".c");
+      const obj = path.join(objDir, `${base}.o`);
+      const dep = path.join(objDir, `${base}.d`);
       objs.push(obj);
-      if (mtime(obj) > mtime(src) && mtime(obj) > hdrT) continue;
-      ctx.log(`  CC runtime/src/${layer}/${path.basename(src)}`);
-      const rc = await ctx.run(["gcc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Wno-unused-parameter",
-        `-I${path.join(root, "runtime", "include")}`,
-        ...layers.map((l) => `-I${path.join(tk.src, l)}`),
-        "-c", src, "-o", obj]);
-      if (rc) return rc;
-      changed = true;
+      /* -MMD 精确增量（见 upToDate）：内部头改动只波及真正引用它的文件 */
+      if (upToDate(obj, dep)) continue;
+      tasks.push(async () => {
+        ctx.log(`  CC runtime/src/${layer}/${path.basename(src)}`);
+        const rc = await ctx.run(["gcc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Wno-unused-parameter",
+          `-I${path.join(root, "runtime", "include")}`,
+          ...layers.map((l) => `-I${path.join(tk.src, l)}`),
+          "-MMD", "-MF", dep,
+          "-c", src, "-o", obj]);
+        if (!rc) changed = true;
+        return rc;
+      });
     }
   }
   if (!objs.length) return ctx.fail(`${tk.src} 下没有找到运行时源码`);
+  if (tasks.length) {
+    ctx.log(`  （需重编 ${tasks.length} 个文件，并行 6 路）`);
+    const rc = await runPool(tasks, 6);
+    if (rc) return rc;
+  }
 
   const rcSrc = path.join(tk.resDir, "cstackgui.rc");
   const rcIco = path.join(tk.resDir, "cstackgui.ico");
@@ -337,21 +393,21 @@ async function buildApp(ctx, root, tk, appDir, release) {
     cguiRes = objFile;
   }
 
-  /* 增量编译：头变新同样触发重编，避免悄悄链上旧代码 */
-  const hdrT = newest([
-    ...listExt(appDir, ".h"), ...listExt(appDir, ".hpp"), path.join(tk.inc, "cstackgui.h"),
-  ]);
+  /* 增量编译：与运行时同一套 -MMD 精确增量（upToDate）——
+     工程自己的 .h 或公共头改动只波及真正引用它的源文件 */
   const sources = [...listExt(appDir, ".c"), ...CXX_EXTS.flatMap((e) => listExt(appDir, e))];
   const objs = [];
   for (const src of sources) {
-    const obj = path.join(appLib, `${path.basename(src, path.extname(src))}.o`);
+    const base = path.basename(src, path.extname(src));
+    const obj = path.join(appLib, `${base}.o`);
+    const dep = path.join(appLib, `${base}.d`);
     objs.push(obj);
-    if (mtime(obj) > mtime(src) && mtime(obj) > hdrT) continue;
+    if (upToDate(obj, dep)) continue;
     ctx.log(`  CC ${path.basename(src)}`);
     /* C++ 源文件交给 g++：gcc 按 C 编 .cpp 会因为后缀不认而失败 */
     const rc = await ctx.run([isCxx(src) ? "g++" : "gcc", isCxx(src) ? "-std=c++17" : "-std=c11",
       "-O2", "-Wall", "-Wextra", "-Wno-unused-parameter",
-      `-I${tk.inc}`, "-c", src, "-o", obj]);
+      `-I${tk.inc}`, "-MMD", "-MF", dep, "-c", src, "-o", obj]);
     if (rc) return rc;
   }
   if (!objs.length) return ctx.fail(`${appDir} 里没有源文件（.c / .cpp / .cc / .cxx）`);

@@ -25,6 +25,8 @@ designer/release/
 compile_commands.json
 *.o
 *.a
+# gcc -MMD 生成的依赖清单（cgbuild 精确增量用；与 .o 同目录同性质，2026-10-17 起）
+*.d
 Thumbs.db
 desktop.ini
 
