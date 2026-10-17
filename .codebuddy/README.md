@@ -15,15 +15,15 @@
 
 ## 1. 这套配置是什么
 
-五类能力，共 **30 个技能**：
+六类能力，共 **35 个技能**：
 
 | 类 | 数量 | 作用 | 何时用到 |
 |---|---|---|---|
 | **总控** | 1 | ★ `sop`：三入口路由 + 八段流水线 + **对抗性闸门** + 唯一权威门禁命令表 + 收敛与中断恢复 | **任何开发类请求，先过它** |
 | 审查类 | 7 | 代码与界面质量门禁（由 `piv-review-changes` 按领域调用） | 写码后 / 提交前 |
-| 流程类（PIV 双循环） | 13 | 需求 → 提交的工作流 + 3 道门禁 | 每次开发 |
-| 本工程专属规程 | 1 | `designer-modify`：改画布的说明书 | 改 `designer/` 时 |
-| 约束与工具 | 7 | 压缩（caveman / ponytail）、思维准则（本质 + **对抗**）、文件安全、真机实测、陌生库分析 | 始终生效 / 按需 |
+| 流程类（PIV 双循环） | 14 | 需求 → 提交的工作流 + 3 道门禁（审查门禁执行协议 = `adversarial-review`） | 每次开发 |
+| 规程与纪律 | 4 | `designer-modify`（画布规程）+ `evidence-discipline` / `doc-truth-sync` / `request-spec` 三条工程纪律 | 改画布 / 下结论 / 写文档 / 开工前 |
+| 约束与工具 | 8 | 压缩（caveman / ponytail）、思维准则（本质 + **对抗** + 多视角）、文件安全、真机实测、陌生库分析 | 始终生效 / 按需 |
 | 社区引入 | 1 | `wavedrom-gen`：时序描述 → 波形图 | 按需 |
 
 **硬门禁**（不过不提交，业务/文档改动也一样）：
@@ -55,17 +55,19 @@ node tools\check-skills.mjs            :: 改了 .codebuddy/skills\ 之后（che
 ├── plans/               PIV 实现计划（入库）
 ├── code-reviews/        提交前审查报告（入库；2026-10-07 补建，此前只在文档里被引用）
 ├── schemas/             产出物的 JSON Schema（现状见 §8）
-├── skills/              30 个技能
+├── skills/              35 个技能
 │   ├── INDEX.md         ★ 技能索引（分类 / 触发条件 / 维护清单）
 │   ├── sop/             ★ 总控：三入口路由 + 八段流水线 + 对抗性闸门 + 门禁命令表（先看它）
 │   ├── [审查类] 6 个 C 代码检查：buffer_overflow / communication_protocol / error_handling /
 │   │                firmware_code_style（本工程 C 规范）/ memory_leak / struct_best_practice
-│   ├── [流程类] 13 个：plan-create-prd / plan-architecture / piv-slice-epic / prime-codebase /
+│   ├── [流程类] 14 个：plan-create-prd / plan-architecture / piv-slice-epic / prime-codebase /
 │   │                piv-plan-implementation / piv-implement / piv-validate / piv-review-changes /
 │   │                piv-create-pr / piv-run-full-loop / git-commit-style / skills-create /
-│   │                team-parallel-delivery
-│   ├── [约束与工具] 6 个：caveman / ponytail / safe-file-ops / serial_verify /
-│   │                first-principles-thinking / analyzing-projects
+│   │                team-parallel-delivery / adversarial-review
+│   ├── [规程与纪律] 3 个：evidence-discipline / doc-truth-sync / request-spec
+│   ├── [约束与工具] 8 个：caveman / ponytail / safe-file-ops / serial_verify /
+│   │                first-principles-thinking / adversarial-thinking / analyzing-projects /
+│   │                multi-perspective-review
 │   ├── [本工程专属] design-taste（界面观感，属审查类）/ designer-modify
 │   └── [社区] wavedrom-gen
 ├── memory/              项目记忆（.gitignore，不入库）
@@ -91,7 +93,7 @@ node tools\check-skills.mjs            :: 改了 .codebuddy/skills\ 之后（che
 | §7 | 审查映射表 | 改动领域 → 调哪个审查技能（**7 行**，本工程适用） |
 | §8 | 强制执行模式 | `strictMode` 下违反规则的代码必须改完才能提交 |
 | §9 | 产出物管理规范 | 路径与命名规范（见 §7 表） |
-| §10 | 版本历史 | v0.1 → v0.3 |
+| §10 | 版本历史 | v0.1 → v0.6 |
 
 ---
 
@@ -142,7 +144,7 @@ node tools\check-skills.mjs            :: 改了 .codebuddy/skills\ 之后（che
 | 内层 | `piv-plan-implementation` | Validation-First 实现计划 | `.codebuddy/plans/*.md` |
 | 内层 | `piv-implement` | 严格按计划实现，计划外改动需确认 | 代码改动 |
 | 内层 | `piv-validate` | 编译（`build-all.bat`）+ 静态检查 + 行为验证（`--selftest` / 真机实测） | 验证结果清单 |
-| 内层 | `piv-review-changes` | 提交前审查，按领域调用审查技能 | `.codebuddy/code-reviews/*.md` |
+| 内层 | `piv-review-changes` | 提交前审查（第四步强制 `adversarial-review` 三角色对抗裁定） | `.codebuddy/code-reviews/*.md` |
 | 内层 | `git-commit-style` | `[类型][模块] 描述` 格式、分批原子化提交 | git commit |
 | 内层 | `piv-create-pr` | 创建 PR/MR（含验证情况与关联文档） | PR/MR |
 | 全流程 | `piv-run-full-loop` | 从描述到提交的端到端自动化 | 完整交付 |
