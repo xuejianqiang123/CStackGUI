@@ -196,7 +196,7 @@ int cg_proto_parse(const cg_proto_t *p, const void *frame, int len,
         want = (sb == 1) ? f[pos + dlen]
                          : (p->sum_big_endian ? (((unsigned)f[pos + dlen] << 8) | f[pos + dlen + 1])
                                               : (((unsigned)f[pos + dlen + 1] << 8) | f[pos + dlen]));
-        if (s != want) return -2;
+        if (s != want) return CG_ERR_CHECKSUM;
     }
 
     if (p->tail_len > 0) {

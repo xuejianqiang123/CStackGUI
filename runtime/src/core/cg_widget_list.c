@@ -311,11 +311,11 @@ static int menu_parent_of(const cg_widget_t *w, const char *parent_id, const cha
     if (k < 0) {
         cg_log(CG_LOG_WARN, "%s：找不到父项 \"%s\"（要往某个下拉里加项，"
                             "那个下拉必须先在 .cgui 里有 id）", who, parent_id);
-        return -2;
+        return CG_ERR_NO_ITEM;
     }
     if (!w->menu[k].popup) {
         cg_log(CG_LOG_WARN, "%s：\"%s\" 不是下拉项（它没有子项），不能往里加", who, parent_id);
-        return -2;
+        return CG_ERR_NO_ITEM;
     }
     return k;
 }

@@ -111,6 +111,22 @@ const char *cg_event_name(cg_event_t ev);
  */
 int cg_event_from_name(const char *name);
 
+/* ------------------------------------------------------------ 返回码 */
+
+/**
+ * @brief 公共 API 的返回码约定（负数一律失败；具体语义见各函数 @return）
+ * @note 0 成功、-1 通用失败（参数或内容非法）是全库统一口径；
+ *       -2 起是"更具体的失败原因"——同一个 -2 会按函数携带不同语义，
+ *       判定优先看函数文档，本枚举只是给这些数值起名字（数值契约不变）。
+ */
+typedef enum cg_err {
+    CG_OK           = 0,  /**< 成功 */
+    CG_ERR          = -1, /**< 通用失败：参数非法或内容非法 */
+    CG_ERR_NO_BUF   = -2, /**< 输出缓冲放不下（cg_hex_decode / cg_bytes_slice 等） */
+    CG_ERR_CHECKSUM = -2, /**< 校验不符（cg_proto_parse / cg_modbus_parse） */
+    CG_ERR_NO_ITEM  = -2, /**< 目标 id 不存在或类型不对（往列表/下拉加子项等） */
+} cg_err_t;
+
 /* ------------------------------------------------------------ 不透明类型 */
 
 typedef struct cg_app    cg_app_t;

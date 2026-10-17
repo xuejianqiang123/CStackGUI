@@ -281,7 +281,7 @@ int cg_hex_decode(const char *text, void *out, int out_size)
         if (hi < 0) {
             hi = v;
         } else {
-            if (n >= out_size) return -2;
+            if (n >= out_size) return CG_ERR_NO_BUF;
             o[n++] = (unsigned char)((hi << 4) | v);
             hi = -1;
         }
@@ -359,7 +359,7 @@ int cg_base64_decode(const char *text, void *out, int out_size)
         nbits += 6;
         if (nbits >= 8) {
             nbits -= 8;
-            if (n >= out_size) return -2;
+            if (n >= out_size) return CG_ERR_NO_BUF;
             o[n++] = (unsigned char)((acc >> nbits) & 0xFF);
         }
     }
@@ -433,7 +433,7 @@ int cg_url_decode(const char *text, char *out, int out_size)
         } else {
             v = (unsigned char)*text;              /* 按字节原样透传（≥0x80 的中文照样对） */
         }
-        if (n >= out_size - 1) return -2;          /* 留一个位置给结尾的 0 */
+        if (n >= out_size - 1) return CG_ERR_NO_BUF;   /* 留一个位置给结尾的 0 */
         out[n++] = (char)v;
     }
     out[n] = '\0';

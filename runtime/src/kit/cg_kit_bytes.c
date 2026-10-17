@@ -55,7 +55,7 @@ int cg_bytes_slice(const void *data, int len, int from, int count, void *out, in
     if (from < 0 || from >= len) return -1;      /* 起点越界：明确失败，别给个空结果糊过去 */
     avail = len - from;
     if (count < 0 || count > avail) count = avail;   /* "取右边"就是 count 比剩余大的那种 */
-    if (count > out_size) return -2;
+    if (count > out_size) return CG_ERR_NO_BUF;
     if (count > 0) memcpy(out, (const unsigned char *)data + from, (size_t)count);
     return count;
 }

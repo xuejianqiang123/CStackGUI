@@ -247,7 +247,7 @@ int cg_modbus_parse(int tcp, const void *frame, int len, cg_modbus_rsp_t *out)
         if (len < 5) return -1;
         /* "含 CRC 的整帧再算一遍必须是 0" —— 这条性质比逐个字节比对更能说明帧没坏，
          * 也是现场验证帧对不对的习惯做法（见 cg_crc16 的注释）。 */
-        if (cg_crc16(f, len) != 0) return -2;
+        if (cg_crc16(f, len) != 0) return CG_ERR_CHECKSUM;
         slave   = f[0];
         pdu     = 1;
         pdu_len = len - 3;                                   /* 去掉从站 + 两个 CRC 字节 */
