@@ -2,9 +2,14 @@
  *
  * 可见 / 可用（所有类型都有）；「勾选」按 KindInfo.checklist、「值 / 范围」按 KindInfo.ranged
  * 出现。类型专属的字段（周期、颜色、形状…）在 TypeSection.tsx，不在这里。
+ *
+ * 2026-10-18（G5）：三个勾选框 + 三个数字输入改用 PanelUi 的 CheckField / NumField。
+ * **两个原语义必须逐字保住**（用原语的参数表达，不能靠"统一一下更整齐"顺手改掉）：
+ *   - 这里的 value/min/max **不取整**（原代码是 `Number(v) || 0`）→ round={false}；
+ *   - max 的兜底是 **1 不是 0**（原代码 `Number(v) || 1`）→ fallback={1}。
  */
 import type { CgNode, KindInfo } from "../../model";
-import { Row, type Patch } from "./PanelUi";
+import { CheckField, NumField, Row, type Patch } from "./PanelUi";
 
 export type StateSectionProps = {
   node: CgNode;
@@ -17,82 +22,71 @@ export default function StateSection({ node, info, patch }: StateSectionProps) {
     <>
       <div className="insp-section">状态</div>
       <Row label="可见">
-        <label className="check-inline">
-          <input
-            type="checkbox"
-            checked={node.visible !== false}
-            onChange={(e) =>
-              patch((n) => {
-                n.visible = e.target.checked;
-              })
-            }
-          />
-          显示
-        </label>
+        <CheckField
+          checked={node.visible !== false}
+          label="显示"
+          onChange={(v) =>
+            patch((n) => {
+              n.visible = v ?? true;
+            })
+          }
+        />
       </Row>
       <Row label="可用">
-        <label className="check-inline">
-          <input
-            type="checkbox"
-            checked={node.enabled !== false}
-            onChange={(e) =>
-              patch((n) => {
-                n.enabled = e.target.checked;
-              })
-            }
-          />
-          可点击
-        </label>
+        <CheckField
+          checked={node.enabled !== false}
+          label="可点击"
+          onChange={(v) =>
+            patch((n) => {
+              n.enabled = v ?? true;
+            })
+          }
+        />
       </Row>
       {info?.checklist ? (
         <Row label="勾选">
-          <label className="check-inline">
-            <input
-              type="checkbox"
-              checked={!!node.checked}
-              onChange={(e) =>
-                patch((n) => {
-                  n.checked = e.target.checked;
-                })
-              }
-            />
-            初始选中
-          </label>
+          <CheckField
+            checked={!!node.checked}
+            label="初始选中"
+            onChange={(v) =>
+              patch((n) => {
+                n.checked = v ?? false;
+              })
+            }
+          />
         </Row>
       ) : null}
       {info?.ranged ? (
         <>
           <Row label="值">
-            <input
-              className="input"
-              type="number"
-              value={node.value ?? 0}
-              onChange={(e) =>
+            <NumField
+              value={node.value}
+              round={false}
+              onChange={(v) =>
                 patch((n) => {
-                  n.value = Number(e.target.value) || 0;
+                  n.value = v ?? 0;
                 })
               }
             />
           </Row>
           <Row label="范围">
-            <input
-              className="input narrow"
-              type="number"
-              value={node.min ?? 0}
-              onChange={(e) =>
+            <NumField
+              value={node.min}
+              round={false}
+              onChange={(v) =>
                 patch((n) => {
-                  n.min = Number(e.target.value) || 0;
+                  n.min = v ?? 0;
                 })
               }
             />
             <span className="muted">—</span>
-            <input
-              className="input narrow"
-              type="number"
+            <NumField
               value={node.max ?? 100}
-              onChange={(e) =>
+              round={false}
+              fallback={1}
+              onChange={(v) =>
                 patch((n) => {
-                  n.max = Number(e.target.value) || 1;
+                  n.max = v ?? 1;
                 })
               }
             />

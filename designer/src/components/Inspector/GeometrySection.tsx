@@ -8,7 +8,7 @@
  * 余量的各自就地变大、没设的原地不动；只有排在这一带之后的兄弟整体平移）。
  */
 import type { CgNode } from "../../model";
-import { Row, type Patch } from "./PanelUi";
+import { NumField, Row, type Patch } from "./PanelUi";
 
 /* 位置与尺寸的中文标签（.cgui 里仍是 rect.x/y/w/h，只是面板上好认） */
 const RECT_LABEL: Record<"x" | "y" | "w" | "h", string> = {
@@ -51,17 +51,15 @@ export default function GeometrySection({ node, patch }: GeometrySectionProps) {
         label="余量分配"
         hint="容器变大时，多出来的空间按这个权重分给同一容器里的兄弟控件；0 = 不参与。横向竖向都用这一个权重"
       >
-        <input
-          className="input narrow"
-          type="number"
+        <NumField
+          value={node.grow}
           min={0}
           max={99}
-          value={node.grow ?? 0}
-          onChange={(e) =>
+          omitOnZero
+          onChange={(v) =>
             patch((n) => {
-              const v = Math.max(0, Math.min(99, Math.round(Number(e.target.value) || 0)));
-              if (v > 0) n.grow = v;
-              else delete n.grow;
+              if (v === undefined) delete n.grow;
+              else n.grow = v;
             })
           }
         />

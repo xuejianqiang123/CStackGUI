@@ -82,11 +82,82 @@
     自动排版 = 8 列网格、24px 行距（与 addNode 的 offset 启发式同口径）；
   - headless 断言进 `check-canvas-ops.mjs`（坏行容错/类型校验/批量命令 JSON 往返）；
   - UI 复用 ActionsDialog 的弹窗范式（先读它再写，别自创对话框骨架）。
-- 选中控件 → 事件/支持库双向高亮（HMI"按了没反应"差评的画布侧解药）。
+- **点表 CSV 批量导入已交付**（2026-10-18，commit `f28936b`）：`model/tableimport.ts`
+  纯函数解析 + `makeImportCmd` 批量命令；`TableImportDialog.tsx` 复用 ActionsDialog 弹窗
+  范式；断言 34→44 项（`check-canvas-ops.mjs`），全链 + vite 绿。
+- 选中控件 → 事件/支持库双向高亮（HMI"按了没反应"差评的画布侧解药）——**盘点已完成，
+  施工方案见下面 G4' 节**。
 
 ## G5 Inspector 数据驱动（依赖 G1 的 ops 分层经验）
 
-- kinds 表驱动属性面板生成；新控件加属性不再改 React 代码。
+**现状盘点（2026-10-18，file:line 见 inspector 盘点记录）**：
+- 11 个 Section 由 `Inspector.tsx:110-142` 无条件全渲染，各 Section 内 `return null` 自筛
+  （EditSection:16、MediaSection:17、ActionSection:58、HintSection:19、GeometrySection:30）
+  + KIND_MAP 标志（StateSection:47/63、ContentSection:154、BindSection:60）。
+- **重复面（数据化直接收益）**：数字+夹取 18 处、下拉/勾选 40 处，三种数字形态
+  （`Number||0` / `Math.round` / `±夹取+delete 归零`）与两种勾选形态（写 true / false 删字段）
+  散在 GeometrySection:62、EditSection:73/189/204/214、StateSection:72/84/95、
+  TypeSection:28/229/260/269/276/325、ContentSection:100、StyleSection:287/410。
+- **字段描述表雏形已存在**：`model/style.ts:19 STYLE_KEYS` + `StyleSection.tsx:51-59
+  FIELD_LABEL`（style.* 七字段可整族数据化）；`events.ts:131 KIND_EVENTS` 是同款
+  "类型→能力"表范式。其余散表：RECT_LABEL(GeometrySection:14)、ITEMS_DRIVEN(IdentitySection:12)。
+- **对抗性收缩（2026-10-18 开工时改判：不建 fieldSpecs 描述表）**：
+  原计划新增 `fieldSpecs.ts`（46 类型 × 字段 → 编辑器/label/夹取/清空策略，250-350 行）。
+  **判为不做**：那会造出**第二张手工镜像表**——本工程已经有一张并证明了代价
+  （supportlib.ts 129KB + check-support 白名单防腐剂全套机制，架构师原话"同一事实两份"）。
+  字段描述表会与 serialize.ts / cg_doc.c 漂移，而它带来的只是"少写 JSX"；
+  且下面 8 类字段本来就禁止数据化，纯收益面进一步缩小。
+  **替代做法**：把重复消灭在**渲染原语层** —— PanelUi 补 `NumField`/`SelectField`/`CheckField`
+  （统一解析/夹取/取整/0 就删字段这套机械口径），各 section 用原语改写，字段语义仍留在
+  各 section（那是真差异，不是重复）。这既是可验证的收益，**也是未来若真要数据化时的
+  必要地基**（spec 表也是靠这几个原语渲染）。**复议触发**：出现"新控件加属性必须不改 React"
+  的硬需求、且接受再维护一张镜像表时。
+- **已交付（2026-10-18）**：PanelUi 三原语落地；EditSection（5 同形下拉 + 3 数值 + 1 勾选）、
+  StateSection（3 勾选 + 3 数值）、GeometrySection（grow）改用原语，选项文案集中为常量。
+  两处原语义**逐字保住**并写进注释：StateSection 的 value/min/max 不取整（`round={false}`）、
+  max 兜底是 1 不是 0（`fallback={1}`）；CheckField 的 label 给 ReactNode 而非 string，
+  免得原语替调用方决定观感（StateSection 是裸文字、EditSection 是 muted small）。
+  tsc / vite / canvas 契约 / roundtrip / kinds / layers / electron / comments 全绿。
+- **待继续**：TypeSection（8 下拉 + 若干数值）、ContentSection、EditSection 剩余项。
+- **必须保留手写（不可数据化）**：colorpicker 整数↔hex 往返（TypeSection:139-143）、
+  serial 六参数+无界面说明（:54-127）、chart 三值且禁标 ranged（kinds.ts:63、TypeSection:253-277）、
+  id 查重改绑（IdentitySection:46-78）、style 继承 setField/clearField/setBold/setAlign
+  （StyleSection:104-140）、Area 序列化 items/nodes/columns/rows（ContentSection:154-251）、
+  EditSection 预设按钮组（:22-64）、LED 闪 period<100→500（TypeSection:325）。
+
+## G4' 选中控件 → 事件/支持库双向高亮（HMI"按了没反应"差评的画布侧解药）
+
+**现状盘点（2026-10-18）**：
+- EventPanel 已有**绑定级检查**（跨控件共用回调 collectCallbacks:62-73、控件不支持事件警告
+  :77-79/:107-119、click 被动作接管禁用 :158/:187/:202-212）；缺的是"回调在导出 C 骨架/
+  impl 里是否存在"——头注释 :5 承诺了但没实现，且 `uniqueCallbackNames` 全由 doc 推出
+  （codegen.ts:223/258/261 导出时给所有名字生成空函数），doc 内永远自洽，真正的"绑错"要
+  对着**已导出的 impl 文件**解析（现无此工具函数）。
+- SupportPanel：搜索 `filterSupportLibs`（supportlib.ts:1694-1700）匹配键 = fn/name(中文)/brief/decl
+  四选一；命中高亮 `.sup-cmd.on`（SupportPanel.tsx:85、styles.css:2522-2533）已存在；
+  **无 ref/scrollIntoView**（全仓零命中），滚动容器 `.sup-tree`（:132），搜索时折叠失效
+  命中必可见（:71）。**无"控件类型→API"关联字段**。SupportPanel 目前只收 onSay（App.tsx:790），
+  拿不到 doc/选中控件。
+- tab 全是条件渲染（App.tsx:766-791），切走即卸载，SupportPanel 的 kw/selected 状态会丢
+  （SupportPanel.tsx:40-43）。
+- codegen 可复用：`collectCallbacks(doc)` → `CallbackUse{name,widgetId,widgetType,event}`
+  （codegen.ts:34-48，含窗口伪 id `__window`）；回调签名固定 `void name(cg_widget_t*,
+  cg_event_t, void*)`（:258）。
+
+**交付（2026-10-18，(b)(c) 落地；(a) 判为不做）**：
+- **(a) 事件存在性检查：不做**。两个判据：① bridge 无"按路径读 C 文件"能力
+  （`bridge.ts` 只有 `readImage`），要做得加 electron 主进程 IPC，跨层成本高；
+  ② EventPanel 头注释那句"C 侧是否存在"其实已用 doc 派生在做（`collectCallbacks`
+  :62-73 的跨控件共用检查）。真·impl 存在性检查的投入产出比不成立 ⇒ 入档不做，
+  **复议触发**：真实用户报"导出后编译 undefined reference 且画布没提示"。
+- **(b)(c) 已交付**（同日）：新增 `model/supportfocus.ts`（`supportKeywordsFor` 控件类型
+  →关键词、`callbacksNamed` 反查用到某函数的控件；**零 codegen 依赖**，`FocusHit` 本地
+  类型避免 barrel 重名）。SupportPanel 接 `doc`/`focusKeywords`/`onFindWidgets`：选中控件
+  →预置搜索词（正向，effect 只在切页签/换选中那一下，不覆盖用户手输）；帮助卡片新增
+  "用到它的控件"块（反向，命中可一键"定位"画布控件，复用 App 的 `selectMany` :146）。
+  两向都纯 doc 派生，**不新增跨组件状态**。tsc / vite / model barrel 编译全绿。
+- **设计判据**：映射表用**关键词**不是函数名——支持库真相是 `cstackgui.h`，函数会增减，
+  按"用途词"（表格/树/定时器…）过滤更稳；关键词表放独立小文件，不改 129KB 数据表。
 
 ## 长期否决与中间态（2026-10-18 修正版）
 
