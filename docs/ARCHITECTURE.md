@@ -310,12 +310,13 @@ runtime/
       cg_win_notify.c   原生通知 -> 事件映射
       cg_win_event.c    焦点子类与窗口级事件
       cg_win_main.c     主窗口过程
-      cg_win_draw.c     自绘窗口类的**路标**（9 个类 2026-09-23 拆到下面四个文件了，别往这里加代码）
+      cg_win_draw.c     自绘窗口类的**路标**（10 个类 2026-09-23 起拆到下面五个文件，别往这里加代码）
       cg_win_draw_canvas.c  image / 圆环 / 进度条 / 画板（各自的窗口类与窗口过程）
       cg_win_draw_panel.c   面板（group/box/card/shape）与分隔条
       cg_win_draw_chart.c   图表
       cg_win_draw_iconlist.c 图标列表（自绘行列表：绘制 / 点选勾选 / 滚动 / 键盘导航）
       cg_win_draw_gauge.c   状态灯与仪表盘
+      cg_win_paint.c    自绘控件窗口类的公共注册样板（cgw_register_paint_class，10 个类共用）
       cg_win_ownerdraw.c owner-draw 项绘制与 WM_DRAWITEM 分发
       cg_win_menu.c     菜单与工具栏
       cg_win_window.c   窗口生命周期与窗口/托盘 API

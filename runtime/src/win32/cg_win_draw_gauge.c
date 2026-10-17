@@ -219,15 +219,8 @@ static LRESULT CALLBACK LedProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 void cgw_register_led_class(void)
 {
     static int done = 0;
-    WNDCLASSEXW wc;
     if (done) return;
-    memset(&wc, 0, sizeof(wc));
-    wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = LedProc;
-    wc.hInstance = GetModuleHandleW(NULL);
-    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
-    wc.lpszClassName = CG_LED_CLASS;
-    RegisterClassExW(&wc);
+    cgw_register_paint_class(CG_LED_CLASS, LedProc, IDC_ARROW, NULL);
     done = 1;
 }
 
@@ -491,14 +484,7 @@ static LRESULT CALLBACK MeterProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 void cgw_register_meter_class(void)
 {
     static int done = 0;
-    WNDCLASSEXW wc;
     if (done) return;
-    memset(&wc, 0, sizeof(wc));
-    wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = MeterProc;
-    wc.hInstance = GetModuleHandleW(NULL);
-    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
-    wc.lpszClassName = CG_METER_CLASS;
-    RegisterClassExW(&wc);
+    cgw_register_paint_class(CG_METER_CLASS, MeterProc, IDC_ARROW, NULL);
     done = 1;
 }

@@ -72,15 +72,8 @@ static LRESULT CALLBACK ImageProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 void cgw_register_image_class(void)
 {
     static int done = 0;
-    WNDCLASSEXW wc;
     if (done) return;
-    memset(&wc, 0, sizeof(wc));
-    wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = ImageProc;
-    wc.hInstance = GetModuleHandleW(NULL);
-    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
-    wc.lpszClassName = CG_IMAGE_CLASS;
-    RegisterClassExW(&wc);
+    cgw_register_paint_class(CG_IMAGE_CLASS, ImageProc, IDC_ARROW, NULL);
     done = 1;
 }
 
@@ -319,15 +312,8 @@ static LRESULT CALLBACK RingProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 void cgw_register_ring_class(void)
 {
     static int done = 0;
-    WNDCLASSEXW wc;
     if (done) return;
-    memset(&wc, 0, sizeof(wc));
-    wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = RingProc;
-    wc.hInstance = GetModuleHandleW(NULL);
-    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
-    wc.lpszClassName = CG_RING_CLASS;
-    RegisterClassExW(&wc);
+    cgw_register_paint_class(CG_RING_CLASS, RingProc, IDC_ARROW, NULL);
     done = 1;
 }
 
@@ -372,15 +358,8 @@ static LRESULT CALLBACK ProgressProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 void cgw_register_progress_class(void)
 {
     static int done = 0;
-    WNDCLASSEXW wc;
     if (done) return;
-    memset(&wc, 0, sizeof(wc));
-    wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = ProgressProc;
-    wc.hInstance = GetModuleHandleW(NULL);
-    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
-    wc.lpszClassName = CG_PROGRESS_CLASS;
-    RegisterClassExW(&wc);
+    cgw_register_paint_class(CG_PROGRESS_CLASS, ProgressProc, IDC_ARROW, NULL);
     done = 1;
 }
 
@@ -602,14 +581,7 @@ static LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 void cgw_register_canvas_class(void)
 {
     static int done = 0;
-    WNDCLASSEXW wc;
     if (done) return;
-    memset(&wc, 0, sizeof(wc));
-    wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = CanvasProc;
-    wc.hInstance = GetModuleHandleW(NULL);
-    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
-    wc.lpszClassName = CG_CANVAS_CLASS;
-    RegisterClassExW(&wc);
+    cgw_register_paint_class(CG_CANVAS_CLASS, CanvasProc, IDC_ARROW, NULL);
     done = 1;
 }

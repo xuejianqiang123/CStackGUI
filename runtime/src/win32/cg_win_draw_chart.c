@@ -321,14 +321,7 @@ static LRESULT CALLBACK ChartProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 void cgw_register_chart_class(void)
 {
     static int done = 0;
-    WNDCLASSEXW wc;
     if (done) return;
-    memset(&wc, 0, sizeof(wc));
-    wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = ChartProc;
-    wc.hInstance = GetModuleHandleW(NULL);
-    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
-    wc.lpszClassName = CG_CHART_CLASS;
-    RegisterClassExW(&wc);
+    cgw_register_paint_class(CG_CHART_CLASS, ChartProc, IDC_ARROW, NULL);
     done = 1;
 }

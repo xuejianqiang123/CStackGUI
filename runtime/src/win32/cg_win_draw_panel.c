@@ -282,16 +282,9 @@ LRESULT CALLBACK cgw_PanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 void cgw_register_panel_class(void)
 {
     static int done = 0;
-    WNDCLASSEXW wc;
     if (done) return;
-    memset(&wc, 0, sizeof(wc));
-    wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = cgw_PanelProc;
-    wc.hInstance = GetModuleHandleW(NULL);
-    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
-    wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
-    wc.lpszClassName = CG_PANEL_CLASS;
-    RegisterClassExW(&wc);
+    cgw_register_paint_class(CG_PANEL_CLASS, cgw_PanelProc, IDC_ARROW,
+                             (HBRUSH)(COLOR_BTNFACE + 1));
     done = 1;
 }
 
@@ -433,14 +426,7 @@ static LRESULT CALLBACK SplitterProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 void cgw_register_splitter_class(void)
 {
     static int done = 0;
-    WNDCLASSEXW wc;
     if (done) return;
-    memset(&wc, 0, sizeof(wc));
-    wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = SplitterProc;
-    wc.hInstance = GetModuleHandleW(NULL);
-    wc.hCursor = LoadCursorW(NULL, IDC_SIZEWE);
-    wc.lpszClassName = CG_SPLITTER_CLASS;
-    RegisterClassExW(&wc);
+    cgw_register_paint_class(CG_SPLITTER_CLASS, SplitterProc, IDC_SIZEWE, NULL);
     done = 1;
 }

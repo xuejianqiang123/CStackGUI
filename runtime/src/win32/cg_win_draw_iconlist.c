@@ -730,14 +730,7 @@ static LRESULT CALLBACK IconListProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 void cgw_register_iconlist_class(void)
 {
     static int done = 0;
-    WNDCLASSEXW wc;
     if (done) return;
-    memset(&wc, 0, sizeof(wc));
-    wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = IconListProc;
-    wc.hInstance = GetModuleHandleW(NULL);
-    wc.hCursor = LoadCursorW(NULL, IDC_ARROW);
-    wc.lpszClassName = CG_ICONLIST_CLASS;
-    RegisterClassExW(&wc);
+    cgw_register_paint_class(CG_ICONLIST_CLASS, IconListProc, IDC_ARROW, NULL);
     done = 1;
 }

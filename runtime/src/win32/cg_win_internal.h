@@ -423,9 +423,22 @@ void cgw_datetime_from_text(const cg_widget_t *w, SYSTEMTIME *date, SYSTEMTIME *
  */
 void cgw_datetime_pull_text(cg_widget_t *w, HWND date_hwnd, HWND time_hwnd);
 
-/* ---------------- 自绘窗口类：9 个类按控件分居四个文件
+/* ---------------- 自绘窗口类：10 个类按控件分居四个文件
  *   cg_win_draw_canvas.c（image/圆环/进度条/画板）、cg_win_draw_panel.c（面板/分隔条）、
- *   cg_win_draw_chart.c（图表）、cg_win_draw_gauge.c（状态灯/仪表盘） ---------------- */
+ *   cg_win_draw_chart.c（图表）、cg_win_draw_gauge.c（状态灯/仪表盘）、
+ *   cg_win_draw_iconlist.c（图标列表）。
+ *   注册样板（WNDCLASSEXW 那一段）共用 cg_win_paint.c 的 cgw_register_paint_class。 ---------------- */
+
+/**
+ * @brief 注册一个自绘控件窗口类（各 cgw_register_*_class 的共同实现）
+ * @param class_name 窗口类名（CG_*_CLASS 常量）
+ * @param proc 该类的窗口过程
+ * @param cursor 光标资源名（IDC_ARROW / IDC_SIZEWE 等）
+ * @param bg 背景画刷；可为 NULL（自绘类背景由窗口过程自己负责）
+ * @return void 无返回值（"整进程一次"的守卫在各包装函数里）
+ */
+void cgw_register_paint_class(const wchar_t *class_name, WNDPROC proc,
+                              const wchar_t *cursor, HBRUSH bg);
 
 /**
  * @brief 注册 image 自绘窗口类
