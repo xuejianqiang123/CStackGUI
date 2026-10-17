@@ -1,6 +1,6 @@
 /* model/factory.ts -- 造节点与造文档（新建控件、新工程模板）
  *
- * 模型层的「工厂」：id 生成（newId）、按类型造出一个带可见种子的控件（makeNode）、
+ * 模型层的「工厂」：id 生成（makeId）、按类型造出一个带可见种子的控件（makeNode）、
  * 空文档（emptyDoc）与三种新工程模板（templateDoc）。
  *
  * 依赖：model/types.ts + model/kinds.ts（默认尺寸/文字/容器与否都取自 KIND_MAP）。
@@ -11,17 +11,23 @@ import type { CgDoc, CgNode } from "./types.js";
 
 /* ------------------------------------------------------------ 新建 */
 
-let seed = 0;
-export const newId = (base = "w") => {
-  seed += 1;
-  return `${base}_${seed}`;
-};
-
+/** 控件 id：可读前缀 + 跨机器唯一的后缀（毫秒时间戳 base36 + 随机 base36），
+ *  形态如 `button_6lzq9x2k`。为什么不是 `${type}_${序号}`：序号只在**本机**唯一，
+ *  两个人各建一个 button_1 再合并（团队分工 / git 三方合并）就撞 —— id 出现在
+ *  事件绑定里，撞了是静默错。协同是本产品的长期方向（2026-10-18 路线图 G1），
+ *  id 唯一性必须从现在就是对的。前缀保留可读性：教学与绑定场景的辨识度不降。 */
+export function makeId(base = "w"): string {
+  const t = Date.now().toString(36);
+  /* 随机段必须够宽：4 位 base36 在同毫秒连打 1000 个时生日碰撞概率 ~30%
+     （2026-10-18 契约测试实测抓到），8 位后降到 2e-7 量级。 */
+  const r = Math.random().toString(36).slice(2, 10).padEnd(8, "0");
+  return `${base}_${t}${r}`;
+}
 
 export function makeNode(type: string, x: number, y: number): CgNode {
   const info = KIND_MAP[type] ?? KINDS[0];
   const node: CgNode = {
-    id: `${type}_${++seed}`,
+    id: makeId(type),
     type: info.type,
     rect: { x: Math.round(x), y: Math.round(y), w: info.w, h: info.h },
   };

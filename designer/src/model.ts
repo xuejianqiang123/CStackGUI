@@ -11,7 +11,9 @@
  *   model/parse.ts      读入 .cgui（含脏数据容错）+ 克隆
  *   model/serialize.ts  写出 .cgui
  *   model/math.ts       夹取 / 吸附
- * 本文件只把上面 9 个文件的导出面原样转出，外部一律照旧 `from "./model"`。
+ *   model/store.ts      文档 store（doc 唯一真相 + 快照栈撤销；React 无关，可 headless 测试）
+ *   model/ops.ts        文档命令层（可序列化命令对象 + 确定性 apply；协同的架构前置）
+ * 本文件只把上面 11 个文件的导出面原样转出，外部一律照旧 `from "./model"`。
  *
  * ⚠ 下面这些相对说明符**必须带 `.js` 后缀**（`model/` 里各文件之间同理）：
  *   本目录会被 tools\check-format.bat 用 `tsc --module es2022` 编到 build\modeljs\ 再交给
@@ -35,3 +37,5 @@ export * from "./model/align.js";
 export * from "./model/parse.js";
 export * from "./model/serialize.js";
 export * from "./model/math.js";
+export * from "./model/store.js";
+export * from "./model/ops.js";

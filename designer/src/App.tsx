@@ -3,7 +3,7 @@
  * 数据流很简单：doc 是唯一真相，所有编辑都是「克隆一份改完放回去」，
  * 顺手把旧的一份压进撤销栈。文件读写全部走 bridge（Electron 或浏览器降级）。
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import ActionsDialog from "./components/ActionsDialog";
 import Canvas from "./components/Canvas";
 import EventPanel from "./components/EventPanel";
@@ -23,23 +23,22 @@ import { setImageBase } from "./imagecache";
 import { collectCallbacks, generateC, implFileName, uniqueCallbackNames } from "./codegen";
 import {
   absRect,
+  applyCmd,
   clamp,
-  cloneNode,
   emptyDoc,
   findNode,
   findParent,
   isContainer,
-  makeNode,
-  moveNodes,
+  makeInsertCmd,
+  makeDuplicateCmd,
+  makeRemoveCmd,
+  newStore,
   parseDoc,
-  removeNode,
   serializeDoc,
   templateDoc,
-  topLevelOnly,
-  uniquifyIds,
   walk,
+  type CanvasCmd,
   type CgDoc,
-  type CgNode,
   type TemplateKind,
 } from "./model";
 
@@ -70,9 +69,14 @@ function RunPanel({ lines, running, onClose }: { lines: string[]; running: boole
 
 export default function App() {
   const bridge = useMemo(() => getBridge(), []);
-  const [doc, setDoc] = useState<CgDoc>(() => emptyDoc());
+  /* 文档 / 脏标 / 撤销栈都在 model/store.ts（React 无关、可 headless 测试，
+     也是协同的 journal 宿主）。useSyncExternalStore 接回：快照引用稳定，
+     变更时换新对象触发重渲。 */
+  const store = useMemo(() => newStore(emptyDoc()), []);
+  const snap = useSyncExternalStore(store.subscribe, store.snapshot);
+  const doc = snap.doc;
+  const dirty = snap.dirty;
   const [filePath, setFilePath] = useState("");
-  const [dirty, setDirty] = useState(false);
   /* 选择集：数组顺序 = 点选顺序，**最后一个是主选框**（属性面板显示它、拖动吸附以它为准）。
      单选就是长度为 1 的集合，所以老的 setSelectedId(id) 语义由下面的 selectOne 原样保留。 */
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -102,9 +106,7 @@ export default function App() {
   /** 「新建工程」模板选择对话框 */
   const [newOpen, setNewOpen] = useState(false);
 
-  const past = useRef<CgDoc[]>([]);
-  const future = useRef<CgDoc[]>([]);
-  const [histVersion, setHistVersion] = useState(0);
+  /* 同步镜像：异步回调（保存 / 对话框）里读"最新的 doc"用它，不依赖闭包快照 */
   const docRef = useRef(doc);
   docRef.current = doc;
 
@@ -161,127 +163,66 @@ export default function App() {
     say(ok ? `群号 ${QQ_GROUP} 已复制，打开 QQ 搜索即可加入` : `复制失败，QQ 交流群群号：${QQ_GROUP}`);
   }, [bridge, say]);
 
-  /* -------------------------------------------------- 撤销 / 编辑 */
-  const onBeginHistory = useCallback(() => {
-    past.current.push(structuredClone(docRef.current));
-    if (past.current.length > 200) past.current.shift();
-    future.current = [];
-    setHistVersion((v) => v + 1);
-  }, []);
+  /* -------------------------------------------------- 撤销 / 编辑（实现见 model/store.ts）
+   * 传给子组件的 onBeginHistory / onApply 契约原样保留：拖动首帧记历史、逐帧 apply。 */
+  const onBeginHistory = store.beginHistory;
+  const onApply = store.apply;
+  const undo = store.undo;
+  const redo = store.redo;
 
-  const onApply = useCallback((mutator: (d: CgDoc) => void) => {
-    setDoc((cur) => {
-      const next = structuredClone(cur);
-      mutator(next);
-      return next;
-    });
-    setDirty(true);
-  }, []);
+  /** 派发一条命令（可序列化命令对象，见 model/ops.ts —— 协同的 journal 形态） */
+  const dispatch = useCallback((cmd: CanvasCmd) => store.edit((d) => applyCmd(d, cmd)), [store]);
 
-  /** 一步到位的编辑：自己压撤销栈 */
-  const edit = useCallback(
-    (mutator: (d: CgDoc) => void) => {
-      onBeginHistory();
-      onApply(mutator);
-    },
-    [onBeginHistory, onApply],
-  );
-
-  const undo = useCallback(() => {
-    const prev = past.current.pop();
-    if (!prev) return;
-    future.current.push(structuredClone(docRef.current));
-    setDoc(prev);
-    setDirty(true);
-    setHistVersion((v) => v + 1);
-  }, []);
-
-  const redo = useCallback(() => {
-    const next = future.current.pop();
-    if (!next) return;
-    past.current.push(structuredClone(docRef.current));
-    setDoc(next);
-    setDirty(true);
-    setHistVersion((v) => v + 1);
-  }, []);
-
-  /* -------------------------------------------------- 控件增删 */
+  /* -------------------------------------------------- 控件增删（命令层见 model/ops.ts） */
   const addNode = useCallback(
     (type: string) => {
-      let created: CgNode | null = null;
-      edit((d) => {
-        /* 找一个不压住已有控件的位置放新控件 */
-        const offset = (d.widgets.length % 8) * 24;
-        const node = makeNode(type, 24 + offset, 24 + offset);
-        const taken = new Set<string>();
-        walk(d.widgets, (n) => taken.add(n.id));
-        let i = 2;
-        while (taken.has(node.id)) node.id = `${type}_${i++}`;
-        d.widgets.push(node);
-        created = node;
-      });
-      if (created) setSelectedId((created as CgNode).id);
+      const d0 = store.snapshot().doc;
+      /* 找一个不压住已有控件的位置放新控件（位置与 id 都在构造时定死，apply 只是确定性执行） */
+      const offset = (d0.widgets.length % 8) * 24;
+      const cmd = makeInsertCmd(d0, type, 24 + offset, 24 + offset) as Extract<
+        CanvasCmd,
+        { type: "insert" }
+      >;
+      dispatch(cmd);
+      setSelectedId(cmd.items[0].node.id);
       say(`已添加 ${type}`);
     },
-    [edit, say],
+    [dispatch, say, store],
   );
 
-  /** 批量删除：一次操作 = 一步撤销。层级面板的 × 仍传单个 id，所以留 deleteNode 这层壳。 */
+  /** 批量删除：一次操作 = 一步撤销。层级面板的 × 仍传单个 id，所以留 deleteNode 这层壳。
+   *  选中集收敛为顶层、id 都在构造时定死 —— 进 applyCmd 就是确定性执行。 */
   const deleteNodes = useCallback(
     (ids: string[]) => {
-      const targets = topLevelOnly(docRef.current, ids);
-      if (targets.length === 0) return;
-      edit((d) => {
-        for (const id of targets) removeNode(d, id);
-      });
+      const targets = makeRemoveCmd(store.snapshot().doc, ids);
+      if (!targets) return;
+      dispatch(targets);
       setSelectedIds([]);
     },
-    [edit],
+    [dispatch, store],
   );
 
   const deleteNode = useCallback((id: string) => deleteNodes([id]), [deleteNodes]);
 
-  /** 批量复制：走 model/parse 的 cloneNode + uniquifyIds —— 它们会把**子控件的 id 也重排**。
-   *  （老实现只给顶层节点改名，复制一个分组框会造出一堆重复 id。） */
+  /** 批量复制：构造与应用分离（makeDuplicateCmd 构造时克隆 + **子树 id 重排**，
+   *  applyCmd 确定性执行）—— 命令 JSON 可往返，是协同 journal 的形态。
+   *  （老实现只给顶层节点改名，复制一个分组框会造出一堆重复 id —— uniquifyIds 保住这条。） */
   const duplicateSelected = useCallback(() => {
-    const targets = topLevelOnly(docRef.current, selectedIds);
-    if (targets.length === 0) return;
-    const newIds: string[] = [];
-    edit((d) => {
-      const taken = new Set<string>();
-      walk(d.widgets, (n) => taken.add(n.id));
-      for (const id of targets) {
-        const node = findNode(d, id);
-        if (!node) continue;
-        const copy = cloneNode(node);
-        uniquifyIds(copy, taken);
-        const parent = findParent(d, id);
-        if (parent) {
-          parent.children = parent.children ?? [];
-          parent.children.push(copy);
-        } else {
-          d.widgets.push(copy);
-        }
-        newIds.push(copy.id);
-      }
-    });
-    setSelectedIds(newIds);
-  }, [edit, selectedIds]);
+    const made = makeDuplicateCmd(store.snapshot().doc, selectedIds);
+    if (!made) return;
+    dispatch(made.cmd);
+    setSelectedIds(made.newIds);
+  }, [dispatch, selectedIds, store]);
 
   /* -------------------------------------------------- 文件操作 */
   const doNew = useCallback(async (kind: TemplateKind = "blank") => {
     if (dirty && !(await bridge.confirmDiscard("当前改动还没保存，确定新建？"))) return;
-    const fresh = templateDoc(kind);
-    past.current = [];
-    future.current = [];
-    setDoc(fresh);
+    store.replaceDoc(templateDoc(kind)); /* 换整份文档：历史清空、dirty 归零都在 store 里 */
     setFilePath("");
-    setDirty(false);
     setSelectedId(null);
     /* 不清 lastExport 的话，Ctrl+S 会把新画布内容静默覆盖进上一个工程的 .cgui */
     setLastExport(null);
-    setHistVersion((v) => v + 1);
-  }, [bridge, dirty]);
+  }, [bridge, dirty, store]);
 
   const doOpen = useCallback(async () => {
     if (dirty && !(await bridge.confirmDiscard("当前改动还没保存，确定打开别的文件？"))) return;
@@ -292,17 +233,13 @@ export default function App() {
       say(`打开失败：${parsed.error}`);
       return;
     }
-    past.current = [];
-    future.current = [];
-    setDoc(parsed.doc);
+    store.replaceDoc(parsed.doc);
     setFilePath(res.path ?? "");
-    setDirty(false);
     setSelectedId(null);
     /* 同 doNew：打开别的文件后，保存必须写它自己，而不是上一次导出的工程 */
     setLastExport(null);
-    setHistVersion((v) => v + 1);
     say(`已打开 ${res.path ?? ""}`.trim());
-  }, [bridge, dirty, say]);
+  }, [bridge, dirty, say, store]);
 
   /* 保存目标：导出过 C 骨架 -> 固定写工程里的 .cgui（禁止再弹框选位置）；
    * 没导出过但打开过文件 -> 写原路径；两者都没有 -> 保存不可用。 */
@@ -323,7 +260,7 @@ export default function App() {
         });
         if (res.canceled) return { canceled: true as const };
         if (res.path) setFilePath(res.path);
-        setDirty(false);
+        store.markSaved();
         setExternal(null); /* 自己刚写的那一份就是最新真相，挂起的"外部改动"已经过时 */
         say(`已保存 ${res.path ?? ""}`.trim());
         return { canceled: false as const, path: res.path };
@@ -339,12 +276,12 @@ export default function App() {
       });
       if (res.canceled) return { canceled: true as const };
       setFilePath(res.path ?? target);
-      setDirty(false);
+      store.markSaved();
       setExternal(null); /* 同上：这次保存已经把磁盘写成了画布的样子 */
       say(`已保存 ${res.path ?? target}`);
       return { canceled: false as const, path: res.path ?? target };
     },
-    [bridge, filePath, lastExport, say],
+    [bridge, filePath, lastExport, say, store],
   );
 
   /* 首次导出（工程目录里还没有骨架）时问一句用 C 还是 C++。
@@ -403,7 +340,7 @@ export default function App() {
      * 否则紧接着点保存又会弹框让你再选一次位置（导出即保存）。 */
     if (res.dir) {
       setFilePath(`${res.dir}\\${baseName}.cgui`);
-      setDirty(false);
+      store.markSaved();
     }
     const skipped = res.skipped?.length ? `（跳过已存在的 ${res.skipped.join("、")}）` : "";
     /* 三句提醒都只在真的发生时出现，平时那一行还是原来那么短：
@@ -541,16 +478,12 @@ export default function App() {
    *  留着它 Ctrl+Z 会回到「外部改动之前」，是最难解释的一种状态。 */
   const applyExternal = useCallback(
     (next: CgDoc) => {
-      past.current = [];
-      future.current = [];
-      setDoc(next);
-      setDirty(false);
+      store.replaceDoc(next); /* 历史属于另一条血脉：换文档时 store 顺手清掉 */
       setSelectedIds([]);
       setExternal(null);
-      setHistVersion((v) => v + 1);
       say("已载入外部改动（撤销历史已重置）");
     },
-    [say],
+    [say, store],
   );
 
   /* 外部程序改了当前 .cgui（编辑器 / 发布包里那套 AI 技能 / git checkout）：画布自己跟上。
@@ -632,14 +565,12 @@ export default function App() {
         const step = e.shiftKey ? 8 : 1;
         const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
         const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
-        edit((d) => {
-          moveNodes(d, selectedIds, dx, dy);
-        });
+        dispatch({ type: "move", ids: selectedIds, dx, dy });
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [doSave, doOpen, doExportC, doRun, undo, redo, duplicateSelected, deleteNodes, selectedIds, edit]);
+  }, [doSave, doOpen, doExportC, doRun, undo, redo, duplicateSelected, deleteNodes, selectedIds, dispatch]);
 
   /* -------------------------------------------------- 标题 & 项目路径 */
   useEffect(() => {
@@ -668,16 +599,15 @@ export default function App() {
         say(`打开失败：${parsed.error}`);
         return;
       }
-      setDoc(parsed.doc);
+      store.replaceDoc(parsed.doc);
       setFilePath(res.path ?? "");
-      setDirty(false);
       setSelectedId(null);
       say(`已打开 ${res.path ?? ""}`.trim());
     });
     return () => {
       alive = false;
     };
-  }, [bridge, say]);
+  }, [bridge, say, store]);
 
   /* 拖进浏览器窗口的 .cgui 也能直接打开 */
   useEffect(() => {
@@ -690,9 +620,8 @@ export default function App() {
         say(`打开失败：${parsed.error}`);
         return;
       }
-      setDoc(parsed.doc);
+      store.replaceDoc(parsed.doc);
       setFilePath(file.name);
-      setDirty(false);
       setSelectedId(null);
       setLastExport(null);
     };
@@ -703,7 +632,7 @@ export default function App() {
       window.removeEventListener("dragover", prevent);
       window.removeEventListener("drop", onDrop);
     };
-  }, [say]);
+  }, [say, store]);
 
   const stats = useMemo(() => {
     let count = 0;
@@ -729,8 +658,8 @@ export default function App() {
         zoom={zoom}
         showGrid={showGrid}
         snapOn={snapOn}
-        canUndo={past.current.length > 0}
-        canRedo={future.current.length > 0}
+        canUndo={snap.canUndo}
+        canRedo={snap.canRedo}
         onNew={() => setNewOpen(true)}
         onOpen={() => void doOpen()}
         onSave={() => void doSave()}
@@ -1018,7 +947,6 @@ rect = { x:${selected.rect.x}, y:${selected.rect.y}, w:${selected.rect.w}, h:${s
         onBeginHistory={onBeginHistory}
         onApply={onApply}
       />
-      <span style={{ display: "none" }}>{histVersion}</span>
     </div>
   );
 }

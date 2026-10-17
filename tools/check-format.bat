@@ -134,6 +134,13 @@ if exist designer\package.json (
   if errorlevel 1 exit /b 1
 )
 
+rem 画布文档层契约（store/ops，headless）：命令可序列化重放 / 不被消费污染 /
+rem id 跨调用唯一 / 撤销栈语义。画布此前 0 自动验证，这是文档操作层的第一块回归判据
+rem （2026-10-18 路线图 G1/G2；首跑就抓到 applyCmd 引用污染命令的真实缺陷）。
+echo   canvas store/ops contract (headless, journal discipline)
+node tools\check-canvas-ops.mjs
+if errorlevel 1 exit /b 1
+
 rem 骨架语言判据（designer\electron\skeleton-lang.mjs）：首次导出问 C/C++ 这条规则的
 rem "不破坏既有骨架"承诺由它兜 —— 判据写坏、另一套源文件的写保护被绕过，这里立刻红。
 echo   skeleton language guard (C or C++, never both)
