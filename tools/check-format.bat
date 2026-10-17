@@ -104,9 +104,17 @@ if errorlevel 1 exit /b 1
 rem 分层契约：core 平台中立 / win32 只走 cg_win_internal.h / skin 不反向依赖 /
 rem kit 不依赖界面 / 四层 .c 基名唯一（撞名会让 build-runtime 的 .o 互相覆盖）。
 rem 结构审查实测这五条当前**全部成立** —— 越干净越值得锁，因为一次图省事的 include
-rem 就能悄悄毁掉"core 可跨平台、后端可替换"，而编译器不会报警。
+rem 就能悄悄毁掉"core+kit 与 Win32 视图解耦"，而编译器不会报警（2026-10-17 表述收敛：
+rem 目前只有 win32 一个后端，可移植是设计属性、不是已验证事实）。
 echo   layer contract (core / win32 / skin / kit)
 node tools\check-layers.mjs
+if errorlevel 1 exit /b 1
+
+rem 控件类型表双向同步：运行时 k_kinds 与画布 KINDS 是同一事实的两份手写，
+rem 此前只有注释约定（2026-10-17 架构评审把它列为"唯一无锁的跨端契约"）。
+rem 类型名或容器位任何一边改了忘了另一边，这里立刻红。
+echo   kind table sync (k_kinds vs designer KINDS)
+node tools\check-kinds.mjs
 if errorlevel 1 exit /b 1
 
 rem 画布主进程（designer\electron\*.mjs）此前没有任何语法门禁：tsc 只看 .ts、

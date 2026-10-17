@@ -68,16 +68,46 @@ for (const c of cmds) {
   }
 }
 
-/* 4. 反方向：头文件里有、表里漏了的（只提示，不判失败） */
+/* 4. 反方向：头文件里有、表里漏了的 —— 存量走白名单，**新增漏收录直接红**。
+ *
+ * 为什么从"只提示"升级（2026-10-17 架构评审"反向仅提示"整改）：提示没人看 = 没有锁。
+ * 新加一个公共 API 却忘了进支持库表，画布里就查不到它 —— 那正是本脚本存在的理由。
+ * 存量的 11 个函数 + 26 个宏是**有意不收录**的（对话框/主题等另有讲解位置、成组常量
+ * 在用法示例里更好懂），集中放白名单：新漏一个立刻红，白名单只会越删越短。
+ * 白名单本身受检：哪条其实已经收录了，红着提醒删干净（防清单腐化）。 */
+const UNLISTED_OK_FNS = new Set([
+  "cg_dialog_close", "cg_dialog_open", "cg_dialog_open_nonmodal", "cg_edit_scroll_end",
+  "cg_input_box", "cg_table_begin_update", "cg_table_end_update", "cg_table_last_col",
+  "cg_theme_is_dark", "cg_theme_set_dark", "cg_widget_focus",
+]);
+const UNLISTED_OK_MACROS = new Set([
+  "CG_BIND_END", "CG_BLE_ATTR_INDICATE", "CG_BLE_ATTR_NOTIFY", "CG_BLE_ATTR_READ",
+  "CG_BLE_ATTR_WRITE", "CG_BLE_ATTR_WRITE_NR", "CG_FRAME_DELIM", "CG_FRAME_FIXED",
+  "CG_FRAME_LENFIELD", "CG_FRAME_QUEUE", "CG_FRAME_SILENCE", "CG_LOG_ERROR",
+  "CG_LOG_INFO", "CG_LOG_WARN", "CG_MODBUS_MAX_VALUES", "CG_MODBUS_RTU",
+  "CG_MODBUS_TCP", "CG_SUM_ADD16", "CG_SUM_ADD8", "CG_SUM_CRC16_MODBUS",
+  "CG_SUM_NONE", "CG_SUM_XOR8", "CG_TERM_RX", "CG_TERM_SYS", "CG_TERM_TX",
+  "CG_WIFI_SSID_MAX",
+]);
+
 const listed = new Set(cmds.map((c) => c.fn));
-const missingFns = [...headerFns].filter((f) => !listed.has(f)).sort();
-const missingMacros = [...headerMacros].filter((m) => !listed.has(m) && !m.startsWith("CG_VERSION_")).sort();
+const missingFns = [...headerFns].filter((f) => !listed.has(f) && !UNLISTED_OK_FNS.has(f)).sort();
+const missingMacros = [...headerMacros]
+  .filter((m) => !listed.has(m) && !m.startsWith("CG_VERSION_") && !UNLISTED_OK_MACROS.has(m))
+  .sort();
+const staleFns = [...UNLISTED_OK_FNS].filter((f) => listed.has(f)).sort();
+const staleMacros = [...UNLISTED_OK_MACROS].filter((m) => listed.has(m)).sort();
+bad += missingFns.length + missingMacros.length + staleFns.length + staleMacros.length;
 
 console.log(
   `  支持库 ${cmds.length} 条：${SUPPORT_LIBS.map((l) => `${l.label}(${l.groups.length} 类)`).join(" / ")}`,
 );
-if (missingFns.length) console.log(`  提示：未收录的公共函数 ${missingFns.length} 个 —— ${missingFns.join(", ")}`);
-if (missingMacros.length) console.log(`  提示：未收录的公共宏 ${missingMacros.length} 个 —— ${missingMacros.join(", ")}`);
+if (missingFns.length)
+  console.error(`[fail] 新增公共函数未收录进支持库表：${missingFns.join(", ")} —— 补 c(...) 条目，或加进 UNLISTED_OK_FNS 并写明理由`);
+if (missingMacros.length)
+  console.error(`[fail] 新增公共宏未收录进支持库表：${missingMacros.join(", ")} —— 补条目，或加进 UNLISTED_OK_MACROS`);
+if (staleFns.length || staleMacros.length)
+  console.error(`[fail] 白名单已过期（这些条目其实已收录进表）：${[...staleFns, ...staleMacros].join(", ")} —— 从 UNLISTED_OK_* 删除`);
 
 if (bad) {
   console.error(`[fail] 支持库表与 cstackgui.h 不一致（${bad} 条）`);
