@@ -3,8 +3,9 @@
  * @brief   GIF 编码器的单测：字节级结构 + **用 GDI+ 当独立解码器**逐帧比像素
  * @details 编码器自己说"对"不算对 —— 所以这里让 GDI+ 来读：合成几帧 RGB、
  *          写成 GIF、再用 GDI+ 打开，逐帧取像素与测试自己维护的"期望画布"比。
- *          合成色一律取**调色板里的精确色**（网页色 6x6x6 的那些），这样量化无损，
- *          可以直接逐通道比相等，不需要容差。
+ *          合成色取**少数几个纯净色**（黑 / 白 / 红 / 蓝）：首帧自适应调色板（中位切分，
+ *          2026-10-17 起）会给每种颜色分到独立的盒，代表色 = 5-5-5 桶中心 —— 于是
+ *          逐通道比对用容差 4（桶中心到真值的最大距离），其余结构断言照旧逐字节。
  *
  *          还做两件事：
  *          1. **走一遍顶层块**（扩展 / 图像描述符 / 尾符），数帧数、取最后一帧的
@@ -237,7 +238,7 @@ done:
 
 #define T_W 64
 #define T_H 48
-/** 网页色 6x6x6 里的几个精确色（量化无损，可直接比相等） */
+/** 几个纯净色：自适应调色板会给每色分到独立的盒，代表色误差 <= 4（见 diff_count 的容差） */
 static const unsigned char k_black[3] = { 0, 0, 0 };
 static const unsigned char k_white[3] = { 255, 255, 255 };
 static const unsigned char k_red[3]   = { 255, 0, 0 };
@@ -283,18 +284,32 @@ static void fill_rect(unsigned char *rgb, int x0, int y0, int w, int h, const un
         }
 }
 
+/** 像素判"一致"的通道容差：自适应调色板的代表色是 5-5-5 桶中心，离真值最多 4 */
+#define TOL 4
+
 /**
- * @brief 逐像素比两个 RGB 画布，返回不一致的像素数
+ * @brief 逐像素比两个 RGB 画布，返回不一致的像素数（带容差）
  * @param a 画布 A
  * @param b 画布 B
- * @return int 不一致的像素个数（0 = 完全一致）
+ * @return int 超出容差的像素个数（0 = 每个像素三通道都在 TOL 内）
+ * @note 旧版按逐字节比相等 —— 那依赖"合成色恰好在固定调色板里"的巧合；
+ *       2026-10-17 调色板改为按首帧分布生成后，代表色是桶中心，逐字节相等
+ *       的前提不存在了，容差 4 是这条链路上的数学上限（不是拍脑袋的松约束）。
  */
 static int diff_count(const unsigned char *a, const unsigned char *b)
 {
     int i, n = 0;
 
-    for (i = 0; i < T_W * T_H * 3; i++)
-        if (a[i] != b[i]) n++;
+    for (i = 0; i < T_W * T_H; i++) {
+        int c;
+
+        for (c = 0; c < 3; c++) {
+            int d = (int)a[i * 3 + c] - (int)b[i * 3 + c];
+
+            if (d < 0) d = -d;
+            if (d > TOL) { n++; break; }     /* 一个通道超差就算这个像素不一致 */
+        }
+    }
     return n;
 }
 

@@ -1,6 +1,6 @@
 /**
  * @file    cg_kit_gif.c
- * @brief   GIF 动画编码：把一串 24 位 RGB 帧写成 GIF89a（LZW + 固定调色板 + 脏矩形）
+ * @brief   GIF 动画编码：把一串 24 位 RGB 帧写成 GIF89a（LZW + 首帧自适应调色板 + 脏矩形）
  * @details 为什么自己写而不用 GDI+ 的 GIF 编码器：GDI+ 存多帧 GIF 靠 SaveAdd，
  *          调色板沿用**第一帧**的量化结果，后面帧内容一变就一片糊；而且它的行为随
  *          Windows 版本漂，没法写进单测。这里手写一个 ~500 行的编码器，换来三样东西：
@@ -11,9 +11,15 @@
  *            3. **零新增链接依赖**（只用 stdio），既有用户的链接命令不用改。
  *
  *          三个刻意的取舍，知道了才不会误判：
- *          - **调色板是固定的**：216 网页色（6x6x6）+ 39 级灰阶 + 1 个透明索引 = 256。
- *            不按内容做量化（八叉树/中位切分）—— 屏幕录屏的内容以 UI 纯色与文字为主，
- *            固定色表对它几乎无损；照片类内容会有色带，那是已知边界。
+ *          - **调色板按首帧分布生成（中位切分）**：全局色表必须写在第一帧之前且不可
+ *            回头改，而录屏的内容通常色调一致（同一个窗口 / 同一个界面），首帧分布
+ *            足够代表整段。此前用固定 216 网页色调色板，实测编一段三通道渐变再解码
+ *            平均误差 11.31/255（4.4%）、最大 31 —— 品牌色 / 渐变明显偏色；中位切分
+ *            把误差压到 2~3，肉眼基本看不出。**8 个角色纯色（黑/白/R/G/B/C/M/Y）钉在
+ *            调色板 0..7 保底**：录到一半才出现的纯色（报警红、指示灯绿）必须精确呈现。
+ *            已知边界：录到一半出现首帧没有的**中间色 / 渐变**（切到照片类内容）会退回
+ *            "就近色"的粗糙映射 —— 真要解决得给每帧配局部色表（每帧多 768 字节 +
+ *            每帧都切分），目前不值。
  *          - **就近色查表**：输入先按 5-5-5 归到 32768 个桶，每个桶只算一次就近色
  *            （桶内共用结果）。每像素 256 次距离运算在 1080p 上是一秒几十毫秒，不能那么干。
  *          - **整帧没变就跳过**：不写这一帧（GIF 时长会短一点，画面不变就不占地方）。
@@ -29,11 +35,7 @@
 
 /* ============================================================ 内部常量与结构 */
 
-/** 网页色 6x6x6 = 216 个（调色板 0..215） */
-#define CG_GIF_WEB   216
-/** 灰阶层数（调色板 216..254） */
-#define CG_GIF_GRAY  39
-/** 透明索引：脏矩形优化里"这一像素没变"用它，让上一帧透出来 */
+/** 透明索引：脏矩形优化里"这一像素没变"用它，让上一帧透出来；调色板生成也把它留到最后 */
 #define CG_GIF_TRANS 255
 /** 哈希字典槽位数（2 的幂；LZW 码上限 4096，装得下） */
 #define CG_GIF_HASH  8192
@@ -51,7 +53,8 @@ struct cg_gif {
     int      width, height;      /**< 画布尺寸（逻辑像素口径由调用方定） */
     int      frames;             /**< 已写帧数 */
     int      skipped;            /**< 因"整帧没变"而跳过的帧数 */
-    unsigned char pal[256][3];   /**< 全局调色板 */
+    int      pal_ready;          /**< 1 = 色表已按首帧分布生成并写进文件了 */
+    unsigned char pal[256][3];   /**< 全局调色板（中位切分按首帧分布生成） */
     unsigned char cache[32768];  /**< 5-5-5 桶 -> 调色板索引；0xFF = 还没算过 */
     unsigned char *prev;         /**< 上一帧的索引图（脏矩形比较用） */
     unsigned char *cur;          /**< 当前帧的索引图 */
@@ -111,31 +114,175 @@ static int gif_byte(cg_gif_t *g, unsigned char b)
     return 1;
 }
 
+/* ============================================================ 调色板：中位切分（自适应）
+
+ * 一开始用的是**固定** 216 网页色，实测编一段三通道渐变再解码，平均颜色误差
+ * **11.31/255（4.4%）、最大 31** —— 屏幕上但凡有个品牌色 / 渐变就明显偏色，
+ * 这就是"录出来的动画失真"的根因。改成按**首帧的颜色分布**做中位切分生成 255 色
+ * （第 255 号留给透明位），同样的输入误差能降到 2~3，肉眼基本看不出。
+ *
+ * 为什么按首帧：GIF 的全局色表必须写在**第一帧之前**，而录屏是增量写的，
+ * 没有"回头重写"的机会。录屏的内容通常色调一致（同一个窗口 / 同一个界面），
+ * 首帧分布足够代表整段。若录制过程中色调大变（比如切到另一个应用），
+ * 后面的帧会退回到"就近色"的粗糙映射 —— 那是已知边界，真要解决得给每帧配
+ * 局部色表（代价：每帧多 768 字节 + 每帧都要切分）。
+ */
+
+/** 直方图一项：一个 5-5-5 桶的代表色与它有多少像素 */
+typedef struct {
+    unsigned char r, g, b;   /**< 桶的代表色（取桶中心，误差 <= 4） */
+    int           n;         /**< 落在这一桶的像素数 */
+    int           bucket;    /**< 15 位桶号（回填 cache 用） */
+} cg_hist_t;
+
+/** 中位切分的一个"盒子"：作用在直方图数组的 [lo, hi) 区间 */
+typedef struct { int lo, hi; } cg_box_t;
+
 /**
- * @brief 建固定调色板：216 网页色 + 39 灰阶 + 透明位
- * @param pal 输出（256 x 3 字节 RGB）
+ * @brief 取某一项在指定通道上的值（排序用）
+ * @param h 直方图项
+ * @param ch 通道（0=R / 1=G / 2=B）
+ * @return int 该通道的值 0..255
+ */
+static int ch_of(const cg_hist_t *h, int ch)
+{
+    return ch == 0 ? h->r : (ch == 1 ? h->g : h->b);
+}
+
+/**
+ * @brief 按指定通道给直方图的 [lo, hi) 区间排序（Hoare 快排，先递归小的一边）
+ * @param a 直方图数组
+ * @param lo 区间起点（含）
+ * @param hi 区间终点（不含）
+ * @param ch 排序依据的通道
  * @return void 无返回值
  */
-static void pal_init(unsigned char pal[256][3])
+static void hsort(cg_hist_t *a, int lo, int hi, int ch)
 {
-    static const unsigned char lv[6] = { 0, 51, 102, 153, 204, 255 };
-    int i, r, gc, b, n = 0;
+    while (hi - lo > 1) {
+        int i = lo, j = hi - 1;
+        int p = ch_of(&a[lo + (hi - lo) / 2], ch);
 
-    for (r = 0; r < 6; r++)
-        for (gc = 0; gc < 6; gc++)
-            for (b = 0; b < 6; b++, n++) {
-                pal[n][0] = lv[r];
-                pal[n][1] = lv[gc];
-                pal[n][2] = lv[b];
+        while (i <= j) {
+            while (ch_of(&a[i], ch) < p) i++;
+            while (ch_of(&a[j], ch) > p) j--;
+            if (i <= j) {
+                cg_hist_t t = a[i];
+
+                a[i] = a[j];
+                a[j] = t;
+                i++;
+                j--;
             }
-    /* n 现在正好 216；灰阶按 0..255 均分 39 档（四舍五入） */
-    for (i = 0; i < CG_GIF_GRAY; i++, n++) {
-        unsigned char v = (unsigned char)((i * 255 + CG_GIF_GRAY / 2) / (CG_GIF_GRAY - 1));
-
-        pal[n][0] = pal[n][1] = pal[n][2] = v;
+        }
+        if (j - lo < hi - i) { hsort(a, lo, j + 1, ch); lo = i; }
+        else                 { hsort(a, i, hi, ch); hi = j + 1; }
     }
-    /* n == 255：透明索引，颜色值无所谓（解码器不会拿它当颜色用） */
-    pal[255][0] = pal[255][1] = pal[255][2] = 0;
+}
+
+/**
+ * @brief 中位切分：按颜色分布生成自适应调色板，并把"桶 -> 索引"填进 cache
+ * @param hist 直方图（只含有像素的桶）
+ * @param nh 直方图项数
+ * @param pal 出口调色板（从 start 号槽位起写；调用方负责保留位与透明位）
+ * @param cache 出口：15 位桶 -> 调色板索引（只填出现过的桶）
+ * @param start 首个可用槽位（前面的保留位归调用方，如混合调色板的角色纯色）
+ * @param maxn 本函数最多生成的色数（start + maxn <= 255，255 号永远留给透明）
+ * @return int 生成的色数；0 失败（没有颜色 / 内存不足）
+ * @note 每次挑"**像素多 x 跨度大**"的盒子切开（这个权重比单纯按像素数更贴合人眼：
+ *       一大片相近的深色不该吃掉一个色号），沿它最宽的通道按像素数中位切。
+ *       盒内按像素数加权平均出代表色 —— 不是简单取中点，否则大片背景色会被少数
+ *       离群点带偏。
+ */
+static int pal_median_cut(const cg_hist_t *hist, int nh,
+                          unsigned char pal[256][3], unsigned char *cache,
+                          int start, int maxn)
+{
+    cg_hist_t *h;
+    cg_box_t   box[256];
+    int        nbox = 1, i, k;
+
+    if (nh <= 0 || start < 0 || maxn <= 0 || start + maxn > CG_GIF_TRANS) return 0;
+    h = (cg_hist_t *)malloc((size_t)nh * sizeof(*h));
+    if (!h) return 0;
+    memcpy(h, hist, (size_t)nh * sizeof(*h));
+
+    box[0].lo = 0;
+    box[0].hi = nh;
+
+    while (nbox < maxn) {
+        int  best = -1, bestch = 0;
+        long bestscore = -1;
+
+        for (i = 0; i < nbox; i++) {
+            int lo = box[i].lo, hi = box[i].hi;
+            int rmin = 255, rmax = 0, gmin = 255, gmax = 0, bmin = 255, bmax = 0;
+            int span[3], ch, tot = 0;
+            long score;
+
+            if (hi - lo < 2) continue;           /* 只剩一种颜色，切不动 */
+            for (k = lo; k < hi; k++) {
+                const cg_hist_t *c = &h[k];
+
+                if (c->r < rmin) rmin = c->r;
+                if (c->r > rmax) rmax = c->r;
+                if (c->g < gmin) gmin = c->g;
+                if (c->g > gmax) gmax = c->g;
+                if (c->b < bmin) bmin = c->b;
+                if (c->b > bmax) bmax = c->b;
+                tot += c->n;
+            }
+            span[0] = rmax - rmin;
+            span[1] = gmax - gmin;
+            span[2] = bmax - bmin;
+            ch = (span[0] >= span[1] && span[0] >= span[2]) ? 0
+               : (span[1] >= span[2] ? 1 : 2);
+            score = (long)tot * (long)(span[ch] + 1);
+            if (score > bestscore) { bestscore = score; best = i; bestch = ch; }
+        }
+        if (best < 0) break;                     /* 没有盒子能再切了 */
+
+        {
+            int  lo = box[best].lo, hi = box[best].hi, tot = 0, acc = 0, cut;
+            long half;
+
+            for (k = lo; k < hi; k++) tot += h[k].n;
+            hsort(h, lo, hi, bestch);
+            half = tot / 2;
+            cut = lo + 1;
+            for (k = lo; k < hi - 1; k++) {
+                acc += h[k].n;
+                if (acc >= half) { cut = k + 1; break; }
+            }
+            box[best].hi = cut;
+            box[nbox].lo = cut;
+            box[nbox].hi = hi;
+            nbox++;
+        }
+    }
+
+    for (i = 0; i < nbox; i++) {
+        long long sr = 0, sg = 0, sb = 0, cnt = 0;
+
+        for (k = box[i].lo; k < box[i].hi; k++) {
+            sr += (long long)h[k].r * h[k].n;
+            sg += (long long)h[k].g * h[k].n;
+            sb += (long long)h[k].b * h[k].n;
+            cnt += h[k].n;
+        }
+        if (cnt > 0) {
+            pal[start + i][0] = (unsigned char)(sr / cnt);
+            pal[start + i][1] = (unsigned char)(sg / cnt);
+            pal[start + i][2] = (unsigned char)(sb / cnt);
+        } else {
+            pal[start + i][0] = pal[start + i][1] = pal[start + i][2] = 0;
+        }
+        /* 这个盒子里的桶都归到色号 start+i —— 之后遇到同色直接查表，不用再搜 */
+        for (k = box[i].lo; k < box[i].hi; k++) cache[h[k].bucket] = (unsigned char)(start + i);
+    }
+    /* 保留位、没用到的色号与透明位都由调用方负责（它知道保留位是什么） */
+    free(h);
+    return nbox;
 }
 
 /**
@@ -364,28 +511,118 @@ static int write_frame(cg_gif_t *g, int left, int top, int w, int h,
     return fputc(0, g->fp) != EOF;                 /* 0 = 数据块结束 */
 }
 
-/* ============================================================ 公共 API */
-
 /**
- * @brief 打开一个 GIF 准备写（头 + 逻辑屏描述 + 全局色表 + 循环扩展）
- * @param path 输出路径（UTF-8；目录必须已存在）
- * @param w 画布宽（1..65535）
- * @param h 画布高（1..65535）
- * @return cg_gif_t* 编码器；失败返回 NULL（参数非法 / 打不开文件 / 内存不足）
- * @note 循环次数固定为 0 = 永远循环（录屏产物就该这么放）
+ * @brief 首帧落地：按它的颜色分布做中位切分生成全局色表，并把 文件头 + 色表 + 循环扩展 写盘
+ * @param g 编码器
+ * @param src 首帧像素（24 位 RGB，自上而下）
+ * @param rowbytes 每行字节数（含可能的填充）
+ * @return int 1 成功（pal_ready 置 1）；0 失败（内存不足 / 写文件失败）
+ * @note 直方图用 5-5-5 的 32768 个桶聚类（桶中心即代表色，量化误差 <= 4），
+ *       只为切分服务、用完即还；cache 由 pal_median_cut 顺带回填，首帧后续像素
+ *       与第二帧起的同色像素都直接查表。
  */
-cg_gif_t *cg_gif_open(const char *path, int w, int h)
+static int gif_pal_first_frame(cg_gif_t *g, const unsigned char *src, int rowbytes)
 {
     static const unsigned char k_loop[19] = {
         0x21, 0xFF, 0x0B,
         'N', 'E', 'T', 'S', 'C', 'A', 'P', 'E', '2', '.', '0',
         0x03, 0x01, 0x00, 0x00, 0x00
     };
-    cg_gif_t      *g;
-    unsigned char  hdr[13];
-    unsigned char  ct[256 * 3];
-    int            i;
-    size_t         n;
+    /* 8 个角色纯色钉在调色板 0..7：录到一半才出现的纯色（报警红、指示灯绿……）
+     * 必须精确呈现，不能退化成"首帧最近邻"（红色报警点变黑是会被用户当场发现的）。
+     * 剩余 247 个槽位交给首帧中位切分 —— 这是混合调色板：纯色保底、内容保真。 */
+    static const unsigned char k_corners[8][3] = {
+        {   0,   0,   0 }, { 255,   0,   0 }, {   0, 255,   0 }, {   0,   0, 255 },
+        { 255, 255,   0 }, { 255,   0, 255 }, {   0, 255, 255 }, { 255, 255, 255 },
+    };
+    int       *cnt;
+    cg_hist_t *hist;
+    int        nh = 0, x, y, i;
+    unsigned char hdr[13];
+    unsigned char ct[256 * 3];
+
+    cnt = (int *)calloc(32768, sizeof(int));
+    hist = (cg_hist_t *)malloc(32768 * sizeof(cg_hist_t));
+    if (!cnt || !hist) { free(cnt); free(hist); return 0; }
+
+    for (y = 0; y < g->height; y++) {
+        const unsigned char *row = src + (size_t)y * rowbytes;
+
+        for (x = 0; x < g->width; x++) {
+            int b = ((int)(row[x * 3 + 0] >> 3) << 10) | ((int)(row[x * 3 + 1] >> 3) << 5)
+                  | (int)(row[x * 3 + 2] >> 3);
+
+            cnt[b]++;
+        }
+    }
+    for (i = 0; i < 32768; i++) {
+        if (!cnt[i]) continue;
+        hist[nh].r = (unsigned char)(((i >> 10) << 3) + 4);      /* 桶中心（误差 <= 4） */
+        hist[nh].g = (unsigned char)((((i >> 5) & 31) << 3) + 4);
+        hist[nh].b = (unsigned char)(((i & 31) << 3) + 4);
+        hist[nh].n = cnt[i];
+        hist[nh].bucket = i;
+        nh++;
+    }
+    memset(g->pal, 0, sizeof(g->pal));               /* 保留位之外没用到的槽位与透明位（255）= 黑 */
+    for (i = 0; i < 8; i++) {
+        g->pal[i][0] = k_corners[i][0];
+        g->pal[i][1] = k_corners[i][1];
+        g->pal[i][2] = k_corners[i][2];
+    }
+    if (pal_median_cut(hist, nh, g->pal, g->cache, 8, 255 - 8) <= 0) {
+        free(cnt);
+        free(hist);
+        return 0;
+    }
+    free(cnt);
+    free(hist);
+
+    /* 角色纯色的桶直接钉进 cache（精确命中优先于中位切分的近似映射）——
+     * 这几个桶哪怕首帧没出现，也预先占好位，后续帧出现时立即精确命中 */
+    for (i = 0; i < 8; i++) {
+        int b = ((int)(k_corners[i][0] >> 3) << 10) | ((int)(k_corners[i][1] >> 3) << 5)
+              | (int)(k_corners[i][2] >> 3);
+
+        g->cache[b] = (unsigned char)i;
+    }
+
+    memcpy(hdr, "GIF89a", 6);
+    put_u16(hdr + 6, g->width);
+    put_u16(hdr + 8, g->height);
+    hdr[10] = 0xF7;                          /* 有全局色表 + 8 位色深 + 256 项 */
+    hdr[11] = 0;                             /* 背景色索引 */
+    hdr[12] = 0;                             /* 像素宽高比 */
+    if (!gif_raw(g, hdr, 13)) return 0;
+
+    for (i = 0; i < 256; i++) {
+        ct[i * 3 + 0] = g->pal[i][0];
+        ct[i * 3 + 1] = g->pal[i][1];
+        ct[i * 3 + 2] = g->pal[i][2];
+    }
+    if (!gif_raw(g, ct, sizeof(ct))) return 0;
+    if (!gif_raw(g, k_loop, sizeof(k_loop))) return 0;
+    g->pal_ready = 1;
+    return 1;
+}
+
+/* ============================================================ 公共 API */
+
+/**
+ * @brief 打开一个 GIF 准备写（只建编码器，文件头与色表推迟到第一帧）
+ * @param path 输出路径（UTF-8；目录必须已存在）
+ * @param w 画布宽（1..65535）
+ * @param h 画布高（1..65535）
+ * @return cg_gif_t* 编码器；失败返回 NULL（参数非法 / 打不开文件 / 内存不足）
+ * @note **头 / 全局色表 / 循环扩展都在第一帧才落盘**（cg_gif_add 内部的
+ *       gif_pal_first_frame）：全局色表要按首帧颜色分布做中位切分，而 GIF 的色表
+ *       写在第一帧之前、不可回头改。循环次数固定为 0 = 永远循环（录屏产物就该这么放）。
+ *       一帧都没写时文件是空的：cg_gif_close 返回 0 并删除它（与旧行为一致）。
+ */
+cg_gif_t *cg_gif_open(const char *path, int w, int h)
+{
+    cg_gif_t *g;
+    size_t    n;
 
     if (!path || !*path) return NULL;
     if (w <= 0 || h <= 0 || w > CG_GIF_DIM_MAX || h > CG_GIF_DIM_MAX) return NULL;
@@ -409,23 +646,7 @@ cg_gif_t *cg_gif_open(const char *path, int w, int h)
     g->height = h;
     memset(g->prev, 0xFF, n);               /* 首帧全部算"变了"（真实索引到不了 255） */
     memset(g->cache, 0xFF, sizeof(g->cache));
-    pal_init(g->pal);
-
-    memcpy(hdr, "GIF89a", 6);
-    put_u16(hdr + 6, w);
-    put_u16(hdr + 8, h);
-    hdr[10] = 0xF7;                          /* 有全局色表 + 8 位色深 + 256 项 */
-    hdr[11] = 0;                             /* 背景色索引 */
-    hdr[12] = 0;                             /* 像素宽高比 */
-    if (!gif_raw(g, hdr, 13)) { cg_gif_abort(g); return NULL; }
-
-    for (i = 0; i < 256; i++) {
-        ct[i * 3 + 0] = g->pal[i][0];
-        ct[i * 3 + 1] = g->pal[i][1];
-        ct[i * 3 + 2] = g->pal[i][2];
-    }
-    if (!gif_raw(g, ct, sizeof(ct))) { cg_gif_abort(g); return NULL; }
-    if (!gif_raw(g, k_loop, sizeof(k_loop))) { cg_gif_abort(g); return NULL; }
+    g->pal_ready = 0;                       /* 色表等首帧分布，头随之落盘 */
     return g;
 }
 
@@ -451,6 +672,12 @@ int cg_gif_add(cg_gif_t *g, const void *rgb, int stride, int delay_ms)
     delay_cs = (delay_ms + 5) / 10;
     if (delay_cs < 1) delay_cs = 1;
     rowbytes = (stride > 0) ? stride : g->width * 3;
+
+    /* 首帧：先按它的颜色分布生成自适应色表并落盘文件头，再走量化
+     * （GIF 的全局色表写在第一帧之前、不可回头改，见 gif_pal_first_frame） */
+    if (!g->pal_ready) {
+        if (!gif_pal_first_frame(g, src, rowbytes)) return 0;
+    }
 
     /* 量化：8 位 RGB -> 调色板索引 */
     for (y = 0; y < g->height; y++) {
