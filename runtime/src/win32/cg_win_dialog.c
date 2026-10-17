@@ -263,7 +263,7 @@ static void tmpl_item(const WORD *base, WORD **p, WORD cls_atom, DWORD style, WO
  * @param lp 附加参数（WM_INITDIALOG 时是 input_ctx_t 指针）
  * @return INT_PTR TRUE = 已处理，FALSE = 交给系统
  */
-static INT_PTR CALLBACK input_dlg_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
+static INT_PTR CALLBACK InputDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 {
     input_ctx_t *ctx = (input_ctx_t *)GetWindowLongPtrW(dlg, GWLP_USERDATA);
 
@@ -423,7 +423,7 @@ int cg_input_box(cg_widget_t *parent, const char *title, const char *prompt,
     ctx.cap    = cap;
     ctx.ok     = 0;
 
-    r = DialogBoxIndirectParamW(GetModuleHandleW(NULL), dt, owner, input_dlg_proc, (LPARAM)&ctx);
+    r = DialogBoxIndirectParamW(GetModuleHandleW(NULL), dt, owner, InputDlgProc, (LPARAM)&ctx);
 
     free(wt);
     free(wpr);
