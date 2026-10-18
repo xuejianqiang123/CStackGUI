@@ -138,6 +138,14 @@ echo   canvas e2e smoke (real window, real events)
 node tools\check-canvas-e2e.mjs
 if errorlevel 1 exit /b 1
 
+rem 套件工程的静态契约（examples 合并方案 P0 起）：套件是 N 个原工程合并成的多页签工程，
+rem 合并期最容易在这里漏 —— .cgui 的回调名在模块里没登记（运行时才报错）、反向死绑定、
+rem 套件内 id 撞名、id 前缀与模块不符。自检能兜住一部分，但要跑起来才知道；
+rem 这里静态就拦住，且 suites\ 不存在时脚本自己跳过（合并未开始的仓库）。
+echo   suite contract (static: events/bindings/id-prefix)
+node tools\check-suite.mjs
+if errorlevel 1 exit /b 1
+
 rem 骨架语言判据（designer\electron\skeleton-lang.mjs）：首次导出问 C/C++ 这条规则的
 rem "不破坏既有骨架"承诺由它兜 —— 判据写坏、另一套源文件的写保护被绕过，这里立刻红。
 echo   skeleton language guard (C or C++, never both)

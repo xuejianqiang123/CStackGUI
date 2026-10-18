@@ -35,6 +35,20 @@ const listExt = (dir, ext) =>
     ? fs.readdirSync(dir).filter((f) => f.toLowerCase().endsWith(ext)).sort().map((f) => path.join(dir, f))
     : [];
 
+/** 递归收集工程源码（模块化工程的 modules\ 子目录要进来）。
+ *  排除 lib\ —— 那是 cgbuild 自己放中间产物（.o/.d）的目录，绝不能递归进去。
+ *  平铺工程（没有子目录）扫出来与 listExt 一字不差，行为不变。 */
+function listSrcDeep(dir, ext, out = []) {
+  if (!isDir(dir)) return out;
+  for (const name of fs.readdirSync(dir).sort()) {
+    if (name === "lib" || name === "node_modules") continue;
+    const full = path.join(dir, name);
+    if (isDir(full)) listSrcDeep(full, ext, out);
+    else if (name.toLowerCase().endsWith(ext)) out.push(full);
+  }
+  return out;
+}
+
 /* ---------------------------------------------------------------- include 展开（F3）
  * 语义与 runtime 的 cg_doc_expand_includes 同一套（pick / 三张表合并主文档优先 /
  * id 冲突报错 / 循环与重复引用跳过）；改这里请同步改那边。差异仅两点：
@@ -403,7 +417,9 @@ async function buildApp(ctx, root, tk, appDir, release) {
 
   /* 增量编译：与运行时同一套 -MMD 精确增量（upToDate）——
      工程自己的 .h 或公共头改动只波及真正引用它的源文件 */
-  const sources = [...listExt(appDir, ".c"), ...CXX_EXTS.flatMap((e) => listExt(appDir, e))];
+  /* 递归收集（listSrcDeep）：模块化工程把各工具放 modules\ 子目录；
+     平铺工程扫出来与原来一字不差。lib\ 是本工具的产物目录，被排除在外。 */
+  const sources = [...listSrcDeep(appDir, ".c"), ...CXX_EXTS.flatMap((e) => listSrcDeep(appDir, e))];
   const objs = [];
   for (const src of sources) {
     const base = path.basename(src, path.extname(src));
