@@ -45,6 +45,27 @@
 - 下一块：headless .cgui → parse → store → serialize 的性质测试（不依赖 Electron/DOM）；
 - 再下一块（需要时）：Electron e2e 骨架（ Playwright ），判据 = 出现"只能人肉点出来"的 bug 时才投入。
 
+## G2 收口（2026-10-18：行为冒烟落地，e2e 判据被"既成事实"提前满足）
+
+**为什么不等到"出现人肉 bug"才做**：到 G5 收口时，UI 接线层已积压 **5 批改动零运行时验证**
+（G1 状态内核 / G3' 预演 / G4 导入 / G4' 高亮 / G5 原语）—— tsc 与 vite build 只证明
+"类型对、能打包"，证明不了"行为对"。这就是判据里"只能人肉点出来"的**存量**已经够大。
+
+**交付**（`designer/electron/main.mjs` 的 `--smoke` 分支 + `tools/check-canvas-e2e.mjs`，
+挂进 check-format）：
+- 起**真 Electron 窗口**（先 vite build 保证测当前源码），在渲染层驱动**真实事件**：
+  指针序列点调色板（调色板是 onPointerUp 触发 onAdd，合成 click 到不了；range 滑杆必须走
+  原型原生 setter，否则 React 吞 onChange）、真 KeyboardEvent 敲 Ctrl+Z、切页签；
+- 13 项行为断言：启动渲染 / 空文档 / 加控件 + 自动选中 / 撤销 / 预演开关 + 双滑杆 /
+  拖滑杆画布窗口真的变宽 / 读数 / 支持库关键词预置；
+- 探针只碰 DOM 与真实事件、不 import 内部实现 —— 是行为测试不是白盒测试；
+- **变异测试验过"会红"**：临时破坏 Canvas 的 sim 尺寸接线，冒烟当场 12/13 红 + 退出码 1
+  （只能绿的冒烟是绿灯装饰，这条纪律与 check-canvas-ops 首跑抓真缺陷同源）。
+- 已知边界：探针用语义化选择器（.app-window / .widget[data-node-id] / .palette-item /
+  .tab / .sim-slider），改这些类名会红着提醒同步；不覆盖拖拽移动、对话框、文件读写
+  （那些要么靠 roundtrip 门禁、要么需要真实文件系统交互，留待出现对应需求）。
+- **不引 Playwright**：判据不变（规模不匹配 + 零新依赖纪律）；electron.exe 直接起。
+
 ## G3 布局体系 —— **取消，被既有设计覆盖**（2026-10-18 校准）
 
 - 先验证再动刀的红利：`.codebuddy/plans/grow-layout.md` 是逐字契约级设计（带分配算法、

@@ -1094,6 +1094,143 @@ const buildCliArgs = (() => {
   return i < 0 ? null : process.argv.slice(i + 1);
 })();
 
+/* ------------------------------------------------ 画布行为冒烟：--smoke
+ * CStackGUI.exe --smoke（或 electron . --smoke）
+ * 起真窗口、加载真渲染层，然后在渲染层里跑一段**自包含**探针（点调色板 / 敲键盘 /
+ * 切页签 / 拖预演滑杆），断言打成 [smoke] 行、按退出码汇报。
+ *
+ * 为什么值得（2026-10-18 路线图 G2）：画布的 UI 接线层此前只有 tsc 与 vite build 把关
+ * —— 类型全对、行为全错照样发版。store/命令/键盘/页签/预演五批改动零运行时验证，
+ * 这是画布自动化验证从"模型层"（check-canvas-ops，纯逻辑）推到"行为层"的第一块。
+ *
+ * 探针只碰 DOM 与真实事件（PointerEvent / KeyboardEvent / input），不 import 任何
+ * 内部实现 —— 是行为测试，不是白盒测试。选择器全部用有稳定语义的钩子：
+ *   .app-window（画布根）/ .widget[data-node-id]（控件）/ .palette-item（调色板）/
+ *   .tab（页签）/ .toolbar .sim-slider（预演滑杆）。
+ * 入口是 tools\check-canvas-e2e.mjs（先 vite build 再起窗，挂 check-format）。 */
+const smokeMode = process.argv.includes("--smoke");
+
+const SMOKE_PROBE = async () => {
+  const out = [];
+  const t = (name, cond) => out.push({ name, ok: !!cond });
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => [...document.querySelectorAll(s)];
+  const widgetCount = () => $$(".app-window .widget[data-node-id]").length;
+
+  /* 真实指针序列（pointerdown + 同位 pointerup）：调色板是 onPointerUp 触发 onAdd 的，
+   * 合成 .click() 到不了它。setPointerCapture 对合成指针会抛异常 —— 按 DOM 规范，
+   * 监听器里的异常只上报 window.onerror、不冒泡出 dispatchEvent，onAdd 照常触发。 */
+  const tap = (el) => {
+    const r = el.getBoundingClientRect();
+    const o = {
+      bubbles: true, cancelable: true, composed: true,
+      clientX: r.left + r.width / 2, clientY: r.top + r.height / 2,
+      pointerId: 1, isPrimary: true, button: 0, buttons: 1,
+    };
+    el.dispatchEvent(new PointerEvent("pointerdown", o));
+    el.dispatchEvent(new PointerEvent("pointerup", { ...o, buttons: 0 }));
+  };
+  /* range 滑杆必须走原型上的原生 setter：React 在自己的 value setter 里记了"当前值"，
+   * 直接 el.value = x 会被它当成"没变"而吞掉 onChange（react-testing 的经典坑）。 */
+  const setRange = (el, v) => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+    setter.call(el, String(v));
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  /* 1. 启动基线：画布渲染出来、空文档 0 个控件 */
+  t("启动后画布渲染（.app-window 在）", !!$(".app-window"));
+  t("空文档画布 0 个控件", widgetCount() === 0);
+
+  /* 2. 点调色板加控件：store.edit → 命令 → DOM（G1 全链路 + useSyncExternalStore） */
+  const paletteBtn = (label) =>
+    $$(".palette-item").find((b) => b.querySelector(".palette-label")?.textContent.trim() === label);
+  const btn = paletteBtn("按钮");
+  t("调色板有「按钮」项", !!btn);
+  if (btn) {
+    tap(btn);
+    await sleep(150);
+    t("点调色板后画布多出一个控件", widgetCount() === 1);
+    t("新控件自动选中（.selected）", $$(".app-window .widget.selected").length === 1);
+
+    /* 3. Ctrl+Z 一步撤销回 0（快照栈 + 键盘接线） */
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }));
+    await sleep(150);
+    t("Ctrl+Z 撤销后控件消失", widgetCount() === 0);
+  }
+
+  /* 4. 预演开关与滑杆（G3'-UI）：按钮切出两条滑杆，拖动真的改变画布窗口尺寸 */
+  const previewBtn = $$(".toolbar button").find((b) => b.textContent.includes("预演"));
+  t("工具栏有「预演」按钮", !!previewBtn);
+  if (previewBtn) {
+    t("预演关时没有滑杆", $$(".toolbar .sim-slider").length === 0);
+    previewBtn.click();
+    await sleep(150);
+    const sliders = $$(".toolbar .sim-slider");
+    t("开预演出两条滑杆（宽/高）", sliders.length === 2);
+    if (sliders.length === 2) {
+      const before = $(".app-window").style.width;
+      setRange(sliders[0], 150);
+      await sleep(150);
+      t("拖宽滑杆后画布窗口变宽", $(".app-window").style.width !== before);
+      t("预演读数显示模拟尺寸", /×/.test($(".toolbar .sim-readout")?.textContent ?? ""));
+    }
+    previewBtn.click(); /* 关回去，免得影响后面的断言 */
+    await sleep(100);
+  }
+
+  /* 5. 支持库页签 + 选中关键词预置（G4'） */
+  if (btn) {
+    tap(btn);
+    await sleep(150);
+    const tab = $$(".tab").find((b) => b.textContent.includes("支持库"));
+    t("有「支持库」页签", !!tab);
+    if (tab) {
+      tab.click();
+      await sleep(200);
+      const kw = $(".sup-search input");
+      t("选中按钮后支持库预置了关键词", !!kw && kw.value.length > 0);
+    }
+  }
+
+  return out;
+};
+
+async function runCanvasSmoke() {
+  const done = (code) => app.exit(code);
+  const wc = win?.webContents;
+  if (!wc) { console.log("[smoke] FAIL 窗口没创建"); done(1); return; }
+  /* 等真 UI（prod 先画启动页再切 dist/index.html；最多 30s） */
+  const deadline = Date.now() + 30000;
+  for (;;) {
+    if (!win || win.isDestroyed()) { console.log("[smoke] FAIL 窗口在探针前被关闭"); done(1); return; }
+    let ready = false;
+    try { ready = await wc.executeJavaScript(`!!document.querySelector(".app-window")`); } catch { /* 页面切换中，继续等 */ }
+    if (ready) break;
+    if (Date.now() > deadline) { console.log("[smoke] FAIL 真 UI 30 秒内没就绪"); done(1); return; }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  let rows;
+  try {
+    /* 用字符串 IIFE 而不是直接把函数交给 executeJavaScript：本环境（Electron 38 +
+     * 软件 GL）对函数参数走结构化克隆会抛 "An object could not be cloned"（2026-10-18
+     * 实测）。toString + 求值等价且不依赖参数克隆；探针返回的仍是纯数据数组。 */
+    rows = await wc.executeJavaScript(`(${SMOKE_PROBE.toString()})()`);
+  } catch (e) {
+    console.log("[smoke] FAIL 探针在渲染层抛异常：" + String(e));
+    done(1);
+    return;
+  }
+  let pass = 0;
+  for (const r of rows ?? []) {
+    if (r.ok) { pass += 1; console.log(`[smoke] ok   ${r.name}`); }
+    else console.log(`[smoke] FAIL ${r.name}`);
+  }
+  console.log(`[smoke] ${pass}/${(rows ?? []).length} 通过`);
+  done((rows ?? []).length > 0 && pass === (rows ?? []).length ? 0 : 1);
+}
+
 app.whenReady().then(async () => {
   log("app.whenReady 触发（Chromium 已就绪）");
   if (buildCliArgs) {
@@ -1111,6 +1248,7 @@ app.whenReady().then(async () => {
     return;
   }
   createWindow();
+  if (smokeMode) void runCanvasSmoke();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

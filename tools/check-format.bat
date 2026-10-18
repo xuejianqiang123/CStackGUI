@@ -141,6 +141,16 @@ echo   canvas store/ops contract (headless, journal discipline)
 node tools\check-canvas-ops.mjs
 if errorlevel 1 exit /b 1
 
+rem 画布行为冒烟（路线图 G2）：起真 Electron 窗口，在渲染层里驱动真实事件
+rem （点调色板 / 敲键盘 / 切页签 / 拖预演滑杆），把 UI 接线层的行为钉住。
+rem store/命令/键盘/页签/预演五批改动此前只有 tsc 与 vite build 把关 ——
+rem 类型全对、行为全错照样发版（2026-10-18 二轮会诊点名的最大盲区）。
+rem 本步先 vite build 再起窗，保证测的是当前源码；designer 源码或 electron
+rem 不在时脚本自己跳过（发布包环境无画布源码，与 check-support 同口径）。
+echo   canvas e2e smoke (real window, real events)
+node tools\check-canvas-e2e.mjs
+if errorlevel 1 exit /b 1
+
 rem 骨架语言判据（designer\electron\skeleton-lang.mjs）：首次导出问 C/C++ 这条规则的
 rem "不破坏既有骨架"承诺由它兜 —— 判据写坏、另一套源文件的写保护被绕过，这里立刻红。
 echo   skeleton language guard (C or C++, never both)
