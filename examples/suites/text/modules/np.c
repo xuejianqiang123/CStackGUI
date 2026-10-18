@@ -433,7 +433,7 @@ static void on_file_save(cg_widget_t *self, cg_event_t ev, void *user)
 {
     const char *name = cg_action_name(self);
     cg_app_t   *app  = cg_app_of(self);
-    int         force_dialog = (name && strcmp(name, "save_as") == 0);
+    int         force_dialog = (name && strcmp(name, "np_save_as") == 0);
 
     (void)ev;
     (void)user;

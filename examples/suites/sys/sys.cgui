@@ -1,0 +1,1832 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "sys 套件",
+    "width": 1000,
+    "height": 640,
+    "bg": "#F3EDF7",
+    "info": {
+      "product": "CStackGUI sys 套件",
+      "desc": "原 shottool / traytool / syspanel / envsnap / settings 合并（每工具一页签）",
+      "comments": "由 tools\\suite-merge.mjs 合并生成",
+      "version": "1.0.0.0",
+      "author": "CStackGUI"
+    },
+    "events": {
+      "close": "suite_close",
+      "tray": "suite_tray",
+      "keydown": "suite_keydown",
+      "size": "suite_size",
+      "move": "suite_move",
+      "show": "suite_show",
+      "hide": "suite_hide"
+    }
+  },
+  "widgets": [
+    {
+      "id": "sv_pages",
+      "type": "tabs",
+      "rect": {
+        "x": 6,
+        "y": 6,
+        "w": 988,
+        "h": 628
+      },
+      "items": [
+        "shottool",
+        "traytool",
+        "syspanel",
+        "envsnap",
+        "settings"
+      ],
+      "children": [
+        {
+          "id": "sh_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 416,
+            "w": 600,
+            "h": 24
+          },
+          "items": [
+            "就绪",
+            "热键 Ctrl+Alt+A",
+            "截图 0 张"
+          ],
+          "page": 0
+        },
+        {
+          "id": "sh_lab_title",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 10,
+            "w": 576,
+            "h": 22
+          },
+          "text": "QQ 风格截图工具：托盘常驻 · 全局热键 · 框选 · 标注 · 一键复制",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 10,
+            "bold": true
+          },
+          "page": 0
+        },
+        {
+          "id": "sh_lab_tip1",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 38,
+            "w": 576,
+            "h": 20
+          },
+          "text": "按 Ctrl+Alt+A（或「开始截图」/ 左键点托盘图标）→ 屏幕上按住拖动框选 → 松手进标注",
+          "page": 0
+        },
+        {
+          "id": "sh_lab_tip2",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 60,
+            "w": 576,
+            "h": 20
+          },
+          "text": "标注条在选区下方：「完成」= 存 PNG + 复制到剪贴板；Esc = 取消；「贴图」把结果钉在屏幕上",
+          "page": 0
+        },
+        {
+          "id": "sh_btn_shot",
+          "type": "button",
+          "rect": {
+            "x": 12,
+            "y": 88,
+            "w": 160,
+            "h": 32
+          },
+          "text": "开始截图(&S)",
+          "action": "sh_shot",
+          "hint": "等价于全局热键 Ctrl+Alt+A（热键被占用时的兜底入口）",
+          "page": 0
+        },
+        {
+          "id": "sh_btn_quit",
+          "type": "button",
+          "rect": {
+            "x": 180,
+            "y": 88,
+            "w": 96,
+            "h": 32
+          },
+          "text": "退出(&Q)",
+          "action": "sh_quit",
+          "page": 0
+        },
+        {
+          "id": "sh_btn_rec",
+          "type": "button",
+          "rect": {
+            "x": 284,
+            "y": 88,
+            "w": 110,
+            "h": 32
+          },
+          "text": "录屏 GIF(&R)",
+          "action": "sh_rec",
+          "hint": "等价于全局热键 Ctrl+Alt+G：先框一块区域，松手就开始录，点「停止」存成动画 GIF",
+          "page": 0
+        },
+        {
+          "id": "sh_lab_fps",
+          "type": "label",
+          "rect": {
+            "x": 402,
+            "y": 94,
+            "w": 40,
+            "h": 22
+          },
+          "text": "帧率",
+          "hint": "录屏帧率：帧率越高越流畅，文件也越大（静止画面靠脏矩形优化，几乎不涨）",
+          "page": 0
+        },
+        {
+          "id": "sh_cbo_fps",
+          "type": "combo",
+          "rect": {
+            "x": 442,
+            "y": 90,
+            "w": 70,
+            "h": 28
+          },
+          "items": [
+            "5 fps",
+            "10 fps",
+            "15 fps",
+            "20 fps"
+          ],
+          "value": 1,
+          "hint": "默认 10 fps；录屏开始时读一次，录制中改不了（改了也只能影响之后的段）",
+          "page": 0
+        },
+        {
+          "id": "sh_lst_log",
+          "type": "listbox",
+          "rect": {
+            "x": 12,
+            "y": 130,
+            "w": 576,
+            "h": 278
+          },
+          "hint": "每一步都有日志：注册热键 / 抓屏 / 框选尺寸 / 存图路径 / 失败原因",
+          "page": 0
+        },
+        {
+          "id": "sh_cv_shot",
+          "type": "canvas",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 600,
+            "h": 400
+          },
+          "visible": false,
+          "style": {
+            "bg": "#FFFFFF",
+            "font": "Microsoft YaHei UI",
+            "size": 12
+          },
+          "hint": "截图背景 + 标注都画在它身上：背景图 = 刚抓的屏幕，标注 = 录制的绘制命令",
+          "events": {
+            "mousedown": "sh_on_shot_mouse",
+            "mousemove": "sh_on_shot_mouse",
+            "mouseup": "sh_on_shot_mouse",
+            "dblclick": "sh_on_shot_mouse"
+          },
+          "page": 0
+        },
+        {
+          "id": "sh_lab_mode",
+          "type": "label",
+          "rect": {
+            "x": 8,
+            "y": 8,
+            "w": 584,
+            "h": 22
+          },
+          "text": "框选 / 标注 / 贴图三种状态下显示不同提示",
+          "visible": false,
+          "hint": "overlay 提示行：必须排在 cv_shot **之后**（后创建的窗口才压在画布上面）",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "bold": true
+          },
+          "page": 0
+        },
+        {
+          "id": "sh_lab_tool",
+          "type": "label",
+          "rect": {
+            "x": 8,
+            "y": 404,
+            "w": 32,
+            "h": 24
+          },
+          "text": "工具",
+          "visible": false,
+          "page": 0
+        },
+        {
+          "id": "sh_cbo_tool",
+          "type": "combo",
+          "rect": {
+            "x": 44,
+            "y": 402,
+            "w": 96,
+            "h": 28
+          },
+          "items": [
+            "矩形",
+            "椭圆",
+            "箭头",
+            "画笔",
+            "文字"
+          ],
+          "value": 0,
+          "visible": false,
+          "hint": "标注工具：拖出来的形状 / 点一下落文字",
+          "events": {
+            "select": "sh_on_tool_change"
+          },
+          "page": 0
+        },
+        {
+          "id": "sh_lab_color",
+          "type": "label",
+          "rect": {
+            "x": 146,
+            "y": 404,
+            "w": 36,
+            "h": 24
+          },
+          "text": "颜色",
+          "visible": false,
+          "page": 0
+        },
+        {
+          "id": "sh_cbo_color",
+          "type": "combo",
+          "rect": {
+            "x": 186,
+            "y": 402,
+            "w": 76,
+            "h": 28
+          },
+          "items": [
+            "红",
+            "橙",
+            "黄",
+            "绿",
+            "蓝",
+            "白"
+          ],
+          "value": 0,
+          "visible": false,
+          "page": 0
+        },
+        {
+          "id": "sh_lab_width",
+          "type": "label",
+          "rect": {
+            "x": 268,
+            "y": 404,
+            "w": 36,
+            "h": 24
+          },
+          "text": "粗细",
+          "visible": false,
+          "page": 0
+        },
+        {
+          "id": "sh_cbo_width",
+          "type": "combo",
+          "rect": {
+            "x": 308,
+            "y": 402,
+            "w": 64,
+            "h": 28
+          },
+          "items": [
+            "细",
+            "中",
+            "粗"
+          ],
+          "value": 1,
+          "visible": false,
+          "page": 0
+        },
+        {
+          "id": "sh_lab_text",
+          "type": "label",
+          "rect": {
+            "x": 378,
+            "y": 404,
+            "w": 36,
+            "h": 24
+          },
+          "text": "文字",
+          "visible": false,
+          "page": 0
+        },
+        {
+          "id": "sh_edt_text",
+          "type": "edit",
+          "rect": {
+            "x": 418,
+            "y": 402,
+            "w": 120,
+            "h": 28
+          },
+          "text": "重点",
+          "visible": false,
+          "maxlen": 24,
+          "hint": "「文字」工具要写上去的内容（最多 24 字）",
+          "page": 0
+        },
+        {
+          "id": "sh_btn_undo",
+          "type": "button",
+          "rect": {
+            "x": 546,
+            "y": 401,
+            "w": 54,
+            "h": 30
+          },
+          "text": "撤销",
+          "visible": false,
+          "hint": "撤掉最后一笔（一笔可能由多条命令拼成，按整笔撤）",
+          "events": {
+            "click": "sh_on_tool_btn"
+          },
+          "page": 0
+        },
+        {
+          "id": "sh_btn_clear",
+          "type": "button",
+          "rect": {
+            "x": 604,
+            "y": 401,
+            "w": 54,
+            "h": 30
+          },
+          "text": "清除",
+          "visible": false,
+          "hint": "清掉全部标注（截图背景不动）",
+          "events": {
+            "click": "sh_on_tool_btn"
+          },
+          "page": 0
+        },
+        {
+          "id": "sh_btn_finish",
+          "type": "button",
+          "rect": {
+            "x": 662,
+            "y": 401,
+            "w": 64,
+            "h": 30
+          },
+          "text": "完成",
+          "visible": false,
+          "hint": "抓画板存 PNG（ScreenShot+日期）+ 写进剪贴板，然后回面板",
+          "events": {
+            "click": "sh_on_tool_btn"
+          },
+          "page": 0
+        },
+        {
+          "id": "sh_btn_pin",
+          "type": "button",
+          "rect": {
+            "x": 730,
+            "y": 401,
+            "w": 56,
+            "h": 30
+          },
+          "text": "贴图",
+          "visible": false,
+          "hint": "存图 + 复制后**留在屏幕上**当贴图；双击贴图或 Esc 回面板",
+          "events": {
+            "click": "sh_on_tool_btn"
+          },
+          "page": 0
+        },
+        {
+          "id": "sh_btn_cancel",
+          "type": "button",
+          "rect": {
+            "x": 790,
+            "y": 401,
+            "w": 60,
+            "h": 30
+          },
+          "text": "取消",
+          "visible": false,
+          "hint": "不存图直接回面板（等价于 Esc）",
+          "events": {
+            "click": "sh_on_tool_btn"
+          },
+          "page": 0
+        },
+        {
+          "id": "tr_menu_main",
+          "type": "menu",
+          "events": {
+            "click": "tr_on_menu_click"
+          },
+          "nodes": [
+            {
+              "text": "程序",
+              "children": [
+                {
+                  "action": "tr_toggle_win"
+                },
+                {
+                  "action": "tr_toggle_dark"
+                },
+                {
+                  "text": "-"
+                },
+                {
+                  "action": "tr_quit"
+                }
+              ]
+            },
+            {
+              "text": "操作",
+              "children": [
+                {
+                  "action": "tr_copy_time"
+                },
+                {
+                  "action": "tr_shot"
+                },
+                {
+                  "text": "-"
+                },
+                {
+                  "text": "清空日志",
+                  "id": "tr_m_clear"
+                },
+                {
+                  "text": "弹个托盘气泡",
+                  "id": "tr_m_balloon"
+                }
+              ]
+            },
+            {
+              "text": "帮助",
+              "children": [
+                {
+                  "text": "关于",
+                  "id": "tr_m_about"
+                }
+              ]
+            }
+          ],
+          "page": 1
+        },
+        {
+          "id": "tr_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 396,
+            "w": 560,
+            "h": 24
+          },
+          "items": [
+            "就绪",
+            "主题：浅色",
+            "截图 0 张"
+          ],
+          "page": 1
+        },
+        {
+          "id": "tr_lab_state",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 12,
+            "w": 536,
+            "h": 22
+          },
+          "text": "窗口：显示中　主题：浅色　截图：0 张",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "bold": true
+          },
+          "page": 1
+        },
+        {
+          "id": "tr_lab_tip",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 38,
+            "w": 536,
+            "h": 20
+          },
+          "text": "点右上角关闭 = 最小化到托盘（进程继续跑）；真正退出用「程序 → 退出」或 Ctrl+Shift+Q",
+          "page": 1
+        },
+        {
+          "id": "tr_lab_tip2",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 60,
+            "w": 536,
+            "h": 20
+          },
+          "text": "托盘图标：左键单击 = 显示 / 隐藏，左键双击 = 叫回窗口，右键 = 拉出窗口走菜单",
+          "page": 1
+        },
+        {
+          "id": "tr_lst_log",
+          "type": "listbox",
+          "rect": {
+            "x": 12,
+            "y": 88,
+            "w": 536,
+            "h": 302
+          },
+          "hint": "操作日志：追加一条 + 滚到底（日志类控件的标准写法）",
+          "page": 1
+        },
+        {
+          "id": "sp_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 588,
+            "w": 780,
+            "h": 24
+          },
+          "items": [
+            "就绪",
+            "系统信息",
+            "刷新：—"
+          ],
+          "page": 2
+        },
+        {
+          "id": "sp_tab_main",
+          "type": "tabs",
+          "rect": {
+            "x": 12,
+            "y": 12,
+            "w": 756,
+            "h": 470
+          },
+          "items": [
+            "系统信息",
+            "配置"
+          ],
+          "events": {
+            "select": "sp_on_tab_main_select"
+          },
+          "children": [
+            {
+              "id": "sp_lab_sys",
+              "type": "label",
+              "page": 0,
+              "rect": {
+                "x": 8,
+                "y": 36,
+                "w": 300,
+                "h": 24
+              },
+              "text": "系统",
+              "style": {
+                "bold": true
+              }
+            },
+            {
+              "id": "sp_lab_is64_k",
+              "type": "label",
+              "page": 0,
+              "rect": {
+                "x": 8,
+                "y": 62,
+                "w": 150,
+                "h": 24
+              },
+              "text": "是否 64 位系统"
+            },
+            {
+              "id": "sp_lab_is64_v",
+              "type": "label",
+              "page": 0,
+              "rect": {
+                "x": 162,
+                "y": 62,
+                "w": 560,
+                "h": 24
+              },
+              "text": "（待刷新）"
+            },
+            {
+              "id": "sp_lab_ver_k",
+              "type": "label",
+              "page": 0,
+              "rect": {
+                "x": 8,
+                "y": 88,
+                "w": 150,
+                "h": 24
+              },
+              "text": "系统版本"
+            },
+            {
+              "id": "sp_lab_ver_v",
+              "type": "label",
+              "page": 0,
+              "rect": {
+                "x": 162,
+                "y": 88,
+                "w": 560,
+                "h": 24
+              },
+              "text": "（待刷新）"
+            },
+            {
+              "id": "sp_lab_disk_t",
+              "type": "label",
+              "page": 0,
+              "rect": {
+                "x": 8,
+                "y": 120,
+                "w": 300,
+                "h": 24
+              },
+              "text": "磁盘（用户数据目录）",
+              "style": {
+                "bold": true
+              }
+            },
+            {
+              "id": "sp_lab_disk_k",
+              "type": "label",
+              "page": 0,
+              "rect": {
+                "x": 8,
+                "y": 146,
+                "w": 150,
+                "h": 24
+              },
+              "text": "目录"
+            },
+            {
+              "id": "sp_lab_disk_v",
+              "type": "label",
+              "page": 0,
+              "rect": {
+                "x": 162,
+                "y": 146,
+                "w": 560,
+                "h": 24
+              },
+              "text": "（待刷新）"
+            },
+            {
+              "id": "sp_lab_pct_k",
+              "type": "label",
+              "page": 0,
+              "rect": {
+                "x": 8,
+                "y": 172,
+                "w": 150,
+                "h": 24
+              },
+              "text": "占用率"
+            },
+            {
+              "id": "sp_prg_disk",
+              "type": "progress",
+              "page": 0,
+              "rect": {
+                "x": 162,
+                "y": 172,
+                "w": 300,
+                "h": 20
+              },
+              "mx": 100,
+              "value": 0,
+              "hint": "设值接口写的是「已用百分比」"
+            },
+            {
+              "id": "sp_lab_disk_num",
+              "type": "label",
+              "page": 0,
+              "rect": {
+                "x": 474,
+                "y": 172,
+                "w": 248,
+                "h": 24
+              },
+              "text": "（待刷新）"
+            },
+            {
+              "id": "sp_lab_env_t",
+              "type": "label",
+              "page": 0,
+              "rect": {
+                "x": 8,
+                "y": 200,
+                "w": 300,
+                "h": 24
+              },
+              "text": "环境变量",
+              "style": {
+                "bold": true
+              }
+            },
+            {
+              "id": "sp_lst_env",
+              "type": "listbox",
+              "page": 0,
+              "rect": {
+                "x": 8,
+                "y": 226,
+                "w": 340,
+                "h": 162
+              },
+              "hint": "路径只显示前 60 字符；临时目录原样；CPU 个数按整数读"
+            },
+            {
+              "id": "sp_lab_proc_t",
+              "type": "label",
+              "page": 0,
+              "rect": {
+                "x": 364,
+                "y": 200,
+                "w": 300,
+                "h": 24
+              },
+              "text": "进程存在性",
+              "style": {
+                "bold": true
+              }
+            },
+            {
+              "id": "sp_lab_proc_k",
+              "type": "label",
+              "page": 0,
+              "rect": {
+                "x": 364,
+                "y": 228,
+                "w": 120,
+                "h": 24
+              },
+              "text": "进程名"
+            },
+            {
+              "id": "sp_edt_proc",
+              "type": "edit",
+              "page": 0,
+              "rect": {
+                "x": 488,
+                "y": 224,
+                "w": 160,
+                "h": 28
+              },
+              "text": "explorer.exe",
+              "hint": "大小写不敏感；回车 = 点「检查」",
+              "events": {
+                "submit": "sp_on_edt_proc_submit"
+              }
+            },
+            {
+              "id": "sp_btn_proc",
+              "type": "button",
+              "page": 0,
+              "rect": {
+                "x": 652,
+                "y": 224,
+                "w": 96,
+                "h": 28
+              },
+              "text": "检查",
+              "events": {
+                "click": "sp_on_btn_proc_click"
+              }
+            },
+            {
+              "id": "sp_led_proc",
+              "type": "led",
+              "page": 0,
+              "rect": {
+                "x": 364,
+                "y": 260,
+                "w": 24,
+                "h": 24
+              },
+              "value": 0,
+              "text": ""
+            },
+            {
+              "id": "sp_lab_proc_res",
+              "type": "label",
+              "page": 0,
+              "rect": {
+                "x": 396,
+                "y": 260,
+                "w": 352,
+                "h": 24
+              },
+              "text": "（待刷新）"
+            },
+            {
+              "id": "sp_lab_port_t",
+              "type": "label",
+              "page": 0,
+              "rect": {
+                "x": 364,
+                "y": 294,
+                "w": 384,
+                "h": 24
+              },
+              "text": "串口列表",
+              "style": {
+                "bold": true
+              }
+            },
+            {
+              "id": "sp_lst_port",
+              "type": "listbox",
+              "page": 0,
+              "rect": {
+                "x": 364,
+                "y": 320,
+                "w": 384,
+                "h": 68
+              },
+              "hint": "一行一个端口；没有端口返回 0（不是错误）"
+            },
+            {
+              "id": "sp_btn_refresh",
+              "type": "button",
+              "page": 0,
+              "rect": {
+                "x": 8,
+                "y": 396,
+                "w": 180,
+                "h": 32
+              },
+              "text": "刷新",
+              "hint": "重算 系统 / 磁盘 / 环境 / 进程 / 串口，并把当前时间写进状态栏",
+              "events": {
+                "click": "sp_on_btn_refresh_click"
+              }
+            },
+            {
+              "id": "sp_lab_hint",
+              "type": "label",
+              "page": 0,
+              "rect": {
+                "x": 196,
+                "y": 396,
+                "w": 552,
+                "h": 32
+              },
+              "text": "本页全部只读，不接硬件；串口只枚举，不打开"
+            },
+            {
+              "id": "sp_lab_cfgpath_k",
+              "type": "label",
+              "page": 1,
+              "rect": {
+                "x": 8,
+                "y": 36,
+                "w": 120,
+                "h": 24
+              },
+              "text": "配置文件"
+            },
+            {
+              "id": "sp_lab_cfgpath_v",
+              "type": "label",
+              "page": 1,
+              "rect": {
+                "x": 132,
+                "y": 36,
+                "w": 604,
+                "h": 24
+              },
+              "text": "（启动时确定）"
+            },
+            {
+              "id": "sp_tbl_cfg",
+              "type": "table",
+              "page": 1,
+              "rect": {
+                "x": 8,
+                "y": 64,
+                "w": 736,
+                "h": 220
+              },
+              "columns": [
+                {
+                  "title": "节",
+                  "w": 160
+                },
+                {
+                  "title": "键",
+                  "w": 200
+                },
+                {
+                  "title": "值"
+                }
+              ],
+              "hint": "每行一个配置项：节 / 键 / 值"
+            },
+            {
+              "id": "sp_lab_sec_k",
+              "type": "label",
+              "page": 1,
+              "rect": {
+                "x": 8,
+                "y": 296,
+                "w": 32,
+                "h": 24
+              },
+              "text": "节"
+            },
+            {
+              "id": "sp_edt_sec",
+              "type": "edit",
+              "page": 1,
+              "rect": {
+                "x": 44,
+                "y": 292,
+                "w": 180,
+                "h": 28
+              },
+              "text": "面板"
+            },
+            {
+              "id": "sp_lab_key_k",
+              "type": "label",
+              "page": 1,
+              "rect": {
+                "x": 232,
+                "y": 296,
+                "w": 32,
+                "h": 24
+              },
+              "text": "键"
+            },
+            {
+              "id": "sp_edt_key",
+              "type": "edit",
+              "page": 1,
+              "rect": {
+                "x": 268,
+                "y": 292,
+                "w": 160,
+                "h": 28
+              },
+              "text": "进程名"
+            },
+            {
+              "id": "sp_lab_val_k",
+              "type": "label",
+              "page": 1,
+              "rect": {
+                "x": 436,
+                "y": 296,
+                "w": 32,
+                "h": 24
+              },
+              "text": "值"
+            },
+            {
+              "id": "sp_edt_val",
+              "type": "edit",
+              "page": 1,
+              "rect": {
+                "x": 472,
+                "y": 292,
+                "w": 272,
+                "h": 28
+              },
+              "text": "explorer.exe"
+            },
+            {
+              "id": "sp_btn_cfg_read",
+              "type": "button",
+              "page": 1,
+              "rect": {
+                "x": 8,
+                "y": 332,
+                "w": 180,
+                "h": 32
+              },
+              "text": "读一项",
+              "hint": "读 [节] 键，值填进右边的「值」输入框",
+              "events": {
+                "click": "sp_on_btn_cfg_read_click"
+              }
+            },
+            {
+              "id": "sp_btn_cfg_write",
+              "type": "button",
+              "page": 1,
+              "rect": {
+                "x": 196,
+                "y": 332,
+                "w": 180,
+                "h": 32
+              },
+              "text": "写一项",
+              "hint": "写 [节] 键 = 值，写成功后重载表格",
+              "events": {
+                "click": "sp_on_btn_cfg_write_click"
+              }
+            },
+            {
+              "id": "sp_btn_cfg_reload",
+              "type": "button",
+              "page": 1,
+              "rect": {
+                "x": 384,
+                "y": 332,
+                "w": 180,
+                "h": 32
+              },
+              "text": "全部重载",
+              "hint": "把清单里的几项读回来填进表格，并逐条写日志",
+              "events": {
+                "click": "sp_on_btn_cfg_reload_click"
+              }
+            },
+            {
+              "id": "sp_btn_cfg_copy",
+              "type": "button",
+              "page": 1,
+              "rect": {
+                "x": 572,
+                "y": 332,
+                "w": 172,
+                "h": 32
+              },
+              "text": "复制到剪贴板",
+              "hint": "把表格内容按每行一条送进剪贴板",
+              "events": {
+                "click": "sp_on_btn_cfg_copy_click"
+              }
+            },
+            {
+              "id": "sp_lab_cfg_hint",
+              "type": "label",
+              "page": 1,
+              "rect": {
+                "x": 8,
+                "y": 376,
+                "w": 736,
+                "h": 24
+              },
+              "text": "默认节：面板 / 串口；首启会把默认值写进用户数据目录下的 syspanel.ini"
+            }
+          ],
+          "page": 2
+        },
+        {
+          "id": "sp_lst_log",
+          "type": "listbox",
+          "rect": {
+            "x": 12,
+            "y": 492,
+            "w": 756,
+            "h": 88
+          },
+          "hint": "逐行记录操作；长到 400 条会自动清一次，免得无限增长",
+          "page": 2
+        },
+        {
+          "id": "en_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 616,
+            "w": 1000,
+            "h": 24
+          },
+          "items": [
+            "就绪",
+            "条目 0 · 目录 0",
+            "—"
+          ],
+          "page": 3
+        },
+        {
+          "id": "en_btn_refresh",
+          "type": "button",
+          "rect": {
+            "x": 12,
+            "y": 12,
+            "w": 120,
+            "h": 32
+          },
+          "text": "重新采集",
+          "hint": "清空树与节点表，重扫用户数据目录并重建两个根节点（清单不动）",
+          "events": {
+            "click": "en_on_btn_refresh_click"
+          },
+          "page": 3
+        },
+        {
+          "id": "en_btn_export",
+          "type": "button",
+          "rect": {
+            "x": 140,
+            "y": 12,
+            "w": 120,
+            "h": 32
+          },
+          "text": "导出快照",
+          "hint": "弹保存对话框，把当前已采集的内容写成 UTF-8 文本",
+          "events": {
+            "click": "en_on_btn_export_click"
+          },
+          "page": 3
+        },
+        {
+          "id": "en_btn_copy",
+          "type": "button",
+          "rect": {
+            "x": 268,
+            "y": 12,
+            "w": 120,
+            "h": 32
+          },
+          "text": "复制快照",
+          "hint": "把同一份快照文本送进剪贴板",
+          "events": {
+            "click": "en_on_btn_copy_click"
+          },
+          "page": 3
+        },
+        {
+          "id": "en_lab_hint",
+          "type": "label",
+          "rect": {
+            "x": 404,
+            "y": 16,
+            "w": 584,
+            "h": 24
+          },
+          "text": "展开节点才采集；导出 / 复制对当前已采集的内容做一次快照",
+          "page": 3
+        },
+        {
+          "id": "en_btn_import",
+          "type": "button",
+          "rect": {
+            "x": 12,
+            "y": 48,
+            "w": 112,
+            "h": 32
+          },
+          "text": "导入INI",
+          "hint": "选一份 INI 重新载入清单；此后的增删改都存回它",
+          "events": {
+            "click": "en_on_btn_import_click"
+          },
+          "page": 3
+        },
+        {
+          "id": "en_btn_add",
+          "type": "button",
+          "rect": {
+            "x": 132,
+            "y": 48,
+            "w": 112,
+            "h": 32
+          },
+          "text": "添加",
+          "hint": "分组 / 变量名 / 备注 三步输入；同组同名重复会被拒",
+          "events": {
+            "click": "en_on_btn_add_click"
+          },
+          "page": 3
+        },
+        {
+          "id": "en_btn_del",
+          "type": "button",
+          "rect": {
+            "x": 252,
+            "y": 48,
+            "w": 112,
+            "h": 32
+          },
+          "text": "删除",
+          "hint": "删选中的变量；选中分组则整组连带删除（无二次确认）",
+          "events": {
+            "click": "en_on_btn_del_click"
+          },
+          "page": 3
+        },
+        {
+          "id": "en_btn_edit",
+          "type": "button",
+          "rect": {
+            "x": 372,
+            "y": 48,
+            "w": 112,
+            "h": 32
+          },
+          "text": "修改",
+          "hint": "预填三步输入：改名 / 挪分组 / 改备注",
+          "events": {
+            "click": "en_on_btn_edit_click"
+          },
+          "page": 3
+        },
+        {
+          "id": "en_btn_find",
+          "type": "button",
+          "rect": {
+            "x": 492,
+            "y": 48,
+            "w": 112,
+            "h": 32
+          },
+          "text": "查询",
+          "hint": "按关键字过滤清单（分组 / 变量名 / 备注），结果摆进右侧表格",
+          "events": {
+            "click": "en_on_btn_find_click"
+          },
+          "page": 3
+        },
+        {
+          "id": "en_lab_ops",
+          "type": "label",
+          "rect": {
+            "x": 612,
+            "y": 52,
+            "w": 364,
+            "h": 24
+          },
+          "text": "清单在 envsnap.ini：改动自动存回，记事本改完点「导入INI」",
+          "page": 3
+        },
+        {
+          "id": "en_grp_mid",
+          "type": "group",
+          "rect": {
+            "x": 12,
+            "y": 88,
+            "w": 976,
+            "h": 364
+          },
+          "text": "采集内容（左：树 · 右：条目）",
+          "children": [
+            {
+              "id": "en_tree_main",
+              "type": "tree",
+              "rect": {
+                "x": 12,
+                "y": 24,
+                "w": 360,
+                "h": 304
+              },
+              "hint": "展开才采集；变量 / 分组 / 目录 / 扩展名各有不同的条目表",
+              "events": {
+                "select": "en_on_tree_sel",
+                "expand": "en_on_tree_expand"
+              }
+            },
+            {
+              "id": "en_sp_main",
+              "type": "splitter",
+              "format": "col",
+              "rect": {
+                "x": 376,
+                "y": 24,
+                "w": 6,
+                "h": 304
+              },
+              "hint": "左右拖动：树变宽 / 变窄，右边的表格跟着让位"
+            },
+            {
+              "id": "en_tbl_items",
+              "type": "table",
+              "rect": {
+                "x": 386,
+                "y": 24,
+                "w": 578,
+                "h": 304
+              },
+              "columns": [
+                {
+                  "title": "名称",
+                  "w": 240
+                },
+                {
+                  "title": "值或大小",
+                  "w": 180
+                },
+                {
+                  "title": "备注"
+                }
+              ],
+              "hint": "变量 / 扩展名 / 目录 / 根与分组节点各有不同的列内容"
+            }
+          ],
+          "page": 3
+        },
+        {
+          "id": "en_term_log",
+          "type": "terminal",
+          "rect": {
+            "x": 12,
+            "y": 460,
+            "w": 976,
+            "h": 148
+          },
+          "checked": true,
+          "value": 800,
+          "hint": "每行一条采集与导出记录",
+          "page": 3
+        },
+        {
+          "id": "en_dlg_edit",
+          "type": "dialog",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 400,
+            "h": 210
+          },
+          "text": "添加变量",
+          "events": {
+            "show": "en_on_dlg_show"
+          },
+          "children": [
+            {
+              "id": "en_lab_dlg_group",
+              "type": "label",
+              "rect": {
+                "x": 20,
+                "y": 22,
+                "w": 84,
+                "h": 24
+              },
+              "text": "分组："
+            },
+            {
+              "id": "en_edt_dlg_group",
+              "type": "edit",
+              "rect": {
+                "x": 108,
+                "y": 20,
+                "w": 272,
+                "h": 26
+              },
+              "hint": "写 [方括号] 里的那个名字；改成别的就是换分组"
+            },
+            {
+              "id": "en_lab_dlg_name",
+              "type": "label",
+              "rect": {
+                "x": 20,
+                "y": 62,
+                "w": 84,
+                "h": 24
+              },
+              "text": "变量名："
+            },
+            {
+              "id": "en_edt_dlg_name",
+              "type": "edit",
+              "rect": {
+                "x": 108,
+                "y": 60,
+                "w": 272,
+                "h": 26
+              },
+              "hint": "比如 PATH、TEMP；同一分组里不能重名"
+            },
+            {
+              "id": "en_lab_dlg_note",
+              "type": "label",
+              "rect": {
+                "x": 20,
+                "y": 102,
+                "w": 84,
+                "h": 24
+              },
+              "text": "备注（可空）："
+            },
+            {
+              "id": "en_edt_dlg_note",
+              "type": "edit",
+              "rect": {
+                "x": 108,
+                "y": 100,
+                "w": 272,
+                "h": 26
+              },
+              "hint": "会写进 ini 的 = 号后面，表格与快照里都显示"
+            },
+            {
+              "id": "en_lab_dlg_hint",
+              "type": "label",
+              "rect": {
+                "x": 20,
+                "y": 138,
+                "w": 360,
+                "h": 24
+              },
+              "text": "",
+              "style": {
+                "fg": "#B3261E"
+              }
+            },
+            {
+              "id": "en_btn_dlg_ok",
+              "type": "button",
+              "rect": {
+                "x": 200,
+                "y": 168,
+                "w": 88,
+                "h": 30
+              },
+              "text": "确定",
+              "hint": "一次提交三个字段；不合法就留在框里改，不关框",
+              "events": {
+                "click": "en_on_dlg_ok"
+              }
+            },
+            {
+              "id": "en_btn_dlg_cancel",
+              "type": "button",
+              "rect": {
+                "x": 296,
+                "y": 168,
+                "w": 88,
+                "h": 30
+              },
+              "text": "取消",
+              "hint": "不写清单，直接关框（Esc 同效）",
+              "events": {
+                "click": "en_on_dlg_cancel"
+              }
+            }
+          ],
+          "page": 3
+        },
+        {
+          "id": "se_sb_back",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 592,
+            "w": 900,
+            "h": 24
+          },
+          "items": [
+            "当前后端：INI 文件",
+            "对比表：尚未刷新",
+            "就绪"
+          ],
+          "page": 4
+        },
+        {
+          "id": "se_lab_dir",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 16,
+            "w": 76,
+            "h": 24
+          },
+          "text": "上次目录",
+          "page": 4
+        },
+        {
+          "id": "se_edt_dir",
+          "type": "edit",
+          "rect": {
+            "x": 92,
+            "y": 14,
+            "w": 176,
+            "h": 28
+          },
+          "maxlen": 200,
+          "hint": "上次打开的目录（文本设置项）",
+          "page": 4
+        },
+        {
+          "id": "se_lab_font",
+          "type": "label",
+          "rect": {
+            "x": 276,
+            "y": 16,
+            "w": 40,
+            "h": 24
+          },
+          "text": "字号",
+          "page": 4
+        },
+        {
+          "id": "se_edt_font",
+          "type": "edit",
+          "rect": {
+            "x": 318,
+            "y": 14,
+            "w": 84,
+            "h": 28
+          },
+          "spin": true,
+          "min": 8,
+          "max": 28,
+          "value": 14,
+          "hint": "整数设置项：带调节器的数值框（8..28）；读回时越界会回退默认值",
+          "page": 4
+        },
+        {
+          "id": "se_chk_dark",
+          "type": "checkbox",
+          "rect": {
+            "x": 414,
+            "y": 14,
+            "w": 120,
+            "h": 28
+          },
+          "text": "深色主题",
+          "checked": false,
+          "page": 4
+        },
+        {
+          "id": "se_lab_recent",
+          "type": "label",
+          "rect": {
+            "x": 540,
+            "y": 16,
+            "w": 72,
+            "h": 24
+          },
+          "text": "最近文件",
+          "page": 4
+        },
+        {
+          "id": "se_edt_recent1",
+          "type": "edit",
+          "rect": {
+            "x": 616,
+            "y": 14,
+            "w": 90,
+            "h": 28
+          },
+          "maxlen": 120,
+          "page": 4
+        },
+        {
+          "id": "se_edt_recent2",
+          "type": "edit",
+          "rect": {
+            "x": 712,
+            "y": 14,
+            "w": 90,
+            "h": 28
+          },
+          "maxlen": 120,
+          "page": 4
+        },
+        {
+          "id": "se_edt_recent3",
+          "type": "edit",
+          "rect": {
+            "x": 808,
+            "y": 14,
+            "w": 90,
+            "h": 28
+          },
+          "maxlen": 120,
+          "hint": "最近使用的 3 个文件名（整组一起存 / 一起读）",
+          "page": 4
+        },
+        {
+          "id": "se_lab_backend",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 56,
+            "w": 76,
+            "h": 24
+          },
+          "text": "存储后端",
+          "page": 4
+        },
+        {
+          "id": "se_cmb_backend",
+          "type": "combo",
+          "rect": {
+            "x": 92,
+            "y": 52,
+            "w": 240,
+            "h": 28
+          },
+          "items": [
+            "INI 文件",
+            "注册表 HKCU",
+            "用户数据目录文件"
+          ],
+          "value": 0,
+          "hint": "选哪个，右边的保存 / 读取 / 清空就作用于哪个",
+          "events": {
+            "select": "se_on_cmb_backend_select"
+          },
+          "page": 4
+        },
+        {
+          "id": "se_btn_save",
+          "type": "button",
+          "rect": {
+            "x": 344,
+            "y": 52,
+            "w": 110,
+            "h": 28
+          },
+          "text": "保存",
+          "hint": "把上面这组设置写进当前后端",
+          "events": {
+            "click": "se_on_btn_save_click"
+          },
+          "page": 4
+        },
+        {
+          "id": "se_btn_load",
+          "type": "button",
+          "rect": {
+            "x": 464,
+            "y": 52,
+            "w": 110,
+            "h": 28
+          },
+          "text": "读取",
+          "hint": "从当前后端读回设置；缺字段 / 脏数据回退默认值",
+          "events": {
+            "click": "se_on_btn_load_click"
+          },
+          "page": 4
+        },
+        {
+          "id": "se_btn_clear",
+          "type": "button",
+          "rect": {
+            "x": 584,
+            "y": 52,
+            "w": 110,
+            "h": 28
+          },
+          "text": "清空",
+          "hint": "删文件；注册表没有删值接口，改写空串（值空 = 相当于没设）",
+          "events": {
+            "click": "se_on_btn_clear_click"
+          },
+          "page": 4
+        },
+        {
+          "id": "se_lab_loc",
+          "type": "label",
+          "rect": {
+            "x": 706,
+            "y": 56,
+            "w": 182,
+            "h": 24
+          },
+          "text": "（启动时确定）",
+          "page": 4
+        },
+        {
+          "id": "se_lab_tbl",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 92,
+            "w": 876,
+            "h": 24
+          },
+          "text": "三个后端各自现在存着什么（换后端保存后，旧后端的值仍留在原处）",
+          "page": 4
+        },
+        {
+          "id": "se_tbl_back",
+          "type": "table",
+          "rect": {
+            "x": 12,
+            "y": 118,
+            "w": 876,
+            "h": 168
+          },
+          "columns": [
+            {
+              "title": "后端",
+              "w": 130
+            },
+            {
+              "title": "位置摘要",
+              "w": 320
+            },
+            {
+              "title": "字号",
+              "w": 90
+            },
+            {
+              "title": "深色",
+              "w": 90
+            },
+            {
+              "title": "更新时间 / 不存在"
+            }
+          ],
+          "page": 4
+        },
+        {
+          "id": "se_lab_log",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 302,
+            "w": 876,
+            "h": 24
+          },
+          "text": "操作日志",
+          "page": 4
+        },
+        {
+          "id": "se_term_log",
+          "type": "terminal",
+          "rect": {
+            "x": 12,
+            "y": 328,
+            "w": 876,
+            "h": 252
+          },
+          "checked": true,
+          "value": 500,
+          "hint": "每次保存 / 读取 / 清空都会在这里留一行",
+          "page": 4
+        }
+      ]
+    }
+  ],
+  "actions": {
+    "sh_shot": {
+      "text": "开始截图(&S)",
+      "accel": "Ctrl+Alt+A",
+      "handler": "sh_on_action"
+    },
+    "sh_rec": {
+      "text": "录屏 GIF(&R)",
+      "accel": "Ctrl+Alt+G",
+      "handler": "sh_on_action"
+    },
+    "sh_quit": {
+      "text": "退出(&Q)",
+      "accel": "Ctrl+Shift+Q",
+      "handler": "sh_on_action"
+    },
+    "tr_toggle_win": {
+      "text": "显示 / 隐藏窗口(&H)",
+      "accel": "Ctrl+Shift+H",
+      "handler": "tr_on_action"
+    },
+    "tr_toggle_dark": {
+      "text": "切换深色 / 浅色(&D)",
+      "accel": "Ctrl+Shift+D",
+      "handler": "tr_on_action"
+    },
+    "tr_copy_time": {
+      "text": "时间戳写进剪贴板(&C)",
+      "accel": "Ctrl+Shift+C",
+      "handler": "tr_on_action"
+    },
+    "tr_shot": {
+      "text": "窗口截图存 PNG(&S)",
+      "accel": "Ctrl+Shift+S",
+      "handler": "tr_on_action"
+    },
+    "tr_quit": {
+      "text": "退出(&Q)",
+      "handler": "tr_on_action"
+    }
+  }
+}

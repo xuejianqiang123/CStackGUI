@@ -47,6 +47,13 @@ const SUITES = {
     { tool: "modbus", prefix: "mb" },
     { tool: "framedec", prefix: "fd" },
   ],
+  sys: [
+    { tool: "shottool", prefix: "sh" },
+    { tool: "traytool", prefix: "tr" },
+    { tool: "syspanel", prefix: "sp" },
+    { tool: "envsnap", prefix: "en" },
+    { tool: "settings", prefix: "se" },
+  ],
 };
 
 const args = process.argv.slice(2);
@@ -115,6 +122,10 @@ const actions = {};
 const report = [];
 let maxW = 800;
 let maxH = 600;
+/** 加速键已占用表：一个 accel 只能属于一个动作（运行时"后声明的让位"会记 bad_actions
+ *  → selftest exit=4）。合并时**先到先得**（= 页签顺序靠前的工具保留快捷键），
+ *  重复的只丢 accel —— 动作本身与菜单入口照旧可用，丢弃逐条报出来。 */
+const usedAccels = new Set();
 
 suite.forEach(({ tool, prefix }, page) => {
   const dir = toolDir(tool);
@@ -145,6 +156,12 @@ suite.forEach(({ tool, prefix }, page) => {
       const out = { ...v };
       if (typeof out.handler === "string" && out.handler && !out.handler.startsWith(`${prefix}_`)) {
         out.handler = `${prefix}_${out.handler}`;
+      }
+      if (out.accel && usedAccels.has(out.accel)) {
+        console.log(`      [accel 冲突] ${prefix}_${k} 的 ${out.accel} 已被占用，只丢快捷键（动作与菜单入口保留）`);
+        delete out.accel;
+      } else if (out.accel) {
+        usedAccels.add(out.accel);
       }
       actions[`${prefix}_${k}`] = out;
     }

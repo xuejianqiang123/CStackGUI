@@ -81,9 +81,24 @@ for (const s of suites) {
   /* 入口 main.c 也有绑定表：窗口事件的 suite_<事件> 分发器在这里注册（模块的窗口 handler
    * 走直连转发不进绑定表，分发器才按名被 .cgui 的 app.events 找到）。不收进来的话
    * "suite_close 未登记"会被误报。 */
-  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith(".c"))) {
+  const entrySrcs = fs.readdirSync(dir).filter((x) => x.endsWith(".c"));
+  for (const f of entrySrcs) {
     const src = fs.readFileSync(path.join(dir, f), "utf8");
     for (const m of src.matchAll(/CG_BIND\("([^"]+)"/g)) registered.add(m[1]);
+  }
+  /* 残留旧动作名的反向门禁（合并器 4b 的兜底）：C 里 strcmp(name, "save_as") / cg_hotkey_set
+   * 这类**按字符串消费动作名**的地方若没改前缀，就是"点菜单没反应 / 热键白注册"的静默失效
+   * —— selftest 抓不到（回调照常触发、只是分支不匹配）。动作键改名后，旧名字面量
+   * 不该再出现在任何 C 源里。 */
+  const allC = [...modFiles.map((f) => path.join(modDir, f)), ...entrySrcs.map((f) => path.join(dir, f))]
+    .map((f) => fs.readFileSync(f, "utf8"))
+    .join("\n");
+  for (const key of Object.keys(doc.actions ?? {})) {
+    const orig = key.split("_").slice(1).join("_");   /* 去掉两位模块前缀 = 原动作键 */
+    if (!orig) continue;
+    if (allC.includes(`"${orig}"`)) {
+      fail(`${s}: C 源里残留旧动作名 "${orig}"（动作键已改名 ${key}，这里不改就是点菜单没反应）`);
+    }
   }
 
   // ③ .cgui 用到的回调必须都有登记

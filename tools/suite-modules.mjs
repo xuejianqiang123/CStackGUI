@@ -47,6 +47,13 @@ const SUITES = {
     { tool: "modbus", pre: "mb", cli: true },
     { tool: "framedec", pre: "fd" },
   ],
+  sys: [
+    { tool: "shottool", pre: "sh" },
+    { tool: "traytool", pre: "tr" },
+    { tool: "syspanel", pre: "sp" },
+    { tool: "envsnap", pre: "en" },
+    { tool: "settings", pre: "se" },
+  ],
 };
 
 const suiteName = process.argv[2];
@@ -62,6 +69,11 @@ function srcOf(tool) {
     if (fs.existsSync(path.join(d, "main.c"))) return path.join(d, "main.c");
   }
   throw new Error(`找不到 ${tool}/main.c`);
+}
+
+/** 原工程的 .cgui 路径（与 srcOf 同目录） */
+function cguiFile2(tool) {
+  return path.join(path.dirname(srcOf(tool)), `${tool}.cgui`);
 }
 
 /* ---------------------------------------------------------------- main() 体分析
@@ -193,6 +205,28 @@ ${cliDecls.map((d) => `    ${d}\n`).join("")}${cliChunks.map((s) => `    ${s}`).
   src = src.replace(/CG_BIND\("([^"]+)"/g, (m, name) =>
     name.startsWith(`${pre}_`) ? m : `CG_BIND("${pre}_${name}"`,
   );
+
+  /* 4b) **C 代码里按字符串引用动作名**的地方（strcmp(name, "shot")、
+   * cg_hotkey_set(app, hk, "shot")）：动作键加了前缀而 C 串不改，就是
+   * "点菜单没反应 / 全局热键白注册"的**静默失效** —— selftest 抓不到（回调照常触发，
+   * 只是分支不匹配）。2026-10-18 P3 动手前扫描全仓抓到 10 处（notepad/shottool/traytool），
+   * 其中 notepad 那处意味着 P1 的"另存为"已经在套件里悄悄退化成"保存"。
+   * 只在**动作名消费模式**（strcmp / cg_hotkey_set / cg_action）的行上改，
+   * 改动逐行报出来供复核；check-suite 另有一道"残留旧名"的反向门禁兜底。 */
+  const actionKeys = fs.existsSync(cguiFile2(tool))
+    ? Object.keys(JSON.parse(fs.readFileSync(cguiFile2(tool), "utf8")).actions ?? {})
+    : [];
+  for (const k of actionKeys) {
+    const lit = `"${k}"`;
+    src = src
+      .split("\n")
+      .map((line) => {
+        if (!line.includes(lit) || !/(strcmp|cg_hotkey_set|cg_action)/.test(line)) return line;
+        console.log(`      [动作名] ${line.trim().slice(0, 76)}`);
+        return line.split(lit).join(`"${pre}_${k}"`);
+      })
+      .join("\n");
+  }
 
   // 5) on_ready -> <pre>_init（保持签名）；原 main() 里的工具级初值注入 init 开头
   if (readyName && readyName !== `${pre}_init`) {

@@ -59,3 +59,5 @@ term_test.txt
 
 # envsnap 运行时在 exe 旁生成的清单（用户数据，机器本地，首次运行自动重建）
 examples/envsnap/envsnap.ini
+# 套件同理：envsnap 合并进 suites\sys 后，运行时仍往 exe 旁边写它自己的 ini
+examples/suites/*/*.ini
