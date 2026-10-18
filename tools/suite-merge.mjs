@@ -16,6 +16,11 @@
  * 用法：
  *   node tools\suite-merge.mjs --suite dev --out examples\suites\dev\dev.cgui
  *   （套件定义在下方 SUITES 表里；--dry 只报告不写盘）
+ *
+ * **2026-10-18 P4 之后原工程已删**（examples\ 只剩 lessons\ / suites\ / gallery / toolbox /
+ * cppdemo）—— 本工具对既有 4 个套件已无输入可跑，保留是为了：① 记录合并规则本身
+ * （谁加前缀、谁搬 main、谁去重 accel）；② 未来若有新工具要并进已有套件，照这张表加一行
+ * 即可（把新工具的原工程放回 examples\<tool>\，只跑它那一条；模块全量重生成后手工比对）。
  */
 import fs from "node:fs";
 import path from "node:path";

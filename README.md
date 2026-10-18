@@ -71,7 +71,7 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
 （等价于 `.cgui` 里写 `"bind": { "src": "sld_level" }`），它的值/文字/勾选就一直跟着源走 ——
 "滑块拖动时旁边的标签显示数字"这种活，一行 C 都不用写，连重置都不用管它。
 源与目标的类型决定抄什么、双向怎么用，见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md) 第 2.8 节，
-活例子见 `examples\lesson03_values`（拖动滑块，旁边的标签自己跟着变；**那几个回调都不用写**）。
+活例子见 `examples\lessons\lesson03_values`（拖动滑块，旁边的标签自己跟着变；**那几个回调都不用写**）。
 
 和它同类的是**动作（actions）**：`.cgui` 顶层写一条命令（文字 + 快捷键 + 回调名），菜单项和按钮都用
 `"action": "save"` 引用它 —— **一个回调管住菜单项和按钮，一处启用状态全跟着变**；快捷键走消息循环里的
@@ -85,7 +85,7 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
 
 仓库自带几类示例，分工不同：
 
-- `examples\lesson01_basics` ~ `examples\lesson06_window` —— **六课教学示例**：基础与容器 →
+- `examples\lessons\lesson01_basics` ~ `examples\lessons\lesson06_window` —— **六课教学示例**：基础与容器 →
   输入与选择 → 数值与指示 → 数据与日志 → 命令与图形 → 主窗口与窗口事件。每课只讲一个主题、
   **只出现本课主题的控件**、各用一屏摆齐、都能单独编译运行。
   **入门从这里开始**，路线图与逐课详解见 [examples\教学使用说明.md](examples/教学使用说明.md)。
@@ -94,10 +94,10 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
   回调 `extern "C"` 转发到单例"，`.cgui` / 绑定表 / `--selftest` 与 C 工程一字不差。
 - `examples\gallery\` —— **控件陈列室（三合一）**：顶层标签页分「基础闭环 / 控件陈列 / 新特性」
   三页，67 个控件、47 个回调，**讲"控件怎么用"**（当"控件字典"翻）。
-- `examples\notepad\` —— **真实小工具范例（记事本）**：菜单分发、脏标记、状态栏刷新、
+- `examples\suites\text\` —— **真实小工具范例（记事本）**：菜单分发、脏标记、状态栏刷新、
   文件读写、GBK/UTF-8 识别、INI 记住上次文件与窗口尺寸、关闭前拦截。**讲"一个工具该怎么组织"**，
   也是 `cg_kit` 基础能力库的活例子（全程没有 include 任何 Windows 头）。
-- `examples\serialterm\` / `examples\netterm\` / `examples\darkterm\` —— **接上真实链路与主题三个**：
+- `examples\suites\comm\` —— **接上真实链路与主题的套件**（串口终端 serialterm / 网口 netterm / 深色主题 darkterm 三页）：
   串口助手、网络调试助手，以及**深色主题示例**（`app.dark` + 命名样式 + 一个**运行时切换主题**的按钮）。
   前两个讲"链路上怎么收怎么发"，第三个讲"要为深色写哪套配色、哪些只能自己写死"。
   `serialterm` 功能上**对标 XCOM**（16 进制显示 / 时间戳 / 自动保存 / 定时发送 / 多条发送 / 文件收发），
@@ -106,18 +106,18 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
   通用骨架 + 实时预览 —— 替掉 XCOM 那个写死厂商私有格式的「协议传输」页签）；
   不抄它的私有 IAP「协议传输」——通用件是 `cg_crc16` + `cg_modbus_*`。
   自测不需要硬件：`serialterm.exe --demo`（灌合成字节，结论打到 stdout）。
-- `examples\shottool\` —— **QQ 风格截图工具**：托盘常驻 + 全局热键 `Ctrl+Alt+A` + 屏幕区域
+- `examples\suites\sys\` —— **QQ 风格截图工具**：托盘常驻 + 全局热键 `Ctrl+Alt+A` + 屏幕区域
   框选 + 矩形/椭圆/箭头/画笔/文字标注 + 完成即存 PNG 并复制剪贴板 + 贴图钉屏；
   另有一条 **GIF 录屏**（`Ctrl+Alt+G`：复用同一套框选，按帧率抓屏存成动画 GIF）。演示 runtime
   的五条"界面之外"能力 —— **屏幕抓取**（`cg_screen_capture`）、**全局热键**（`cg_hotkey_set`，
   后台也按得到）、**图片写剪贴板**（`cg_clip_set_image`）、**GIF 编码与录屏**（`cg_gif_*`，
   脏矩形优化：只编码变化的那一块）、以及**画板背景图**（截图当底、
   标注当命令，成品 = 抓画板自己）。
-- `examples\modbus\` —— **工控向样板（Modbus/TCP 上位机）**：`cg_modbus_*` 拼请求帧 / 解响应帧，
+- `examples\suites\comm\` —— **工控向样板（Modbus/TCP 上位机）**：`cg_modbus_*` 拼请求帧 / 解响应帧，
   `cg_net_*` 收发，切帧交给 **`cg_frame_*`**（长度字段模式；串口上的 Modbus/RTU 换成
   `CG_FRAME_SILENCE` 即可），异常响应翻成人话，等回应超时报一句 —— 顺带带了 `mock-slave.mjs`
   （Node 模拟从站），**不需要任何硬件就能把整条链在本机跑通**：
-  `node examples/modbus/mock-slave.mjs 1502`。
+  `node examples/suites/comm/mock-slave.mjs 1502`。
 
 ### 1.3 当前边界
 
@@ -271,7 +271,7 @@ build-runtime.bat                :: 只编译运行时库（build-app 会先跑�
 :: 验证（改了 .cgui 字段或控件类型后必跑）
 build-app.bat gallery                                            :: 先有 gallery.exe
 examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui  :: 回调闭环自检
-examples\notepad\notepad.exe --selftest examples\notepad\notepad.cgui  :: 真实工具范例自检
+examples\suites\text\text.exe --selftest examples\suites\text\text.cgui  :: 真实工具范例自检
 tools\run-tests.bat                                              :: C 层单测（JSON/文档/类型表/事件表）+ cg_kit 冒烟
 tools\run-tests.bat --memcheck                                   :: 再叠一层堆泄漏记账（ld --wrap malloc/free）
 tools\check-format.bat                                           :: 格式契约回归 + 支持库表一致性 + bat 编码

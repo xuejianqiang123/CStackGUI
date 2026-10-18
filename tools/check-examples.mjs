@@ -116,12 +116,13 @@ const CN_NUM = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8,
 
 /**
  * 教学示例目录名（按课号排序）
- * 教训目录现在收在 examples/base/ 下（重组后不再平铺在 examples/ 顶层），
- * 所以两层都要扫 —— 只扫顶层会得到 0 课，门禁里所有"六课"的声明就全红了。
+ * 2026-10-18 示例合并 P4：六课从 examples/base/ 迁到 examples/lessons/（统一成
+ * "组/工程"两级布局），所以按 lessons\ 找。保留顶层与 base\ 两个旧位置只为兼容
+ * —— 若有人把课放回旧处，门禁仍认得出来（找不到就 0 课，"六课"声明全红）。
  */
 function lessonDirs() {
   const names = new Set();
-  for (const sub of ["", "base"]) {
+  for (const sub of ["lessons", "", "base"]) {
     const dir = sub ? path.join(EX_DIR, sub) : EX_DIR;
     if (!fs.existsSync(dir)) continue;
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -131,10 +132,22 @@ function lessonDirs() {
   return [...names].sort();
 }
 
-/** 某一课的实际目录：优先 examples/<名>，其次 examples/base/<名> */
+/** 某一课的实际目录：lessons\ 优先，其次 examples/<名>、examples/base/<名>（旧位置） */
 function lessonHome(dir) {
-  const direct = path.join(EX_DIR, dir);
-  return fs.existsSync(path.join(direct, dir + ".cgui")) ? direct : path.join(EX_DIR, "base", dir);
+  const candidates = [
+    path.join(EX_DIR, "lessons", dir),
+    path.join(EX_DIR, dir),
+    path.join(EX_DIR, "base", dir),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(path.join(c, dir + ".cgui"))) return c;
+  }
+  return candidates[0];
+}
+
+/** 某一课的相对路径（事实表里写的那个，必须是真路径 —— 旧表写死 examples\<名> 会在迁移后误导） */
+function lessonRel(dir) {
+  return path.relative(root, lessonHome(dir)).replace(/\\/g, "/");
 }
 
 /** 真跑一次 --selftest 取规模数字（规模真相在运行时，不是我们数 JSON 的结果） */
@@ -168,6 +181,7 @@ function lessonFacts() {
     rows.push({
       no: dir.slice(6, 8),
       dir,
+      rel: lessonRel(dir),
       theme,
       kinds: used.size,
       widgets: st ? st.widgets : "?",
@@ -189,7 +203,7 @@ function lessonsScaleBlock() {
   out.push("| --- | --- | --- | --- | --- |");
   for (const r of lessonFacts()) {
     const typesCell = r.types.map((t) => "`" + t + "`").join(" ");
-    out.push(`| 入门 ${r.no} | \`examples\\${r.dir}\` | ${r.theme} | ${r.kinds} 类 · ${r.widgets} 个控件 · ${r.callbacks} 个回调 | ${typesCell} |`);
+    out.push(`| 入门 ${r.no} | \`${r.rel}\` | ${r.theme} | ${r.kinds} 类 · ${r.widgets} 个控件 · ${r.callbacks} 个回调 | ${typesCell} |`);
   }
   out.push(MARK_END);
   return out.join("\n");

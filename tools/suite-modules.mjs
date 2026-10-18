@@ -11,6 +11,10 @@
  *
  * 用法：改下方 SUITE 表（tool=原工程名、pre=两位缩写前缀）后跑
  *       node tools\suite-modules.mjs <套件名>
+ *
+ * **2026-10-18 P4 之后原工程已删**：本工具对既有 4 个套件已无输入可跑（同 suite-merge.mjs
+ * 头部的说明）。保留是为了记录 C 侧变换规则 —— 去 main、绑定表导出、CG_BIND 与动作名
+ * 字符串加前缀、on_ready 变 init、窗口事件直连转发、main 体分类搬运。
  */
 import fs from "node:fs";
 import path from "node:path";

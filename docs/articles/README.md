@@ -8,15 +8,15 @@
 
 | 文章 | 对应示例 | 事实来源（改代码后要重核这些） |
 | --- | --- | --- |
-| `01-基础与容器.md` | `examples\lesson01_basics\` | `.cgui` 的 `hint`/`text`、`main.c` 的回调名、`--selftest` 的"控件 N 个 / 回调 M 次" |
-| `02-输入与选择.md` | `examples\lesson02_inputs\` | 同上；输入框字段见 `docs\CGUI-FORMAT.md` 第 2.1 节 |
-| `03-数值与指示.md` | `examples\lesson03_values\` | 同上；`.cgui` 的 `bind` 例子见 `docs\CGUI-FORMAT.md` 第 2.8 节 |
-| `04-数据与日志.md` | `examples\lesson04_data\` | 同上；`splitter` 的两栏语义见 `docs\CGUI-FORMAT.md` 的 `terminal` 那节 |
-| `05-命令与图形.md` | `examples\lesson05_commands\` | 同上 |
+| `01-基础与容器.md` | `examples\lessons\lesson01_basics\` | `.cgui` 的 `hint`/`text`、`main.c` 的回调名、`--selftest` 的"控件 N 个 / 回调 M 次" |
+| `02-输入与选择.md` | `examples\lessons\lesson02_inputs\` | 同上；输入框字段见 `docs\CGUI-FORMAT.md` 第 2.1 节 |
+| `03-数值与指示.md` | `examples\lessons\lesson03_values\` | 同上；`.cgui` 的 `bind` 例子见 `docs\CGUI-FORMAT.md` 第 2.8 节 |
+| `04-数据与日志.md` | `examples\lessons\lesson04_data\` | 同上；`splitter` 的两栏语义见 `docs\CGUI-FORMAT.md` 的 `terminal` 那节 |
+| `05-命令与图形.md` | `examples\lessons\lesson05_commands\` | 同上 |
 | `00-导读.md` | `README.md` + `build-app.bat` | 环境要求、第一次编译的三条命令 |
-| `06-主窗口与窗口事件.md` | `examples\lesson06_window\` | 窗口配置 `app.*`、26 种窗口事件、`app.info` 程序信息；自检不合成窗口事件这条也在里面 |
-| `07-实战-记事本.md` | `examples\notepad\` | 菜单分发、脏标记、状态栏刷新、编码识别 |
-| `08-案例-serialterm-无界面串口与编辑框.md` | `examples\serialterm\` | 无界面串口组件的 `arrive` 事件、数据落点、HEX 发送 |
+| `06-主窗口与窗口事件.md` | `examples\lessons\lesson06_window\` | 窗口配置 `app.*`、26 种窗口事件、`app.info` 程序信息；自检不合成窗口事件这条也在里面 |
+| `07-实战-记事本.md` | `examples\suites\text\` | 菜单分发、脏标记、状态栏刷新、编码识别 |
+| `08-案例-serialterm-无界面串口与编辑框.md` | `examples\suites\comm\` | 无界面串口组件的 `arrive` 事件、数据落点、HEX 发送 |
 | `09-校验与摘要.md` | —（纯能力篇，不绑示例） | `runtime\include\cstackgui.h` 里 CRC / 哈希 / 进制与补码的签名与语义 |
 
 ## 每篇的固定结构（各篇保持一致，读者才不用重新适应）

@@ -174,6 +174,22 @@ id 前缀唯一、`.cgui` 的每个事件名在对应模块的 `*_bindings[]` �
    日志给出 `全局热键已注册：Ctrl+Alt+A -> 动作 sh_shot`（4b 修复在真路径生效）
    与 `托盘图标已建好`（单图标、第二次 setup 为 MODIFY）。
 5. **P4：六课迁 `lessons/` + 22 个原目录删除 + 教学说明 399 行路径同步 + 门禁收口**
+   **已交付（2026-10-18，门禁全绿）**：`examples/` 现在只有一种布局 ——
+   `lessons/`（六课）· `suites/`（四套件）· `gallery` · `toolbox` · `cppdemo`，`base/` 已消除。
+   - **删前先归档**：21 份原 README 附迁移横幅存进 `suites/<suite>/docs/<tool>.md`
+     （坑位文档是真金白银调试出来的，横幅注明"文中的命令口径已失效、其余逐条成立"）；
+     `modbus/mock-slave.mjs` 是功能性测试助手，搬进 `suites/comm/`。
+   - **路径同步**：26 个文件约 180 处（分级替换：先文件级精确——exe/cgui 改名处，再目录级
+     通用），通用替换造成的两类破损（文件名错、工具区分丢失 17 处）用专项扫描抓出并精确修复
+     —— 同句两工具并成一个套件时，用「serialterm 页（`modules\st.c`）」恢复区分。
+     两篇深度文章（07 记事本 / 08 serialterm）补迁移注记（数字取自合并前独立运行）。
+   - **门禁**：check-examples 认 `lessons\` 并吐真实路径（事实表重生成回贴）；make-release
+     的自检示例从 notepad 换成 **suites\text**（多模块套件，连随包工具链的 modules\ 子目录
+     编译一起验）；probe-hotreload 改指 comm.cgui；build-all 注释更新（容器目录逻辑本就通用，
+     lessons\ 与 suites\ 直接受益）。
+   - **验证**：build-all 新布局 13 工程全编、roundtrip 13/13、**docs 口径 122 条声明全过**
+     （约 180 处路径改写后口径仍成立）、冒烟 43/43、套件契约 4 个；发布包内编译 text 套件
+     + 自检全通（79 控件/39 回调/错误全 0）。kit 冒烟仍被本机剪贴板占用（同 P1~P3 判定）。
 6. **P5：索引与文档**（`examples/README.md` 自动索引：按套件列工具、点即跑命令）
 
 P0 未验证模式前不动 P1~P5。每批结束跑 `tools\run-tests.bat --full` + `make-release.bat`。

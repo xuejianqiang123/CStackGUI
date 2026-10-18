@@ -5,7 +5,7 @@
 # 按**客户区坐标**裁一块再放大保存，还可以先点一下（-ClickX/-ClickY）截"聚焦/选中"后的样子。
 #
 # 用法（在项目根；坐标是控件的客户区坐标，容器里的控件把容器偏移加上）：
-#   powershell -ExecutionPolicy Bypass -File tools\shot-widget.ps1 -Exe examples\lesson01_basics\lesson01_basics.exe `
+#   powershell -ExecutionPolicy Bypass -File tools\shot-widget.ps1 -Exe examples\lessons\lesson01_basics\lesson01_basics.exe `
 #       -QX 16 -QY 296 -QW 400 -QH 130 -Out build\edt_multi.png
 #   powershell ... -ClickX 216 -ClickY 361 -Out build\edt_multi_focus.png        # 真鼠标点一下再截
 #   powershell ... -ClickX 341 -ClickY 161 -Clicks 2 -Out build\spin.png         # 连点两下再截

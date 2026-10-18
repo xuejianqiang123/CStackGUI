@@ -9,7 +9,7 @@
 # Re-run: powershell -NoProfile -ExecutionPolicy Bypass -File tools\probe-hotreload.ps1
 #
 # Steps:
-#   1. copy examples\darkterm\darkterm.cgui -> build\hotreload.cgui
+#   1. copy examples\suites\comm\comm.cgui -> build\hotreload.cgui
 #   2. start the canvas (electron) pointing at that file, CSTACKGUI_LOG -> build\hotreload.log
 #   3. screenshot -> build\hotreload-before.png
 #   4. change the app title in that file from OUTSIDE the canvas
@@ -34,7 +34,7 @@ public class Win32Shot2 {
 $root = Split-Path -Parent $PSScriptRoot
 $exe  = Join-Path $root "designer\node_modules\electron\dist\electron.exe"
 $app  = Join-Path $root "designer"
-$src  = Join-Path $root "examples\darkterm\darkterm.cgui"
+$src  = Join-Path $root "examples\suites\comm\comm.cgui"
 $dst  = Join-Path $root "$OutDir\hotreload.cgui"
 $log  = Join-Path $root "$OutDir\hotreload.log"
 if (-not (Test-Path $exe)) { Write-Output "[fail] no electron at $exe"; exit 1 }

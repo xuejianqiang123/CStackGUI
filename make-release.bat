@@ -204,13 +204,13 @@ if errorlevel 1 (
     exit /b 1
 )
 rem 记事本示例用到 cg_kit（文件/配置/编码），顺带验证发布包的运行时库
-call build-app.bat notepad
+call build-app.bat suites\text
 if errorlevel 1 (
     popd
     echo [fail] 发布包里编译 cg_kit 示例失败
     exit /b 1
 )
-examples\notepad\notepad.exe --selftest examples\notepad\notepad.cgui
+examples\suites\text\text.exe --selftest examples\suites\text\text.cgui
 if errorlevel 1 (
     popd
     echo [fail] 发布包里记事本示例自检没过

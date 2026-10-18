@@ -31,9 +31,10 @@ rem 逐个编译示例，编完立刻跑一次 --selftest：编译过只能说�
 rem 自检过才说明 .cgui 里的事件名都能对上 C 函数。
 rem
 rem examples\ 下有两种目录：**工程目录**（自带 main.c / main.cpp）和**容器目录**
-rem （目前是 examples\base\，教学六课与其它示例被收在它下面，它自己没有源文件）。
-rem 老写法一律按"工程目录"处理，于是每跑必红在 examples\base 这一行、它下面的示例
-rem 还一个都没编 —— 现在：有源文件就编它自己，没有就往下编一层（2026-10-14 修）。
+rem （examples\lessons\ 教学六课、examples\suites\ 四个合并套件 —— 它们自己没有源文件，
+rem 工程收在各自的子目录里）。老写法一律按"工程目录"处理，于是每跑必红在容器这一行、
+rem 它下面的示例还一个都没编 —— 现在：有源文件就编它自己，没有就往下编一层（2026-10-14 修；
+rem 2026-10-18 示例合并 P4 后容器是 lessons\ 与 suites\）。
 for /d %%a in (examples\*) do (
     if exist "%%a\main.c"   call :build_one "%%a" %~1
     if exist "%%a\main.cpp" call :build_one "%%a" %~1

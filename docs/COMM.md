@@ -4,7 +4,7 @@
 > 不用 include `windows.h`，也不用自己写 `CreateFile` / `DCB` / `WSAStartup` / 读线程。
 
 实现：`runtime/src/kit/cg_serial.c`（串口）、`runtime/src/kit/cg_net.c`（网口：TCP 与 UDP 在同一个文件里）。
-用法示例：`examples/serialterm/`（串口助手）与 `examples/netterm/`（网口助手）—— 两个示例共用第 3 节的线程模型。
+用法示例：`examples/suites/comm/` 的 serialterm 页（串口助手，源码 `modules/st.c`）与 netterm 页（网口助手，`modules/nt.c`）—— 两页共用第 3 节的线程模型（合并前是两个独立示例）。
 控件侧的配套是 `terminal`（日志视图），字段与坑见 [CGUI-FORMAT.md](CGUI-FORMAT.md) 第 2.9 节。
 
 **串口与 TCP 网的形状是同一个**，因为面对的是同一件麻烦事（等 I/O 的每一毫秒都是消息循环被堵住的毫秒）：
@@ -207,7 +207,7 @@ static void close_port(cg_app_t *app)
 | 关一次就完了，**指针当场失效** | `cg_serial_close(s)` 会释放句柄结构：**同一个句柄关两次 = use-after-free**（2026-09-27 真机实测：进程以 `0xC0000374` 堆损坏退出，崩点可能离得老远）。写完立刻 `s = NULL;`。**组件形态没这个坑** —— `cg_widget_serial_close()` 内部置空，重复调真的安全。 |
 | **不自动重连** | 拔掉 USB 转串口之后旧句柄就废了，`cg_serial_read()` 会一直返回 0。要恢复就"关掉旧的 + 重新 open"。 |
 | **没有流控** | RTS/CTS（硬件）与 XON/XOFF（软件）都没接：`DCB` 里那两位始终关着。设备靠流控才稳的话，现在得自己在业务侧做（或给 `cg_serial` 加上）。 |
-| `cg_serial_write()` 是**同步写** | 有超时，返回实际写出的字节数。**没有发送队列** —— 发送节奏很密时排队得自己来（最省事的做法仍然是走时钟，见 `examples/serialterm`）。 |
+| `cg_serial_write()` 是**同步写** | 有超时，返回实际写出的字节数。**没有发送队列** —— 发送节奏很密时排队得自己来（最省事的做法仍然是走时钟，见 `examples/suites/comm`）。 |
 | 没有串口设备时**只能验证错误路径** | 没有板子的机器上就只有这一条路可走：`cg_serial_open()` 返回 `NULL`、`cg_serial_last_error()` 给出可读的中文原因。**这条路径本身就是排查第一步**，示例工程把它当正常分支处理（不是"测不到就不测"）。 |
 
 ## 6. 串口排查表
@@ -601,7 +601,7 @@ UDP 比 TCP 还多一层好处：**回环同时能验"报文边界没被粘成�
 
 ## 13. 示例工程
 
-`examples/serialterm/` —— 串口助手，演示第 3 节那套线程模型的完整版（**36 个控件、20 个事件回调**）：
+`examples/suites/comm/` —— 串口助手，演示第 3 节那套线程模型的完整版（**36 个控件、20 个事件回调**）：
 
 - 端口下拉（`cg_serial_list()`，插拔设备后点「刷新」重新枚举）+ 波特率 + 打开 / 断开 + 清空 + 存日志；
 - 一块 `terminal` 同时收 RX 与 TX（按方向着色），中间用 `splitter` 分隔（就是 CGUI-FORMAT 2.9 里
@@ -621,7 +621,7 @@ UDP 比 TCP 还多一层好处：**回环同时能验"报文边界没被粘成�
 - **自测不需要硬件**：`serialterm.exe --demo` 不开串口，灌合成字节走**同一条 `intake()`**，
   把"切出的帧 / CRC 结论 / 发送侧解析出的字节"打到 stdout。
 
-`examples/netterm/` —— 网口助手（TCP 客户端 + 服务端 + **UDP 模式**），**与 serialterm 是同一个形状**，看点也还是那三处：
+`examples/suites/comm/` —— 网口助手（TCP 客户端 + 服务端 + **UDP 模式**），**与 serialterm 是同一个形状**，看点也还是那三处：
 
 - 客户端半边：就是 §3.1 的三步，把 `cg_serial_*` 换成 `cg_net_*`（§8 写了具体改哪两行），
   外加 §8 那句掉线判断（`cg_net_connected()` 变 0 就收摊）；
@@ -630,5 +630,5 @@ UDP 比 TCP 还多一层好处：**回环同时能验"报文边界没被粘成�
 - **UDP 半边（第三种模式）**：角色选择里多一项 UDP（本地端口 + 是否允许广播），
   目的地址用**地址 + 端口两个控件**（UDP 没有连接，每次发都得给目的地），收在时钟里循环
   `cg_net_recvfrom`（即 §10.4 那段的完整版），并把来源 IP / 端口打进 terminal。
-  **本段只按形状描述、未逐项核对控件与回调名** —— 该示例正与本节同步改动中，以 `examples/netterm/` 里的实际代码为准；
+  **本段只按形状描述、未逐项核对控件与回调名** —— 该示例正与本节同步改动中，以 `examples/suites/comm/` 里的实际代码为准；
 - 上手第一步按 §9 说的做：**先连 `127.0.0.1` 自测**，通了再去连真机器。
