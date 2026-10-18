@@ -32,6 +32,14 @@ const SUITES = {
     { tool: "encconv", prefix: "ec" },
     { tool: "calculator", prefix: "cl" },
   ],
+  text: [
+    { tool: "notepad", prefix: "np" },
+    { tool: "logfilter", prefix: "lf" },
+    { tool: "filecheck", prefix: "fc" },
+    { tool: "dataview", prefix: "dv" },
+    { tool: "htmlreport", prefix: "hr" },
+    { tool: "datarec", prefix: "dr" },
+  ],
 };
 
 const args = process.argv.slice(2);
@@ -86,6 +94,10 @@ function rename(node, pre) {
     }
   }
   rename(node.children, pre);
+  /* 菜单树：menu 控件的条目挂在 **nodes** 下（不是 children），条目里的 action 引用
+   * 动作键、条目 id 用于菜单点击分流 —— 都要跟着改名。漏了它就是"菜单引用了不存在的
+   * 动作"（2026-10-18 text 套件首跑抓到：notepad 的 4 个菜单项指向已改名的动作表）。 */
+  rename(node.nodes, pre);
 }
 
 /* ---------------------------------------------------------------- 读入并合并 */
@@ -102,9 +114,13 @@ suite.forEach(({ tool, prefix }, page) => {
   const doc = JSON.parse(fs.readFileSync(path.join(dir, `${tool}.cgui`), "utf8"));
   const app = doc.app || {};
 
-  /* app.events（窗口级事件）：加前缀并入合并文档（各工具的窗口事件名也可能撞） */
+  /* app.events（窗口级事件）：**不按工具前缀改名，而是统一指向 main 的分发器** `suite_<事件>`。
+   * 一个窗口只能接一个回调名（运行时把 app.events.close 存进 root->ev[close] 一个槽），
+   * 若按工具前缀改名再"首工具胜出"，其余工具的窗口职责就被静默吞掉（notepad 的未保存
+   * 拦截、filecheck 的写窗口尺寸、lf/hr 的收尾记账全没了 —— check-suite 的死绑定会红）。
+   * 正解：main 里一个 suite_<事件> 分发器逐个调各模块的 <pre>_app_<event> 直连转发。 */
   const appEvents = {};
-  if (app.events) for (const [k, v] of Object.entries(app.events)) appEvents[k] = v ? `${prefix}_${v}` : v;
+  if (app.events) for (const k of Object.keys(app.events)) appEvents[k] = `suite_${k}`;
 
   rename(doc.widgets, prefix);
   for (const w of doc.widgets || []) {
@@ -113,7 +129,19 @@ suite.forEach(({ tool, prefix }, page) => {
   }
   if (doc.styles) for (const [k, v] of Object.entries(doc.styles)) styles[`${prefix}_${k}`] = v;
   if (doc.roles) for (const [k, v] of Object.entries(doc.roles)) roles[`${prefix}_${k}`] = v;
-  if (doc.actions) for (const [k, v] of Object.entries(doc.actions)) actions[`${prefix}_${k}`] = v;
+  /* actions 表：键加前缀（避免撞名），**handler 也要加前缀** —— 它是回调名，
+   * C 侧的 CG_BIND 已经加了前缀，不改就对不上（动作出错，自检 exit 4）。
+   * dev 套件 0 个 action 所以没暴露；text 套件的 notepad 有 4 个（save_as 与 save
+   * 共用一个 handler，双双改名后仍共用）。浅拷贝，别改到原对象。 */
+  if (doc.actions) {
+    for (const [k, v] of Object.entries(doc.actions)) {
+      const out = { ...v };
+      if (typeof out.handler === "string" && out.handler && !out.handler.startsWith(`${prefix}_`)) {
+        out.handler = `${prefix}_${out.handler}`;
+      }
+      actions[`${prefix}_${k}`] = out;
+    }
+  }
 
   maxW = Math.max(maxW, app.width || 800);
   maxH = Math.max(maxH, app.height || 600);

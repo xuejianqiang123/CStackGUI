@@ -7,7 +7,9 @@
  *          （modules\<缩写>.c），照抄价值零损失：想抄 HEX 工具就打开 ht.c。
  *
  *          分层契约：
- *            main.c   仅入口：登记 .cgui、拼各模块绑定表、依次调各模块 init
+ *            main.c   仅入口：登记 .cgui、拼各模块绑定表、依次调各模块 init、
+ *                     窗口事件分发器（suite_close：一个窗口只能接一个回调名，
+ *                     多工具的窗口职责靠这里逐个调模块的直连转发）
  *            modules\  各工具的完整逻辑（回调仍是 static，编译单元隔离，函数名未改）
  *            dev.cgui   由 tools\suite-merge.mjs 生成（一个 tabs，每页一个原工程的界面）
  *          main.c 不含任何工具语义 —— 加一个工具就是"加一个模块 + 改一次 .cgui 清单"。
@@ -63,6 +65,21 @@ static void suite_ready(cg_app_t *app, void *user)
 }
 
 /**
+ * @brief 窗口关闭分发器（.cgui 的 app.events.close 指到这里）
+ * @param self 窗口伪控件
+ * @param ev close
+ * @param user 业务数据（本套件未用）
+ * @return void 无返回值
+ * @note 本套件只有 encconv 用窗口事件，但**写成分发器而不是直接挂 ec_on_close**：
+ *       一个窗口只能接一个回调名，P2/P3 的套件必然多工具抢同一个槽 —— 模式统一，
+ *       加工具就是往这个函数里加一行（与 append_bindings 同一姿势）。
+ */
+static void suite_close(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    ec_app_close(self, ev, user);
+}
+
+/**
  * @brief 入口：登记 .cgui、拼绑定表后交给运行时
  * @param argc 命令行参数个数
  * @param argv 命令行参数数组：argv[1] 是 .cgui 路径，写 "--selftest" 则跑不开窗自检
@@ -79,6 +96,10 @@ int main(int argc, char **argv)
     n = append_bindings(ht_bindings, n);
     n = append_bindings(ec_bindings, n);
     n = append_bindings(cl_bindings, n);
+    /* 窗口事件的分发器：.cgui 的 app.events 写的是 suite_close（按名派发只能接一个回调） */
+    g_bindings[n++] = (cg_binding_t)CG_BIND("suite_close", suite_close);
+    g_bindings[n].name = NULL;
+    g_bindings[n].fn   = NULL;
 
     desc.bindings         = g_bindings;
     desc.auto_locate_cgui = 1;

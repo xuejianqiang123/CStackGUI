@@ -115,6 +115,22 @@ id 前缀唯一、`.cgui` 的每个事件名在对应模块的 `*_bindings[]` �
         CG_BIND_END 结尾，遍历复制）。
    - 自检闭环：122 控件 / 68 次回调触发 / 未登记·不支持·绑定出错·动作出错·样式失效全 0。
 2. **P1：`suites/text`**（6 工具，同模式）
+   **已交付（2026-10-18，套件门禁 + 双自检 + check-format 全绿）**：notepad(3)/logfilter(4)/
+   filecheck(4)/dataview(16)/htmlreport(7)/datarec(8) → `suites/text`（tabs 六页、窗口 1080x740）。
+   **P1 首跑抓到 P0 没暴露的三个合并盲区（都已修进转换器/门禁，并回改 dev 统一口径）**：
+   - **`actions[].handler` 是回调名**：合并器只改了动作表的键、没改 handler（dev 5 个工具
+     0 个 action 所以没暴露）。不修就是"动作出错"（自检 exit 4）。门禁同步把 action.handler
+     纳入双向核对。
+   - **窗口事件一个槽只容一个回调**（运行时把 `app.events.close` 存进 `root->ev[close]`）：
+     6 个工具里 5 个都要 close —— 首胜会静默吞掉其余工具的窗口职责（notepad 的未保存拦截
+     cg_cancel_close / filecheck 的写窗口尺寸 / lf·hr 的收尾记账）。**正解：分发器模式**
+     （`.cgui` 的 app.events 一律写 `suite_<事件>`；main 的分发器按序调各模块的
+     `<pre>_app_<event>` 直连转发；模块绑定表里那条 CG_BIND 由转换器删掉，不留死绑定）。
+     dev 已回改同一口径（它只有 encconv 用窗口事件，但模式统一后加工具=加一行）。
+   - **菜单树挂在 `nodes` 而非 `children`**：rename() 只递归 children，整个菜单树被跳过 ——
+     菜单项引用的动作键没改名，运行时报"菜单引用了不存在的动作"（4 项）。rename 现在也
+     递归 nodes；门禁加"动作引用必须存在于 actions 表"核对。
+   roundtrip 门禁自动跟上：30 原工程 + 2 套件 = **32/32**。
 3. **P2：`suites/comm`**（5 工具，含 serialterm 旗舰）
 4. **P3：`suites/sys`**（5 工具）
 5. **P4：六课迁 `lessons/` + 22 个原目录删除 + 教学说明 399 行路径同步 + 门禁收口**

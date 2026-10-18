@@ -52,13 +52,21 @@ for (const s of suites) {
 
   // ① 收集 .cgui 里的全部回调名（events 值）
   const used = new Set();
+  const actRefs = new Set();   /* 动作引用（指向 actions 表的键，不是回调名） */
   const ids = [];
   (function walk(ns) {
     for (const n of ns ?? []) {
       if (n.id) ids.push(n.id);
       if (n.events) for (const v of Object.values(n.events)) if (v) used.add(String(v));
       if (doc.app && doc.app.events) for (const v of Object.values(doc.app.events)) if (v) used.add(String(v));
+      /* action 的 handler 也是回调名（要进双向核对：漏了就查不出"handler 没改前缀"
+       * 这类合并事故 —— 2026-10-18 text 套件首跑前自查发现的盲区） */
+      if (doc.actions) for (const v of Object.values(doc.actions)) if (v && v.handler) used.add(String(v.handler));
+      /* 动作引用（控件的 action 字段、菜单条目 nodes[].action）指向动作表的键 ——
+       * 单独记一份核对存在性（漏改名就是运行时"菜单引用了不存在的动作"） */
+      if (typeof n.action === "string" && n.action) actRefs.add(n.action);
       walk(n.children);
+      walk(n.nodes);
     }
   })(doc.widgets);
 
@@ -70,6 +78,13 @@ for (const s of suites) {
     const src = fs.readFileSync(path.join(modDir, f), "utf8");
     for (const m of src.matchAll(/CG_BIND\("([^"]+)"/g)) registered.add(m[1]);
   }
+  /* 入口 main.c 也有绑定表：窗口事件的 suite_<事件> 分发器在这里注册（模块的窗口 handler
+   * 走直连转发不进绑定表，分发器才按名被 .cgui 的 app.events 找到）。不收进来的话
+   * "suite_close 未登记"会被误报。 */
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith(".c"))) {
+    const src = fs.readFileSync(path.join(dir, f), "utf8");
+    for (const m of src.matchAll(/CG_BIND\("([^"]+)"/g)) registered.add(m[1]);
+  }
 
   // ③ .cgui 用到的回调必须都有登记
   for (const name of used) {
@@ -78,6 +93,10 @@ for (const s of suites) {
   // ④ 反向：登记了但没人用 = 死绑定
   for (const name of registered) {
     if (!used.has(name)) fail(`${s}: 模块登记了 "${name}" 但 .cgui 没用到（死绑定）`);
+  }
+  /* 动作引用必须在动作表里（菜单/控件引用已改名的动作键时漏一个就是运行时报错） */
+  for (const ref of actRefs) {
+    if (!Object.hasOwn(doc.actions ?? {}, ref)) fail(`${s}: 引用了不存在的动作 "${ref}"（actions 表里没有）`);
   }
   // ⑤ 套件内 id 唯一
   const seen = new Set();

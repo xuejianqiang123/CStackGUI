@@ -3,7 +3,9 @@
  * @brief   encconv —— 套件模块（原 examples\encconv 合并而来，函数名未改：static 编译单元隔离）
  * @note    由 tools\suite-merge.mjs（.cgui 侧）+ build\gen_modules.mjs（C 侧）的变换规则
  *          产出：CG_BIND 字符串带 ec_ 前缀（与 .cgui 的 events 一一对应）、
- *          绑定表导出为 ec_bindings、原 on_ready 变成 ec_init。
+ *          绑定表导出为 ec_bindings、原 on_ready 变成 ec_init、
+ *          窗口事件改成直连转发 ec_app_<event>（套件只有一个窗口，
+ *          按名派发只能接一个，其余工具的窗口职责会被静默吞掉）。
  *          各工具的回调都是 static，合并进同一次链接不冲突。
  */
 
@@ -1137,7 +1139,6 @@ static int ends_with_ci(const char *s, const char *suffix)
 const cg_binding_t ec_bindings[] = {
     CG_BIND("ec_on_btn_click", on_btn_click),
     CG_BIND("ec_on_preview",   on_preview),
-    CG_BIND("ec_on_close",     on_close),
     CG_BIND_END
 };
 
@@ -1147,3 +1148,15 @@ const cg_binding_t ec_bindings[] = {
  * @param argv 命令行参数数组：argv[1] 是 .cgui 路径 / .ini 任务单 / 要处理的目录，写 "--selftest" 则跑自检
  * @return int 进程退出码：运行 / 自检的返回值，0 = 正常
  */
+
+/**
+ * @brief 窗口事件 close 的套件转发入口（main 的分发器调进来；**不进绑定表** —— 直接调用而非按名派发）
+ * @param self 窗口伪控件
+ * @param ev close
+ * @param user 业务数据（透传给原 handler）
+ * @return void 无返回值
+ */
+void ec_app_close(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    on_close(self, ev, user);
+}

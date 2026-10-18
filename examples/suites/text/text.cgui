@@ -1,0 +1,1263 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "text 套件",
+    "width": 1080,
+    "height": 740,
+    "bg": "#F3EDF7",
+    "info": {
+      "product": "CStackGUI text 套件",
+      "desc": "原 notepad / logfilter / filecheck / dataview / htmlreport / datarec 合并（每工具一页签）",
+      "comments": "由 tools\\suite-merge.mjs 合并生成",
+      "version": "1.0.0.0",
+      "author": "CStackGUI"
+    },
+    "events": {
+      "close": "suite_close",
+      "size": "suite_size",
+      "drop": "suite_drop"
+    }
+  },
+  "widgets": [
+    {
+      "id": "sv_pages",
+      "type": "tabs",
+      "rect": {
+        "x": 6,
+        "y": 6,
+        "w": 1068,
+        "h": 728
+      },
+      "items": [
+        "notepad",
+        "logfilter",
+        "filecheck",
+        "dataview",
+        "htmlreport",
+        "datarec"
+      ],
+      "children": [
+        {
+          "id": "np_menu_main",
+          "type": "menu",
+          "events": {
+            "click": "np_on_menu_click"
+          },
+          "nodes": [
+            {
+              "text": "文件",
+              "children": [
+                {
+                  "action": "np_new"
+                },
+                {
+                  "action": "np_open"
+                },
+                {
+                  "action": "np_save"
+                },
+                {
+                  "action": "np_save_as"
+                },
+                {
+                  "text": "-"
+                },
+                {
+                  "text": "退出",
+                  "id": "np_m_quit"
+                }
+              ]
+            },
+            {
+              "text": "编辑",
+              "children": [
+                {
+                  "text": "复制全部",
+                  "id": "np_m_copy"
+                },
+                {
+                  "text": "粘贴",
+                  "id": "np_m_paste"
+                },
+                {
+                  "text": "清空",
+                  "id": "np_m_clear"
+                }
+              ]
+            },
+            {
+              "text": "帮助",
+              "children": [
+                {
+                  "text": "关于",
+                  "id": "np_m_about"
+                }
+              ]
+            }
+          ],
+          "page": 0
+        },
+        {
+          "id": "np_edt_body",
+          "type": "edit",
+          "rect": {
+            "x": 12,
+            "y": 12,
+            "w": 736,
+            "h": 500
+          },
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 10
+          },
+          "multiline": true,
+          "scroll": 2,
+          "events": {
+            "change": "np_on_body_change"
+          },
+          "page": 0
+        },
+        {
+          "id": "np_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 536,
+            "w": 760,
+            "h": 24
+          },
+          "items": [
+            "未命名",
+            "0 字",
+            "行 1"
+          ],
+          "page": 0
+        },
+        {
+          "id": "lf_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 616,
+            "w": 1020,
+            "h": 24
+          },
+          "items": [
+            "还没打开文件",
+            "条件：无关键字（全部行）",
+            "命中 0 行 / 共 0 行 / 0 ms"
+          ],
+          "page": 1
+        },
+        {
+          "id": "lf_grp_open",
+          "type": "group",
+          "rect": {
+            "x": 12,
+            "y": 8,
+            "w": 996,
+            "h": 96
+          },
+          "text": "① 打开日志文件（文本；上限 32 MB）",
+          "children": [
+            {
+              "id": "lf_btn_open",
+              "type": "button",
+              "rect": {
+                "x": 16,
+                "y": 32,
+                "w": 180,
+                "h": 32
+              },
+              "text": "打开日志文件...",
+              "hint": "选一个文本日志。超过 32 MB 只取前 32 MB 并提示切分（运行时的文件接口没有分块 / 流式读）",
+              "events": {
+                "click": "lf_on_btn_open_click"
+              }
+            },
+            {
+              "id": "lf_lab_size",
+              "type": "label",
+              "rect": {
+                "x": 208,
+                "y": 38,
+                "w": 420,
+                "h": 22
+              },
+              "text": "还没打开文件"
+            },
+            {
+              "id": "lf_btn_clear",
+              "type": "button",
+              "rect": {
+                "x": 640,
+                "y": 32,
+                "w": 150,
+                "h": 32
+              },
+              "text": "清空视图",
+              "hint": "清掉终端与行号表；文件内容还留着，改条件可以直接重滤",
+              "events": {
+                "click": "lf_on_btn_clear_click"
+              }
+            },
+            {
+              "id": "lf_prg_work",
+              "type": "progress",
+              "rect": {
+                "x": 802,
+                "y": 38,
+                "w": 178,
+                "h": 20
+              },
+              "value": 0,
+              "vmax": 3,
+              "hint": "0 未开始 / 1 已读取 / 2 过滤中 / 3 完成（整读模式拿不到按字节的进度）"
+            },
+            {
+              "id": "lf_lab_stage",
+              "type": "label",
+              "rect": {
+                "x": 208,
+                "y": 64,
+                "w": 772,
+                "h": 22
+              },
+              "text": "进度条只表示「读取 / 过滤 / 完成」三步：没有分块读接口，做不出按百分比的解析进度。"
+            }
+          ],
+          "page": 1
+        },
+        {
+          "id": "lf_grp_filter",
+          "type": "group",
+          "rect": {
+            "x": 12,
+            "y": 112,
+            "w": 996,
+            "h": 116
+          },
+          "text": "② 过滤条件",
+          "children": [
+            {
+              "id": "lf_lab_a",
+              "type": "label",
+              "rect": {
+                "x": 16,
+                "y": 32,
+                "w": 56,
+                "h": 22
+              },
+              "text": "关键字 A"
+            },
+            {
+              "id": "lf_edt_kw_a",
+              "type": "edit",
+              "rect": {
+                "x": 76,
+                "y": 28,
+                "w": 300,
+                "h": 26
+              },
+              "hint": "子串匹配（不是正则）；留空表示这一条不参与",
+              "events": {
+                "change": "lf_on_cond_change"
+              }
+            },
+            {
+              "id": "lf_lab_b",
+              "type": "label",
+              "rect": {
+                "x": 392,
+                "y": 32,
+                "w": 56,
+                "h": 22
+              },
+              "text": "关键字 B"
+            },
+            {
+              "id": "lf_edt_kw_b",
+              "type": "edit",
+              "rect": {
+                "x": 452,
+                "y": 28,
+                "w": 300,
+                "h": 26
+              },
+              "hint": "与 A 之间按下面的「与 / 或」组合",
+              "events": {
+                "change": "lf_on_cond_change"
+              }
+            },
+            {
+              "id": "lf_btn_filter",
+              "type": "button",
+              "rect": {
+                "x": 770,
+                "y": 26,
+                "w": 210,
+                "h": 32
+              },
+              "text": "开始过滤",
+              "hint": "按当前条件重扫一遍工作窗口，结果进终端与行号表",
+              "events": {
+                "click": "lf_on_btn_filter_click"
+              }
+            },
+            {
+              "id": "lf_chk_case",
+              "type": "checkbox",
+              "rect": {
+                "x": 16,
+                "y": 66,
+                "w": 130,
+                "h": 26
+              },
+              "text": "区分大小写",
+              "checked": false,
+              "hint": "不勾 = 忽略大小写（只折叠 ASCII 字母，中文不受影响）",
+              "events": {
+                "change": "lf_on_cond_change"
+              }
+            },
+            {
+              "id": "lf_chk_or",
+              "type": "checkbox",
+              "rect": {
+                "x": 156,
+                "y": 66,
+                "w": 200,
+                "h": 26
+              },
+              "text": "A 或 B（不勾 = 与）",
+              "checked": false,
+              "hint": "运行时没有正则接口，两个关键字只有「与 / 或」两种组合方式",
+              "events": {
+                "change": "lf_on_cond_change"
+              }
+            },
+            {
+              "id": "lf_chk_invert",
+              "type": "checkbox",
+              "rect": {
+                "x": 366,
+                "y": 66,
+                "w": 250,
+                "h": 26
+              },
+              "text": "反向：只显示不含关键字的行",
+              "checked": false,
+              "hint": "两个关键字都空时勾它 = 0 行命中（有意如此）",
+              "events": {
+                "change": "lf_on_cond_change"
+              }
+            },
+            {
+              "id": "lf_btn_copy",
+              "type": "button",
+              "rect": {
+                "x": 640,
+                "y": 64,
+                "w": 190,
+                "h": 30
+              },
+              "text": "命中内容复制到剪贴板",
+              "hint": "把命中行（带行号）攒成一段文本放进剪贴板，上限 256 KB",
+              "events": {
+                "click": "lf_on_btn_copy_click"
+              }
+            },
+            {
+              "id": "lf_btn_export",
+              "type": "button",
+              "rect": {
+                "x": 838,
+                "y": 64,
+                "w": 142,
+                "h": 30
+              },
+              "text": "导出结果...",
+              "hint": "弹「保存文件」对话框，把命中行写成 UTF-8 文本（攒块 + 追加，不整份驻留内存）",
+              "events": {
+                "click": "lf_on_btn_export_click"
+              }
+            }
+          ],
+          "page": 1
+        },
+        {
+          "id": "lf_grp_view",
+          "type": "group",
+          "rect": {
+            "x": 12,
+            "y": 236,
+            "w": 996,
+            "h": 372
+          },
+          "grow": 1,
+          "text": "③ 命中结果（行号表 + 逐行回显；终端一次最多回显 2000 行）",
+          "children": [
+            {
+              "id": "lf_tbl_hits",
+              "type": "table",
+              "rect": {
+                "x": 16,
+                "y": 26,
+                "w": 964,
+                "h": 150
+              },
+              "columns": [
+                {
+                  "title": "行号",
+                  "w": 90
+                },
+                {
+                  "title": "内容（前 80 字节）"
+                }
+              ]
+            },
+            {
+              "id": "lf_term_out",
+              "type": "terminal",
+              "rect": {
+                "x": 16,
+                "y": 182,
+                "w": 964,
+                "h": 174
+              },
+              "checked": false,
+              "value": 5000,
+              "hint": "命中行带行号回显；内容可以选中复制，也能用「导出结果」写成文件"
+            }
+          ],
+          "page": 1
+        },
+        {
+          "id": "fc_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 616,
+            "w": 900,
+            "h": 24
+          },
+          "items": [
+            "就绪",
+            "A：未选",
+            "B：未选"
+          ],
+          "page": 2
+        },
+        {
+          "id": "fc_grp_top",
+          "type": "group",
+          "rect": {
+            "x": 8,
+            "y": 8,
+            "w": 884,
+            "h": 380
+          },
+          "grow": 1,
+          "text": "文件槽与摘要",
+          "children": [
+            {
+              "id": "fc_lab_a",
+              "type": "label",
+              "rect": {
+                "x": 16,
+                "y": 30,
+                "w": 60,
+                "h": 22
+              },
+              "text": "文件 A"
+            },
+            {
+              "id": "fc_edt_a_path",
+              "type": "edit",
+              "rect": {
+                "x": 80,
+                "y": 28,
+                "w": 700,
+                "h": 24
+              },
+              "style": {
+                "font": "Microsoft YaHei UI",
+                "size": 9
+              }
+            },
+            {
+              "id": "fc_btn_a_pick",
+              "type": "button",
+              "rect": {
+                "x": 788,
+                "y": 27,
+                "w": 84,
+                "h": 26
+              },
+              "text": "选择文件...",
+              "hint": "打开系统文件对话框，把选中的文件填进文件 A",
+              "events": {
+                "click": "fc_on_pick_a_click"
+              }
+            },
+            {
+              "id": "fc_lab_b",
+              "type": "label",
+              "rect": {
+                "x": 16,
+                "y": 62,
+                "w": 60,
+                "h": 22
+              },
+              "text": "文件 B"
+            },
+            {
+              "id": "fc_edt_b_path",
+              "type": "edit",
+              "rect": {
+                "x": 80,
+                "y": 60,
+                "w": 700,
+                "h": 24
+              },
+              "style": {
+                "font": "Microsoft YaHei UI",
+                "size": 9
+              }
+            },
+            {
+              "id": "fc_btn_b_pick",
+              "type": "button",
+              "rect": {
+                "x": 788,
+                "y": 59,
+                "w": 84,
+                "h": 26
+              },
+              "text": "选择文件...",
+              "hint": "把选中的文件填进文件 B",
+              "events": {
+                "click": "fc_on_pick_b_click"
+              }
+            },
+            {
+              "id": "fc_led_verdict",
+              "type": "led",
+              "rect": {
+                "x": 16,
+                "y": 96,
+                "w": 24,
+                "h": 24
+              },
+              "value": 0,
+              "text": ""
+            },
+            {
+              "id": "fc_lab_verdict",
+              "type": "label",
+              "rect": {
+                "x": 48,
+                "y": 96,
+                "w": 824,
+                "h": 26
+              },
+              "text": "还没比对 —— 选好两个文件后点「开始比对」",
+              "style": {
+                "size": 12,
+                "bold": true
+              }
+            },
+            {
+              "id": "fc_btn_cmp",
+              "type": "button",
+              "rect": {
+                "x": 16,
+                "y": 130,
+                "w": 110,
+                "h": 30
+              },
+              "text": "开始比对",
+              "hint": "比大小与 SHA256，给出「一致 / 不一致」结论与状态灯",
+              "events": {
+                "click": "fc_on_compare_click"
+              }
+            },
+            {
+              "id": "fc_btn_diff",
+              "type": "button",
+              "rect": {
+                "x": 132,
+                "y": 130,
+                "w": 110,
+                "h": 30
+              },
+              "text": "找差异",
+              "hint": "逐字节比对，差异最多列 200 条；超过 4 MB 只提示比摘要",
+              "events": {
+                "click": "fc_on_diff_click"
+              }
+            },
+            {
+              "id": "fc_btn_copy",
+              "type": "button",
+              "rect": {
+                "x": 248,
+                "y": 130,
+                "w": 140,
+                "h": 30
+              },
+              "text": "复制报告",
+              "hint": "把大小 / 五种摘要 / 结论复制到剪贴板",
+              "events": {
+                "click": "fc_on_copy_click"
+              }
+            },
+            {
+              "id": "fc_btn_export",
+              "type": "button",
+              "rect": {
+                "x": 394,
+                "y": 130,
+                "w": 120,
+                "h": 30
+              },
+              "text": "导出报告",
+              "hint": "把报告写成 UTF-8 文本文件",
+              "events": {
+                "click": "fc_on_export_click"
+              }
+            },
+            {
+              "id": "fc_btn_clear",
+              "type": "button",
+              "rect": {
+                "x": 520,
+                "y": 130,
+                "w": 110,
+                "h": 30
+              },
+              "text": "清空",
+              "hint": "清掉两个文件槽、结论、差异表格与日志",
+              "events": {
+                "click": "fc_on_clear_click"
+              }
+            },
+            {
+              "id": "fc_lab_log",
+              "type": "label",
+              "rect": {
+                "x": 16,
+                "y": 168,
+                "w": 500,
+                "h": 20
+              },
+              "text": "日志（每行一条：大小 / MD5 / SHA1 / SHA256 / SHA512 / CRC32 与结论）"
+            },
+            {
+              "id": "fc_term_log",
+              "type": "terminal",
+              "rect": {
+                "x": 16,
+                "y": 190,
+                "w": 852,
+                "h": 174
+              },
+              "checked": true,
+              "value": 800
+            }
+          ],
+          "page": 2
+        },
+        {
+          "id": "fc_sp_main",
+          "type": "splitter",
+          "format": "row",
+          "rect": {
+            "x": 8,
+            "y": 392,
+            "w": 884,
+            "h": 6
+          },
+          "hint": "上下拖动：上面那块变大，差异表让位",
+          "events": {
+            "release": "fc_on_sp_main_release"
+          },
+          "page": 2
+        },
+        {
+          "id": "fc_grp_diff",
+          "type": "group",
+          "rect": {
+            "x": 8,
+            "y": 402,
+            "w": 884,
+            "h": 210
+          },
+          "text": "差异偏移（最多列出 200 条）",
+          "children": [
+            {
+              "id": "fc_lab_diff_hint",
+              "type": "label",
+              "rect": {
+                "x": 16,
+                "y": 26,
+                "w": 852,
+                "h": 20
+              },
+              "text": "点「找差异」后，两文件不同的偏移列在这里：偏移 / 文件 A 的字节 / 文件 B 的字节。"
+            },
+            {
+              "id": "fc_tbl_diff",
+              "type": "table",
+              "rect": {
+                "x": 16,
+                "y": 50,
+                "w": 852,
+                "h": 146
+              },
+              "columns": [
+                {
+                  "title": "偏移",
+                  "w": 240
+                },
+                {
+                  "title": "文件 A 的字节",
+                  "w": 200
+                },
+                {
+                  "title": "文件 B 的字节",
+                  "w": 200
+                }
+              ],
+              "events": {
+                "select": "fc_on_tbl_diff_select"
+              }
+            }
+          ],
+          "page": 2
+        },
+        {
+          "id": "dv_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 710,
+            "w": 1040,
+            "h": 24
+          },
+          "items": [
+            "请打开一个 CSV",
+            "排序：原始顺序",
+            "—"
+          ],
+          "page": 3
+        },
+        {
+          "id": "dv_btn_open",
+          "type": "button",
+          "rect": {
+            "x": 8,
+            "y": 8,
+            "w": 104,
+            "h": 30
+          },
+          "text": "打开 CSV...",
+          "hint": "选一个 CSV / 文本文件；超过索引上限的文件只读前一段",
+          "events": {
+            "click": "dv_on_btn_open_click"
+          },
+          "page": 3
+        },
+        {
+          "id": "dv_btn_export_page",
+          "type": "button",
+          "rect": {
+            "x": 120,
+            "y": 8,
+            "w": 132,
+            "h": 30
+          },
+          "text": "导出当前页",
+          "hint": "把表格里这一页的行写成 CSV（带表头）",
+          "events": {
+            "click": "dv_on_btn_export_click"
+          },
+          "page": 3
+        },
+        {
+          "id": "dv_btn_export_all",
+          "type": "button",
+          "rect": {
+            "x": 260,
+            "y": 8,
+            "w": 132,
+            "h": 30
+          },
+          "text": "导出全部行",
+          "hint": "把索引到的全部行写成 CSV；攒块写盘，多少行都不占内存",
+          "events": {
+            "click": "dv_on_btn_export_click"
+          },
+          "page": 3
+        },
+        {
+          "id": "dv_btn_stats",
+          "type": "button",
+          "rect": {
+            "x": 400,
+            "y": 8,
+            "w": 112,
+            "h": 30
+          },
+          "text": "统计",
+          "hint": "对「统计列」做当前页 / 全部行的并排统计（最小 / 最大 / 合计 / 平均 / 非数值行数）",
+          "events": {
+            "click": "dv_on_btn_stats_click"
+          },
+          "page": 3
+        },
+        {
+          "id": "dv_lab_sort",
+          "type": "label",
+          "rect": {
+            "x": 524,
+            "y": 14,
+            "w": 56,
+            "h": 22
+          },
+          "text": "排序列",
+          "page": 3
+        },
+        {
+          "id": "dv_cbo_sort",
+          "type": "combo",
+          "rect": {
+            "x": 584,
+            "y": 8,
+            "w": 180,
+            "h": 30
+          },
+          "hint": "选好列后点下面那行的「排序」按钮；升 / 降由「降序」勾选决定",
+          "items": [],
+          "events": {
+            "select": "dv_on_cbo_select"
+          },
+          "page": 3
+        },
+        {
+          "id": "dv_lab_stat",
+          "type": "label",
+          "rect": {
+            "x": 776,
+            "y": 14,
+            "w": 56,
+            "h": 22
+          },
+          "text": "统计列",
+          "page": 3
+        },
+        {
+          "id": "dv_cbo_stat",
+          "type": "combo",
+          "rect": {
+            "x": 836,
+            "y": 8,
+            "w": 196,
+            "h": 30
+          },
+          "hint": "选好列后点「统计」，看这一列的当前页与全部行差多少",
+          "items": [],
+          "events": {
+            "select": "dv_on_cbo_select"
+          },
+          "page": 3
+        },
+        {
+          "id": "dv_btn_sort",
+          "type": "button",
+          "rect": {
+            "x": 8,
+            "y": 46,
+            "w": 88,
+            "h": 30
+          },
+          "text": "排序",
+          "hint": "按「排序列」重新排；升 / 降由右边的「降序」勾选决定（双击表格不再是排序）",
+          "events": {
+            "click": "dv_on_btn_sort_click"
+          },
+          "page": 3
+        },
+        {
+          "id": "dv_chk_desc",
+          "type": "checkbox",
+          "rect": {
+            "x": 104,
+            "y": 47,
+            "w": 104,
+            "h": 28
+          },
+          "text": "降序",
+          "checked": false,
+          "hint": "勾上 = 降序；方向只由它决定，点「排序」才生效",
+          "events": {
+            "change": "dv_on_chk_desc_change"
+          },
+          "page": 3
+        },
+        {
+          "id": "dv_lab_tip",
+          "type": "label",
+          "rect": {
+            "x": 216,
+            "y": 52,
+            "w": 620,
+            "h": 22
+          },
+          "text": "编辑：双击表格里任意一格即可改这一格（改的是内存，原文件不动）",
+          "page": 3
+        },
+        {
+          "id": "dv_grp_table",
+          "type": "group",
+          "rect": {
+            "x": 8,
+            "y": 80,
+            "w": 1024,
+            "h": 430
+          },
+          "text": "当前页（表格里只有这一页的行，其余的行只在索引里）",
+          "children": [
+            {
+              "id": "dv_tbl_data",
+              "type": "table",
+              "rect": {
+                "x": 16,
+                "y": 30,
+                "w": 992,
+                "h": 392
+              },
+              "hint": "双击任意一格 = 编辑这一格：弹输入框（原值预填、全选），回车即写回内存",
+              "columns": [],
+              "events": {
+                "dblclick": "dv_on_table_dblclick"
+              }
+            }
+          ],
+          "page": 3
+        },
+        {
+          "id": "dv_sp_split",
+          "type": "splitter",
+          "format": "row",
+          "rect": {
+            "x": 8,
+            "y": 514,
+            "w": 1024,
+            "h": 6
+          },
+          "hint": "上下拖动：数据页变大，报告区让位",
+          "page": 3
+        },
+        {
+          "id": "dv_grp_report",
+          "type": "group",
+          "rect": {
+            "x": 8,
+            "y": 524,
+            "w": 1024,
+            "h": 146
+          },
+          "text": "报告 / 统计（只读，程序写）",
+          "children": [
+            {
+              "id": "dv_edt_report",
+              "type": "edit",
+              "rect": {
+                "x": 16,
+                "y": 30,
+                "w": 992,
+                "h": 108
+              },
+              "multiline": true,
+              "scroll": 3,
+              "input": 1,
+              "hint": "载入限制、排序结论、当前页与全部行的统计都写在这里；只读，能选中复制"
+            }
+          ],
+          "page": 3
+        },
+        {
+          "id": "dv_pg_main",
+          "type": "pagination",
+          "rect": {
+            "x": 360,
+            "y": 674,
+            "w": 320,
+            "h": 32
+          },
+          "hint": "页数 = 总行数 ÷ 每页行数；翻页只重渲染一页，不会卡",
+          "value": 1,
+          "min": 1,
+          "max": 1,
+          "events": {
+            "change": "dv_on_page_change"
+          },
+          "page": 3
+        },
+        {
+          "id": "hr_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 676,
+            "w": 1080,
+            "h": 24
+          },
+          "items": [
+            "等待数据",
+            "0 列 × 0 行",
+            "报告：还没生成"
+          ],
+          "page": 4
+        },
+        {
+          "id": "hr_btn_open",
+          "type": "button",
+          "rect": {
+            "x": 12,
+            "y": 12,
+            "w": 158,
+            "h": 34
+          },
+          "text": "打开 CSV...",
+          "hint": "选一个首行是表头的 CSV。超过 8 MB 只取前一段，数据行封顶 5000 行；不处理引号转义",
+          "events": {
+            "click": "hr_on_btn_open_click"
+          },
+          "page": 4
+        },
+        {
+          "id": "hr_btn_gen",
+          "type": "button",
+          "rect": {
+            "x": 178,
+            "y": 12,
+            "w": 158,
+            "h": 34
+          },
+          "text": "生成并预览",
+          "hint": "写进用户数据目录（首块覆盖写、其后追加），然后让网页控件加载它",
+          "events": {
+            "click": "hr_on_btn_generate_click"
+          },
+          "page": 4
+        },
+        {
+          "id": "hr_btn_sys",
+          "type": "button",
+          "rect": {
+            "x": 344,
+            "y": 12,
+            "w": 190,
+            "h": 34
+          },
+          "text": "用系统默认浏览器打开",
+          "hint": "把报告文件交给系统默认程序（网页控件起不来时的兜底）",
+          "events": {
+            "click": "hr_on_btn_sysopen_click"
+          },
+          "page": 4
+        },
+        {
+          "id": "hr_btn_copy",
+          "type": "button",
+          "rect": {
+            "x": 542,
+            "y": 12,
+            "w": 158,
+            "h": 34
+          },
+          "text": "复制 HTML 源码",
+          "hint": "把完整 HTML 放进剪贴板（上限 256 KB，超了截断）",
+          "events": {
+            "click": "hr_on_btn_copy_click"
+          },
+          "page": 4
+        },
+        {
+          "id": "hr_web_view",
+          "type": "browser",
+          "rect": {
+            "x": 12,
+            "y": 54,
+            "w": 1056,
+            "h": 470
+          },
+          "grow": 1,
+          "hint": "网页控件是实验性功能，起不来会降级成空占位 —— 那时点「用系统默认浏览器打开」",
+          "page": 4
+        },
+        {
+          "id": "hr_term_log",
+          "type": "terminal",
+          "rect": {
+            "x": 12,
+            "y": 530,
+            "w": 1056,
+            "h": 140
+          },
+          "hint": "日志：读数据 / 生成 / 打开报告的过程都写在这里",
+          "page": 4
+        },
+        {
+          "id": "dr_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 596,
+            "w": 900,
+            "h": 24
+          },
+          "items": [
+            "待机",
+            "已采集 0 点 · 时长 0.0 s",
+            "CSV: （未保存）"
+          ],
+          "page": 5
+        },
+        {
+          "id": "dr_cht_wave",
+          "type": "chart",
+          "rect": {
+            "x": 12,
+            "y": 12,
+            "w": 560,
+            "h": 420
+          },
+          "items": [
+            "设备A",
+            "设备B"
+          ],
+          "value": 200,
+          "vmin": 0,
+          "vmax": 100,
+          "hint": "两条曲线：一次推一个点的接口，value = 窗口保留的点数（不是当前值）",
+          "page": 5
+        },
+        {
+          "id": "dr_edt_path",
+          "type": "edit",
+          "rect": {
+            "x": 12,
+            "y": 440,
+            "w": 560,
+            "h": 30
+          },
+          "text": "（尚未保存）",
+          "input": 1,
+          "hint": "最近一次保存 / 回放的 CSV 路径（只读）",
+          "page": 5
+        },
+        {
+          "id": "dr_btn_start",
+          "type": "button",
+          "rect": {
+            "x": 12,
+            "y": 482,
+            "w": 134,
+            "h": 36
+          },
+          "text": "开始采集",
+          "hint": "挂一颗 200ms 的一次性定时器；回调里自己重挂，形成周期",
+          "events": {
+            "click": "dr_on_btn_start_click"
+          },
+          "page": 5
+        },
+        {
+          "id": "dr_btn_stop",
+          "type": "button",
+          "rect": {
+            "x": 154,
+            "y": 482,
+            "w": 134,
+            "h": 36
+          },
+          "text": "停止",
+          "hint": "杀掉在跳的定时器；内存缓冲留着，保存 CSV 要用",
+          "events": {
+            "click": "dr_on_btn_stop_click"
+          },
+          "page": 5
+        },
+        {
+          "id": "dr_btn_save",
+          "type": "button",
+          "rect": {
+            "x": 296,
+            "y": 482,
+            "w": 134,
+            "h": 36
+          },
+          "text": "保存 CSV",
+          "hint": "先覆盖写表头，再按 4KB 分块追加，不在内存里拼整份 CSV",
+          "events": {
+            "click": "dr_on_btn_save_click"
+          },
+          "page": 5
+        },
+        {
+          "id": "dr_btn_replay",
+          "type": "button",
+          "rect": {
+            "x": 438,
+            "y": 482,
+            "w": 134,
+            "h": 36
+          },
+          "text": "回放",
+          "hint": "读回 CSV → 逐行解析 → 清空图表后重放",
+          "events": {
+            "click": "dr_on_btn_replay_click"
+          },
+          "page": 5
+        },
+        {
+          "id": "dr_lst_log",
+          "type": "listbox",
+          "rect": {
+            "x": 584,
+            "y": 12,
+            "w": 304,
+            "h": 568
+          },
+          "hint": "采集与落盘日志：追加一条 + 滚到底",
+          "page": 5
+        }
+      ]
+    }
+  ],
+  "actions": {
+    "np_new": {
+      "text": "新建",
+      "accel": "Ctrl+N",
+      "handler": "np_on_file_new"
+    },
+    "np_open": {
+      "text": "打开...",
+      "accel": "Ctrl+O",
+      "handler": "np_on_file_open"
+    },
+    "np_save": {
+      "text": "保存",
+      "accel": "Ctrl+S",
+      "handler": "np_on_file_save"
+    },
+    "np_save_as": {
+      "text": "另存为...",
+      "accel": "Ctrl+Shift+S",
+      "handler": "np_on_file_save"
+    }
+  }
+}

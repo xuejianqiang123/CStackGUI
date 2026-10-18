@@ -3,7 +3,9 @@
  * @brief   drawpad —— 套件模块（原 examples\drawpad 合并而来，函数名未改：static 编译单元隔离）
  * @note    由 tools\suite-merge.mjs（.cgui 侧）+ build\gen_modules.mjs（C 侧）的变换规则
  *          产出：CG_BIND 字符串带 dp_ 前缀（与 .cgui 的 events 一一对应）、
- *          绑定表导出为 dp_bindings、原 on_ready 变成 dp_init。
+ *          绑定表导出为 dp_bindings、原 on_ready 变成 dp_init、
+ *          窗口事件改成直连转发 dp_app_<event>（套件只有一个窗口，
+ *          按名派发只能接一个，其余工具的窗口职责会被静默吞掉）。
  *          各工具的回调都是 static，合并进同一次链接不冲突。
  */
 

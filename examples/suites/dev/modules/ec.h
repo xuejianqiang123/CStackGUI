@@ -18,4 +18,13 @@ extern const cg_binding_t ec_bindings[];
  */
 void ec_init(cg_app_t *app, void *user);
 
+/**
+ * @brief 窗口事件 close 的套件转发入口（main 的分发器直接调；不进绑定表）
+ * @param self 窗口伪控件
+ * @param ev close
+ * @param user 业务数据（透传给模块内部的原 handler）
+ * @return void 无返回值
+ */
+void ec_app_close(cg_widget_t *self, cg_event_t ev, void *user);
+
 #endif

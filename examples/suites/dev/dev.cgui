@@ -13,7 +13,7 @@
       "author": "CStackGUI"
     },
     "events": {
-      "close": "ec_on_close"
+      "close": "suite_close"
     }
   },
   "widgets": [
