@@ -265,7 +265,7 @@ int cg_menu_count(const cg_widget_t *w)
 static int want_menu(const cg_widget_t *w, const char *who)
 {
     if (w && (!strcmp(w->type, "menu") || !strcmp(w->type, "menubutton"))) return 1;
-    cg_log(CG_LOG_ERROR, "%s：控件 \"%s\" 不是菜单（menu / menubutton）",
+    cg_logm(CG_LOG_ERROR, "menu", "%s：控件 \"%s\" 不是菜单（menu / menubutton）",
            who, (w && w->id) ? w->id : "-");
     return 0;
 }
@@ -309,12 +309,12 @@ static int menu_parent_of(const cg_widget_t *w, const char *parent_id, const cha
         }
     }
     if (k < 0) {
-        cg_log(CG_LOG_WARN, "%s：找不到父项 \"%s\"（要往某个下拉里加项，"
+        cg_logm(CG_LOG_WARN, "menu", "%s：找不到父项 \"%s\"（要往某个下拉里加项，"
                             "那个下拉必须先在 .cgui 里有 id）", who, parent_id);
         return CG_ERR_NO_ITEM;
     }
     if (!w->menu[k].popup) {
-        cg_log(CG_LOG_WARN, "%s：\"%s\" 不是下拉项（它没有子项），不能往里加", who, parent_id);
+        cg_logm(CG_LOG_WARN, "menu", "%s：\"%s\" 不是下拉项（它没有子项），不能往里加", who, parent_id);
         return CG_ERR_NO_ITEM;
     }
     return k;
@@ -460,14 +460,14 @@ int cg_menu_remove_item(cg_widget_t *w, const char *id)
 
     if (!want_menu(w, "cg_menu_remove_item")) return -1;
     if (!id || !*id) {
-        cg_log(CG_LOG_WARN, "cg_menu_remove_item：id 不能为空（没有 id 的项没法定位）");
+        cg_logm(CG_LOG_WARN, "menu", "cg_menu_remove_item：id 不能为空（没有 id 的项没法定位）");
         return -1;
     }
     for (k = 0; k < w->nmenu; k++) {
         if (w->menu[k].id && strcmp(w->menu[k].id, id) == 0) break;
     }
     if (k >= w->nmenu) {
-        cg_log(CG_LOG_WARN, "cg_menu_remove_item：找不到 id 为 \"%s\" 的菜单项", id);
+        cg_logm(CG_LOG_WARN, "menu", "cg_menu_remove_item：找不到 id 为 \"%s\" 的菜单项", id);
         return -1;
     }
     n = menu_drop_rows(w, k, menu_subtree_end(w, k));
@@ -512,18 +512,18 @@ static cg_menu_row_t *menu_edit_target(cg_widget_t *w, const char *id, const cha
 
     if (!want_menu(w, who)) return NULL;
     if (!id || !*id) {
-        cg_log(CG_LOG_WARN, "%s：id 不能为空", who);
+        cg_logm(CG_LOG_WARN, "menu", "%s：id 不能为空", who);
         return NULL;
     }
     for (k = 0; k < w->nmenu; k++) {
         if (w->menu[k].id && strcmp(w->menu[k].id, id) == 0) break;
     }
     if (k >= w->nmenu) {
-        cg_log(CG_LOG_WARN, "%s：找不到 id 为 \"%s\" 的菜单项", who, id);
+        cg_logm(CG_LOG_WARN, "menu", "%s：找不到 id 为 \"%s\" 的菜单项", who, id);
         return NULL;
     }
     if (w->menu[k].action && *w->menu[k].action) {
-        cg_log(CG_LOG_WARN, "%s：菜单项 \"%s\" 引用了动作 \"%s\" —— 它的文字/启用/勾选"
+        cg_logm(CG_LOG_WARN, "menu", "%s：菜单项 \"%s\" 引用了动作 \"%s\" —— 它的文字/启用/勾选"
                             "归动作管，本次不生效（要改就 cg_action_set_*）",
                who, id, w->menu[k].action);
         return NULL;
@@ -547,7 +547,7 @@ void cg_menu_set_item_text(cg_widget_t *w, const char *id, const char *text)
 
     if (!r) return;
     if (strcmp(txt, "-") == 0) {
-        cg_log(CG_LOG_WARN, "cg_menu_set_item_text：不能把菜单项改成 \"-\""
+        cg_logm(CG_LOG_WARN, "menu", "cg_menu_set_item_text：不能把菜单项改成 \"-\""
                             "（那是分隔线的记号，用 cg_menu_remove_item 删掉再加一条）");
         return;
     }

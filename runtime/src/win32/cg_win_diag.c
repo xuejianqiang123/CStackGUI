@@ -69,7 +69,7 @@ static LONG WINAPI diag_on_crash(EXCEPTION_POINTERS *ep)
         ULONG_PTR op = ep->ExceptionRecord->ExceptionInformation[0];
         void *bad = (void *)ep->ExceptionRecord->ExceptionInformation[1];
         const char *opname = (op == 1) ? "写" : (op == 8) ? "执行" : "读";
-        cg_log(CG_LOG_ERROR, "访问冲突：尝试%s 地址 %p（出错地址 %p，模块 %s）",
+        cg_logm(CG_LOG_ERROR, "crash", "访问冲突：尝试%s 地址 %p（出错地址 %p，模块 %s）",
                opname, bad, addr, mod);
     }
 
@@ -78,7 +78,7 @@ static LONG WINAPI diag_on_crash(EXCEPTION_POINTERS *ep)
         void     *frames[40];
         char      mbuf[512];
         USHORT    n = CaptureStackBackTrace(0, 40, frames, NULL);
-        cg_log(CG_LOG_ERROR, "调用栈(%u 帧)：", (unsigned)n);
+        cg_logm(CG_LOG_ERROR, "crash", "调用栈(%u 帧)：", (unsigned)n);
         for (USHORT i = 0; i < n; i++) {
             HMODULE hm = NULL;
             const char *name = "(?)";
@@ -90,11 +90,11 @@ static LONG WINAPI diag_on_crash(EXCEPTION_POINTERS *ep)
                 off = (DWORD64)((char *)frames[i] - (char *)hm);
                 FreeLibrary(hm);
             }
-            cg_log(CG_LOG_ERROR, "  #%02u %s + 0x%llX", i, name, (unsigned long long)off);
+            cg_logm(CG_LOG_ERROR, "crash", "  #%02u %s + 0x%llX", i, name, (unsigned long long)off);
         }
     }
 
-    cg_log(CG_LOG_ERROR, "程序异常退出：code=0x%08lX addr=%p module=%s",
+    cg_logm(CG_LOG_ERROR, "crash", "程序异常退出：code=0x%08lX addr=%p module=%s",
            (unsigned long)code, addr, mod);
     snprintf(msg, sizeof(msg),
              "程序遇到异常，即将退出。\n\n"
@@ -181,6 +181,6 @@ void cg_diag_init(void)
     }
 
     SetUnhandledExceptionFilter(diag_on_crash);
-    cg_log(CG_LOG_INFO, "启动：%s", have_exe ? exe : "(未知路径)");
-    if (path[0]) cg_log(CG_LOG_INFO, "日志文件：%s", path);
+    cg_logm(CG_LOG_INFO, "crash", "启动：%s", have_exe ? exe : "(未知路径)");
+    if (path[0]) cg_logm(CG_LOG_INFO, "crash", "日志文件：%s", path);
 }

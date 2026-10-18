@@ -46,16 +46,16 @@ static int shot_save_png(HBITMAP bmp, const char *path)
 
     if (!bmp || !path || !*path) return 0;
     if (!g_win_gdip_token) {
-        cg_log(CG_LOG_WARN, "存图失败：这台机器上 GDI+ 没起来");
+        cg_logm(CG_LOG_WARN, "shot", "存图失败：这台机器上 GDI+ 没起来");
         return 0;
     }
     wpath = cgw_wc_from_utf8(path);
     if (!wpath) return 0;
 
     if (GdipCreateBitmapFromHBITMAP(bmp, NULL, &image) != 0 || !image) {
-        cg_log(CG_LOG_WARN, "存图失败：位图转 GDI+ 对象出错");
+        cg_logm(CG_LOG_WARN, "shot", "存图失败：位图转 GDI+ 对象出错");
     } else if (GdipSaveImageToFile(image, wpath, k_png_clsid, NULL) != 0) {
-        cg_log(CG_LOG_WARN, "存图失败：写文件出错：%s", path);
+        cg_logm(CG_LOG_WARN, "shot", "存图失败：写文件出错：%s", path);
     } else {
         ok = 1;
     }
@@ -82,7 +82,7 @@ static int shot_capture(HWND hwnd, const char *path)
     cw = rc.right - rc.left;
     ch = rc.bottom - rc.top;
     if (cw <= 0 || ch <= 0) {
-        cg_log(CG_LOG_WARN, "截图失败：窗口尺寸是 %dx%d", cw, ch);
+        cg_logm(CG_LOG_WARN, "shot", "截图失败：窗口尺寸是 %dx%d", cw, ch);
         return 0;
     }
 
@@ -99,7 +99,7 @@ static int shot_capture(HWND hwnd, const char *path)
 
     if (!PrintWindow(hwnd, mem_dc, 0)) {
         /* 少数控件不响应 PrintWindow：退回抓屏，并如实说明这张图可能被遮挡 */
-        cg_log(CG_LOG_WARN, "PrintWindow 未成功，改用抓屏：这张图可能被其它窗口遮挡");
+        cg_logm(CG_LOG_WARN, "shot", "PrintWindow 未成功，改用抓屏：这张图可能被其它窗口遮挡");
         if (!BitBlt(mem_dc, 0, 0, cw, ch, win_dc, 0, 0, SRCCOPY)) goto done;
     }
     ok = shot_save_png(bmp, path);
@@ -109,7 +109,7 @@ done:
     if (bmp) DeleteObject(bmp);
     if (mem_dc) DeleteDC(mem_dc);
     if (win_dc) ReleaseDC(hwnd, win_dc);
-    if (ok) cg_log(CG_LOG_INFO, "截图已存：%s（%dx%d）", path, cw, ch);
+    if (ok) cg_logm(CG_LOG_INFO, "shot", "截图已存：%s（%dx%d）", path, cw, ch);
     return ok;
 }
 
@@ -168,11 +168,11 @@ int cg_clip_get_image(const char *path)
 
     if (!path || !*path) return 0;
     if (!g_win_gdip_token) {
-        cg_log(CG_LOG_WARN, "取剪贴板图片失败：这台机器上 GDI+ 没起来");
+        cg_logm(CG_LOG_WARN, "shot", "取剪贴板图片失败：这台机器上 GDI+ 没起来");
         return 0;
     }
     if (!OpenClipboard(NULL)) {
-        cg_log(CG_LOG_WARN, "取剪贴板图片失败：打不开剪贴板（可能被别的程序占着）");
+        cg_logm(CG_LOG_WARN, "shot", "取剪贴板图片失败：打不开剪贴板（可能被别的程序占着）");
         return 0;
     }
 
@@ -199,12 +199,12 @@ int cg_clip_get_image(const char *path)
     CloseClipboard();      /* 像素已经复制出来了，句柄不再需要 */
 
     if (!copy) {
-        cg_log(CG_LOG_WARN, "剪贴板里没有图片（先截个图或复制一张图再试）");
+        cg_logm(CG_LOG_WARN, "shot", "剪贴板里没有图片（先截个图或复制一张图再试）");
         return 0;
     }
     ok = shot_save_png(copy, path);
     DeleteObject(copy);
-    if (ok) cg_log(CG_LOG_INFO, "剪贴板图片已存：%s", path);
+    if (ok) cg_logm(CG_LOG_INFO, "shot", "剪贴板图片已存：%s", path);
     return ok;
 }
 
@@ -238,7 +238,7 @@ int cg_screen_size(const cg_app_t *app, int *w, int *h)
         ph = GetSystemMetrics(SM_CYSCREEN);
     }
     if (pw <= 0 || ph <= 0) {
-        cg_log(CG_LOG_WARN, "取屏幕尺寸失败：%dx%d", pw, ph);
+        cg_logm(CG_LOG_WARN, "shot", "取屏幕尺寸失败：%dx%d", pw, ph);
         return 0;
     }
     if (w) *w = (int)(((long long)pw * 100 + sc / 2) / sc);
@@ -300,7 +300,7 @@ int cg_screen_capture(const cg_app_t *app, int x, int y, int w, int h, const cha
     if (sx + sw > vx + vw) sw = vx + vw - sx;
     if (sy + sh > vy + vh) sh = vy + vh - sy;
     if (sw <= 0 || sh <= 0) {
-        cg_log(CG_LOG_WARN, "抓屏失败：区域 %dx%d（逻辑像素）不在虚拟桌面内", w, h);
+        cg_logm(CG_LOG_WARN, "shot", "抓屏失败：区域 %dx%d（逻辑像素）不在虚拟桌面内", w, h);
         return 0;
     }
 
@@ -320,7 +320,7 @@ done:
     if (bmp) DeleteObject(bmp);
     if (mem) DeleteDC(mem);
     if (scr) ReleaseDC(NULL, scr);
-    if (ok) cg_log(CG_LOG_INFO, "抓屏已存：%s（%dx%d 物理像素）", path, sw, sh);
+    if (ok) cg_logm(CG_LOG_INFO, "shot", "抓屏已存：%s（%dx%d 物理像素）", path, sw, sh);
     return ok;
 }
 
@@ -346,14 +346,14 @@ int cg_clip_set_image(const char *path)
 
     if (!path || !*path) return 0;
     if (!g_win_gdip_token) {
-        cg_log(CG_LOG_WARN, "写剪贴板图片失败：这台机器上 GDI+ 没起来");
+        cg_logm(CG_LOG_WARN, "shot", "写剪贴板图片失败：这台机器上 GDI+ 没起来");
         return 0;
     }
     src = cgw_load_image_file(NULL, path);   /* 读图失败在里面写日志 */
     if (!src) return 0;
     dc = GetDC(NULL);
     if (!dc || !GetObjectW(src, sizeof(bm), &bm) || bm.bmWidth <= 0 || bm.bmHeight <= 0) {
-        cg_log(CG_LOG_WARN, "写剪贴板图片失败：读不到位图信息");
+        cg_logm(CG_LOG_WARN, "shot", "写剪贴板图片失败：读不到位图信息");
         goto done;
     }
     /* 24 位 BI_RGB：截图本来不透明，避开 32 位 alpha 被粘贴方当成透明底的歧义 */
@@ -372,7 +372,7 @@ int cg_clip_set_image(const char *path)
         void *lp = GlobalLock(dib);
 
         if (!lp) {
-            cg_log(CG_LOG_WARN, "写剪贴板图片失败：GlobalLock 出错");
+            cg_logm(CG_LOG_WARN, "shot", "写剪贴板图片失败：GlobalLock 出错");
             goto done;
         }
         locked = 1;                 /* 之后所有 goto done 都由 done 里负责 GlobalUnlock */
@@ -381,7 +381,7 @@ int cg_clip_set_image(const char *path)
         if (!GetDIBits(dc, src, 0, (UINT)bm.bmHeight,
                        (char *)lp + sizeof(BITMAPINFOHEADER),
                        (BITMAPINFO *)&bi, DIB_RGB_COLORS)) {
-            cg_log(CG_LOG_WARN, "写剪贴板图片失败：GetDIBits 出错");
+            cg_logm(CG_LOG_WARN, "shot", "写剪贴板图片失败：GetDIBits 出错");
             goto done;
         }
         memcpy(lp, &bi, sizeof(BITMAPINFOHEADER));
@@ -390,7 +390,7 @@ int cg_clip_set_image(const char *path)
     }
 
     if (!OpenClipboard(NULL)) {
-        cg_log(CG_LOG_WARN, "写剪贴板图片失败：打不开剪贴板（可能被别的程序占着）");
+        cg_logm(CG_LOG_WARN, "shot", "写剪贴板图片失败：打不开剪贴板（可能被别的程序占着）");
         goto done;
     }
     EmptyClipboard();
@@ -403,7 +403,7 @@ int cg_clip_set_image(const char *path)
     own = (HBITMAP)CopyImage(src, IMAGE_BITMAP, 0, 0, 0);
     if (own && SetClipboardData(CF_BITMAP, own)) own = NULL;   /* 归系统了 */
     CloseClipboard();
-    if (!ok) cg_log(CG_LOG_WARN, "写剪贴板图片失败：SetClipboardData 被拒");
+    if (!ok) cg_logm(CG_LOG_WARN, "shot", "写剪贴板图片失败：SetClipboardData 被拒");
 
 done:
     if (locked) GlobalUnlock(dib);
@@ -411,6 +411,6 @@ done:
     if (own) DeleteObject(own);
     if (src) DeleteObject(src);
     if (dc) ReleaseDC(NULL, dc);
-    if (ok) cg_log(CG_LOG_INFO, "图片已写进剪贴板：%s", path);
+    if (ok) cg_logm(CG_LOG_INFO, "shot", "图片已写进剪贴板：%s", path);
     return ok;
 }

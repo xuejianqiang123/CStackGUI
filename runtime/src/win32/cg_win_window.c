@@ -198,11 +198,11 @@ int cg_hotkey_set(cg_app_t *app, const char *combo, const char *action)
     if (!combo) { cgw_hotkey_clear(app); return 1; }   /* NULL = 全部解绑 */
     if (!app || !app->hwnd || !action || !*action) return 0;
     if (cg_action_index(app, action) < 0) {
-        cg_log(CG_LOG_WARN, "全局热键 %s 注册失败：没有叫 \"%s\" 的动作", combo, action);
+        cg_logm(CG_LOG_WARN, "window", "全局热键 %s 注册失败：没有叫 \"%s\" 的动作", combo, action);
         return 0;
     }
     if (!cg_accel_parse(combo, &k) || !accel_to_win(&k, &fVirt, &vk)) {
-        cg_log(CG_LOG_WARN, "全局热键注册失败：组合键 \"%s\" 看不懂", combo);
+        cg_logm(CG_LOG_WARN, "window", "全局热键注册失败：组合键 \"%s\" 看不懂", combo);
         return 0;
     }
     /* accel_to_win 给的是 TranslateAccelerator 的标志位，映射成 RegisterHotKey 的 MOD_* */
@@ -220,7 +220,7 @@ int cg_hotkey_set(cg_app_t *app, const char *combo, const char *action)
         break;
     }
     if (s_nhotkey >= CGW_HOTKEY_MAX) {
-        cg_log(CG_LOG_WARN, "全局热键 %s 注册失败：已挂满 %d 条", combo, CGW_HOTKEY_MAX);
+        cg_logm(CG_LOG_WARN, "window", "全局热键 %s 注册失败：已挂满 %d 条", combo, CGW_HOTKEY_MAX);
         return 0;
     }
     /* 挑一个表里没人用的 id，别按下标直接算 —— 上面"删中间条目"用的是 swap，
@@ -234,12 +234,12 @@ int cg_hotkey_set(cg_app_t *app, const char *combo, const char *action)
         if (!used) break;
     }
     if (i >= CGW_HOTKEY_MAX) {          /* 到不了：表满在上面已拦（防的是以后改逻辑） */
-        cg_log(CG_LOG_WARN, "全局热键 %s 注册失败：找不到空闲 id", combo);
+        cg_logm(CG_LOG_WARN, "window", "全局热键 %s 注册失败：找不到空闲 id", combo);
         return 0;
     }
     id = CGW_HOTKEY_ID_BASE + (unsigned)i;
     if (!RegisterHotKey(hwnd, (int)id, mods, vk)) {
-        cg_log(CG_LOG_WARN, "全局热键 %s 注册失败：组合键可能已被别的程序占用", combo);
+        cg_logm(CG_LOG_WARN, "window", "全局热键 %s 注册失败：组合键可能已被别的程序占用", combo);
         return 0;
     }
     s_hotkeys[s_nhotkey].id     = id;
@@ -249,7 +249,7 @@ int cg_hotkey_set(cg_app_t *app, const char *combo, const char *action)
         return 0;
     }
     s_nhotkey++;
-    cg_log(CG_LOG_INFO, "全局热键已注册：%s -> 动作 %s", combo, action);
+    cg_logm(CG_LOG_INFO, "window", "全局热键已注册：%s -> 动作 %s", combo, action);
     return 1;
 }
 
@@ -854,7 +854,7 @@ int cg_win_set_border(cg_app_t *app, const char *mode)
     if (!h || !mode || !*mode) return 0;
     if (strcmp(mode, "sizable") && strcmp(mode, "fixed") &&
         strcmp(mode, "dialog")  && strcmp(mode, "none")) {
-        cg_log(CG_LOG_WARN, "改边框失败：mode \"%s\" 认不出来（sizable/fixed/dialog/none）", mode);
+        cg_logm(CG_LOG_WARN, "window", "改边框失败：mode \"%s\" 认不出来（sizable/fixed/dialog/none）", mode);
         return 0;
     }
     style = style_of_border(&app->doc, mode, &ex);

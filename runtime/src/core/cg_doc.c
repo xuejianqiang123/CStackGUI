@@ -1074,16 +1074,16 @@ cg_doc_t *cg_doc_parse(const char *json, char *err, size_t errsz)
      * （stats 计数与那条 WARN 都在这里产生）。 */
     resolve_named_styles(doc->root, doc);
     if (doc->style_missing) {
-        cg_log(CG_LOG_WARN, "有 %d 个控件引用了不存在的样式名（第一个是 \"%s\"）：这些控件按「没写 style」处理，外观退回缺省",
+        cg_logm(CG_LOG_WARN, "doc", "有 %d 个控件引用了不存在的样式名（第一个是 \"%s\"）：这些控件按「没写 style」处理，外观退回缺省",
                doc->style_missing, doc->style_missing_name ? doc->style_missing_name : "?");
     }
     if (doc->role_missing) {
-        cg_log(CG_LOG_WARN, "有 %d 个控件引用了不存在的角色名（第一个是 \"@%s\"）：这些引用按「没写」处理，颜色退回缺省",
+        cg_logm(CG_LOG_WARN, "doc", "有 %d 个控件引用了不存在的角色名（第一个是 \"@%s\"）：这些引用按「没写」处理，颜色退回缺省",
                doc->role_missing, doc->role_missing_name ? doc->role_missing_name : "?");
     } else if (doc->bg_role && !role_find(doc->roles, doc->nroles, doc->bg_role)) {
         doc->role_missing = 1;
         doc->role_missing_name = doc->bg_role;
-        cg_log(CG_LOG_WARN, "app.bg 引用了不存在的角色名 \"@%s\"：按「没写」处理", doc->bg_role);
+        cg_logm(CG_LOG_WARN, "doc", "app.bg 引用了不存在的角色名 \"@%s\"：按「没写」处理", doc->bg_role);
     }
 
     cj_free(root);
@@ -1481,7 +1481,7 @@ static int merge_tables(cg_doc_t *host, const cg_doc_t *sub, const char *file, c
         cg_named_style_t *slot;
 
         if (style_find(host->styles, host->nstyles, s->name)) {
-            cg_log(CG_LOG_WARN, "include（%s）：命名样式 \"%s\" 主文档里已有，主文档优先", file, s->name);
+            cg_logm(CG_LOG_WARN, "doc", "include（%s）：命名样式 \"%s\" 主文档里已有，主文档优先", file, s->name);
             continue;
         }
         grown = (cg_named_style_t *)realloc(host->styles, (host->nstyles + 1) * sizeof(*grown));
@@ -1497,7 +1497,7 @@ static int merge_tables(cg_doc_t *host, const cg_doc_t *sub, const char *file, c
         cg_role_t *slot;
 
         if (role_find(host->roles, host->nroles, r->name)) {
-            cg_log(CG_LOG_WARN, "include（%s）：色彩角色 \"%s\" 主文档里已有，主文档优先", file, r->name);
+            cg_logm(CG_LOG_WARN, "doc", "include（%s）：色彩角色 \"%s\" 主文档里已有，主文档优先", file, r->name);
             continue;
         }
         grown = (cg_role_t *)realloc(host->roles, (host->nroles + 1) * sizeof(*grown));
@@ -1520,7 +1520,7 @@ static int merge_tables(cg_doc_t *host, const cg_doc_t *sub, const char *file, c
         for (j = 0; j < host->nactions; j++)
             if (host->actions[j].name && strcmp(host->actions[j].name, a->name) == 0) break;
         if (j < host->nactions) {
-            cg_log(CG_LOG_WARN, "include（%s）：动作 \"%s\" 主文档里已有，主文档优先", file, a->name);
+            cg_logm(CG_LOG_WARN, "doc", "include（%s）：动作 \"%s\" 主文档里已有，主文档优先", file, a->name);
             continue;
         }
         grown = (cg_action_t *)realloc(host->actions, (host->nactions + 1) * sizeof(*grown));
@@ -1655,7 +1655,7 @@ static int expand_entry_into(cg_doc_t *host, const char *base_dir, const char *p
 
     if (!file) { snprintf(err, errsz, "include 的 path 是空的"); return 1; }
     if (str_list_has(visited, file)) {
-        cg_log(CG_LOG_WARN, "include（%s）已经在本次加载里展开过，跳过（防循环 / 防重复）", file);
+        cg_logm(CG_LOG_WARN, "doc", "include（%s）已经在本次加载里展开过，跳过（防循环 / 防重复）", file);
         free(file);
         return 0;
     }

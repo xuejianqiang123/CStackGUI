@@ -127,7 +127,7 @@ static int wlan_ready(void)
 
     m = LoadLibraryW(L"wlanapi.dll");
     if (!m) {
-        cg_log(CG_LOG_WARN, "无线：wlanapi.dll 打不开（err=%lu），WiFi 状态查不了",
+        cg_logm(CG_LOG_WARN, "wireless", "无线：wlanapi.dll 打不开（err=%lu），WiFi 状态查不了",
                (unsigned long)GetLastError());
         return 0;
     }
@@ -139,7 +139,7 @@ static int wlan_ready(void)
     g_wlan_scan  = (p_wlan_scan_t)(void *)GetProcAddress(m, "WlanScan");   /* 可选：取不到就不提供扫描 */
     g_wlan_free  = (p_wlan_free_t)(void *)GetProcAddress(m, "WlanFreeMemory");
     if (!g_wlan_open || !g_wlan_close || !g_wlan_enum || !g_wlan_query || !g_wlan_avail || !g_wlan_free) {
-        cg_log(CG_LOG_WARN, "无线：wlanapi.dll 里缺符号（系统太老？），WiFi 状态查不了");
+        cg_logm(CG_LOG_WARN, "wireless", "无线：wlanapi.dll 里缺符号（系统太老？），WiFi 状态查不了");
         g_wlan_open = NULL;
         return 0;
     }
@@ -169,7 +169,7 @@ static HANDLE wlan_handle(void)
     if (g_wlan_open(2, NULL, &g_wlan_ver, &g_wlan) != 0 || !g_wlan) {
         g_wlan_open_failed = 1;
         g_wlan             = NULL;
-        cg_log(CG_LOG_WARN, "无线：WlanOpenHandle 失败（WLAN 服务没起？），WiFi 状态查不了");
+        cg_logm(CG_LOG_WARN, "wireless", "无线：WlanOpenHandle 失败（WLAN 服务没起？），WiFi 状态查不了");
         return NULL;
     }
     return g_wlan;
@@ -190,7 +190,7 @@ static int bt_ready(void)
 
     m = LoadLibraryW(L"BluetoothApis.dll");
     if (!m) {
-        cg_log(CG_LOG_WARN, "无线：BluetoothApis.dll 打不开（err=%lu），蓝牙状态查不了",
+        cg_logm(CG_LOG_WARN, "wireless", "无线：BluetoothApis.dll 打不开（err=%lu），蓝牙状态查不了",
                (unsigned long)GetLastError());
         return 0;
     }
@@ -202,7 +202,7 @@ static int bt_ready(void)
     g_bt_next_dev    = (p_bt_next_dev_t)(void *)GetProcAddress(m, "BluetoothFindNextDevice");
     g_bt_close_dev   = (p_bt_close_dev_t)(void *)GetProcAddress(m, "BluetoothFindDeviceClose");
     if (!g_bt_first_radio || !g_bt_next_radio || !g_bt_close_radio || !g_bt_radio_info) {
-        cg_log(CG_LOG_WARN, "无线：BluetoothApis.dll 里缺符号，蓝牙状态查不了");
+        cg_logm(CG_LOG_WARN, "wireless", "无线：BluetoothApis.dll 里缺符号，蓝牙状态查不了");
         return 0;
     }
     g_bt_ready = 1;
@@ -335,7 +335,7 @@ int cg_wifi_scan(void)
             ret = 0;
         } else {
             /* 见到 5 就是"位置权限"：Win10 起扫描要它，去「设置 > 隐私 > 位置」打开 */
-            cg_log(CG_LOG_WARN, "无线：触发扫描失败（err=%lu）%s", (unsigned long)rc,
+            cg_logm(CG_LOG_WARN, "wireless", "无线：触发扫描失败（err=%lu）%s", (unsigned long)rc,
                    rc == 5 ? " —— 去「设置 > 隐私 > 位置」把位置权限打开" : "");
         }
     }

@@ -211,7 +211,7 @@ static DWORD WINAPI rec_worker(LPVOID p)
             if (!r->capped && (r->frames % REC_SIZE_CHECK_EVERY) == 0 &&
                 cg_file_size(r->tmp_path) >= CG_REC_BYTES_MAX) {
                 r->capped = 1;
-                cg_log(CG_LOG_WARN, "录屏：已达 %dMB 体积上限，停止写入（停止录制时已录内容照常收尾）",
+                cg_logm(CG_LOG_WARN, "gif", "录屏：已达 %dMB 体积上限，停止写入（停止录制时已录内容照常收尾）",
                        (int)(CG_REC_BYTES_MAX / (1024 * 1024)));
             }
         }
@@ -219,7 +219,7 @@ static DWORD WINAPI rec_worker(LPVOID p)
         LeaveCriticalSection(&r->cs);
 
         if (done) {
-            cg_log(CG_LOG_ERROR, "录屏：编码第 %d 帧失败，停止并丢弃", r->frames + 1);
+            cg_logm(CG_LOG_ERROR, "gif", "录屏：编码第 %d 帧失败，停止并丢弃", r->frames + 1);
             EnterCriticalSection(&r->cs);
             r->active = 0;                    /* UI 下一拍自然熄火；收尾归 stop 路径 */
             LeaveCriticalSection(&r->cs);
@@ -243,7 +243,7 @@ static void rec_tick(void *user)
     if (!app || !r->active) return;           /* 工作线程可能已自行停止（编码失败）——定时器熄火 */
 
     if (!rec_capture(r, r->rgb)) {
-        cg_log(CG_LOG_ERROR, "录屏：抓第 %d 帧失败，停止并丢弃", r->frames + 1);
+        cg_logm(CG_LOG_ERROR, "gif", "录屏：抓第 %d 帧失败，停止并丢弃", r->frames + 1);
         cg_gif_rec_stop(app, NULL);
         return;
     }
@@ -300,7 +300,7 @@ static int rec_join_worker(cg_rec_t *r)
     SetEvent(r->ev_stop);
     wr = WaitForSingleObject(r->th, 10000);   /* 一帧编码有界（大区域几百毫秒），10s 极限宽裕 */
     if (wr != WAIT_OBJECT_0) {
-        cg_log(CG_LOG_ERROR, "录屏：等工作线程退出超时（>10s），放弃收尾以避免崩溃；编码器与缓冲泄漏至进程退出");
+        cg_logm(CG_LOG_ERROR, "gif", "录屏：等工作线程退出超时（>10s），放弃收尾以避免崩溃；编码器与缓冲泄漏至进程退出");
         return 0;
     }
     CloseHandle(r->th);
@@ -359,7 +359,7 @@ int cg_gif_rec_start(cg_app_t *app, int x, int y, int w, int h, int fps)
 
     r->gif = cg_gif_open(r->tmp_path, w, h);
     if (!r->gif) {
-        cg_log(CG_LOG_ERROR, "录屏：打不开临时文件 %s", r->tmp_path);
+        cg_logm(CG_LOG_ERROR, "gif", "录屏：打不开临时文件 %s", r->tmp_path);
         rec_free(r);
         return 0;
     }
@@ -371,7 +371,7 @@ int cg_gif_rec_start(cg_app_t *app, int x, int y, int w, int h, int fps)
     r->ev_stop = CreateEventW(NULL, TRUE, FALSE, NULL);   /* 手动复位：停的信号要留住 */
     r->ev_work = CreateEventW(NULL, FALSE, FALSE, NULL);  /* auto-reset：一帧一唤 */
     if (!r->ev_stop || !r->ev_work) {
-        cg_log(CG_LOG_ERROR, "录屏：创建同步对象失败");
+        cg_logm(CG_LOG_ERROR, "gif", "录屏：创建同步对象失败");
         if (r->ev_stop) CloseHandle(r->ev_stop);
         if (r->ev_work) CloseHandle(r->ev_work);
         r->ev_stop = r->ev_work = NULL;
@@ -393,7 +393,7 @@ int cg_gif_rec_start(cg_app_t *app, int x, int y, int w, int h, int fps)
 
     r->th = CreateThread(NULL, 0, rec_worker, r, 0, NULL);
     if (!r->th) {
-        cg_log(CG_LOG_ERROR, "录屏：起编码线程失败");
+        cg_logm(CG_LOG_ERROR, "gif", "录屏：起编码线程失败");
         r->active = 0;
         CloseHandle(r->ev_stop);
         CloseHandle(r->ev_work);
@@ -413,7 +413,7 @@ int cg_gif_rec_start(cg_app_t *app, int x, int y, int w, int h, int fps)
     }
 
     cg_set_timer(app, r->interval_ms, rec_tick, app);
-    cg_log(CG_LOG_INFO, "录屏开始：区域 %d,%d %dx%d（逻辑像素），%d fps，临时文件 %s",
+    cg_logm(CG_LOG_INFO, "gif", "录屏开始：区域 %d,%d %dx%d（逻辑像素），%d fps，临时文件 %s",
            x, y, w, h, fps, r->tmp_path);
     return 1;
 }
@@ -468,14 +468,14 @@ int cg_gif_rec_stop(cg_app_t *app, const char *path)
     if (ok) {
         long long sz = cg_file_size(path);
 
-        cg_log(CG_LOG_INFO, "录屏结束：%d 帧（跳过 %d 帧无变化、丢弃 %d 帧编码跟不上），%lld 字节 -> %s",
+        cg_logm(CG_LOG_INFO, "gif", "录屏结束：%d 帧（跳过 %d 帧无变化、丢弃 %d 帧编码跟不上），%lld 字节 -> %s",
                frames, r->skipped, r->dropped, sz, path);
     } else if (path && *path && frames > 0) {
-        cg_log(CG_LOG_ERROR, "录屏：收尾失败（%d 帧没能落到 %s）", frames, path);
+        cg_logm(CG_LOG_ERROR, "gif", "录屏：收尾失败（%d 帧没能落到 %s）", frames, path);
     } else if (path && *path) {
-        cg_log(CG_LOG_WARN, "录屏取消：一帧都没录到，不生成文件");
+        cg_logm(CG_LOG_WARN, "gif", "录屏取消：一帧都没录到，不生成文件");
     } else {
-        cg_log(CG_LOG_INFO, "录屏取消：丢弃 %d 帧", frames);
+        cg_logm(CG_LOG_INFO, "gif", "录屏取消：丢弃 %d 帧", frames);
     }
     rec_free(r);
     return ok;
@@ -519,7 +519,7 @@ void cg_gif_rec_shutdown(void)
     /* 同 stop 的幂等口径：worker 自停（active=0 但 th/gif 还在）时这里也要收尾，
      * 否则关窗路径把孤儿资源留到进程结束（2026-10-17 二轮评审）。 */
     if (!r->th && !r->gif) return;
-    cg_log(CG_LOG_INFO, "关窗：中止录屏，丢弃 %d 帧", r->frames);
+    cg_logm(CG_LOG_INFO, "gif", "关窗：中止录屏，丢弃 %d 帧", r->frames);
     r->active = 0;
     rec_join_worker(r);                        /* 超时则下面什么都不释放（宁泄漏不 UAF） */
     if (!r->th) rec_free(r);

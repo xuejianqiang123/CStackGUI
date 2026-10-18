@@ -270,18 +270,18 @@ static void action_validate_refs(cg_app_t *app)
 
         if (w->action && *w->action) {
             if (cg_action_index(app, w->action) < 0) {
-                cg_log(CG_LOG_WARN, "控件 \"%s\" 引用了不存在的动作 \"%s\"", id, w->action);
+                cg_logm(CG_LOG_WARN, "action", "控件 \"%s\" 引用了不存在的动作 \"%s\"", id, w->action);
                 app->bad_actions++;
             }
             /* 不支持 click 的类型：动作永远不会被触发 —— 说出来，别让人等一个不来的事件 */
             if (!cg_kind_supports_event(w->type, CG_EVENT_CLICK)) {
-                cg_log(CG_LOG_WARN, "控件 \"%s\"（%s）不支持 click，所以动作 \"%s\" 永远不会触发",
+                cg_logm(CG_LOG_WARN, "action", "控件 \"%s\"（%s）不支持 click，所以动作 \"%s\" 永远不会触发",
                        id, w->type ? w->type : "?", w->action);
                 app->bad_actions++;
             }
             /* 两处真相：click 会被动作接管，自己绑的那份永远不会被调用 */
             if (w->handlers[CG_EVENT_CLICK]) {
-                cg_log(CG_LOG_WARN, "控件 \"%s\" 既引用了动作 \"%s\" 又绑了 click —— click 会被忽略",
+                cg_logm(CG_LOG_WARN, "action", "控件 \"%s\" 既引用了动作 \"%s\" 又绑了 click —— click 会被忽略",
                        id, w->action);
                 app->bad_actions++;
             }
@@ -290,7 +290,7 @@ static void action_validate_refs(cg_app_t *app)
             const cg_menu_row_t *r = &w->menu[i];
             if (!r->action || !*r->action) continue;
             if (cg_action_index(app, r->action) < 0) {
-                cg_log(CG_LOG_WARN, "菜单 \"%s\" 的第 %d 项引用了不存在的动作 \"%s\"",
+                cg_logm(CG_LOG_WARN, "action", "菜单 \"%s\" 的第 %d 项引用了不存在的动作 \"%s\"",
                        id, i, r->action);
                 app->bad_actions++;
             }
@@ -388,7 +388,7 @@ void cg_action_build(cg_app_t *app)
         /* handler 必须登记过 —— 与事件回调走同一张表、同一套兜底：
          * cg_resolve_binding 会写日志并记进启动期提示清单（cg_app_run 汇总弹一次）。 */
         if (!a->handler || !*a->handler) {
-            cg_log(CG_LOG_WARN, "动作 \"%s\" 没写 handler，已忽略", a->name);
+            cg_logm(CG_LOG_WARN, "action", "动作 \"%s\" 没写 handler，已忽略", a->name);
             app->bad_actions++;
         } else {
             a->fn = cg_resolve_binding(app, a->handler);
@@ -402,7 +402,7 @@ void cg_action_build(cg_app_t *app)
                 a->accel = cg_str_dup(display);
                 a->accel_ok = cg_accel_parse(da->accel, &a->key);
             } else {
-                cg_log(CG_LOG_WARN, "动作 \"%s\" 的快捷键 \"%s\" 看不懂，已忽略", a->name, da->accel);
+                cg_logm(CG_LOG_WARN, "action", "动作 \"%s\" 的快捷键 \"%s\" 看不懂，已忽略", a->name, da->accel);
                 app->bad_actions++;
             }
         }
@@ -419,7 +419,7 @@ void cg_action_build(cg_app_t *app)
             if (!app->actions[i].accel_ok || !app->actions[j].accel_ok) continue;
             if (app->actions[i].key.key == app->actions[j].key.key &&
                 app->actions[i].key.mods == app->actions[j].key.mods) {
-                cg_log(CG_LOG_WARN, "动作 \"%s\" 的快捷键 %s 与 \"%s\" 重复，它不会生效",
+                cg_logm(CG_LOG_WARN, "action", "动作 \"%s\" 的快捷键 %s 与 \"%s\" 重复，它不会生效",
                        app->actions[i].name, app->actions[i].accel, app->actions[j].name);
                 app->bad_actions++;
                 app->actions[i].accel_ok = 0;

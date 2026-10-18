@@ -137,7 +137,7 @@ unsigned char *cg_file_read_bytes(const char *path, int *out_len)
 
     size = GetFileSize(h, NULL);
     if (size == INVALID_FILE_SIZE || size > 0x7FFFFFFFu) {   /* 长度出口是 int，超了直接报失败 */
-        if (size > 0x7FFFFFFFu) cg_log(CG_LOG_WARN, "文件超过 2GB，读不进来：%s", path);
+        if (size > 0x7FFFFFFFu) cg_logm(CG_LOG_WARN, "fs", "文件超过 2GB，读不进来：%s", path);
         CloseHandle(h);
         return NULL;
     }

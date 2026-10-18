@@ -175,7 +175,7 @@ static UINT kit_gbk_cp(void)
         checked = 1;
         if (!GetCPInfoExW(936, 0, &info)) {
             cp = CP_ACP;
-            cg_log(CG_LOG_WARN, "本机没有 GBK(936) 代码页，cg_*_gbk_* 退化为系统 ANSI 代码页 %u", GetACP());
+            cg_logm(CG_LOG_WARN, "str", "本机没有 GBK(936) 代码页，cg_*_gbk_* 退化为系统 ANSI 代码页 %u", GetACP());
         }
     }
     return cp;

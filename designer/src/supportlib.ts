@@ -82,6 +82,15 @@ if (argc > 1 && strcmp(argv[1], "--selftest") == 0) return cg_app_selftest(&d);`
             sample: `cg_log(CG_LOG_INFO, "保存到 %s（%d 字节）", path, n);
 if (!ok) cg_log(CG_LOG_ERROR, "写文件失败：%s", path);`,
           }),
+          c("cg_logm", "写日志（带模块标签）", "void cg_logm(int level, const char *mod, const char *fmt, ...)", "和 cg_log 同一条落地路径，行里多一个 [模块] —— 几十万行的现场日志按子系统一键 grep，不用逐行读文案猜是谁写的", {
+            params: [
+              "level：CG_LOG_INFO / CG_LOG_WARN / CG_LOG_ERROR",
+              "mod：短 ASCII 模块名（\"serial\" / \"net\" / \"gif\"…）；NULL 或空串 = 不标",
+              "fmt, ...：和 printf 一样（支持中文）",
+            ],
+            sample: `cg_logm(CG_LOG_ERROR, "serial", "打开 %s 失败：%s", port, cg_serial_last_error(ser));
+cg_logm(CG_LOG_INFO, "net", "收到 %d 字节", n);`,
+          }),
           c("cg_log_set_level", "设日志等级", "void cg_log_set_level(int level)", "只记 >= 该等级的条目（默认 CG_LOG_INFO，全记）"),
         ],
       },

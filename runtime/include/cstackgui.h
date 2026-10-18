@@ -2224,6 +2224,19 @@ void cg_browser_navigate(cg_widget_t *w, const char *url);
  */
 void cg_log(int level, const char *fmt, ...);
 /**
+ * @brief 写一条日志（printf 风格，带模块标签）
+ * @param level 等级，CG_LOG_INFO / CG_LOG_WARN / CG_LOG_ERROR
+ * @param mod 模块标签：短 ASCII（"serial" / "net" / "gif"…）；NULL 或空串 = 不标。
+ *            行格式变成 `时间 [等级] [模块] 正文` —— 现场日志按子系统 grep 就靠它
+ *            （几十万行的 app.log 里"串口相关"一键过滤，不用逐行读文案猜是谁写的）
+ * @param fmt printf 风格格式串
+ * @return void 无返回值
+ * @note 与 cg_log 同一条落地路径（stderr 镜像 / 自旋锁 / 时间戳 / 轮转全共用），
+ *       只多一个模块标签。运行时自己的内部记录已全部带标签；业务代码用哪个都行
+ *       —— 带标签的更容易在现场日志里被找到。
+ */
+void cg_logm(int level, const char *mod, const char *fmt, ...);
+/**
  * @brief 设日志文件的过滤等级
  * @param level 只记 >= 它的条目
  * @return void 无返回值（默认 CG_LOG_INFO）

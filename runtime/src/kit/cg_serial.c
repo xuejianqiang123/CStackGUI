@@ -123,10 +123,10 @@ static void ser_fail(cg_serial_t *s, const char *what)
         EnterCriticalSection(&s->lock);
         memcpy(s->err, msg, strlen(msg) + 1);
         LeaveCriticalSection(&s->lock);
-        cg_log(CG_LOG_ERROR, "串口 %s %s", s->port, msg);
+        cg_logm(CG_LOG_ERROR, "serial", "串口 %s %s", s->port, msg);
     } else {
         memcpy(g_open_err, msg, strlen(msg) + 1);
-        cg_log(CG_LOG_ERROR, "串口 %s", msg);
+        cg_logm(CG_LOG_ERROR, "serial", "串口 %s", msg);
     }
 }
 
@@ -163,7 +163,7 @@ static DWORD WINAPI ser_thread(LPVOID p)
             continue;
         }
         if (backoff > 200) {
-            cg_log(CG_LOG_INFO, "串口 %s：读取已恢复", s->port);
+            cg_logm(CG_LOG_INFO, "serial", "串口 %s：读取已恢复", s->port);
             backoff = 200;
         }
 
@@ -184,7 +184,7 @@ static DWORD WINAPI ser_thread(LPVOID p)
          * 随时可查，这里按 5s 节流打一条 WARN —— 不节流会反过来把日志淹掉。 */
         tnow = GetTickCount64();
         if (drop_now > drop_reported && tnow - drop_logged_at >= 5000) {
-            cg_log(CG_LOG_WARN, "串口 %s：接收缓冲溢出，已累计丢弃 %lld 字节（业务取数跟不上；cg_serial_dropped() 可查精确值）",
+            cg_logm(CG_LOG_WARN, "serial", "串口 %s：接收缓冲溢出，已累计丢弃 %lld 字节（业务取数跟不上；cg_serial_dropped() 可查精确值）",
                    s->port, drop_now);
             drop_reported = drop_now;
             drop_logged_at = tnow;
@@ -274,27 +274,27 @@ cg_serial_t *cg_serial_open_ex(const char *port, int baud, int bits, int stop, i
 
     if (!port || !*port) {
         snprintf(g_open_err, sizeof(g_open_err), "端口名是空的");
-        cg_log(CG_LOG_ERROR, "串口打开失败：端口名是空的");
+        cg_logm(CG_LOG_ERROR, "serial", "串口打开失败：端口名是空的");
         return NULL;
     }
     if (baud <= 0) {
         snprintf(g_open_err, sizeof(g_open_err), "波特率不合法（%d）", baud);
-        cg_log(CG_LOG_ERROR, "串口 %s 打开失败：波特率不合法（%d）", port, baud);
+        cg_logm(CG_LOG_ERROR, "serial", "串口 %s 打开失败：波特率不合法（%d）", port, baud);
         return NULL;
     }
     if (bits < 5 || bits > 8) {
         snprintf(g_open_err, sizeof(g_open_err), "数据位不合法（%d，只能是 5..8）", bits);
-        cg_log(CG_LOG_ERROR, "串口 %s 打开失败：%s", port, g_open_err);
+        cg_logm(CG_LOG_ERROR, "serial", "串口 %s 打开失败：%s", port, g_open_err);
         return NULL;
     }
     if (stop < 1 || stop > 2) {
         snprintf(g_open_err, sizeof(g_open_err), "停止位不合法（%d，只能是 1..2）", stop);
-        cg_log(CG_LOG_ERROR, "串口 %s 打开失败：%s", port, g_open_err);
+        cg_logm(CG_LOG_ERROR, "serial", "串口 %s 打开失败：%s", port, g_open_err);
         return NULL;
     }
     if (parity < 0 || parity > 2) {
         snprintf(g_open_err, sizeof(g_open_err), "校验位不合法（%d，0=无 1=奇 2=偶）", parity);
-        cg_log(CG_LOG_ERROR, "串口 %s 打开失败：%s", port, g_open_err);
+        cg_logm(CG_LOG_ERROR, "serial", "串口 %s 打开失败：%s", port, g_open_err);
         return NULL;
     }
 
@@ -361,7 +361,7 @@ cg_serial_t *cg_serial_open_ex(const char *port, int baud, int bits, int stop, i
         CloseHandle(h);
         return NULL;
     }
-    cg_log(CG_LOG_INFO, "串口 %s 已打开（%d %d%s%d）", port, baud, bits,
+    cg_logm(CG_LOG_INFO, "serial", "串口 %s 已打开（%d %d%s%d）", port, baud, bits,
            parity_txt[parity], stop);
     return s;
 }
@@ -409,7 +409,7 @@ int cg_widget_serial_open(cg_widget_t *w, const char *port)
         }
     }
     if (!w->sport[0]) {
-        cg_log(CG_LOG_WARN, "串口组件 #%s 没配端口，打开不了", w->id ? w->id : "-");
+        cg_logm(CG_LOG_WARN, "serial", "串口组件 #%s 没配端口，打开不了", w->id ? w->id : "-");
         return -1;
     }
 
@@ -487,7 +487,7 @@ void cg_widget_serial_set_format(cg_widget_t *w, int bits, int stop, int parity)
     if (!w || !w->type || strcmp(w->type, "serial") != 0) return;
     if (bits < 5 || bits > 8 || stop < 1 || stop > 2 || parity < 0 || parity > 2) {
         /* 越界就整个忽略：只改一半会造出"7 数据位 + 无校验"这种谁也没要的组合 */
-        cg_log(CG_LOG_WARN, "串口组件 #%s：数据位/停止位/校验不合法（%d/%d/%d），已忽略",
+        cg_logm(CG_LOG_WARN, "serial", "串口组件 #%s：数据位/停止位/校验不合法（%d/%d/%d），已忽略",
                w->id ? w->id : "-", bits, stop, parity);
         return;
     }
@@ -536,7 +536,7 @@ void cg_serial_close(cg_serial_t *s)
              * 的线程准备 use-after-free（2026-10-17 架构评审"close 的 3 秒幻觉"整改）：
              * 宁可把整份链路泄漏到进程结束（由系统回收），也绝不释放一个还可能被写的
              * 内存。代价是本端口的独占权到进程结束为止 —— 日志里说清楚。 */
-            cg_log(CG_LOG_ERROR, "串口 %s：关闭时读线程未退出（取消挂死 I/O 后仍 >1s），放弃回收以避免崩溃；本链路泄漏至进程退出，该端口到进程结束前无法重开", s->port);
+            cg_logm(CG_LOG_ERROR, "serial", "串口 %s：关闭时读线程未退出（取消挂死 I/O 后仍 >1s），放弃回收以避免崩溃；本链路泄漏至进程退出，该端口到进程结束前无法重开", s->port);
             return;
         }
         CloseHandle(s->th);

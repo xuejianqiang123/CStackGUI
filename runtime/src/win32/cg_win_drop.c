@@ -30,7 +30,7 @@ void cgw_win_drop(cg_app_t *app, HDROP hdrop)
 
     n = DragQueryFileW(hdrop, 0xFFFFFFFF, NULL, 0);     /* 个数：第二个参数传 -1 */
     if (n == 0) {
-        cg_log(CG_LOG_WARN, "拖进来的东西里没有文件名（不是文件、或来源没给内容）");
+        cg_logm(CG_LOG_WARN, "drop", "拖进来的东西里没有文件名（不是文件、或来源没给内容）");
         return;
     }
     files = (char **)calloc(n, sizeof(char *));
@@ -55,7 +55,7 @@ void cgw_win_drop(cg_app_t *app, HDROP hdrop)
     }
 
     if (taken == 0) {
-        cg_log(CG_LOG_WARN, "拖进来的 %u 项里没有一项能读成路径", (unsigned)n);
+        cg_logm(CG_LOG_WARN, "drop", "拖进来的 %u 项里没有一项能读成路径", (unsigned)n);
         free(files);
         return;
     }
@@ -64,7 +64,7 @@ void cgw_win_drop(cg_app_t *app, HDROP hdrop)
     for (i = 0; i < taken; i++) free(files[i]);
     free(files);
 
-    cg_log(CG_LOG_INFO, "文件拖入：%d 个（第一个：%s）", cg_drop_count(app), app->drop_files[0]);
+    cg_logm(CG_LOG_INFO, "drop", "文件拖入：%d 个（第一个：%s）", cg_drop_count(app), app->drop_files[0]);
 
     /* 派发期间清单有效；回调返回后立刻收掉（业务要留就自己拷） */
     cgw_win_emit(app->window, CG_EVENT_DROP);

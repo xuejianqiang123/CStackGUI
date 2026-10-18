@@ -232,7 +232,7 @@ void cg_bind_apply_all(cg_app_t *app)
         src = cg_widget_by_id(app, w->bind_src);
         if (!src) {
             app->bad_binds++;
-            cg_log(CG_LOG_WARN, "控件 \"%s\" 绑定到 \"%s\"，但没有这个 id 的控件",
+            cg_logm(CG_LOG_WARN, "bind", "控件 \"%s\" 绑定到 \"%s\"，但没有这个 id 的控件",
                    w->id ? w->id : "-", w->bind_src);
             continue;
         }

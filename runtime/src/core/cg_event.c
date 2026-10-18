@@ -245,14 +245,14 @@ cg_event_fn cg_resolve_binding(cg_app_t *app, const char *name)
 {
     if (!name || !*name) return NULL;
     if (!app || !app->bindings) {
-        cg_log(CG_LOG_WARN, "事件绑定了 \"%s\"，但没有提供 bindings 表", name);
+        cg_logm(CG_LOG_WARN, "event", "事件绑定了 \"%s\"，但没有提供 bindings 表", name);
         unresolved_add(name);
         return NULL;
     }
     for (const cg_binding_t *b = app->bindings; b->name; b++) {
         if (strcmp(b->name, name) == 0) return b->fn;
     }
-    cg_log(CG_LOG_WARN, ".cgui 引用了回调 \"%s\"，但 C 代码里没有 CG_BIND 它", name);
+    cg_logm(CG_LOG_WARN, "event", ".cgui 引用了回调 \"%s\"，但 C 代码里没有 CG_BIND 它", name);
     unresolved_add(name);
     return NULL;
 }

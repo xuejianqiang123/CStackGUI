@@ -145,6 +145,22 @@ static void test_log_file(void)
     cg_test_ok("ERROR 在文件里", txt && strstr(txt, "should-appear") != NULL);
     cg_free(txt);
 
+    cg_test_note("---- 模块标签：cg_logm 带 [模块]、cg_log 不带、NULL/空串等同不标 ----");
+    log_cleanup();
+    cg_log_open(p);
+    cg_logm(CG_LOG_ERROR, "serial", "tagged line");
+    cg_log(CG_LOG_WARN, "untagged line");
+    cg_logm(CG_LOG_INFO, NULL, "null mod falls back to untagged");
+    cg_logm(CG_LOG_INFO, "", "empty mod also untagged");
+    cg_log_close();
+    txt = cg_file_read(p);
+    cg_test_ok("  cg_logm 的行带 [ERROR] [serial] 标签", txt && strstr(txt, "[ERROR] [serial] tagged line") != NULL);
+    cg_test_ok("  cg_log 的行不带模块标签（[WARN ] 直接接正文）", txt && strstr(txt, "[WARN ] untagged line") != NULL);
+    cg_test_ok("  mod=NULL 等同不标（老调用方行为不变）", txt && strstr(txt, "[INFO ] null mod falls back") != NULL);
+    cg_test_ok("  mod 空串等同不标", txt && strstr(txt, "[INFO ] empty mod also") != NULL);
+    cg_test_ok("  时间戳仍在行首（格式只做增量，旧解析不破）", log_ts_shape(txt));
+    cg_free(txt);
+
     cg_test_note("---- 开档轮转：旧文件超限，开档即挪 .old，新档从头写 ----");
     log_cleanup();
     log_fill(p, LOG_TEST_MAX + 1024, 'x');

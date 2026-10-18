@@ -72,7 +72,7 @@ static int net_wsa(void)
     if (done) return ok;
     done = 1;
     ok = (WSAStartup(MAKEWORD(2, 2), &ws) == 0);
-    if (!ok) cg_log(CG_LOG_ERROR, "网络初始化失败（WSAStartup）");
+    if (!ok) cg_logm(CG_LOG_ERROR, "net", "网络初始化失败（WSAStartup）");
     return ok;
 }
 
@@ -155,10 +155,10 @@ static void net_fail(cg_net_t *n, const char *what, int code)
         EnterCriticalSection(&n->lock);
         memcpy(n->err, msg, strlen(msg) + 1);
         LeaveCriticalSection(&n->lock);
-        cg_log(CG_LOG_ERROR, "网络 %s %s", n->peer, msg);
+        cg_logm(CG_LOG_ERROR, "net", "网络 %s %s", n->peer, msg);
     } else {
         memcpy(g_open_err, msg, strlen(msg) + 1);
-        cg_log(CG_LOG_ERROR, "网络 %s", msg);
+        cg_logm(CG_LOG_ERROR, "net", "网络 %s", msg);
     }
 }
 
@@ -216,7 +216,7 @@ static DWORD WINAPI net_thread(LPVOID p)
              * 这里按 5s 节流打一条 WARN。 */
             tnow = GetTickCount64();
             if (drop_now > drop_reported && tnow - drop_logged_at >= 5000) {
-                cg_log(CG_LOG_WARN, "网络 %s：接收缓冲溢出，已累计丢弃 %lld 字节（业务取数跟不上；cg_net_dropped() 可查精确值）",
+                cg_logm(CG_LOG_WARN, "net", "网络 %s：接收缓冲溢出，已累计丢弃 %lld 字节（业务取数跟不上；cg_net_dropped() 可查精确值）",
                        n->peer, drop_now);
                 drop_reported = drop_now;
                 drop_logged_at = tnow;
@@ -227,7 +227,7 @@ static DWORD WINAPI net_thread(LPVOID p)
             EnterCriticalSection(&n->lock);
             n->connected = 0;
             LeaveCriticalSection(&n->lock);
-            cg_log(CG_LOG_INFO, "网络 %s：对端关闭了连接", n->peer);
+            cg_logm(CG_LOG_INFO, "net", "网络 %s：对端关闭了连接", n->peer);
             break;
         }
         if (WSAGetLastError() == WSAETIMEDOUT) continue;    /* 没数据，转一圈看要不要停 */
@@ -343,7 +343,7 @@ cg_net_t *cg_net_connect(const char *host, int port, int timeout_ms)
     rc = getaddrinfo(host, portstr, &hints, &res);
     if (rc != 0 || !res) {
         snprintf(g_open_err, sizeof(g_open_err), "主机名解析不了：%s（%d）", host, rc);
-        cg_log(CG_LOG_ERROR, "网络连接 %s 失败：主机名解析不了", host);
+        cg_logm(CG_LOG_ERROR, "net", "网络连接 %s 失败：主机名解析不了", host);
         return NULL;
     }
 
@@ -404,7 +404,7 @@ cg_net_t *cg_net_connect(const char *host, int port, int timeout_ms)
         closesocket(s);
         return NULL;
     }
-    cg_log(CG_LOG_INFO, "已连接 %s", n->peer);
+    cg_logm(CG_LOG_INFO, "net", "已连接 %s", n->peer);
     return n;
 }
 
@@ -452,7 +452,7 @@ cg_net_t *cg_net_listen(int port, int backlog)
 
     n = net_alloc_plain(s, 1);
     if (!n) { closesocket(s); return NULL; }
-    cg_log(CG_LOG_INFO, "正在监听端口 %d", port);
+    cg_logm(CG_LOG_INFO, "net", "正在监听端口 %d", port);
     return n;
 }
 
@@ -488,7 +488,7 @@ cg_net_t *cg_net_accept(cg_net_t *srv, int timeout_ms)
     }
     n = net_from_socket(c, (struct sockaddr *)&sa, NET_RX_CAP);
     if (!n) { closesocket(c); return NULL; }
-    cg_log(CG_LOG_INFO, "接受了来自 %s 的连接", n->peer);
+    cg_logm(CG_LOG_INFO, "net", "接受了来自 %s 的连接", n->peer);
     return n;
 }
 
@@ -516,7 +516,7 @@ void cg_net_close(cg_net_t *n)
             /* 同串口口径（2026-10-17 架构评审）：读线程没出来就继续拆 = use-after-free，
              * 宁可泄漏整份链路到进程结束，也绝不释放一个还可能被写的内存。
              * shutdown 已发过，走到这里的只剩驱动级死锁，概率远低于串口侧。 */
-            cg_log(CG_LOG_ERROR, "网络 %s：关闭时读线程未退出（>3s），放弃回收以避免崩溃；本链路泄漏至进程退出", n->peer);
+            cg_logm(CG_LOG_ERROR, "net", "网络 %s：关闭时读线程未退出（>3s），放弃回收以避免崩溃；本链路泄漏至进程退出", n->peer);
             return;
         }
         CloseHandle(n->th);
@@ -715,7 +715,7 @@ cg_net_t *cg_net_udp_open(int local_port, int broadcast)
         snprintf(n->peer, sizeof(n->peer), "UDP 本地 %d%s",
                  (int)ntohs(me.sin_port), broadcast ? "（可广播）" : "");
     }
-    cg_log(CG_LOG_INFO, "已开 UDP 端口：%s", n->peer);
+    cg_logm(CG_LOG_INFO, "net", "已开 UDP 端口：%s", n->peer);
     return n;
 }
 

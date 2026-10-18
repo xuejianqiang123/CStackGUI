@@ -216,13 +216,51 @@ void cg_log_set_level(int level)
 }
 
 /**
+ * @brief 日志落地：stderr 镜像 + 追加写文件（时间戳 + 等级 + 可选模块标签），并盯运行中轮转
+ * @param level 日志等级（CG_LOG_INFO / WARN / ERROR）
+ * @param mod 模块标签（NULL 或空串 = 不标）：短 ASCII，如 "serial" / "net" / "gif"
+ * @param msg 已格式化好的正文（调用方 vsnprintf 的产物）
+ * @return void 无返回值
+ * @note 文件部分整条在 s_log_lock 保护下：轮转（log_rotate_runtime）会换 s_log，
+ *       而 kit 的读线程也在写日志 —— 锁是"别的线程不拿已关闭的 FILE* 写字"的保证。
+ *       stderr 那份不进锁（CRT 自己锁它，且它不参与轮转）。
+ *       模块标签的意义：几十万行的现场日志里，"串口相关"一键 grep 可得，
+ *       不用逐行读文案猜是哪个子系统写的（2026-10-18 二轮会诊挂账项结账）。
+ */
+static void log_emit(int level, const char *mod, const char *msg)
+{
+    char modtag[64] = "";
+
+    if (mod && *mod) snprintf(modtag, sizeof(modtag), " [%s]", mod);
+    /* 开发时（有控制台）走这里看得最顺；GUI 版这些字进不了任何地方 */
+    fprintf(stderr, "[cstackgui]%s %s\n", modtag, msg);
+
+    log_lock();
+    if (s_log) {
+        time_t    t = time(NULL);
+        struct tm *tmv = localtime(&t);
+        char      ts[32] = "";
+        int       n;
+
+        if (tmv) strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", tmv);
+        n = fprintf(s_log, "%s [%s]%s %s\n", ts[0] ? ts : "-", level_tag(level), modtag, msg);
+        if (n > 0) s_bytes += n;
+        fflush(s_log);      /* 崩溃/被杀时不至于丢最后几行 */
+
+        /* 运行中轮转（2026-10-18 补，二轮会诊挂账项）：开档时那一轮转管不到
+         * "一个进程跑几周"的无人值守场景，单个文件会无界增长。判据用自己累加的
+         * 字节数（精确，且不用每次 ftell）；过线就在持锁状态下换档。 */
+        if (s_bytes >= LOG_ROTATE_MAX) log_rotate_runtime();
+    }
+    log_unlock();
+}
+
+/**
  * @brief 写一条日志：镜像到 stderr，并追加到日志文件（带时间戳）
  * @param level 日志等级，低于当前过滤等级的条目直接丢弃
  * @param fmt printf 风格格式串
  * @return void 无返回值（没打开日志文件时只写 stderr）
- * @note 整条写在 s_log_lock 保护下：轮转（log_rotate_runtime）会换 s_log，
- *       而 kit 的读线程也在调本函数 —— 锁是"别的线程不拿已关闭的 FILE* 写字"的保证。
- *       stderr 那份不进锁（CRT 自己锁它，且它不参与轮转）。
+ * @note 不带模块标签；要按子系统 grep 请用 cg_logm
  */
 void cg_log(int level, const char *fmt, ...)
 {
@@ -234,26 +272,26 @@ void cg_log(int level, const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(msg, sizeof(msg), fmt, ap);
     va_end(ap);
+    log_emit(level, NULL, msg);
+}
 
-    /* 开发时（有控制台）走这里看得最顺；GUI 版这些字进不了任何地方 */
-    fprintf(stderr, "[cstackgui] %s\n", msg);
+/**
+ * @brief 写一条日志（带模块标签）：镜像到 stderr，并追加到日志文件
+ * @param level 日志等级，低于当前过滤等级的条目直接丢弃
+ * @param mod 模块标签（短 ASCII 如 "serial"；NULL/空串 = 不标，等同 cg_log）
+ * @param fmt printf 风格格式串
+ * @return void 无返回值（没打开日志文件时只写 stderr）
+ * @note 与 cg_log 同一条落地路径（log_emit），只多一个标签
+ */
+void cg_logm(int level, const char *mod, const char *fmt, ...)
+{
+    char    msg[1024];
+    va_list ap;
 
-    log_lock();
-    if (s_log) {
-        time_t    t = time(NULL);
-        struct tm *tmv = localtime(&t);
-        char      ts[32] = "";
-        int       n;
+    if (!fmt || level < s_level) return;
 
-        if (tmv) strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", tmv);
-        n = fprintf(s_log, "%s [%s] %s\n", ts[0] ? ts : "-", level_tag(level), msg);
-        if (n > 0) s_bytes += n;
-        fflush(s_log);      /* 崩溃/被杀时不至于丢最后几行 */
-
-        /* 运行中轮转（2026-10-18 补，二轮会诊挂账项）：开档时那一轮转管不到
-         * "一个进程跑几周"的无人值守场景，单个文件会无界增长。判据用自己累加的
-         * 字节数（精确，且不用每次 ftell）；过线就在持锁状态下换档。 */
-        if (s_bytes >= LOG_ROTATE_MAX) log_rotate_runtime();
-    }
-    log_unlock();
+    va_start(ap, fmt);
+    vsnprintf(msg, sizeof(msg), fmt, ap);
+    va_end(ap);
+    log_emit(level, mod, msg);
 }

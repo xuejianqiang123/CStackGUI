@@ -42,7 +42,7 @@ static void fatal_add(const char *fmt, ...)
  */
 static void fatal_report(int allow_ui, const char *title, const char *text)
 {
-    cg_log(CG_LOG_ERROR, "%s：%s", title, text ? text : "");
+    cg_logm(CG_LOG_ERROR, "app", "%s：%s", title, text ? text : "");
     if (!allow_ui) return;
     {
         char        buf[1500];
@@ -164,7 +164,7 @@ static char *open_cgui_text(const cg_app_desc_t *desc, char *found, size_t found
             fatal_add("这个文件打不开：\n    %s\n", desc->cgui_path);
             return NULL;      /* 日志与弹窗由 app_open 的 fatal_report 统一处理 */
         }
-        cg_log(CG_LOG_WARN, "读不到 %s，在 exe 附近找找看", desc->cgui_path);
+        cg_logm(CG_LOG_WARN, "app", "读不到 %s，在 exe 附近找找看", desc->cgui_path);
     } else if (!desc->auto_locate_cgui) {
         s_fatal[0] = '\0';
         fatal_add("没有提供 cgui_path 或 cgui_text，也没有打开自动查找。\n");
@@ -208,7 +208,7 @@ static char *open_cgui_text(const cg_app_desc_t *desc, char *found, size_t found
         size_t n = 0;
         json = cg_embedded_resource("CGUI", &n);
         if (json) {
-            cg_log(CG_LOG_INFO, "界面来源：exe 内嵌资源（%lu 字节）", (unsigned long)n);
+            cg_logm(CG_LOG_INFO, "app", "界面来源：exe 内嵌资源（%lu 字节）", (unsigned long)n);
             if (found) snprintf(found, found_size, "(内嵌资源)");
             return json;
         }
@@ -394,7 +394,7 @@ int cg_app_run(const cg_app_desc_t *desc)
     rc = cg_backend_active->run(&app);
     app_close(&app);
     cg_backend_active = NULL;
-    cg_log(CG_LOG_INFO, "结束：退出码 %d", rc);
+    cg_logm(CG_LOG_INFO, "app", "结束：退出码 %d", rc);
     cg_log_close();
     return rc;
 }
@@ -427,7 +427,7 @@ static void selftest_walk(cg_app_t *app, cg_widget_t *w, selftest_stat_t *st, in
             if (!w->node || !w->node->ev[i]) continue;
             if (!cg_kind_supports_event(w->type, (cg_event_t)i)) continue;
             if (w->handlers[i]) continue;
-            cg_log(CG_LOG_ERROR, "  [FAIL] %-10s #%-14s %-13s 绑定 \"%s\" 未在 C 侧登记",
+            cg_logm(CG_LOG_ERROR, "app", "  [FAIL] %-10s #%-14s %-13s 绑定 \"%s\" 未在 C 侧登记",
                    "window", w->id ? w->id : "-",
                    cg_event_name((cg_event_t)i), w->node->ev[i]);
             st->unresolved++;
@@ -442,7 +442,7 @@ static void selftest_walk(cg_app_t *app, cg_widget_t *w, selftest_stat_t *st, in
         if (!w->node || !w->node->ev[i]) continue;
         if (!cg_kind_supports_event(w->type, (cg_event_t)i)) continue;  /* 不支持的事件上面已报过 */
         if (!w->handlers[i]) {
-            cg_log(CG_LOG_ERROR, "  [FAIL] %-10s #%-14s %-9s 绑定 \"%s\" 未在 C 侧登记",
+            cg_logm(CG_LOG_ERROR, "app", "  [FAIL] %-10s #%-14s %-9s 绑定 \"%s\" 未在 C 侧登记",
                    w->type ? w->type : "-", w->id ? w->id : "-",
                    cg_event_name((cg_event_t)i), w->node->ev[i]);
             st->unresolved++;
@@ -498,13 +498,13 @@ int cg_app_selftest(const cg_app_desc_t *desc)
 
         app_close(&app);
         if (bad) {
-            cg_log(CG_LOG_ERROR, "自检失败：未登记回调 %d 个，绑了不支持的事件 %d 个，绑定源不存在 %d 个，动作出错 %d 个，样式引用失效 %d 个",
+            cg_logm(CG_LOG_ERROR, "app", "自检失败：未登记回调 %d 个，绑了不支持的事件 %d 个，绑定源不存在 %d 个，动作出错 %d 个，样式引用失效 %d 个",
                    st.unresolved, app.unsupported_events, app.bad_binds, app.bad_actions, missing);
             cg_log_close();
             return 5;
         }
     }
-    cg_log(CG_LOG_INFO, "自检通过：控件 %d 个，触发回调 %d 次", st.total, st.fired);
+    cg_logm(CG_LOG_INFO, "app", "自检通过：控件 %d 个，触发回调 %d 次", st.total, st.fired);
     cg_log_close();
     printf("selftest OK\n");
     return 0;

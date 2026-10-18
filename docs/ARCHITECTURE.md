@@ -288,7 +288,10 @@ runtime/
       cg_action.c       动作层：命名命令（文字/快捷键/回调名）+ 加速键表 + 启用与勾选同步
       cg_app.c          应用生命周期（定位 .cgui / 打开 / 消息循环 / 收尾）与自检
       cg_timer.c        一次性定时器（后端 50ms 心跳驱动）
-      cg_log.c          日志：stderr 镜像 + 追加写文件（CG_LOG_INFO/WARN/ERROR 宏的落点）
+      cg_log.c          日志：stderr 镜像 + 追加写文件（CG_LOG_* 宏的落点）。cg_logm 带模块
+                         标签，行格式 = `时间 [等级] [模块] 正文`（cg_log 不标，行为同旧版）；
+                         运行时的内部记录已全部带标签（serial/net/gif/app/doc/crash…），
+                         几十万行的现场日志按子系统一键 grep
       cg_ringbuf.c      环形字节缓冲（串口/网口的读线程往里扔，业务在时钟里取走）
     win32/              Win32 原生后端：不知道业务的存在
       cg_win_internal.h 后端内部共享接口（各 cg_win_*.c 之间）
