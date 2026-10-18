@@ -1336,6 +1336,67 @@ const SMOKE_PROBE = async () => {
     }
   }
 
+  /* 10. 缩放手柄（第三个空间编辑分支）：与拖拽同一套指针协议，但提交路径不同 ——
+        resize 是**逐帧 onApply**（React 每帧重渲），不是 move 那种直写 DOM 预览。 */
+  {
+    const w = $(".app-window .widget[data-node-id='smk_btn']");
+    t("缩放前能选中目标控件（第 9 段拖放进来的）", !!w);
+    if (w) {
+      const w0 = parseFloat(w.style.width);
+      tap(w); /* 点选：选中才画手柄 */
+      await sleep(150);
+      const handle = $(".handles .handle-e");
+      t("选中后画出东侧缩放手柄", !!handle);
+      if (handle) {
+        const rh = handle.getBoundingClientRect();
+        const hx = rh.left + rh.width / 2;
+        const hy = rh.top + rh.height / 2;
+        const hd = {
+          bubbles: true, cancelable: true, composed: true,
+          clientX: hx, clientY: hy, pointerId: 2, isPrimary: true, button: 0, buttons: 1,
+        };
+        handle.dispatchEvent(new PointerEvent("pointerdown", hd));
+        await sleep(120); /* 等 effect 挂 window 监听 */
+        window.dispatchEvent(new PointerEvent("pointermove", { ...hd, clientX: hx + 32 }));
+        await sleep(120);
+        window.dispatchEvent(new PointerEvent("pointerup", { ...hd, clientX: hx + 32, buttons: 0 }));
+        await sleep(200);
+        t("拖东侧手柄：宽 +32（缩放逐帧提交进 doc）", parseFloat(w.style.width) === w0 + 32);
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }));
+        await sleep(200);
+        t("缩放也是一步撤销", parseFloat(w.style.width) === w0);
+      }
+    }
+  }
+
+  /* 11. 框选（marquee）：起点是客户区背景而不是控件 —— 第三个空间编辑分支。 */
+  {
+    const client = $(".client-area");
+    t("框选：客户区在", !!client);
+    if (client) {
+      const rc = client.getBoundingClientRect();
+      const at = (px, py) => ({ clientX: rc.left + px, clientY: rc.top + py });
+      const down = {
+        bubbles: true, cancelable: true, composed: true,
+        ...at(8, 8), pointerId: 3, isPrimary: true, button: 0, buttons: 1,
+      };
+      client.dispatchEvent(new PointerEvent("pointerdown", down));
+      await sleep(120);
+      window.dispatchEvent(new PointerEvent("pointermove", { ...down, ...at(320, 130) }));
+      await sleep(120);
+      window.dispatchEvent(new PointerEvent("pointerup", { ...down, ...at(320, 130), buttons: 0 }));
+      await sleep(200);
+      /* 多选的视觉是"主选中 .selected + 其余 .selected-2"（WidgetView 的主次之分），
+         数的时候两类都要算 —— 只数 .selected 会永远只见 1 个（2026-10-18 踩过）。 */
+      t("框住两个控件后两个都被选中", $$(".app-window .widget.selected, .app-window .widget.selected-2").length === 2);
+      /* 点空白（没过位移阈值）= 取消选中 */
+      client.dispatchEvent(new PointerEvent("pointerdown", { ...down, ...at(420, 320) }));
+      window.dispatchEvent(new PointerEvent("pointerup", { ...down, ...at(420, 320), buttons: 0 }));
+      await sleep(200);
+      t("框选后点空白取消选中", $$(".app-window .widget.selected").length === 0);
+    }
+  }
+
   return out;
 };
 
