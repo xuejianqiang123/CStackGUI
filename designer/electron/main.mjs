@@ -1299,6 +1299,43 @@ const SMOKE_PROBE = async () => {
     }
   }
 
+  /* 9. 拖放打开 .cgui（文件打开路径的行为层首覆盖）：合成一个带 File 的 drop 事件。
+     冒烟此前始终以空文档启动，replaceDoc 这条路径（打开文件 / 载入外部改动）
+     零运行时验证。合成可行性：处理器用的是纯浏览器 API
+     （dataTransfer.files[0] + file.text()），不碰 electron 桥。 */
+  {
+    /* 最小合法 .cgui（schema 与 examples/ 下真实文件一致：cgui/app/widgets）。
+       故意用与空文档不同的尺寸（640x480）和两个具名控件 —— 断言全部由这份内容决定，
+       不引用任何示例文件（示例改了不会误红）。 */
+    const cgui = JSON.stringify({
+      cgui: 1,
+      app: { title: "冒烟拖放", width: 640, height: 480, bg: "#FFFFFF" },
+      widgets: [
+        { id: "smk_btn", type: "button", rect: { x: 24, y: 24, w: 140, h: 40 }, text: "拖进来的按钮" },
+        { id: "smk_lbl", type: "label", rect: { x: 24, y: 80, w: 200, h: 24 }, text: "拖进来的标签" },
+      ],
+    });
+    const dt = new DataTransfer();
+    dt.items.add(new File([cgui], "smoke-drop.cgui", { type: "application/json" }));
+    window.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: dt }));
+    await sleep(300);
+    t("拖放 .cgui 后画布换成文件里的界面（2 个控件）", $$(".app-window .widget[data-node-id]").length === 2);
+    const win = $(".app-window");
+    t("窗口尺寸用文件里的 640x480", win?.style.width === "640px" && win?.style.height === "480px");
+    t("文件里的控件id与文字渲染出来了", !!$(".app-window .widget[data-node-id='smk_btn']") && document.body.textContent.includes("拖进来的按钮"));
+    /* replaceDoc 清历史：打开文件后第一次编辑仍可一步撤销（新历史的起点）——
+       这条同时钉住"换文档 = 历史归零"的 store 语义在 UI 侧也成立。 */
+    const btn2 = $$(".palette-item").find((b) => b.querySelector(".palette-label")?.textContent.trim() === "按钮");
+    if (btn2) {
+      tap(btn2);
+      await sleep(150);
+      t("打开文件后能继续加控件", $$(".app-window .widget[data-node-id]").length === 3);
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }));
+      await sleep(200);
+      t("replaceDoc 后历史干净：加一个撤一个", $$(".app-window .widget[data-node-id]").length === 2);
+    }
+  }
+
   return out;
 };
 
