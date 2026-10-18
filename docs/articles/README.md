@@ -8,13 +8,13 @@
 
 | 文章 | 对应示例 | 事实来源（改代码后要重核这些） |
 | --- | --- | --- |
-| `01-基础与容器.md` | `examples\lessons\lesson01_basics\` | `.cgui` 的 `hint`/`text`、`main.c` 的回调名、`--selftest` 的"控件 N 个 / 回调 M 次" |
-| `02-输入与选择.md` | `examples\lessons\lesson02_inputs\` | 同上；输入框字段见 `docs\CGUI-FORMAT.md` 第 2.1 节 |
-| `03-数值与指示.md` | `examples\lessons\lesson03_values\` | 同上；`.cgui` 的 `bind` 例子见 `docs\CGUI-FORMAT.md` 第 2.8 节 |
-| `04-数据与日志.md` | `examples\lessons\lesson04_data\` | 同上；`splitter` 的两栏语义见 `docs\CGUI-FORMAT.md` 的 `terminal` 那节 |
-| `05-命令与图形.md` | `examples\lessons\lesson05_commands\` | 同上 |
+| `01-基础与容器.md` | `examples\lessons\lessons\`（页 01 · `modules\l1.c`） | `.cgui` 的 `hint`/`text`、`l1.c` 的回调名、`--selftest` 的"控件 N 个 / 回调 M 次" |
+| `02-输入与选择.md` | `examples\lessons\lessons\`（页 02 · `modules\l2.c`） | 同上；输入框字段见 `docs\CGUI-FORMAT.md` 第 2.1 节 |
+| `03-数值与指示.md` | `examples\lessons\lessons\`（页 03 · `modules\l3.c`） | 同上；`.cgui` 的 `bind` 例子见 `docs\CGUI-FORMAT.md` 第 2.8 节 |
+| `04-数据与日志.md` | `examples\lessons\lessons\`（页 04 · `modules\l4.c`） | 同上；`splitter` 的两栏语义见 `docs\CGUI-FORMAT.md` 的 `terminal` 那节 |
+| `05-命令与图形.md` | `examples\lessons\lessons\`（页 05 · `modules\l5.c`） | 同上 |
 | `00-导读.md` | `README.md` + `build-app.bat` | 环境要求、第一次编译的三条命令 |
-| `06-主窗口与窗口事件.md` | `examples\lessons\lesson06_window\` | 窗口配置 `app.*`、26 种窗口事件、`app.info` 程序信息；自检不合成窗口事件这条也在里面 |
+| `06-主窗口与窗口事件.md` | `examples\lessons\lessons\`（页 06 · `modules\l6.c`） | 窗口配置 `app.*`、26 种窗口事件、`app.info` 程序信息；自检不合成窗口事件这条也在里面 |
 | `07-实战-记事本.md` | `examples\suites\text\` | 菜单分发、脏标记、状态栏刷新、编码识别 |
 | `08-案例-serialterm-无界面串口与编辑框.md` | `examples\suites\comm\` | 无界面串口组件的 `arrive` 事件、数据落点、HEX 发送 |
 | `09-校验与摘要.md` | —（纯能力篇，不绑示例） | `runtime\include\cstackgui.h` 里 CRC / 哈希 / 进制与补码的签名与语义 |
@@ -25,7 +25,7 @@
 2. **跑起来**：编译命令 + 自检命令 + 该课的自检数字；
 3. **一屏总览**：控件清单表（`类型名 | 一句话 | 有事件吗`）；
 4. **逐个讲**：`.cgui` 片段 → C 回调片段 → 一句"为什么这么写"；
-5. **踩坑清单**：这一课真实踩过的（都在 `main.c` 注释与 `hint` 里）；
+5. **踩坑清单**：这一课真实踩过的（都在对应模块 `modules\lN.c` 注释与 `hint` 里）；
 6. **验收**：`--selftest` 期望输出；
 7. **下一篇预告 + 系列导航**。
 
@@ -58,9 +58,9 @@
 
 - 文章里**不要**出现内部路径、内部工具名（`check-format` 这类门禁命令可以留，读者也需要）；
   用户在意的只有"我怎么跑起来、我怎么写回调"。
-- 示例代码一律照 `main.c` 抄，**不要为了文章好看而简化到不能编译**：
+- 示例代码一律照对应课的模块 `modules\lN.c` 抄，**不要为了文章好看而简化到不能编译**：
   真抄一遍、真编译一遍，读者才不会卡在第一步。
 - **篇数/课数别手改**：正文里"本系列共 10 篇"这类声明由
   `node tools\check-examples.mjs --docs` 回校（它拿 `docs\articles\*.md` 的实际张数、
-  `examples\lesson*` 的实际课数、以及教学说明里那张生成事实表对表），写错会红 ——
+  `examples\lessons\lessons\` 套件的页数、以及教学说明里那张生成事实表对表），写错会红 ——
   这条门禁已接进 `tools\check-format.bat`。

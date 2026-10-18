@@ -1,4 +1,15 @@
 /**
+ * @file    l2.c
+ * @brief   lesson02_inputs —— 套件模块（原 examples\lesson02_inputs 合并而来，函数名未改：static 编译单元隔离）
+ * @note    由 tools\suite-merge.mjs（.cgui 侧）+ build\gen_modules.mjs（C 侧）的变换规则
+ *          产出：CG_BIND 字符串带 l2_ 前缀（与 .cgui 的 events 一一对应）、
+ *          绑定表导出为 l2_bindings、原 on_ready 变成 l2_init、
+ *          窗口事件改成直连转发 l2_app_<event>（套件只有一个窗口，
+ *          按名派发只能接一个，其余工具的窗口职责会被静默吞掉）。
+ *          各工具的回调都是 static，合并进同一次链接不冲突。
+ */
+
+/**
  * @file    main.c
  * @brief   入门 02：输入与选择 —— 表单里的控件怎么读、怎么填
  * @details 一屏把「填表」要用的控件全摆出来，每个都配回调，结果只落在状态栏那一句：
@@ -71,7 +82,7 @@ static void on_edt_single_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev;
     (void)user;
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l2_sb_main"), 0,
                    "edit 单行：\"%s\"（%d 字）", txt(self), (int)strlen(txt(self)));
 }
 
@@ -93,7 +104,7 @@ static void on_edt_multi_change(cg_widget_t *self, cg_event_t ev, void *user)
     for (p = s; *p; p++) {
         if (*p == '\n') lines++;
     }
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l2_sb_main"), 0,
                    "edit 多行：%d 行 / %d 字（Enter 换行，滚动条是 scroll: 2 给的）",
                    lines, (int)strlen(s));
 }
@@ -109,7 +120,7 @@ static void on_edt_spin_auto_spin(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev;
     (void)user;
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l2_sb_main"), 0,
                    "edit 数值框（自动）：%d，本次 %+d（越界由运行时夹）",
                    cg_widget_value(self), cg_event_delta(self));
 }
@@ -129,7 +140,7 @@ static void on_edt_spin_manual_spin(cg_widget_t *self, cg_event_t ev, void *user
     (void)user;
     if (delta == 0) delta = s_biz.step;     /* 自检合成的事件没有方向，就当加一步 */
     cg_widget_set_value(self, cg_widget_value(self) + delta);
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l2_sb_main"), 0,
                    "edit 数值框（手动）：%d（步长 %d，运行时只管报 ±1）",
                    cg_widget_value(self), s_biz.step);
 }
@@ -145,7 +156,7 @@ static void on_edt_byte_blur(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev;
     (void)user;
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l2_sb_main"), 0,
                    "edit 字节：失焦后是 \"%s\"（超过 0~255 夹回，不是数字就清空）", txt(self));
 }
 
@@ -160,7 +171,7 @@ static void on_edt_int_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev;
     (void)user;
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l2_sb_main"), 0,
                    "edit 整数：\"%s\"（真要当数字用，建数值框走 cg_widget_value 更省事）",
                    txt(self));
 }
@@ -176,7 +187,7 @@ static void on_edt_dt_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev;
     (void)user;
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l2_sb_main"), 0,
                    "edit 日期时间：\"%s\"", txt(self));
 }
 
@@ -191,7 +202,7 @@ static void on_edt_upper_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev;
     (void)user;
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l2_sb_main"), 0,
                    "edit 转大写：\"%s\"（conv: 2，连初始 text 一起转）", txt(self));
 }
 
@@ -206,7 +217,7 @@ static void on_edt_short_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev;
     (void)user;
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l2_sb_main"), 0,
                    "edit 限长：\"%s\"（%d / 8 字，多一个字都进不来）",
                    txt(self), (int)strlen(txt(self)));
 }
@@ -224,7 +235,7 @@ static void on_rt_note_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev;
     (void)user;
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l2_sb_main"), 0,
                    "richtext：%d 字（多行富文本，能选中、能复制）", (int)strlen(txt(self)));
 }
 
@@ -239,7 +250,7 @@ static void on_dtp_date_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev;
     (void)user;
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l2_sb_main"), 0,
                    "datepicker（date）：%s", txt(self));
 }
 
@@ -254,7 +265,7 @@ static void on_dtp_time_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev;
     (void)user;
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l2_sb_main"), 0,
                    "datepicker（time）：%s", txt(self));
 }
 
@@ -269,7 +280,7 @@ static void on_cal_pick_select(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev;
     (void)user;
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l2_sb_main"), 0,
                    "monthcal：选中的日期是 %s", txt(self));
 }
 
@@ -286,7 +297,7 @@ static void on_chk_vip_change(cg_widget_t *self, cg_event_t ev, void *user)
 {
     (void)ev;
     (void)user;
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l2_sb_main"), 0,
                    "checkbox：%s", cg_widget_checked(self) ? "已勾选" : "已取消");
 }
 
@@ -307,14 +318,14 @@ static void on_rad_group_change(cg_widget_t *self, cg_event_t ev, void *user)
 
     (void)ev;
     (void)user;
-    if (cg_widget_checked(cg_find(app, "rad_stu"))) {
+    if (cg_widget_checked(cg_find(app, "l2_rad_stu"))) {
         who = "学生";
-    } else if (cg_widget_checked(cg_find(app, "rad_emp"))) {
+    } else if (cg_widget_checked(cg_find(app, "l2_rad_emp"))) {
         who = "职员";
-    } else if (cg_widget_checked(cg_find(app, "rad_other"))) {
+    } else if (cg_widget_checked(cg_find(app, "l2_rad_other"))) {
         who = "其他";
     }
-    cg_status_setf(cg_find(app, "sb_main"), 0,
+    cg_status_setf(cg_find(app, "l2_sb_main"), 0,
                    "radio 单选：现在选中的是「%s」（一组共用一个回调）", who);
 }
 
@@ -334,7 +345,7 @@ static void on_lst_skill_select(cg_widget_t *self, cg_event_t ev, void *user)
 
     (void)ev;
     (void)user;
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l2_sb_main"), 0,
                    "listbox：第 %d 项「%s」（%d 项可选）",
                    idx, item ? item : "（未选）", cg_widget_list_count(self));
 }
@@ -353,7 +364,7 @@ static void on_cmb_city_select(cg_widget_t *self, cg_event_t ev, void *user)
 
     (void)ev;
     (void)user;
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l2_sb_main"), 0,
                    "combo：第 %d 项「%s」", idx, item ? item : "（未选）");
 }
 
@@ -380,19 +391,19 @@ static void on_form_change(cg_widget_t *self, cg_event_t ev, void *user)
     (void)user;
     if (!id) return;
 
-    if (cg_str_equal(id, "edt_grp_name")) {
-        cg_status_setf(cg_find(app, "sb_main"), 0,
+    if (cg_str_equal(id, "l2_edt_grp_name")) {
+        cg_status_setf(cg_find(app, "l2_sb_main"), 0,
                        "容器里的 edit：\"%s\"（坐标相对 group）", txt(self));
-    } else if (cg_str_equal(id, "chk_grp_vip")) {
-        cg_status_setf(cg_find(app, "sb_main"), 0,
+    } else if (cg_str_equal(id, "l2_chk_grp_vip")) {
+        cg_status_setf(cg_find(app, "l2_sb_main"), 0,
                        "容器里的 checkbox：%s", cg_widget_checked(self) ? "已勾选" : "已取消");
-    } else if (cg_str_equal(id, "rad_grp_a") || cg_str_equal(id, "rad_grp_b")) {
+    } else if (cg_str_equal(id, "l2_rad_grp_a") || cg_str_equal(id, "l2_rad_grp_b")) {
         /* 同一个容器里的两个 radio 也是一组互斥，和窗口上那三个互不干扰 */
-        cg_status_setf(cg_find(app, "sb_main"), 0,
+        cg_status_setf(cg_find(app, "l2_sb_main"), 0,
                        "容器里的 radio：选中「%s」", txt(self));
     } else {
         /* edt_b1~edt_b6：只演示边框长相，改了文字就报一句 */
-        cg_status_setf(cg_find(app, "sb_main"), 0,
+        cg_status_setf(cg_find(app, "l2_sb_main"), 0,
                        "border 输入框 #%s：\"%s\"", id, txt(self));
     }
 }
@@ -405,32 +416,32 @@ static void on_form_change(cg_widget_t *self, cg_event_t ev, void *user)
  * @param user 未使用
  * @return 无
  */
-static void on_ready(cg_app_t *app, void *user)
+void l2_init(cg_app_t *app, void *user)
 {
     (void)user;
     s_biz.step = 5;     /* 手动数值框的步长：自动方式拿不到这个能力，只能业务自己乘 */
-    cg_status_set(cg_find(app, "sb_main"), 0, "改一改上面的控件，这里就会多一句结果");
+    cg_status_set(cg_find(app, "l2_sb_main"), 0, "改一改上面的控件，这里就会多一句结果");
 }
 
-static const cg_binding_t k_bindings[] = {
-    CG_BIND("on_edt_single_change",      on_edt_single_change),
-    CG_BIND("on_edt_multi_change",       on_edt_multi_change),
-    CG_BIND("on_edt_spin_auto_spin",     on_edt_spin_auto_spin),
-    CG_BIND("on_edt_spin_manual_spin",   on_edt_spin_manual_spin),
-    CG_BIND("on_edt_byte_blur",          on_edt_byte_blur),
-    CG_BIND("on_edt_int_change",         on_edt_int_change),
-    CG_BIND("on_edt_dt_change",          on_edt_dt_change),
-    CG_BIND("on_edt_upper_change",       on_edt_upper_change),
-    CG_BIND("on_edt_short_change",       on_edt_short_change),
-    CG_BIND("on_rt_note_change",         on_rt_note_change),
-    CG_BIND("on_dtp_date_change",        on_dtp_date_change),
-    CG_BIND("on_dtp_time_change",        on_dtp_time_change),
-    CG_BIND("on_cal_pick_select",        on_cal_pick_select),
-    CG_BIND("on_chk_vip_change",         on_chk_vip_change),
-    CG_BIND("on_rad_group_change",       on_rad_group_change),
-    CG_BIND("on_lst_skill_select",       on_lst_skill_select),
-    CG_BIND("on_cmb_city_select",        on_cmb_city_select),
-    CG_BIND("on_form_change",            on_form_change),
+const cg_binding_t l2_bindings[] = {
+    CG_BIND("l2_on_edt_single_change",      on_edt_single_change),
+    CG_BIND("l2_on_edt_multi_change",       on_edt_multi_change),
+    CG_BIND("l2_on_edt_spin_auto_spin",     on_edt_spin_auto_spin),
+    CG_BIND("l2_on_edt_spin_manual_spin",   on_edt_spin_manual_spin),
+    CG_BIND("l2_on_edt_byte_blur",          on_edt_byte_blur),
+    CG_BIND("l2_on_edt_int_change",         on_edt_int_change),
+    CG_BIND("l2_on_edt_dt_change",          on_edt_dt_change),
+    CG_BIND("l2_on_edt_upper_change",       on_edt_upper_change),
+    CG_BIND("l2_on_edt_short_change",       on_edt_short_change),
+    CG_BIND("l2_on_rt_note_change",         on_rt_note_change),
+    CG_BIND("l2_on_dtp_date_change",        on_dtp_date_change),
+    CG_BIND("l2_on_dtp_time_change",        on_dtp_time_change),
+    CG_BIND("l2_on_cal_pick_select",        on_cal_pick_select),
+    CG_BIND("l2_on_chk_vip_change",         on_chk_vip_change),
+    CG_BIND("l2_on_rad_group_change",       on_rad_group_change),
+    CG_BIND("l2_on_lst_skill_select",       on_lst_skill_select),
+    CG_BIND("l2_on_cmb_city_select",        on_cmb_city_select),
+    CG_BIND("l2_on_form_change",            on_form_change),
     CG_BIND_END
 };
 
@@ -440,19 +451,3 @@ static const cg_binding_t k_bindings[] = {
  * @param argv 参数数组（argv[1] = .cgui 路径，或 --selftest）
  * @return int 进程退出码（0 正常）
  */
-int main(int argc, char **argv)
-{
-    cg_app_desc_t desc;
-
-    memset(&desc, 0, sizeof(desc));
-    desc.bindings = k_bindings;
-    desc.auto_locate_cgui = 1;
-    desc.on_ready = on_ready;
-
-    if (argc > 1 && strcmp(argv[1], "--selftest") == 0) {
-        desc.cgui_path = (argc > 2) ? argv[2] : "lesson02_inputs.cgui";
-        return cg_app_selftest(&desc);
-    }
-    desc.cgui_path = (argc > 1) ? argv[1] : "lesson02_inputs.cgui";
-    return cg_app_run(&desc);
-}

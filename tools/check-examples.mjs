@@ -117,44 +117,52 @@ const ARTICLES_DIR = path.join(root, "docs", "articles");
 const CN_NUM = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
 
 /**
- * 教学示例目录名（按课号排序）
- * 2026-10-18 示例合并 P4：六课从 examples/base/ 迁到 examples/lessons/（统一成
- * "组/工程"两级布局），所以按 lessons\ 找。保留顶层与 base\ 两个旧位置只为兼容
- * —— 若有人把课放回旧处，门禁仍认得出来（找不到就 0 课，"六课"声明全红）。
+ * 教学六课套件（2026-10-18 合并）：六课从 6 个独立工程并成一个多页签套件，每课 = 套件
+ * .cgui 里的一页（sv_pages 第 N 页）+ modules\lN.c 模块。事实表改为"从套件 .cgui 按页派生"：
+ * 控件数 / 类数 / 控件清单都能逐页递归算出（与原六课逐课 selftest 数字逐页一致，实测
+ * 30/55/27/23/23/13），不再逐课跑 selftest（合并后只有一个 exe）。页签名（课题名）由合并器
+ * 写进 sv_pages.items，这里读它、不另立名单。
  */
+const LESSON_SUITE = path.join(EX_DIR, "lessons", "lessons");
+
+/** 读教学套件 .cgui（六课合并后都在这一份里）；读不到返回 null */
+function lessonSuiteDoc() {
+  try { return JSON.parse(fs.readFileSync(path.join(LESSON_SUITE, "lessons.cgui"), "utf8")); }
+  catch { return null; }
+}
+
+/** 套件的 tabs 页签容器（sv_pages） */
+function lessonTabs(doc) {
+  return ((doc && doc.widgets) || []).find((w) => w.type === "tabs") || null;
+}
+
+/** 六课身份（按页序）：课号 01..06、模块前缀（l1..l6）、主题（页签名去掉 "NN " 前缀） */
 function lessonDirs() {
-  const names = new Set();
-  for (const sub of ["lessons", "", "base"]) {
-    const dir = sub ? path.join(EX_DIR, sub) : EX_DIR;
-    if (!fs.existsSync(dir)) continue;
-    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (e.isDirectory() && LESSON_RE.test(e.name)) names.add(e.name);
-    }
-  }
-  return [...names].sort();
+  const tabs = lessonTabs(lessonSuiteDoc());
+  const items = (tabs && tabs.items) || [];
+  return items.map((title, i) => ({
+    no: String(i + 1).padStart(2, "0"),
+    pre: "l" + (i + 1),
+    theme: title.replace(/^[0-9]+\s*/, "").trim() || title,
+  }));
 }
 
-/** 某一课的实际目录：lessons\ 优先，其次 examples/<名>、examples/base/<名>（旧位置） */
-function lessonHome(dir) {
-  const candidates = [
-    path.join(EX_DIR, "lessons", dir),
-    path.join(EX_DIR, dir),
-    path.join(EX_DIR, "base", dir),
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(path.join(c, dir + ".cgui"))) return c;
-  }
-  return candidates[0];
+/** 某一页的顶层控件（page == p） */
+function lessonPageWidgets(doc, p) {
+  const tabs = lessonTabs(doc);
+  return ((tabs && tabs.children) || []).filter((w) => w.page === p);
 }
 
-/** 某一课的相对路径（事实表里写的那个，必须是真路径 —— 旧表写死 examples\<名> 会在迁移后误导） */
-function lessonRel(dir) {
-  return path.relative(root, lessonHome(dir)).replace(/\\/g, "/");
+/** 递归数控件（顶层 + 全部后代），与 selftest 的"控件 N 个"同口径 */
+function countWidgets(n) {
+  let c = 1;
+  for (const k of n.children || []) c += countWidgets(k);
+  return c;
 }
 
-/** 真跑一次 --selftest 取规模数字（规模真相在运行时，不是我们数 JSON 的结果） */
-function selftestNumbers(dir) {
-  const base = path.join(lessonHome(dir), dir);
+/** 套件整体跑一次 --selftest 取总数（合并后只有一个 exe，回调总数在这儿量） */
+function suiteSelftest() {
+  const base = path.join(LESSON_SUITE, "lessons");
   try {
     const out = execFileSync(base + ".exe", ["--selftest", base + ".cgui"], {
       encoding: "utf8",
@@ -164,34 +172,36 @@ function selftestNumbers(dir) {
     const m = out.match(/控件\s*(\d+)\s*个[\s\S]*?触发回调\s*(\d+)\s*次/);
     return m ? { widgets: Number(m[1]), callbacks: Number(m[2]) } : null;
   } catch {
-    return null;                       // 没编译过 / 跑不起来：规模列显示"?"，由调用方提示先 build-all
+    return null;                       // 没编译过 / 跑不起来：规模行显示"?"，由调用方提示先 build
   }
 }
 
-/** 一节课的事实：课号、目录、主题（取 app.title 里 "·" 之后那段）、规模、用到的控件类型 */
+/** 一页的事实：课号、模块、主题、规模（控件/类/回调）、用到的控件类型。
+ *  控件数按页递归数（与 selftest 口径一致，实测复现原六课逐课数字）；
+ *  回调数取该页模块 CG_BIND 数（窗口事件转直连转发不进绑定表，故不含窗口事件）。 */
 function lessonFacts() {
-  const rows = [];
-  for (const dir of lessonDirs()) {
-    const cgui = path.join(lessonHome(dir), dir + ".cgui");
-    let doc = {};
-    try { doc = JSON.parse(fs.readFileSync(cgui, "utf8")); } catch { doc = {}; }
-    const title = (doc.app && doc.app.title) || "";
-    const theme = title.includes("·") ? title.split("·").slice(1).join("·").trim() : title.trim();
+  const doc = lessonSuiteDoc() || {};
+  return lessonDirs().map((L, p) => {
+    const pageWidgets = lessonPageWidgets(doc, p);
     const used = new Set();
-    collectTypes(doc.widgets, used);
-    const st = selftestNumbers(dir);
-    rows.push({
-      no: dir.slice(6, 8),
-      dir,
-      rel: lessonRel(dir),
-      theme,
+    for (const w of pageWidgets) collectTypes(w, used);
+    const widgets = pageWidgets.reduce((a, w) => a + countWidgets(w), 0);
+    const modSrc = (() => {
+      try { return fs.readFileSync(path.join(LESSON_SUITE, "modules", `${L.pre}.c`), "utf8"); }
+      catch { return ""; }
+    })();
+    const callbacks = (modSrc.match(/CG_BIND\("/g) || []).length;
+    return {
+      no: L.no,
+      pre: L.pre,
+      module: `examples\\lessons\\lessons\\modules\\${L.pre}.c`,
+      theme: L.theme,
       kinds: used.size,
-      widgets: st ? st.widgets : "?",
-      callbacks: st ? st.callbacks : "?",
+      widgets,
+      callbacks,
       types: [...used].sort(),
-    });
-  }
-  return rows;
+    };
+  });
 }
 
 const MARK_BEGIN = "<!-- lessons-scale:begin";
@@ -201,11 +211,11 @@ const MARK_END = "<!-- lessons-scale:end -->";
 function lessonsScaleBlock() {
   const out = [];
   out.push(MARK_BEGIN + "（由 node tools\\check-examples.mjs --lesson-table 生成，别手改）-->");
-  out.push("| 课 | 目录 | 主题 | 规模 | 用到的控件 |");
+  out.push("| 页 | 模块 | 主题 | 规模 | 用到的控件 |");
   out.push("| --- | --- | --- | --- | --- |");
   for (const r of lessonFacts()) {
     const typesCell = r.types.map((t) => "`" + t + "`").join(" ");
-    out.push(`| 入门 ${r.no} | \`${r.rel}\` | ${r.theme} | ${r.kinds} 类 · ${r.widgets} 个控件 · ${r.callbacks} 个回调 | ${typesCell} |`);
+    out.push(`| ${r.no} | \`${r.module}\` | ${r.theme} | ${r.kinds} 类 · ${r.widgets} 个控件 · ${r.callbacks} 个回调 | ${typesCell} |`);
   }
   out.push(MARK_END);
   return out.join("\n");
@@ -220,15 +230,17 @@ function exIndexBlock() {
   const out = [];
   out.push("<!-- ex-index:begin（由 node tools\\check-examples.mjs --ex-index 生成，别手改）-->");
   out.push("");
-  out.push("## 教学六课（`examples\\lessons\\`）");
+  out.push("## 教学六课（`examples\\lessons\\lessons\\` · 一个多页签套件）");
   out.push("");
-  out.push("**顺序即内容**（前一课的概念是后一课的地基），每课都是能单独编译运行的小工程：");
+  out.push("**顺序即内容**（前一课的概念是后一课的地基），六课并进一个多页签套件，每课一页签、一个模块：");
   out.push("");
-  out.push("| 课 | 目录 | 主题 |");
+  out.push("| 页 | 模块 | 主题 |");
   out.push("| --- | --- | --- |");
   for (const r of lessonFacts()) {
-    out.push(`| 入门 ${r.no} | \`${r.rel}\` | ${r.theme} |`);
+    out.push(`| ${r.no} | \`${r.module}\` | ${r.theme} |`);
   }
+  out.push("");
+  out.push("编译 `build-app.bat lessons\\lessons`，运行 `examples\\lessons\\lessons\\lessons.exe` —— 六课在六个页签里。");
   out.push("");
   out.push("## 合并套件（`examples\\suites\\`）");
   out.push("");
@@ -554,15 +566,26 @@ if (wantDocs) {
   process.exit(0);
 }
 
-/** 某个类型在本次检查范围内的落点（按 --gallery / --lessons 过滤） */
+/** 六课刻意不教的控件（在别处有落点，不计入 --lessons 的缺失）：
+ *  serial → suites/comm 的串口终端；iconlist / dialog → gallery 陈列室。
+ *  合并前 --lessons 的正则已失效（匹配不到 examples/lessons/ 下任何文件），
+ *  这三种"缺落点"从未被真正检查出；2026-10-18 修作用域后才暴露 —— 它们本就不在六课范围内。 */
+const LESSONS_EXEMPT = new Set(["serial", "iconlist", "dialog"]);
+
+/** 某个类型在本次检查范围内的落点（按 --gallery / --lessons 过滤）
+ *  2026-10-18 合并：六课并成一个套件，落点从每个 lessonNN 目录下的 .cgui 变成
+ *  "examples/lessons/lessons/lessons.cgui"（六课都在这一份里）。 */
 function hits(t) {
   const all = [...(map.get(t) ?? [])];
   if (onlyGallery) return all.filter((f) => f.startsWith("examples/gallery/"));
-  if (onlyLessons) return all.filter((f) => /^examples\/lesson\d\d_/.test(f));
+  if (onlyLessons) return all.filter((f) => f.startsWith("examples/lessons/"));
   return all;
 }
 
-const missing = types.filter((t) => hits(t).length === 0);
+const missing = types.filter((t) => {
+  if (onlyLessons && LESSONS_EXEMPT.has(t)) return false;   // 六课刻意不教的控件不计缺失
+  return hits(t).length === 0;
+});
 
 if (wantTable) {
   console.log("| 类型 | 出现处 |");

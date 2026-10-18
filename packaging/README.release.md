@@ -55,8 +55,7 @@ runtime\
   lib\cstackgui_res.o  资源对象（v6 通用控件清单 + 版本信息 + 图标）
   res\                 manifest / 默认图标（工程的 <名字>.rc 会引用这里的清单）
 examples\
-  lesson01_basics\ ~ lesson06_window\
-                       教学示例：六课（基础与容器 → 输入与选择 → 数值与指示 → 数据与日志 → 命令与图形 → 主窗口与窗口事件）
+  lessons\lessons\      教学示例：六课套件（基础与容器 → 输入与选择 → 数值与指示 → 数据与日志 → 命令与图形 → 主窗口与窗口事件；六课并成一个多页签工程）
   教学使用说明.md       上面那六课怎么学（先读它）
   gallery\             示例：控件陈列室·三合一（67 个控件，全部控件+事件都用上了）
   notepad\             示例：真实小工具·记事本（菜单 / 文件 / 编码 / cg_kit 全套）
@@ -337,8 +336,9 @@ tools\check-kit.bat                                              :: 用到 cg_ki
 
 发布包里带四组示例：
 
-- `examples\lessons\lesson01_basics` ~ `lesson06_window` —— **六课教学示例**：基础与容器 → 输入与选择 →
-  数值与指示 → 数据与日志 → 命令与图形 → 主窗口与窗口事件，每课只讲一个主题、只出现本课主题的控件。
+- `examples\lessons\lessons\` —— **六课教学套件**：基础与容器 → 输入与选择 →
+  数值与指示 → 数据与日志 → 命令与图形 → 主窗口与窗口事件，六课并成一个多页签工程，
+  每课一页签、只讲一个主题、只出现本课主题的控件（逻辑在 `modules\l1.c..l6.c`）。
   **第一次用就从这里开始**，
   路线图与逐课详解见 `examples\教学使用说明.md`。
 - `examples\gallery\` —— **控件陈列室**：67 个控件、47 个回调，三页标签页，当"控件用法字典"翻。
@@ -347,7 +347,7 @@ tools\check-kit.bat                                              :: 用到 cg_ki
 - `examples\suites\comm\` —— **外设接入套件**：串口助手（serialterm 页）与网口助手（netterm 页）
   （TCP 客户端 / 服务端 + UDP），共用一套后台线程收发模型；要接硬件时照它们抄。
 
-都能直接编译运行：`build-app.bat lesson01_basics` / `build-app.bat gallery` / `build-app.bat notepad`
+都能直接编译运行：`build-app.bat lessons\\lessons` / `build-app.bat gallery` / `build-app.bat notepad`
 / `build-app.bat serialterm`。
 
 ```bat

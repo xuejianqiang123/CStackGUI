@@ -1,0 +1,2767 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "教学六课",
+    "width": 800,
+    "height": 828,
+    "bg": "#F3EDF7",
+    "info": {
+      "product": "CStackGUI 教学六课套件",
+      "desc": "原 lesson01_basics / lesson02_inputs / lesson03_values / lesson04_data / lesson05_commands / lesson06_window 合并（每课一页签）",
+      "version": "1.0.0.0",
+      "build": "2026-09-23",
+      "author": "CStackGUI",
+      "company": "CStackGUI",
+      "copyright": "© 2026 CStackGUI（示例）",
+      "email": "demo@example.com"
+    },
+    "events": {
+      "ready": "suite_win_ready",
+      "close": "suite_close",
+      "size": "suite_size",
+      "keydown": "suite_keydown",
+      "char": "suite_char",
+      "mousedown": "suite_mousedown",
+      "idle": "suite_idle",
+      "tray": "suite_tray"
+    },
+    "tray": true,
+    "center": true,
+    "escClose": false
+  },
+  "widgets": [
+    {
+      "id": "sv_pages",
+      "type": "tabs",
+      "rect": {
+        "x": 6,
+        "y": 6,
+        "w": 788,
+        "h": 816
+      },
+      "items": [
+        "01 基础与容器",
+        "02 输入与选择",
+        "03 数值与指示",
+        "04 数据与日志",
+        "05 命令与图形",
+        "06 主窗口与窗口事件"
+      ],
+      "children": [
+        {
+          "id": "l1_lab_k_button",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 22,
+            "w": 104,
+            "h": 22
+          },
+          "text": "button 按钮",
+          "style": {
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 0
+        },
+        {
+          "id": "l1_btn_primary",
+          "type": "button",
+          "rect": {
+            "x": 120,
+            "y": 16,
+            "w": 104,
+            "h": 32
+          },
+          "text": "主按钮",
+          "hint": "最常用的控件：点一下就是一次 click 事件",
+          "events": {
+            "click": "l1_on_btn_primary_click"
+          },
+          "page": 0
+        },
+        {
+          "id": "l1_lab_k_button_off",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 66,
+            "w": 104,
+            "h": 22
+          },
+          "text": "button 禁用态",
+          "style": {
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 0
+        },
+        {
+          "id": "l1_btn_disabled",
+          "type": "button",
+          "rect": {
+            "x": 120,
+            "y": 60,
+            "w": 104,
+            "h": 32
+          },
+          "text": "已禁用",
+          "hint": "enabled: false —— 点不动，文案要写清为什么不能用",
+          "enabled": false,
+          "page": 0
+        },
+        {
+          "id": "l1_lab_k_iconbutton",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 110,
+            "w": 104,
+            "h": 22
+          },
+          "text": "iconbutton 图标钮",
+          "style": {
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 0
+        },
+        {
+          "id": "l1_icb_run",
+          "type": "iconbutton",
+          "rect": {
+            "x": 120,
+            "y": 104,
+            "w": 40,
+            "h": 36
+          },
+          "src": "assets/icon.png",
+          "hint": "只放一张图，没有文字；点击同样是 click 事件",
+          "events": {
+            "click": "l1_on_icb_run_click"
+          },
+          "page": 0
+        },
+        {
+          "id": "l1_lab_k_label",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 154,
+            "w": 104,
+            "h": 22
+          },
+          "text": "label 标签",
+          "style": {
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 0
+        },
+        {
+          "id": "l1_lab_hello",
+          "type": "label",
+          "rect": {
+            "x": 120,
+            "y": 154,
+            "w": 224,
+            "h": 22
+          },
+          "text": "这是一段标签文字",
+          "page": 0
+        },
+        {
+          "id": "l1_lab_k_link",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 198,
+            "w": 104,
+            "h": 22
+          },
+          "text": "link 链接",
+          "style": {
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 0
+        },
+        {
+          "id": "l1_lnk_docs",
+          "type": "link",
+          "rect": {
+            "x": 120,
+            "y": 197,
+            "w": 200,
+            "h": 24
+          },
+          "text": "点我试试（链接）",
+          "hint": "蓝色下划线的可点文字；要真跳转就在回调里调 cg_shell_open(url)",
+          "events": {
+            "click": "l1_on_lnk_docs_click"
+          },
+          "page": 0
+        },
+        {
+          "id": "l1_lab_k_switch",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 242,
+            "w": 104,
+            "h": 22
+          },
+          "text": "switch 开关",
+          "style": {
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 0
+        },
+        {
+          "id": "l1_sw_notify",
+          "type": "switch",
+          "rect": {
+            "x": 120,
+            "y": 236,
+            "w": 56,
+            "h": 32
+          },
+          "hint": "开/关两态；勾选状态读作 checked（不是 value）",
+          "checked": true,
+          "events": {
+            "change": "l1_on_sw_notify_change"
+          },
+          "page": 0
+        },
+        {
+          "id": "l1_lab_k_badge",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 286,
+            "w": 104,
+            "h": 22
+          },
+          "text": "badge 徽章",
+          "style": {
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 0
+        },
+        {
+          "id": "l1_bad_count",
+          "type": "badge",
+          "rect": {
+            "x": 120,
+            "y": 285,
+            "w": 48,
+            "h": 24
+          },
+          "text": "12",
+          "hint": "小圆片，只显示一段短文字；纯显示控件，没有事件",
+          "page": 0
+        },
+        {
+          "id": "l1_lab_k_tag",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 330,
+            "w": 104,
+            "h": 22
+          },
+          "text": "tag 标签片",
+          "style": {
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 0
+        },
+        {
+          "id": "l1_tg_demo",
+          "type": "tag",
+          "rect": {
+            "x": 120,
+            "y": 327,
+            "w": 72,
+            "h": 28
+          },
+          "text": "标签片",
+          "hint": "比徽章长一点的圆角片，可以点",
+          "events": {
+            "click": "l1_on_tg_demo_click"
+          },
+          "page": 0
+        },
+        {
+          "id": "l1_lab_k_sep",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 374,
+            "w": 104,
+            "h": 22
+          },
+          "text": "separator 分割线",
+          "style": {
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 0
+        },
+        {
+          "id": "l1_sep_line",
+          "type": "separator",
+          "rect": {
+            "x": 120,
+            "y": 383,
+            "w": 200,
+            "h": 2
+          },
+          "hint": "一条横线，只负责分隔；没有事件",
+          "page": 0
+        },
+        {
+          "id": "l1_grp_form",
+          "type": "group",
+          "rect": {
+            "x": 392,
+            "y": 16,
+            "w": 352,
+            "h": 150
+          },
+          "text": "group 分组框",
+          "style": {
+            "bg": "#11a298"
+          },
+          "children": [
+            {
+              "id": "l1_lab_in_grp",
+              "type": "label",
+              "rect": {
+                "x": 16,
+                "y": 30,
+                "w": 320,
+                "h": 22
+              },
+              "text": "容器里的控件用相对坐标（相对分组框左上角）"
+            },
+            {
+              "id": "l1_btn_in_grp",
+              "type": "button",
+              "rect": {
+                "x": 16,
+                "y": 60,
+                "w": 120,
+                "h": 32
+              },
+              "text": "组内按钮",
+              "hint": "它的坐标 (16,60) 是相对分组框的，不是相对窗口",
+              "events": {
+                "click": "l1_on_btn_in_grp_click"
+              }
+            },
+            {
+              "id": "l1_sep_in_grp",
+              "type": "separator",
+              "rect": {
+                "x": 16,
+                "y": 108,
+                "w": 320,
+                "h": 2
+              }
+            }
+          ],
+          "page": 0
+        },
+        {
+          "id": "l1_box_panel",
+          "type": "box",
+          "rect": {
+            "x": 392,
+            "y": 182,
+            "w": 352,
+            "h": 120
+          },
+          "text": "box 容器块",
+          "children": [
+            {
+              "id": "l1_sw_in_box",
+              "type": "switch",
+              "rect": {
+                "x": 16,
+                "y": 36,
+                "w": 56,
+                "h": 32
+              },
+              "events": {
+                "change": "l1_on_sw_in_box_change"
+              }
+            },
+            {
+              "id": "l1_lab_in_box",
+              "type": "label",
+              "rect": {
+                "x": 88,
+                "y": 42,
+                "w": 248,
+                "h": 22
+              },
+              "text": "box 和 group 都是容器，主题色更浅"
+            }
+          ],
+          "page": 0
+        },
+        {
+          "id": "l1_card_note",
+          "type": "card",
+          "rect": {
+            "x": 392,
+            "y": 318,
+            "w": 352,
+            "h": 122
+          },
+          "text": "card 卡片",
+          "children": [
+            {
+              "id": "l1_tg_in_card",
+              "type": "tag",
+              "rect": {
+                "x": 8,
+                "y": 36,
+                "w": 80,
+                "h": 28
+              },
+              "text": "卡内标签片",
+              "events": {
+                "click": "l1_on_tg_in_card_click"
+              }
+            },
+            {
+              "id": "l1_lnk_in_card",
+              "type": "link",
+              "rect": {
+                "x": 100,
+                "y": 36,
+                "w": 200,
+                "h": 24
+              },
+              "text": "卡内链接",
+              "events": {
+                "click": "l1_on_lnk_in_card_click"
+              }
+            },
+            {
+              "id": "l1_btn_in_card",
+              "type": "button",
+              "rect": {
+                "x": 16,
+                "y": 72,
+                "w": 120,
+                "h": 32
+              },
+              "text": "卡内按钮",
+              "events": {
+                "click": "l1_on_btn_in_card_click"
+              }
+            }
+          ],
+          "page": 0
+        },
+        {
+          "id": "l1_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 476,
+            "w": 760,
+            "h": 24
+          },
+          "items": [
+            "准备就绪"
+          ],
+          "page": 0
+        },
+        {
+          "id": "l2_lab_edt_single",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 20,
+            "w": 104,
+            "h": 24
+          },
+          "text": "edit 单行",
+          "page": 1
+        },
+        {
+          "id": "l2_edt_single",
+          "type": "edit",
+          "rect": {
+            "x": 128,
+            "y": 16,
+            "w": 224,
+            "h": 32
+          },
+          "text": "点这里输入",
+          "hint": "单行输入框：文字一变就发 change",
+          "events": {
+            "change": "l2_on_edt_single_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_edt_multi",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 68,
+            "w": 104,
+            "h": 24
+          },
+          "text": "edit 多行",
+          "page": 1
+        },
+        {
+          "id": "l2_edt_multi",
+          "type": "edit",
+          "rect": {
+            "x": 128,
+            "y": 56,
+            "w": 224,
+            "h": 48
+          },
+          "text": "第一行\n第二行",
+          "multiline": true,
+          "scroll": 2,
+          "hint": "multiline: true + scroll: 2（2 = 纵向）；Enter 换行，行数多了右侧自己出滚动条",
+          "events": {
+            "change": "l2_on_edt_multi_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_edt_spin_auto",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 116,
+            "w": 104,
+            "h": 24
+          },
+          "text": "edit 数值框 自动",
+          "page": 1
+        },
+        {
+          "id": "l2_edt_spin_auto",
+          "type": "edit",
+          "rect": {
+            "x": 128,
+            "y": 112,
+            "w": 224,
+            "h": 32
+          },
+          "min": 1,
+          "max": 120,
+          "value": 24,
+          "spin": 1,
+          "hint": "数值框：value 是真相（所以不写 text），点箭头运行时按 ±1 改值并夹到 1~120",
+          "events": {
+            "spin": "l2_on_edt_spin_auto_spin"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_edt_spin_manual",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 156,
+            "w": 104,
+            "h": 24
+          },
+          "text": "edit 数值框 手动",
+          "page": 1
+        },
+        {
+          "id": "l2_edt_spin_manual",
+          "type": "edit",
+          "rect": {
+            "x": 128,
+            "y": 152,
+            "w": 224,
+            "h": 32
+          },
+          "min": -999,
+          "max": 999,
+          "value": 0,
+          "spin": 2,
+          "hint": "手动方式：运行时只报方向（cg_event_delta），步长 5 由业务自己乘",
+          "events": {
+            "spin": "l2_on_edt_spin_manual_spin"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_edt_byte",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 220,
+            "w": 104,
+            "h": 24
+          },
+          "text": "edit 字节 0~255",
+          "page": 1
+        },
+        {
+          "id": "l2_edt_byte",
+          "type": "edit",
+          "rect": {
+            "x": 128,
+            "y": 216,
+            "w": 224,
+            "h": 32
+          },
+          "text": "200",
+          "input": 5,
+          "hint": "input: 5 = 字节。按键只放行数字，失焦时 0~255 之外夹回、非数字清空",
+          "events": {
+            "lostfocus": "l2_on_edt_byte_blur"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_edt_int",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 260,
+            "w": 104,
+            "h": 24
+          },
+          "text": "edit 整数",
+          "page": 1
+        },
+        {
+          "id": "l2_edt_int",
+          "type": "edit",
+          "rect": {
+            "x": 128,
+            "y": 256,
+            "w": 224,
+            "h": 32
+          },
+          "text": "-1234",
+          "input": 7,
+          "hint": "input: 7 = 整数（可以是负数）。要数字就用数值框，别自己解析文本",
+          "events": {
+            "change": "l2_on_edt_int_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_edt_dt",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 300,
+            "w": 104,
+            "h": 24
+          },
+          "text": "edit 日期时间",
+          "page": 1
+        },
+        {
+          "id": "l2_edt_dt",
+          "type": "edit",
+          "rect": {
+            "x": 128,
+            "y": 296,
+            "w": 224,
+            "h": 32
+          },
+          "text": "2026-09-23 10:30",
+          "input": 11,
+          "hint": "input: 11 = 日期时间，形状得是 YYYY-MM-DD 或 YYYY-MM-DD HH:MM",
+          "events": {
+            "change": "l2_on_edt_dt_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_edt_upper",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 364,
+            "w": 104,
+            "h": 24
+          },
+          "text": "edit 转大写",
+          "page": 1
+        },
+        {
+          "id": "l2_edt_upper",
+          "type": "edit",
+          "rect": {
+            "x": 128,
+            "y": 360,
+            "w": 224,
+            "h": 32
+          },
+          "text": "abc",
+          "conv": 2,
+          "hint": "conv: 2 = 小写转大写。Windows 写文本时也转，所以初始的 abc 进来就是 ABC",
+          "events": {
+            "change": "l2_on_edt_upper_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_edt_short",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 404,
+            "w": 104,
+            "h": 24
+          },
+          "text": "edit 限长 8",
+          "page": 1
+        },
+        {
+          "id": "l2_edt_short",
+          "type": "edit",
+          "rect": {
+            "x": 128,
+            "y": 400,
+            "w": 224,
+            "h": 32
+          },
+          "text": "最多八个字",
+          "maxlen": 8,
+          "hint": "maxlen: 8：第 9 个字符敲不进去，回调里也看不到",
+          "events": {
+            "change": "l2_on_edt_short_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_chk_vip",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 468,
+            "w": 104,
+            "h": 24
+          },
+          "text": "checkbox 复选",
+          "page": 1
+        },
+        {
+          "id": "l2_chk_vip",
+          "type": "checkbox",
+          "rect": {
+            "x": 128,
+            "y": 466,
+            "w": 124,
+            "h": 28
+          },
+          "text": "接收更新提醒",
+          "checked": true,
+          "events": {
+            "change": "l2_on_chk_vip_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_chk_locked",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 508,
+            "w": 104,
+            "h": 24
+          },
+          "text": "checkbox 禁用",
+          "page": 1
+        },
+        {
+          "id": "l2_chk_locked",
+          "type": "checkbox",
+          "rect": {
+            "x": 128,
+            "y": 506,
+            "w": 156,
+            "h": 28
+          },
+          "text": "协议已锁定（禁用态）",
+          "checked": true,
+          "enabled": false,
+          "hint": "disabled 的控件照样能读状态，只是点不动、也不发事件",
+          "page": 1
+        },
+        {
+          "id": "l2_lab_rad",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 548,
+            "w": 104,
+            "h": 24
+          },
+          "text": "radio 单选",
+          "page": 1
+        },
+        {
+          "id": "l2_rad_stu",
+          "type": "radio",
+          "rect": {
+            "x": 128,
+            "y": 546,
+            "w": 56,
+            "h": 28
+          },
+          "text": "学生",
+          "checked": true,
+          "events": {
+            "change": "l2_on_rad_group_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_rad_emp",
+          "type": "radio",
+          "rect": {
+            "x": 188,
+            "y": 546,
+            "w": 56,
+            "h": 28
+          },
+          "text": "职员",
+          "events": {
+            "change": "l2_on_rad_group_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_rad_other",
+          "type": "radio",
+          "rect": {
+            "x": 248,
+            "y": 546,
+            "w": 56,
+            "h": 28
+          },
+          "text": "其他",
+          "events": {
+            "change": "l2_on_rad_group_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_edt_border_12",
+          "type": "label",
+          "rect": {
+            "x": 392,
+            "y": 20,
+            "w": 104,
+            "h": 24
+          },
+          "text": "border 边框 1/2",
+          "page": 1
+        },
+        {
+          "id": "l2_edt_b1",
+          "type": "edit",
+          "rect": {
+            "x": 504,
+            "y": 16,
+            "w": 108,
+            "h": 32
+          },
+          "text": "1 无边框",
+          "border": 1,
+          "hint": "border: 1 无边框（聚焦时仍有紫圈）",
+          "events": {
+            "change": "l2_on_form_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_edt_b2",
+          "type": "edit",
+          "rect": {
+            "x": 620,
+            "y": 16,
+            "w": 108,
+            "h": 32
+          },
+          "text": "2 凹入式",
+          "border": 2,
+          "hint": "border: 2 凹入式",
+          "events": {
+            "change": "l2_on_form_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_edt_border_34",
+          "type": "label",
+          "rect": {
+            "x": 392,
+            "y": 60,
+            "w": 104,
+            "h": 24
+          },
+          "text": "border 边框 3/4",
+          "page": 1
+        },
+        {
+          "id": "l2_edt_b3",
+          "type": "edit",
+          "rect": {
+            "x": 504,
+            "y": 56,
+            "w": 108,
+            "h": 32
+          },
+          "text": "3 凸出式",
+          "border": 3,
+          "hint": "border: 3 凸出式",
+          "events": {
+            "change": "l2_on_form_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_edt_b4",
+          "type": "edit",
+          "rect": {
+            "x": 620,
+            "y": 56,
+            "w": 108,
+            "h": 32
+          },
+          "text": "4 浅凹入",
+          "border": 4,
+          "hint": "border: 4 浅凹入式",
+          "events": {
+            "change": "l2_on_form_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_edt_border_56",
+          "type": "label",
+          "rect": {
+            "x": 392,
+            "y": 100,
+            "w": 104,
+            "h": 24
+          },
+          "text": "border 边框 5/6",
+          "page": 1
+        },
+        {
+          "id": "l2_edt_b5",
+          "type": "edit",
+          "rect": {
+            "x": 504,
+            "y": 96,
+            "w": 108,
+            "h": 32
+          },
+          "text": "5 镜框式",
+          "border": 5,
+          "hint": "border: 5 镜框式",
+          "events": {
+            "change": "l2_on_form_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_edt_b6",
+          "type": "edit",
+          "rect": {
+            "x": 620,
+            "y": 96,
+            "w": 108,
+            "h": 32
+          },
+          "text": "6 单线框",
+          "border": 6,
+          "hint": "border: 6 单线边框式",
+          "events": {
+            "change": "l2_on_form_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_rt",
+          "type": "label",
+          "rect": {
+            "x": 392,
+            "y": 184,
+            "w": 104,
+            "h": 24
+          },
+          "text": "richtext 富文本",
+          "page": 1
+        },
+        {
+          "id": "l2_rt_note",
+          "type": "richtext",
+          "rect": {
+            "x": 504,
+            "y": 160,
+            "w": 224,
+            "h": 72
+          },
+          "text": "富文本（RICHEDIT50W）：\n可以选中、有键盘全套\n和 edit 多行是两套控件",
+          "hint": "富文本：值同样走 cg_widget_text()",
+          "events": {
+            "change": "l2_on_rt_note_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_dtp_date",
+          "type": "label",
+          "rect": {
+            "x": 392,
+            "y": 260,
+            "w": 104,
+            "h": 24
+          },
+          "text": "datepicker 日期",
+          "page": 1
+        },
+        {
+          "id": "l2_dtp_date",
+          "type": "datepicker",
+          "rect": {
+            "x": 504,
+            "y": 256,
+            "w": 224,
+            "h": 32
+          },
+          "text": "2026-09-23",
+          "format": "date",
+          "hint": "format: date，值就是 cg_widget_text()",
+          "events": {
+            "change": "l2_on_dtp_date_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_dtp_time",
+          "type": "label",
+          "rect": {
+            "x": 392,
+            "y": 300,
+            "w": 104,
+            "h": 24
+          },
+          "text": "datepicker 时间",
+          "page": 1
+        },
+        {
+          "id": "l2_dtp_time",
+          "type": "datepicker",
+          "rect": {
+            "x": 504,
+            "y": 296,
+            "w": 224,
+            "h": 32
+          },
+          "text": "10:30",
+          "format": "time",
+          "hint": "同一个控件换 format: time 就只调时间",
+          "events": {
+            "change": "l2_on_dtp_time_change"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_cal",
+          "type": "label",
+          "rect": {
+            "x": 392,
+            "y": 420,
+            "w": 104,
+            "h": 24
+          },
+          "text": "monthcal 月历",
+          "page": 1
+        },
+        {
+          "id": "l2_cal_pick",
+          "type": "monthcal",
+          "rect": {
+            "x": 504,
+            "y": 352,
+            "w": 224,
+            "h": 160
+          },
+          "text": "2026-09-23",
+          "hint": "启动前给 text 就定位到那天；点一天发 select",
+          "events": {
+            "select": "l2_on_cal_pick_select"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_lst",
+          "type": "label",
+          "rect": {
+            "x": 392,
+            "y": 588,
+            "w": 104,
+            "h": 24
+          },
+          "text": "listbox 列表",
+          "page": 1
+        },
+        {
+          "id": "l2_lst_skill",
+          "type": "listbox",
+          "rect": {
+            "x": 504,
+            "y": 536,
+            "w": 224,
+            "h": 128
+          },
+          "items": [
+            "C 语言",
+            "Win32 API",
+            "GDI+ 画图",
+            "串口调试"
+          ],
+          "value": 0,
+          "hint": "value 是选中下标，文字要用 cg_widget_list_item() 取",
+          "events": {
+            "select": "l2_on_lst_skill_select"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_lab_cmb",
+          "type": "label",
+          "rect": {
+            "x": 392,
+            "y": 692,
+            "w": 104,
+            "h": 24
+          },
+          "text": "combo 下拉",
+          "page": 1
+        },
+        {
+          "id": "l2_cmb_city",
+          "type": "combo",
+          "rect": {
+            "x": 504,
+            "y": 688,
+            "w": 224,
+            "h": 32
+          },
+          "items": [
+            "北京",
+            "上海",
+            "广州",
+            "成都"
+          ],
+          "value": 0,
+          "hint": "下拉框和 listbox 是同一套下标语义，主要差在长相",
+          "events": {
+            "select": "l2_on_cmb_city_select"
+          },
+          "page": 1
+        },
+        {
+          "id": "l2_grp_user",
+          "type": "group",
+          "rect": {
+            "x": 16,
+            "y": 608,
+            "w": 352,
+            "h": 120
+          },
+          "text": "用户信息",
+          "hint": "容器里的子控件，rect 坐标是相对容器的（不是相对窗口）",
+          "children": [
+            {
+              "id": "l2_lab_grp_name",
+              "type": "label",
+              "rect": {
+                "x": 12,
+                "y": 26,
+                "w": 40,
+                "h": 24
+              },
+              "text": "姓名"
+            },
+            {
+              "id": "l2_edt_grp_name",
+              "type": "edit",
+              "rect": {
+                "x": 56,
+                "y": 22,
+                "w": 224,
+                "h": 32
+              },
+              "events": {
+                "change": "l2_on_form_change"
+              }
+            },
+            {
+              "id": "l2_lab_grp_plan",
+              "type": "label",
+              "rect": {
+                "x": 12,
+                "y": 74,
+                "w": 40,
+                "h": 24
+              },
+              "text": "套餐"
+            },
+            {
+              "id": "l2_rad_grp_a",
+              "type": "radio",
+              "rect": {
+                "x": 56,
+                "y": 71,
+                "w": 56,
+                "h": 28
+              },
+              "text": "标准",
+              "checked": true,
+              "events": {
+                "change": "l2_on_form_change"
+              }
+            },
+            {
+              "id": "l2_rad_grp_b",
+              "type": "radio",
+              "rect": {
+                "x": 116,
+                "y": 71,
+                "w": 56,
+                "h": 28
+              },
+              "text": "专业",
+              "events": {
+                "change": "l2_on_form_change"
+              }
+            },
+            {
+              "id": "l2_chk_grp_vip",
+              "type": "checkbox",
+              "rect": {
+                "x": 188,
+                "y": 72,
+                "w": 124,
+                "h": 28
+              },
+              "text": "含会员折扣",
+              "events": {
+                "change": "l2_on_form_change"
+              }
+            }
+          ],
+          "page": 1
+        },
+        {
+          "id": "l2_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 744,
+            "w": 760,
+            "h": 24
+          },
+          "items": [
+            "就绪"
+          ],
+          "page": 1
+        },
+        {
+          "id": "l3_lab_tip",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 16,
+            "w": 728,
+            "h": 20
+          },
+          "text": "一个值，四种显示：拖动左上角的滑块，进度条 / 圆环 / 仪表盘 / 数字标签一起变。",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_lab_sld",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 48,
+            "w": 104,
+            "h": 32
+          },
+          "text": "slider 滑块",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_sld_level",
+          "type": "slider",
+          "rect": {
+            "x": 128,
+            "y": 48,
+            "w": 224,
+            "h": 32
+          },
+          "hint": "拖动我：change 在拖动中连续发，release 只在松手时发一次",
+          "value": 60,
+          "min": 0,
+          "max": 100,
+          "events": {
+            "change": "l3_on_sld_level_change",
+            "release": "l3_on_sld_level_release"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_lab_ring",
+          "type": "label",
+          "rect": {
+            "x": 392,
+            "y": 48,
+            "w": 140,
+            "h": 20
+          },
+          "text": "progressring 圆环",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_ring_level",
+          "type": "progressring",
+          "rect": {
+            "x": 392,
+            "y": 72,
+            "w": 140,
+            "h": 140
+          },
+          "value": 60,
+          "min": 0,
+          "max": 100,
+          "page": 2
+        },
+        {
+          "id": "l3_lab_mtr_arc",
+          "type": "label",
+          "rect": {
+            "x": 552,
+            "y": 48,
+            "w": 140,
+            "h": 20
+          },
+          "text": "meter 270°弧",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_mtr_arc",
+          "type": "meter",
+          "rect": {
+            "x": 552,
+            "y": 72,
+            "w": 140,
+            "h": 140
+          },
+          "value": 60,
+          "min": 0,
+          "max": 100,
+          "format": "arc",
+          "text": "%",
+          "page": 2
+        },
+        {
+          "id": "l3_lab_val",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 92,
+            "w": 104,
+            "h": 24
+          },
+          "text": "label 数值",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_lab_level",
+          "type": "label",
+          "rect": {
+            "x": 128,
+            "y": 92,
+            "w": 224,
+            "h": 24
+          },
+          "text": "60 / 100",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 12,
+            "bold": true,
+            "fg": "#6750A4"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_lab_val_bind",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 124,
+            "w": 104,
+            "h": 24
+          },
+          "text": "label 绑定",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_lab_sld_mirror",
+          "type": "label",
+          "rect": {
+            "x": 128,
+            "y": 124,
+            "w": 224,
+            "h": 24
+          },
+          "text": "60",
+          "hint": "这个标签没绑任何回调：它跟着滑块走，是 .cgui 里的 bind 实现的（见 CGUI-FORMAT 2.8）",
+          "bind": {
+            "src": "l3_sld_level"
+          },
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 12,
+            "bold": true,
+            "fg": "#6750A4"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_lab_prg",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 156,
+            "w": 104,
+            "h": 28
+          },
+          "text": "progress 进度条",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_prg_level",
+          "type": "progress",
+          "rect": {
+            "x": 128,
+            "y": 156,
+            "w": 224,
+            "h": 28
+          },
+          "value": 60,
+          "min": 0,
+          "max": 100,
+          "page": 2
+        },
+        {
+          "id": "l3_lab_btn",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 192,
+            "w": 104,
+            "h": 32
+          },
+          "text": "button 按钮",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_btn_reset",
+          "type": "button",
+          "rect": {
+            "x": 128,
+            "y": 192,
+            "w": 224,
+            "h": 32
+          },
+          "text": "复位为 60",
+          "hint": "程序改值（cg_widget_set_value）不会触发 change 回调，四个显示控件得手动跟着刷",
+          "events": {
+            "click": "l3_on_btn_reset_click"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_lab_mtr_half",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 240,
+            "w": 140,
+            "h": 20
+          },
+          "text": "meter 半圆",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_mtr_half",
+          "type": "meter",
+          "rect": {
+            "x": 16,
+            "y": 264,
+            "w": 140,
+            "h": 140
+          },
+          "value": 60,
+          "min": 0,
+          "max": 100,
+          "format": "half",
+          "text": "%",
+          "page": 2
+        },
+        {
+          "id": "l3_lab_led",
+          "type": "label",
+          "rect": {
+            "x": 392,
+            "y": 240,
+            "w": 104,
+            "h": 32
+          },
+          "text": "led 状态灯",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_led_state",
+          "type": "led",
+          "rect": {
+            "x": 496,
+            "y": 240,
+            "w": 80,
+            "h": 32
+          },
+          "value": 1,
+          "format": "round",
+          "period": 500,
+          "text": "亮",
+          "page": 2
+        },
+        {
+          "id": "l3_btn_led",
+          "type": "button",
+          "rect": {
+            "x": 584,
+            "y": 240,
+            "w": 160,
+            "h": 32
+          },
+          "text": "切换灯态",
+          "hint": "0 灭 / 1 亮 / 2 闪 循环；闪烁周期由 period 决定，不用自己开时钟",
+          "events": {
+            "click": "l3_on_btn_led_click"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_lab_rate",
+          "type": "label",
+          "rect": {
+            "x": 392,
+            "y": 284,
+            "w": 104,
+            "h": 32
+          },
+          "text": "rate 评分",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_rate_star",
+          "type": "rate",
+          "rect": {
+            "x": 496,
+            "y": 284,
+            "w": 248,
+            "h": 32
+          },
+          "hint": "星数 = max - min = 5",
+          "value": 3,
+          "min": 0,
+          "max": 5,
+          "events": {
+            "change": "l3_on_rate_star_change"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_lab_pg",
+          "type": "label",
+          "rect": {
+            "x": 392,
+            "y": 328,
+            "w": 104,
+            "h": 32
+          },
+          "text": "pagination 分页",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_pg_page",
+          "type": "pagination",
+          "rect": {
+            "x": 496,
+            "y": 328,
+            "w": 248,
+            "h": 32
+          },
+          "hint": "页数 = max - min + 1 = 8",
+          "value": 3,
+          "min": 1,
+          "max": 8,
+          "events": {
+            "change": "l3_on_pg_page_change"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_lab_off",
+          "type": "label",
+          "rect": {
+            "x": 392,
+            "y": 372,
+            "w": 160,
+            "h": 32
+          },
+          "text": "button 禁用态",
+          "style": {
+            "font": "Microsoft YaHei UI",
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 2
+        },
+        {
+          "id": "l3_btn_off",
+          "type": "button",
+          "rect": {
+            "x": 560,
+            "y": 372,
+            "w": 184,
+            "h": 32
+          },
+          "text": "故意禁用，点了没反应",
+          "hint": "禁用不是只灰掉：EnableWindow(FALSE) 之后点它连事件都不发",
+          "enabled": false,
+          "page": 2
+        },
+        {
+          "id": "l3_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 420,
+            "w": 760,
+            "h": 24
+          },
+          "items": [
+            "拖动滑块试试"
+          ],
+          "page": 2
+        },
+        {
+          "id": "l4_tmr_beat",
+          "type": "timer",
+          "period": 1000,
+          "events": {
+            "tick": "l4_on_tmr_beat_tick"
+          },
+          "page": 3
+        },
+        {
+          "id": "l4_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 536,
+            "w": 760,
+            "h": 24
+          },
+          "items": [
+            "列表 3 · 树 8 · 表格 3",
+            "选中：-",
+            "心跳 0"
+          ],
+          "page": 3
+        },
+        {
+          "id": "l4_btn_log_clear",
+          "type": "button",
+          "rect": {
+            "x": 16,
+            "y": 16,
+            "w": 236,
+            "h": 32
+          },
+          "text": "清空日志",
+          "hint": "cg_term_clear(日志)",
+          "events": {
+            "click": "l4_on_btn_log_clear_click"
+          },
+          "page": 3
+        },
+        {
+          "id": "l4_btn_log_save",
+          "type": "button",
+          "rect": {
+            "x": 260,
+            "y": 16,
+            "w": 236,
+            "h": 32
+          },
+          "text": "保存日志",
+          "hint": "cg_term_save(日志, 路径)：存成 UTF-8 + CRLF 的文本文件",
+          "events": {
+            "click": "l4_on_btn_log_save_click"
+          },
+          "page": 3
+        },
+        {
+          "id": "l4_btn_export",
+          "type": "button",
+          "rect": {
+            "x": 504,
+            "y": 16,
+            "w": 240,
+            "h": 32
+          },
+          "text": "导出（未实现）",
+          "enabled": false,
+          "hint": "禁用态示范：enabled=false 的按钮由皮肤画成灰底灰字（0xECECEE / 0x9A9A9E），点不动、回调一次也不来",
+          "events": {
+            "click": "l4_on_btn_export_click"
+          },
+          "page": 3
+        },
+        {
+          "id": "l4_tab_data",
+          "type": "tabs",
+          "rect": {
+            "x": 16,
+            "y": 60,
+            "w": 366,
+            "h": 460
+          },
+          "items": [
+            "列表框",
+            "树",
+            "表格",
+            "图表"
+          ],
+          "events": {
+            "select": "l4_on_tab_data_select"
+          },
+          "children": [
+            {
+              "id": "l4_lab_list",
+              "type": "label",
+              "page": 0,
+              "rect": {
+                "x": 8,
+                "y": 36,
+                "w": 200,
+                "h": 24
+              },
+              "text": "listbox 列表框",
+              "style": {
+                "font": "Microsoft YaHei UI",
+                "size": 9
+              }
+            },
+            {
+              "id": "l4_lst_items",
+              "type": "listbox",
+              "page": 0,
+              "rect": {
+                "x": 8,
+                "y": 64,
+                "w": 348,
+                "h": 320
+              },
+              "items": [
+                "苹果",
+                "香蕉",
+                "橘子"
+              ],
+              "value": -1,
+              "hint": "cg_widget_list_add / clear / count / item；选中项 = cg_widget_value",
+              "events": {
+                "select": "l4_on_lst_items_select"
+              }
+            },
+            {
+              "id": "l4_btn_list_add",
+              "type": "button",
+              "page": 0,
+              "rect": {
+                "x": 8,
+                "y": 392,
+                "w": 170,
+                "h": 32
+              },
+              "text": "加一条",
+              "hint": "cg_widget_list_addf(列表, \"条目 %d\", n)",
+              "events": {
+                "click": "l4_on_btn_list_add_click"
+              }
+            },
+            {
+              "id": "l4_btn_list_clear",
+              "type": "button",
+              "page": 0,
+              "rect": {
+                "x": 186,
+                "y": 392,
+                "w": 170,
+                "h": 32
+              },
+              "text": "清空",
+              "hint": "cg_widget_list_clear(列表)",
+              "events": {
+                "click": "l4_on_btn_list_clear_click"
+              }
+            },
+            {
+              "id": "l4_lab_tree",
+              "type": "label",
+              "page": 1,
+              "rect": {
+                "x": 8,
+                "y": 36,
+                "w": 200,
+                "h": 24
+              },
+              "text": "tree 树",
+              "style": {
+                "font": "Microsoft YaHei UI",
+                "size": 9
+              }
+            },
+            {
+              "id": "l4_tre_dir",
+              "type": "tree",
+              "page": 1,
+              "rect": {
+                "x": 8,
+                "y": 64,
+                "w": 348,
+                "h": 320
+              },
+              "nodes": [
+                {
+                  "text": "项目",
+                  "expanded": true,
+                  "children": [
+                    {
+                      "text": "runtime",
+                      "children": [
+                        {
+                          "text": "core"
+                        },
+                        {
+                          "text": "skin"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "examples"
+                    },
+                    {
+                      "text": "docs"
+                    }
+                  ]
+                },
+                {
+                  "text": "构建产物",
+                  "children": [
+                    {
+                      "text": "build"
+                    }
+                  ]
+                }
+              ],
+              "hint": "cg_tree_add(树, parent, 文字)；parent 传 -1 = 加在根上",
+              "events": {
+                "select": "l4_on_tre_dir_select",
+                "expand": "l4_on_tre_dir_expand",
+                "collapse": "l4_on_tre_dir_collapse"
+              }
+            },
+            {
+              "id": "l4_btn_tree_add",
+              "type": "button",
+              "page": 1,
+              "rect": {
+                "x": 8,
+                "y": 392,
+                "w": 170,
+                "h": 32
+              },
+              "text": "加节点",
+              "hint": "parent = cg_tree_selected(树)：加在选中节点下面，没选中就加到根上",
+              "events": {
+                "click": "l4_on_btn_tree_add_click"
+              }
+            },
+            {
+              "id": "l4_btn_tree_all",
+              "type": "button",
+              "page": 1,
+              "rect": {
+                "x": 186,
+                "y": 392,
+                "w": 170,
+                "h": 32
+              },
+              "text": "全展开",
+              "hint": "cg_tree_expand(树, 下标, 1)",
+              "events": {
+                "click": "l4_on_btn_tree_all_click"
+              }
+            },
+            {
+              "id": "l4_lab_table",
+              "type": "label",
+              "page": 2,
+              "rect": {
+                "x": 8,
+                "y": 36,
+                "w": 200,
+                "h": 24
+              },
+              "text": "table 表格",
+              "style": {
+                "font": "Microsoft YaHei UI",
+                "size": 9
+              }
+            },
+            {
+              "id": "l4_tbl_data",
+              "type": "table",
+              "page": 2,
+              "rect": {
+                "x": 8,
+                "y": 64,
+                "w": 348,
+                "h": 320
+              },
+              "columns": [
+                {
+                  "title": "姓名",
+                  "w": 106
+                },
+                {
+                  "title": "城市",
+                  "w": 106
+                },
+                {
+                  "title": "状态"
+                }
+              ],
+              "rows": [
+                [
+                  "张三",
+                  "上海",
+                  "在职"
+                ],
+                [
+                  "李四",
+                  "成都",
+                  "试用"
+                ],
+                [
+                  "王五",
+                  "杭州",
+                  "在职"
+                ]
+              ],
+              "multi": true,
+              "check": true,
+              "hint": "cg_table_add_row / clear / row_count / cell(行,列)；勾选列 = cg_table_checked",
+              "events": {
+                "select": "l4_on_tbl_data_select",
+                "check": "l4_on_tbl_data_check"
+              }
+            },
+            {
+              "id": "l4_btn_row_add",
+              "type": "button",
+              "page": 2,
+              "rect": {
+                "x": 8,
+                "y": 392,
+                "w": 170,
+                "h": 32
+              },
+              "text": "加一行",
+              "hint": "cg_table_add_row(表格, cells, 列数)",
+              "events": {
+                "click": "l4_on_btn_row_add_click"
+              }
+            },
+            {
+              "id": "l4_btn_row_clear",
+              "type": "button",
+              "page": 2,
+              "rect": {
+                "x": 186,
+                "y": 392,
+                "w": 170,
+                "h": 32
+              },
+              "text": "清空",
+              "hint": "cg_table_clear(表格)",
+              "events": {
+                "click": "l4_on_btn_row_clear_click"
+              }
+            },
+            {
+              "id": "l4_lab_chart",
+              "type": "label",
+              "page": 3,
+              "rect": {
+                "x": 8,
+                "y": 36,
+                "w": 200,
+                "h": 24
+              },
+              "text": "chart 图表",
+              "style": {
+                "font": "Microsoft YaHei UI",
+                "size": 9
+              }
+            },
+            {
+              "id": "l4_cht_line",
+              "type": "chart",
+              "page": 3,
+              "rect": {
+                "x": 8,
+                "y": 64,
+                "w": 348,
+                "h": 180
+              },
+              "items": [
+                "负载"
+              ],
+              "value": 40,
+              "min": 0,
+              "max": 100,
+              "format": "line",
+              "hint": "cg_chart_push(图, 0, 值)：折线；系列名 = items，窗口点数 = value（不是当前值）"
+            },
+            {
+              "id": "l4_cht_bar",
+              "type": "chart",
+              "page": 3,
+              "rect": {
+                "x": 8,
+                "y": 252,
+                "w": 348,
+                "h": 180
+              },
+              "items": [
+                "错误"
+              ],
+              "value": 30,
+              "min": 0,
+              "max": 20,
+              "format": "bar",
+              "hint": "同一个回调里给两张图各推一个点（format 换成 \"bar\" 就是柱状）"
+            }
+          ],
+          "page": 3
+        },
+        {
+          "id": "l4_sp_main",
+          "type": "splitter",
+          "rect": {
+            "x": 390,
+            "y": 60,
+            "w": 6,
+            "h": 460
+          },
+          "hint": "左右拖动：撑开左边数据区，日志区整体让位并吃掉余量（中间不要夹控件）",
+          "events": {
+            "release": "l4_on_sp_main_release"
+          },
+          "page": 3
+        },
+        {
+          "id": "l4_term_log",
+          "type": "terminal",
+          "rect": {
+            "x": 404,
+            "y": 60,
+            "w": 340,
+            "h": 460
+          },
+          "checked": true,
+          "value": 500,
+          "hint": "日志区：每秒一行心跳（RX 绿）/ 你的每个操作（TX 蓝）/ 程序说明（-- 灰）",
+          "page": 3
+        },
+        {
+          "id": "l5_menu_main",
+          "type": "menu",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "nodes": [
+            {
+              "text": "文件",
+              "children": [
+                {
+                  "text": "新建画板",
+                  "id": "l5_m_new"
+                },
+                {
+                  "text": "载入示例页",
+                  "id": "l5_m_page"
+                }
+              ]
+            },
+            {
+              "text": "视图",
+              "children": [
+                {
+                  "text": "画圆",
+                  "id": "l5_m_circle"
+                },
+                {
+                  "text": "画方",
+                  "id": "l5_m_rect"
+                },
+                {
+                  "text": "-"
+                },
+                {
+                  "text": "清空",
+                  "id": "l5_m_clear"
+                }
+              ]
+            }
+          ],
+          "events": {
+            "click": "l5_on_menu_click"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_tb_cmd",
+          "type": "toolbar",
+          "rect": {
+            "x": 16,
+            "y": 14,
+            "w": 728,
+            "h": 34
+          },
+          "items": [
+            "新建",
+            "画圆",
+            "画方",
+            "清空"
+          ],
+          "hint": "工具栏：点中第几项用 cg_widget_value() 读（0 起）",
+          "events": {
+            "click": "l5_on_tb_cmd_click"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_lab_k_menubutton",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 62,
+            "w": 104,
+            "h": 22
+          },
+          "text": "menubutton 菜单",
+          "style": {
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_mbtn_more",
+          "type": "menubutton",
+          "rect": {
+            "x": 120,
+            "y": 56,
+            "w": 150,
+            "h": 32
+          },
+          "text": "更多命令",
+          "hint": "长得像按钮，点开是菜单；选中的项同样用 cg_menu_last_id() 认",
+          "nodes": [
+            {
+              "text": "载入示例页",
+              "id": "l5_m_page"
+            },
+            {
+              "text": "复制画板尺寸",
+              "id": "l5_m_size"
+            }
+          ],
+          "events": {
+            "click": "l5_on_mbtn_more_click"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_lab_k_colorpicker",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 106,
+            "w": 104,
+            "h": 22
+          },
+          "text": "colorpicker 取色",
+          "style": {
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_cp_ink",
+          "type": "colorpicker",
+          "rect": {
+            "x": 120,
+            "y": 102,
+            "w": 64,
+            "h": 28
+          },
+          "value": 6774948,
+          "hint": "当前颜色存在 value（0xRRGGBB）；点它弹系统取色器，改完派发 change",
+          "events": {
+            "change": "l5_on_cp_ink_change"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_lab_k_button",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 150,
+            "w": 104,
+            "h": 22
+          },
+          "text": "button 按钮",
+          "style": {
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_btn_draw_circle",
+          "type": "button",
+          "rect": {
+            "x": 120,
+            "y": 144,
+            "w": 96,
+            "h": 32
+          },
+          "text": "画圆",
+          "hint": "和菜单「视图 / 画圆」是同一件事：两边都调 do_command(CMD_CIRCLE)",
+          "events": {
+            "click": "l5_on_btn_draw_circle_click"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_btn_draw_rect",
+          "type": "button",
+          "rect": {
+            "x": 224,
+            "y": 144,
+            "w": 96,
+            "h": 32
+          },
+          "text": "画方",
+          "events": {
+            "click": "l5_on_btn_draw_rect_click"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_btn_draw_clear",
+          "type": "button",
+          "rect": {
+            "x": 328,
+            "y": 144,
+            "w": 96,
+            "h": 32
+          },
+          "text": "清空",
+          "events": {
+            "click": "l5_on_btn_draw_clear_click"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_btn_undo",
+          "type": "button",
+          "rect": {
+            "x": 432,
+            "y": 144,
+            "w": 96,
+            "h": 32
+          },
+          "text": "撤销",
+          "hint": "这一课没做撤销，所以它一直是灰的 —— 禁用的控件要在文案或提示里说清为什么不能用",
+          "enabled": false,
+          "page": 4
+        },
+        {
+          "id": "l5_lab_k_canvas",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 194,
+            "w": 104,
+            "h": 22
+          },
+          "text": "canvas 画板",
+          "style": {
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_cv_board",
+          "type": "canvas",
+          "rect": {
+            "x": 120,
+            "y": 190,
+            "w": 400,
+            "h": 300
+          },
+          "style": {
+            "bg": "#FFFFFF"
+          },
+          "hint": "在画板里点一下 = 在点到的位置画一个小圆；图形用 cg_canvas_* 画，重绘时按序回放",
+          "events": {
+            "click": "l5_on_cv_board_click"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_lab_k_shape",
+          "type": "label",
+          "rect": {
+            "x": 544,
+            "y": 62,
+            "w": 200,
+            "h": 22
+          },
+          "text": "shape 外形框",
+          "style": {
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_sh_rect",
+          "type": "shape",
+          "rect": {
+            "x": 544,
+            "y": 88,
+            "w": 60,
+            "h": 60
+          },
+          "format": "rect",
+          "style": {
+            "bg": "#D0BCFF"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_sh_round",
+          "type": "shape",
+          "rect": {
+            "x": 614,
+            "y": 88,
+            "w": 60,
+            "h": 60
+          },
+          "format": "roundrect",
+          "style": {
+            "bg": "#FFD8E4"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_sh_circle",
+          "type": "shape",
+          "rect": {
+            "x": 684,
+            "y": 88,
+            "w": 60,
+            "h": 60
+          },
+          "format": "ellipse",
+          "style": {
+            "bg": "#BCE0FD"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_lab_k_image",
+          "type": "label",
+          "rect": {
+            "x": 544,
+            "y": 164,
+            "w": 200,
+            "h": 22
+          },
+          "text": "image 图片",
+          "style": {
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_img_logo",
+          "type": "image",
+          "rect": {
+            "x": 544,
+            "y": 190,
+            "w": 120,
+            "h": 120
+          },
+          "src": "assets/icon.png",
+          "hint": "按原比例放进矩形；换图用 cg_widget_set_image()",
+          "page": 4
+        },
+        {
+          "id": "l5_lab_k_browser",
+          "type": "label",
+          "rect": {
+            "x": 544,
+            "y": 326,
+            "w": 200,
+            "h": 22
+          },
+          "text": "browser 网页（实验性）",
+          "style": {
+            "size": 9,
+            "fg": "#49454F"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_br_page",
+          "type": "browser",
+          "rect": {
+            "x": 544,
+            "y": 352,
+            "w": 200,
+            "h": 160
+          },
+          "src": "about:blank",
+          "hint": "靠系统 WebBrowser 控件（IE 内核）；用 cg_browser_navigate(w, \"网址或本地 html\") 换页。空白就是还没载入",
+          "page": 4
+        },
+        {
+          "id": "l5_btn_br_load",
+          "type": "button",
+          "rect": {
+            "x": 544,
+            "y": 520,
+            "w": 200,
+            "h": 32
+          },
+          "text": "载入示例页",
+          "hint": "程序自己写一个 html 到用户数据目录，再让 browser 打开它",
+          "events": {
+            "click": "l5_on_btn_br_load_click"
+          },
+          "page": 4
+        },
+        {
+          "id": "l5_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 586,
+            "w": 760,
+            "h": 24
+          },
+          "items": [
+            "准备就绪"
+          ],
+          "page": 4
+        },
+        {
+          "id": "l6_grp_info",
+          "type": "group",
+          "rect": {
+            "x": 16,
+            "y": 16,
+            "w": 728,
+            "h": 76
+          },
+          "text": "程序信息（.cgui 的 app.info → 编译进 exe 版本信息 → 运行时 cg_app_info 读回）",
+          "children": [
+            {
+              "id": "l6_lab_info_product",
+              "type": "label",
+              "rect": {
+                "x": 12,
+                "y": 28,
+                "w": 340,
+                "h": 22
+              },
+              "text": ""
+            },
+            {
+              "id": "l6_lab_info_version",
+              "type": "label",
+              "rect": {
+                "x": 360,
+                "y": 28,
+                "w": 340,
+                "h": 22
+              },
+              "text": ""
+            },
+            {
+              "id": "l6_lab_info_author",
+              "type": "label",
+              "rect": {
+                "x": 12,
+                "y": 52,
+                "w": 340,
+                "h": 22
+              },
+              "text": ""
+            },
+            {
+              "id": "l6_lab_info_company",
+              "type": "label",
+              "rect": {
+                "x": 360,
+                "y": 52,
+                "w": 340,
+                "h": 22
+              },
+              "text": ""
+            }
+          ],
+          "page": 5
+        },
+        {
+          "id": "l6_btn_about",
+          "type": "button",
+          "rect": {
+            "x": 16,
+            "y": 108,
+            "w": 170,
+            "h": 32
+          },
+          "text": "关于（读程序信息）",
+          "hint": "用 cg_app_info(app, \"product\") 从 exe 版本信息里读回，再拼一个消息框",
+          "events": {
+            "click": "l6_on_btn_about_click"
+          },
+          "page": 5
+        },
+        {
+          "id": "l6_btn_center",
+          "type": "button",
+          "rect": {
+            "x": 196,
+            "y": 108,
+            "w": 170,
+            "h": 32
+          },
+          "text": "窗口居中",
+          "hint": "cg_win_center(app)：按当前显示器工作区居中（.cgui 里的 center: true 走的就是它）",
+          "events": {
+            "click": "l6_on_btn_center_click"
+          },
+          "page": 5
+        },
+        {
+          "id": "l6_btn_topmost",
+          "type": "button",
+          "rect": {
+            "x": 376,
+            "y": 108,
+            "w": 170,
+            "h": 32
+          },
+          "text": "总在最前：开",
+          "hint": "cg_win_set_topmost(app, on)：和 .cgui 的 app.topmost 字段等效",
+          "events": {
+            "click": "l6_on_btn_topmost_click"
+          },
+          "page": 5
+        },
+        {
+          "id": "l6_btn_hide",
+          "type": "button",
+          "rect": {
+            "x": 556,
+            "y": 108,
+            "w": 188,
+            "h": 32
+          },
+          "text": "隐藏 1 秒再显示",
+          "hint": "cg_win_show(app, 0) + cg_set_timer 一秒后 cg_win_show(app, 1)；show / hide 事件都会到",
+          "events": {
+            "click": "l6_on_btn_hide_click"
+          },
+          "page": 5
+        },
+        {
+          "id": "l6_lab_k_evt",
+          "type": "label",
+          "rect": {
+            "x": 16,
+            "y": 160,
+            "w": 104,
+            "h": 24
+          },
+          "text": "listbox 事件流水",
+          "page": 5
+        },
+        {
+          "id": "l6_lst_evt",
+          "type": "listbox",
+          "rect": {
+            "x": 128,
+            "y": 156,
+            "w": 616,
+            "h": 200
+          },
+          "value": -1,
+          "hint": "窗口事件都写在 app.events 里：ready / close / size / keydown / char / mousedown / idle / tray / show / hide …",
+          "page": 5
+        },
+        {
+          "id": "l6_chk_ask",
+          "type": "checkbox",
+          "rect": {
+            "x": 128,
+            "y": 364,
+            "w": 320,
+            "h": 32
+          },
+          "text": "演示：拦下这次关闭（cg_cancel_close）",
+          "hint": "勾上它再关窗口：close 回调会拦下这次关闭并说明原因；取消勾选就能正常退出",
+          "page": 5
+        },
+        {
+          "id": "l6_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 412,
+            "w": 760,
+            "h": 24
+          },
+          "items": [
+            "窗口 760×436",
+            "最近事件：-",
+            "空闲 0 次"
+          ],
+          "page": 5
+        }
+      ]
+    }
+  ]
+}

@@ -228,4 +228,4 @@ calculator.exe --selftest
 4. **做工具栏**：把常用操作提成「动作（actions）」，菜单项和按钮共用一个回调，还能绑 `Ctrl+S` 这种被输入框吃掉的快捷键。
 
 > 想系统学控件与 `.cgui` 格式，看仓库根 `README.md` 与 `docs/CGUI-FORMAT.md`；
-> 入门建议从 `examples\lesson01_basics` 六课教学示例开始。
+> 入门建议从 `examples\lessons\lessons` 六课教学套件开始。

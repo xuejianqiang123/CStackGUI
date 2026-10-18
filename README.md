@@ -71,7 +71,7 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
 （等价于 `.cgui` 里写 `"bind": { "src": "sld_level" }`），它的值/文字/勾选就一直跟着源走 ——
 "滑块拖动时旁边的标签显示数字"这种活，一行 C 都不用写，连重置都不用管它。
 源与目标的类型决定抄什么、双向怎么用，见 [docs/CGUI-FORMAT.md](docs/CGUI-FORMAT.md) 第 2.8 节，
-活例子见 `examples\lessons\lesson03_values`（拖动滑块，旁边的标签自己跟着变；**那几个回调都不用写**）。
+活例子见 `examples\lessons\lessons`（拖动滑块，旁边的标签自己跟着变；**那几个回调都不用写**）。
 
 和它同类的是**动作（actions）**：`.cgui` 顶层写一条命令（文字 + 快捷键 + 回调名），菜单项和按钮都用
 `"action": "save"` 引用它 —— **一个回调管住菜单项和按钮，一处启用状态全跟着变**；快捷键走消息循环里的
@@ -85,7 +85,7 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
 
 仓库自带几类示例，分工不同：
 
-- `examples\lessons\lesson01_basics` ~ `examples\lessons\lesson06_window` —— **六课教学示例**：基础与容器 →
+- `examples\lessons\lessons` ~ `examples\lessons\lessons` —— **六课教学示例**：基础与容器 →
   输入与选择 → 数值与指示 → 数据与日志 → 命令与图形 → 主窗口与窗口事件。每课只讲一个主题、
   **只出现本课主题的控件**、各用一屏摆齐、都能单独编译运行。
   **入门从这里开始**，路线图与逐课详解见 [examples\教学使用说明.md](examples/教学使用说明.md)。
@@ -418,19 +418,18 @@ CStackGUI\
       cg_kit.c                 基础能力 API（cg_kit）：业务代码不必 include windows.h
     res\                       清单（v6 通用控件 + 高 DPI）与版本信息
   examples\                    仓库自带的示例
-    lesson01_basics\           教学示例 01：基础与容器（按钮/图标钮/开关/徽章/容器）
-    lesson02_inputs\           教学示例 02：输入与选择（输入框/复选/单选/下拉/日期/月历）
-    lesson03_values\           教学示例 03：数值与指示（滑块/进度/圆环/仪表盘/状态灯/评分）
-    lesson04_data\             教学示例 04：数据与日志（标签页/树/表格/终端/图表/分隔条）
-    lesson05_commands\         教学示例 05：命令与图形（菜单/工具栏/画板/外形/图片/网页）
-    lesson06_window\           教学示例 06：主窗口与窗口事件（app.* 配置 / 26 种窗口事件 / 程序信息）
+    lessons\lessons\           教学六课套件（六课并成一个多页签工程：基础与容器 → 输入与选择 →
+                                数值与指示 → 数据与日志 → 命令与图形 → 主窗口与窗口事件；
+                                每课一页签、一个模块 modules\l1.c..l6.c）
+    suites\                    工具套件（每个多页签工程 = 一组同类工具，main 只做入口、逻辑在 modules\）
+      comm\                    通信：串口 / TCP / 深色终端 / Modbus / 帧解码
+      dev\                     开发：HEX / 编码转换 / 计算器 / 画板 / 取色
+      sys\                     系统：截图 / 托盘 / 系统面板 / 环境快照 / 设置
+      text\                    文本数据：记事本 / 日志过滤 / 文件校验 / 数据查看 / 报告 / 采集
     教学使用说明.md             六课路线图 + 每课详解 + 通用知识（学这套示例先读它）
     cppdemo\                   C++ 例程（main.cpp：STL 管数据 + 类管状态，构建自动走 g++）
     gallery\                   控件陈列室·三合一（gallery.cgui / main.c / assets\ / 产物）
-    notepad\                   真实小工具范例：记事本（菜单/文件/配置/cg_kit 全套）
-    serialterm\                串口助手（对标 XCOM：终端日志 + hex/时间戳/按帧 + 定时/多条发送 + 文件收发）
-    netterm\                   网络调试助手（TCP/UDP + 终端日志 + 角色切换）
-    darkterm\                  深色主题示例（app.dark + 命名样式 + 运行时切换主题）
+    toolbox\                   工具箱启动器（60+ Windows 工具：按钮墙 / 右键菜单管理 / 成对开关）
     modbus\                    Modbus/TCP 上位机（cg_modbus_* 拼帧解帧 + cg_frame_* 切帧 + mock-slave.mjs 模拟从站）
     hextool\                   进制与校验工具箱（HEX/文本互转 + 大小端 + CRC16/CRC32/MD5/SHA + Base64/URL + 报文组装）
     filecheck\                 文件核对工具（两个文件的大小与五种摘要比对 + 逐字节差异定位 + 报告导出）

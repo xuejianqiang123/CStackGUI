@@ -17,14 +17,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const suitesDir = path.join(root, "examples", "suites");
 const args = process.argv.slice(2);
 const only = args.includes("--suite") ? args[args.indexOf("--suite") + 1] : null;
-
-if (!fs.existsSync(suitesDir)) {
-  console.log("[skip] examples\\suites\\ 不存在（套件合并尚未开始）");
-  process.exit(0);
-}
 
 /** 套件骨架控件的前缀（合并脚本自己创建的 tabs 页签容器等）——它不属于任何工具模块，
  *  ⑥ 的"前缀必须对得上模块"对它豁免。 */
@@ -33,18 +27,28 @@ const SKELETON_PREFIX = "sv";
 let fails = 0;
 const fail = (msg) => { fails += 1; console.error(`  [fail] ${msg}`); };
 
-const suites = fs
-  .readdirSync(suitesDir, { withFileTypes: true })
-  .filter((d) => d.isDirectory() && (!only || d.name === only))
-  .map((d) => d.name);
+/** 套件工程目录：4 个工具套件在 examples\suites\，教学六课套件在 examples\lessons\lessons\。
+ *  六课并成套件后同样是"多页签 + modules\"结构，同一套契约照管（事件双向一致 / id 唯一且前缀对得上模块）。 */
+const suiteDirs = [];
+const suitesRoot = path.join(root, "examples", "suites");
+if (fs.existsSync(suitesRoot)) {
+  for (const d of fs.readdirSync(suitesRoot, { withFileTypes: true })) {
+    if (d.isDirectory()) suiteDirs.push({ name: d.name, dir: path.join(suitesRoot, d.name) });
+  }
+}
+const lessonsSuite = path.join(root, "examples", "lessons", "lessons");
+if (fs.existsSync(path.join(lessonsSuite, "lessons.cgui"))) {
+  suiteDirs.push({ name: "lessons", dir: lessonsSuite });
+}
+
+const suites = suiteDirs.filter((s) => !only || s.name === only);
 
 if (!suites.length) {
   console.error(`[fail] 没找到套件${only ? ` "${only}"` : ""}`);
   process.exit(1);
 }
 
-for (const s of suites) {
-  const dir = path.join(suitesDir, s);
+for (const { name: s, dir } of suites) {
   const cgui = path.join(dir, `${s}.cgui`);
   if (!fs.existsSync(cgui)) { fail(`${s}: 缺 ${s}.cgui`); continue; }
 
@@ -53,10 +57,16 @@ for (const s of suites) {
   // ① 收集 .cgui 里的全部回调名（events 值）
   const used = new Set();
   const actRefs = new Set();   /* 动作引用（指向 actions 表的键，不是回调名） */
-  const ids = [];
-  (function walk(ns) {
+  const ids = [];              /* 控件 id：全局唯一（⑤）+ 前缀对得上模块（⑥） */
+  const menuIds = [];          /* 菜单项 id（nodes[] 下）：**按菜单控件作用域**解析
+                                *  （cg_menu_last_id(self) 只在被点的那个菜单内查），
+                                *  跨菜单复用同名项是合法的 —— 所以只查前缀（⑥），
+                                *  不参与全局唯一（⑤）。2026-10-18 lessons 合并首跑：
+                                *  lesson05 的 m_page 同时在菜单栏与菜单按钮里，原工程本就如此，
+                                *  门禁误报成"id 重复"，据此把两类 id 分开。 */
+  (function walk(ns, inMenu) {
     for (const n of ns ?? []) {
-      if (n.id) ids.push(n.id);
+      if (n.id) (inMenu ? menuIds : ids).push(n.id);
       if (n.events) for (const v of Object.values(n.events)) if (v) used.add(String(v));
       if (doc.app && doc.app.events) for (const v of Object.values(doc.app.events)) if (v) used.add(String(v));
       /* action 的 handler 也是回调名（要进双向核对：漏了就查不出"handler 没改前缀"
@@ -65,10 +75,10 @@ for (const s of suites) {
       /* 动作引用（控件的 action 字段、菜单条目 nodes[].action）指向动作表的键 ——
        * 单独记一份核对存在性（漏改名就是运行时"菜单引用了不存在的动作"） */
       if (typeof n.action === "string" && n.action) actRefs.add(n.action);
-      walk(n.children);
-      walk(n.nodes);
+      walk(n.children, false);
+      walk(n.nodes, true);     /* 菜单树挂在 nodes 下，里面的 id 是菜单项 id（作用域不同） */
     }
-  })(doc.widgets);
+  })(doc.widgets, false);
 
   // ② 收集 modules\ 下全部 CG_BIND 登记名
   const modDir = path.join(dir, "modules");
@@ -125,7 +135,7 @@ for (const s of suites) {
     `[ok]   ${s}: 控件 ${ids.length}、回调 ${used.size}、绑定 ${registered.size}、模块 ${modFiles.length}`,
   );
   const prefixes = new Set(modFiles.map((f) => path.basename(f, ".c")));
-  for (const id of ids) {
+  for (const id of [...ids, ...menuIds]) {
     const pre = id.includes("_") ? id.slice(0, id.indexOf("_")) : "";
     if (pre && pre !== SKELETON_PREFIX && !prefixes.has(pre)) {
       fail(`${s}: 控件 id "${id}" 的前缀 "${pre}" 不对应任何模块（${[...prefixes].join("/")}）`);

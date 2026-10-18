@@ -1,4 +1,15 @@
 /**
+ * @file    l3.c
+ * @brief   lesson03_values —— 套件模块（原 examples\lesson03_values 合并而来，函数名未改：static 编译单元隔离）
+ * @note    由 tools\suite-merge.mjs（.cgui 侧）+ build\gen_modules.mjs（C 侧）的变换规则
+ *          产出：CG_BIND 字符串带 l3_ 前缀（与 .cgui 的 events 一一对应）、
+ *          绑定表导出为 l3_bindings、原 on_ready 变成 l3_init、
+ *          窗口事件改成直连转发 l3_app_<event>（套件只有一个窗口，
+ *          按名派发只能接一个，其余工具的窗口职责会被静默吞掉）。
+ *          各工具的回调都是 static，合并进同一次链接不冲突。
+ */
+
+/**
  * @file    main.c
  * @brief   入门 03（数值与指示）：把数字显示出来
  * @details 这一课只讲一件事：**值只有一份，显示方式可以有很多种**。
@@ -65,16 +76,16 @@ static void show_level(cg_app_t *app, int level)
 
     s_biz.level = level;
 
-    cg_widget_set_value(cg_find(app, "prg_level"), level);    /* 进度条：横着一条 */
-    cg_widget_set_value(cg_find(app, "ring_level"), level);   /* 圆环：同一个值画成一圈 */
-    cg_meter_set(cg_find(app, "mtr_arc"), level);             /* 仪表盘：270° 弧 */
-    cg_meter_set(cg_find(app, "mtr_half"), level);            /* 仪表盘：半圆（format = half） */
+    cg_widget_set_value(cg_find(app, "l3_prg_level"), level);    /* 进度条：横着一条 */
+    cg_widget_set_value(cg_find(app, "l3_ring_level"), level);   /* 圆环：同一个值画成一圈 */
+    cg_meter_set(cg_find(app, "l3_mtr_arc"), level);             /* 仪表盘：270° 弧 */
+    cg_meter_set(cg_find(app, "l3_mtr_half"), level);            /* 仪表盘：半圆（format = half） */
 
     /* C 这条路得自己拼串：lab_level 显示成 "60 / 100"。
      * 旁边那个 lab_sld_mirror 一行 C 都不用写 —— .cgui 里 bind 到 sld_level，值自己跟过来；
      * 但它只会整份抄值（抄出来就是 "60"），所以"要拼字符串"的活仍然得走 C。 */
     snprintf(buf, sizeof(buf), "%d / 100", level);
-    cg_widget_set_text(cg_find(app, "lab_level"), buf);       /* 数字本体：标签没有事件，只能主动写它 */
+    cg_widget_set_text(cg_find(app, "l3_lab_level"), buf);       /* 数字本体：标签没有事件，只能主动写它 */
 }
 
 /* ---------------------------------------- slider：值的入口 */
@@ -95,7 +106,7 @@ static void on_sld_level_change(cg_widget_t *self, cg_event_t ev, void *user)
     (void)user;
 
     show_level(app, v);
-    cg_status_setf(cg_find(app, "sb_main"), 0, "拖动中：等级 %d / 100", v);
+    cg_status_setf(cg_find(app, "l3_sb_main"), 0, "拖动中：等级 %d / 100", v);
 }
 
 /**
@@ -110,7 +121,7 @@ static void on_sld_level_release(cg_widget_t *self, cg_event_t ev, void *user)
     (void)ev;
     (void)user;
 
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l3_sb_main"), 0,
                    "松手：等级定为 %d（release 只发这一次）", cg_widget_value(self));
 }
 
@@ -126,7 +137,7 @@ static void on_sld_level_release(cg_widget_t *self, cg_event_t ev, void *user)
 static void on_btn_reset_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app = cg_app_of(self);
-    cg_widget_t *sld = cg_find(app, "sld_level");
+    cg_widget_t *sld = cg_find(app, "l3_sld_level");
 
     (void)ev;
     (void)user;
@@ -136,7 +147,7 @@ static void on_btn_reset_click(cg_widget_t *self, cg_event_t ev, void *user)
     cg_widget_set_value(sld, 60);
     show_level(app, cg_widget_value(sld));
 
-    cg_status_set(cg_find(app, "sb_main"), 0, "程序把值写回 60：这一步没有触发 change 回调");
+    cg_status_set(cg_find(app, "l3_sb_main"), 0, "程序把值写回 60：这一步没有触发 change 回调");
 }
 
 /* ---------------------------------------- led：三态状态灯 */
@@ -152,7 +163,7 @@ static void on_btn_led_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     static const char *k_led_text[3] = { "灭", "亮", "闪" };
     cg_app_t    *app = cg_app_of(self);
-    cg_widget_t *led = cg_find(app, "led_state");
+    cg_widget_t *led = cg_find(app, "l3_led_state");
 
     (void)ev;
     (void)user;
@@ -161,7 +172,7 @@ static void on_btn_led_click(cg_widget_t *self, cg_event_t ev, void *user)
     cg_led_set(led, s_biz.led);                       /* 2 = 闪：闪烁由控件自己按 period 重绘 */
     cg_widget_set_text(led, k_led_text[s_biz.led]);   /* 灯右边那句说明文字 */
 
-    cg_status_setf(cg_find(app, "sb_main"), 0, "状态灯：%s（period = %d 毫秒）",
+    cg_status_setf(cg_find(app, "l3_sb_main"), 0, "状态灯：%s（period = %d 毫秒）",
                    k_led_text[s_biz.led], cg_widget_period(led));
 }
 
@@ -179,7 +190,7 @@ static void on_rate_star_change(cg_widget_t *self, cg_event_t ev, void *user)
     (void)ev;
     (void)user;
 
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l3_sb_main"), 0,
                    "评分：%d 星（.cgui 里 max - min = 5）", cg_widget_value(self));
 }
 
@@ -195,7 +206,7 @@ static void on_pg_page_change(cg_widget_t *self, cg_event_t ev, void *user)
     (void)ev;
     (void)user;
 
-    cg_status_setf(cg_find(cg_app_of(self), "sb_main"), 0,
+    cg_status_setf(cg_find(cg_app_of(self), "l3_sb_main"), 0,
                    "翻到第 %d 页（.cgui 里 max - min + 1 = 8 页）", cg_widget_value(self));
 }
 
@@ -218,8 +229,8 @@ static void on_ready(cg_widget_t *self, cg_event_t ev, void *user)
 
     /* 按滑块的初值把四种显示对齐一次。.cgui 里每个控件的初值也都写成 60 了，
      * 这一步是"程序改值要自己刷显示"最稳的写法，也是启动初始化的标准位置。 */
-    show_level(app, cg_widget_value(cg_find(app, "sld_level")));
-    cg_status_set(cg_find(app, "sb_main"), 0, "就绪：拖一下滑块，看其它四个控件跟不跟");
+    show_level(app, cg_widget_value(cg_find(app, "l3_sld_level")));
+    cg_status_set(cg_find(app, "l3_sb_main"), 0, "就绪：拖一下滑块，看其它四个控件跟不跟");
     cg_log(CG_LOG_INFO, "lesson03 界面就绪：等级初值 %d", s_biz.level);
 }
 
@@ -240,15 +251,13 @@ static void on_close(cg_widget_t *self, cg_event_t ev, void *user)
     cg_log(CG_LOG_INFO, "窗口关闭：最后的等级是 %d", s_biz.level);
 }
 
-static const cg_binding_t k_bindings[] = {
-    CG_BIND("on_sld_level_change",  on_sld_level_change),
-    CG_BIND("on_sld_level_release", on_sld_level_release),
-    CG_BIND("on_btn_reset_click",   on_btn_reset_click),
-    CG_BIND("on_btn_led_click",     on_btn_led_click),
-    CG_BIND("on_rate_star_change",  on_rate_star_change),
-    CG_BIND("on_pg_page_change",    on_pg_page_change),
-    CG_BIND("on_ready",             on_ready),
-    CG_BIND("on_close",             on_close),
+const cg_binding_t l3_bindings[] = {
+    CG_BIND("l3_on_sld_level_change",  on_sld_level_change),
+    CG_BIND("l3_on_sld_level_release", on_sld_level_release),
+    CG_BIND("l3_on_btn_reset_click",   on_btn_reset_click),
+    CG_BIND("l3_on_btn_led_click",     on_btn_led_click),
+    CG_BIND("l3_on_rate_star_change",  on_rate_star_change),
+    CG_BIND("l3_on_pg_page_change",    on_pg_page_change),
     CG_BIND_END
 };
 
@@ -258,18 +267,42 @@ static const cg_binding_t k_bindings[] = {
  * @param argv 参数数组（argv[1] = .cgui 路径，或 --selftest）
  * @return int 进程退出码（0 正常）
  */
-int main(int argc, char **argv)
+
+/**
+ * @brief lesson03_values 套件模块初始化（原工程没有 on_ready；初值原在 main() 里，由转换器搬来）
+ * @param app 当前应用
+ * @param user 用户数据（本套件未用，透传自入口）
+ * @return void 无返回值
+ */
+void l3_init(cg_app_t *app, void *user)
 {
-    cg_app_desc_t desc;
+    (void)app;
+    (void)user;
+    /* 原 main() 里的工具级初值（转换器搬来：丢了会与 .cgui 的初始状态不一致） */
 
-    memset(&desc, 0, sizeof(desc));
-    desc.bindings = k_bindings;
-    desc.auto_locate_cgui = 1;
 
-    if (argc > 1 && strcmp(argv[1], "--selftest") == 0) {
-        desc.cgui_path = (argc > 2) ? argv[2] : "lesson03_values.cgui";
-        return cg_app_selftest(&desc);
-    }
-    desc.cgui_path = (argc > 1) ? argv[1] : "lesson03_values.cgui";
-    return cg_app_run(&desc);
+}
+
+/**
+ * @brief 窗口事件 ready 的套件转发入口（main 的分发器调进来；**不进绑定表** —— 直接调用而非按名派发）
+ * @param self 窗口伪控件
+ * @param ev ready
+ * @param user 业务数据（透传给原 handler）
+ * @return void 无返回值
+ */
+void l3_app_ready(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    on_ready(self, ev, user);
+}
+
+/**
+ * @brief 窗口事件 close 的套件转发入口（main 的分发器调进来；**不进绑定表** —— 直接调用而非按名派发）
+ * @param self 窗口伪控件
+ * @param ev close
+ * @param user 业务数据（透传给原 handler）
+ * @return void 无返回值
+ */
+void l3_app_close(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    on_close(self, ev, user);
 }

@@ -1,4 +1,15 @@
 /**
+ * @file    l1.c
+ * @brief   lesson01_basics —— 套件模块（原 examples\lesson01_basics 合并而来，函数名未改：static 编译单元隔离）
+ * @note    由 tools\suite-merge.mjs（.cgui 侧）+ build\gen_modules.mjs（C 侧）的变换规则
+ *          产出：CG_BIND 字符串带 l1_ 前缀（与 .cgui 的 events 一一对应）、
+ *          绑定表导出为 l1_bindings、原 on_ready 变成 l1_init、
+ *          窗口事件改成直连转发 l1_app_<event>（套件只有一个窗口，
+ *          按名派发只能接一个，其余工具的窗口职责会被静默吞掉）。
+ *          各工具的回调都是 static，合并进同一次链接不冲突。
+ */
+
+/**
  * @file    main.c
  * @brief   入门 01 · 基础与容器 —— 按钮 / 图标按钮 / 标签 / 链接 / 开关 / 徽章 / 标签片 / 分割线 + 三种容器
  * @details 这一课把"搭界面最基础的那批控件"一次摆齐，界面在 `lesson01_basics.cgui`：
@@ -55,7 +66,7 @@ static void say(cg_app_t *app, const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
-    cg_status_set(cg_find(app, "sb_main"), 0, buf);
+    cg_status_set(cg_find(app, "l1_sb_main"), 0, buf);
 }
 
 /** 主按钮被点的次数（演示"业务状态放哪"：文件级 static 就够） */
@@ -248,18 +259,17 @@ static void on_btn_in_card_click(cg_widget_t *self, cg_event_t ev, void *user)
 /* ------------------------------------------------------------ 绑定表与入口 */
 
 /** `.cgui` 里出现的函数名 -> C 函数；漏一个 `--selftest` 会报"未登记" */
-static const cg_binding_t k_bindings[] = {
-    CG_BIND("on_app_ready",       on_app_ready),
-    CG_BIND("on_btn_primary_click", on_btn_primary_click),
-    CG_BIND("on_icb_run_click",   on_icb_run_click),
-    CG_BIND("on_lnk_docs_click",  on_lnk_docs_click),
-    CG_BIND("on_sw_notify_change", on_sw_notify_change),
-    CG_BIND("on_tg_demo_click",   on_tg_demo_click),
-    CG_BIND("on_btn_in_grp_click", on_btn_in_grp_click),
-    CG_BIND("on_sw_in_box_change", on_sw_in_box_change),
-    CG_BIND("on_tg_in_card_click", on_tg_in_card_click),
-    CG_BIND("on_lnk_in_card_click", on_lnk_in_card_click),
-    CG_BIND("on_btn_in_card_click", on_btn_in_card_click),
+const cg_binding_t l1_bindings[] = {
+    CG_BIND("l1_on_btn_primary_click", on_btn_primary_click),
+    CG_BIND("l1_on_icb_run_click",   on_icb_run_click),
+    CG_BIND("l1_on_lnk_docs_click",  on_lnk_docs_click),
+    CG_BIND("l1_on_sw_notify_change", on_sw_notify_change),
+    CG_BIND("l1_on_tg_demo_click",   on_tg_demo_click),
+    CG_BIND("l1_on_btn_in_grp_click", on_btn_in_grp_click),
+    CG_BIND("l1_on_sw_in_box_change", on_sw_in_box_change),
+    CG_BIND("l1_on_tg_in_card_click", on_tg_in_card_click),
+    CG_BIND("l1_on_lnk_in_card_click", on_lnk_in_card_click),
+    CG_BIND("l1_on_btn_in_card_click", on_btn_in_card_click),
     CG_BIND_END
 };
 
@@ -269,18 +279,30 @@ static const cg_binding_t k_bindings[] = {
  * @param argv 参数数组（argv[1] = .cgui 路径，或 --selftest）
  * @return int 进程退出码（0 正常）
  */
-int main(int argc, char **argv)
+
+/**
+ * @brief lesson01_basics 套件模块初始化（原工程没有 on_ready；初值原在 main() 里，由转换器搬来）
+ * @param app 当前应用
+ * @param user 用户数据（本套件未用，透传自入口）
+ * @return void 无返回值
+ */
+void l1_init(cg_app_t *app, void *user)
 {
-    cg_app_desc_t desc;
+    (void)app;
+    (void)user;
+    /* 原 main() 里的工具级初值（转换器搬来：丢了会与 .cgui 的初始状态不一致） */
 
-    memset(&desc, 0, sizeof(desc));
-    desc.bindings = k_bindings;
-    desc.auto_locate_cgui = 1;
 
-    if (argc > 1 && strcmp(argv[1], "--selftest") == 0) {
-        desc.cgui_path = (argc > 2) ? argv[2] : "lesson01_basics.cgui";
-        return cg_app_selftest(&desc);
-    }
-    desc.cgui_path = (argc > 1) ? argv[1] : "lesson01_basics.cgui";
-    return cg_app_run(&desc);
+}
+
+/**
+ * @brief 窗口事件 ready 的套件转发入口（main 的分发器调进来；**不进绑定表** —— 直接调用而非按名派发）
+ * @param self 窗口伪控件
+ * @param ev ready
+ * @param user 业务数据（透传给原 handler）
+ * @return void 无返回值
+ */
+void l1_app_ready(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    on_app_ready(self, ev, user);
 }

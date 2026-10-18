@@ -1,4 +1,15 @@
 /**
+ * @file    l4.c
+ * @brief   lesson04_data —— 套件模块（原 examples\lesson04_data 合并而来，函数名未改：static 编译单元隔离）
+ * @note    由 tools\suite-merge.mjs（.cgui 侧）+ build\gen_modules.mjs（C 侧）的变换规则
+ *          产出：CG_BIND 字符串带 l4_ 前缀（与 .cgui 的 events 一一对应）、
+ *          绑定表导出为 l4_bindings、原 on_ready 变成 l4_init、
+ *          窗口事件改成直连转发 l4_app_<event>（套件只有一个窗口，
+ *          按名派发只能接一个，其余工具的窗口职责会被静默吞掉）。
+ *          各工具的回调都是 static，合并进同一次链接不冲突。
+ */
+
+/**
  * @file    main.c
  * @brief   入门 04：数据与日志 —— 标签页 / 树 / 表格 / 终端 / 图表 / 分隔条 / 时钟
  * @details 前几课都是"一个控件一个值"。这一课装的是**一组数据**，外加一个**自己会刷新**的日志区，
@@ -85,7 +96,7 @@ static void term_line(cg_app_t *app, int dir, const char *fmt, ...)
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
 
-    cg_term_write(cg_find(app, "term_log"), dir, buf, -1);
+    cg_term_write(cg_find(app, "l4_term_log"), dir, buf, -1);
     printf("[log] %s\n", buf);      /* 自检时在控制台也能看到时序 */
 }
 
@@ -96,12 +107,12 @@ static void term_line(cg_app_t *app, int dir, const char *fmt, ...)
  */
 static void refresh_status(cg_app_t *app)
 {
-    cg_widget_t *sb = cg_find(app, "sb_main");
+    cg_widget_t *sb = cg_find(app, "l4_sb_main");
 
     cg_status_setf(sb, 0, "列表 %d · 树 %d · 表格 %d",
-                   cg_widget_list_count(cg_find(app, "lst_items")),
-                   cg_tree_count(cg_find(app, "tre_dir")),
-                   cg_table_row_count(cg_find(app, "tbl_data")));
+                   cg_widget_list_count(cg_find(app, "l4_lst_items")),
+                   cg_tree_count(cg_find(app, "l4_tre_dir")),
+                   cg_table_row_count(cg_find(app, "l4_tbl_data")));
     cg_status_set(sb, 1, s_sel[0] ? s_sel : "选中：-");
     cg_status_setf(sb, 2, "心跳 %d", s_beat);
 }
@@ -174,7 +185,7 @@ static void on_lst_items_select(cg_widget_t *self, cg_event_t ev, void *user)
 static void on_btn_list_add_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app = cg_app_of(self);
-    cg_widget_t *lst = cg_find(app, "lst_items");
+    cg_widget_t *lst = cg_find(app, "l4_lst_items");
 
     (void)ev;
     (void)user;
@@ -194,7 +205,7 @@ static void on_btn_list_add_click(cg_widget_t *self, cg_event_t ev, void *user)
 static void on_btn_list_clear_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app = cg_app_of(self);
-    cg_widget_t *lst = cg_find(app, "lst_items");
+    cg_widget_t *lst = cg_find(app, "l4_lst_items");
     int          n   = cg_widget_list_count(lst);
 
     (void)ev;
@@ -272,7 +283,7 @@ static void on_tre_dir_collapse(cg_widget_t *self, cg_event_t ev, void *user)
 static void on_btn_tree_add_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app    = cg_app_of(self);
-    cg_widget_t *tre    = cg_find(app, "tre_dir");
+    cg_widget_t *tre    = cg_find(app, "l4_tre_dir");
     int          parent = cg_tree_selected(tre);
     int          idx    = cg_tree_addf(tre, parent, "新节点 %d", ++s_added_nodes);
 
@@ -293,7 +304,7 @@ static void on_btn_tree_add_click(cg_widget_t *self, cg_event_t ev, void *user)
 static void on_btn_tree_all_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app = cg_app_of(self);
-    cg_widget_t *tre = cg_find(app, "tre_dir");
+    cg_widget_t *tre = cg_find(app, "l4_tre_dir");
     int          n   = cg_tree_count(tre);
     int          i;
 
@@ -373,7 +384,7 @@ static void on_tbl_data_check(cg_widget_t *self, cg_event_t ev, void *user)
 static void on_btn_row_add_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app = cg_app_of(self);
-    cg_widget_t *tbl = cg_find(app, "tbl_data");
+    cg_widget_t *tbl = cg_find(app, "l4_tbl_data");
     char         name[32];
     const char  *cells[3];
 
@@ -398,7 +409,7 @@ static void on_btn_row_add_click(cg_widget_t *self, cg_event_t ev, void *user)
 static void on_btn_row_clear_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app = cg_app_of(self);
-    cg_widget_t *tbl = cg_find(app, "tbl_data");
+    cg_widget_t *tbl = cg_find(app, "l4_tbl_data");
     int          n   = cg_table_row_count(tbl);
 
     (void)ev;
@@ -439,7 +450,7 @@ static void on_sp_main_release(cg_widget_t *self, cg_event_t ev, void *user)
 static void on_btn_log_clear_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app  = cg_app_of(self);
-    cg_widget_t *term = cg_find(app, "term_log");
+    cg_widget_t *term = cg_find(app, "l4_term_log");
     int          n    = cg_term_count(term);
 
     (void)ev;
@@ -460,7 +471,7 @@ static void on_btn_log_clear_click(cg_widget_t *self, cg_event_t ev, void *user)
 static void on_btn_log_save_click(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app  = cg_app_of(self);
-    cg_widget_t *term = cg_find(app, "term_log");
+    cg_widget_t *term = cg_find(app, "l4_term_log");
     char         path[1024];
 
     (void)ev;
@@ -518,8 +529,8 @@ static void on_btn_export_click(cg_widget_t *self, cg_event_t ev, void *user)
 static void on_tmr_beat_tick(cg_widget_t *self, cg_event_t ev, void *user)
 {
     cg_app_t    *app       = cg_app_of(self);
-    cg_widget_t *chart_line = cg_find(app, "cht_line");
-    cg_widget_t *chart_bar  = cg_find(app, "cht_bar");
+    cg_widget_t *chart_line = cg_find(app, "l4_cht_line");
+    cg_widget_t *chart_bar  = cg_find(app, "l4_cht_bar");
 
     (void)ev;
     (void)user;
@@ -547,10 +558,10 @@ static void on_tmr_beat_tick(cg_widget_t *self, cg_event_t ev, void *user)
  * @return void 无返回值
  * @note 图表刚建好是空的；value / items 改了会重建点缓冲（已有点会丢），所以先摆好参数再灌数据
  */
-static void on_ready(cg_app_t *app, void *user)
+void l4_init(cg_app_t *app, void *user)
 {
-    cg_widget_t *chart_line = cg_find(app, "cht_line");
-    cg_widget_t *chart_bar  = cg_find(app, "cht_bar");
+    cg_widget_t *chart_line = cg_find(app, "l4_cht_line");
+    cg_widget_t *chart_bar  = cg_find(app, "l4_cht_bar");
     int          i;
 
     (void)user;
@@ -565,25 +576,25 @@ static void on_ready(cg_app_t *app, void *user)
     refresh_status(app);
 }
 
-static const cg_binding_t k_bindings[] = {
-    CG_BIND("on_tab_data_select",      on_tab_data_select),
-    CG_BIND("on_lst_items_select",     on_lst_items_select),
-    CG_BIND("on_btn_list_add_click",   on_btn_list_add_click),
-    CG_BIND("on_btn_list_clear_click", on_btn_list_clear_click),
-    CG_BIND("on_tre_dir_select",       on_tre_dir_select),
-    CG_BIND("on_tre_dir_expand",       on_tre_dir_expand),
-    CG_BIND("on_tre_dir_collapse",     on_tre_dir_collapse),
-    CG_BIND("on_btn_tree_add_click",   on_btn_tree_add_click),
-    CG_BIND("on_btn_tree_all_click",   on_btn_tree_all_click),
-    CG_BIND("on_tbl_data_select",      on_tbl_data_select),
-    CG_BIND("on_tbl_data_check",       on_tbl_data_check),
-    CG_BIND("on_btn_row_add_click",    on_btn_row_add_click),
-    CG_BIND("on_btn_row_clear_click",  on_btn_row_clear_click),
-    CG_BIND("on_sp_main_release",      on_sp_main_release),
-    CG_BIND("on_btn_log_clear_click",  on_btn_log_clear_click),
-    CG_BIND("on_btn_log_save_click",   on_btn_log_save_click),
-    CG_BIND("on_btn_export_click",     on_btn_export_click),
-    CG_BIND("on_tmr_beat_tick",        on_tmr_beat_tick),
+const cg_binding_t l4_bindings[] = {
+    CG_BIND("l4_on_tab_data_select",      on_tab_data_select),
+    CG_BIND("l4_on_lst_items_select",     on_lst_items_select),
+    CG_BIND("l4_on_btn_list_add_click",   on_btn_list_add_click),
+    CG_BIND("l4_on_btn_list_clear_click", on_btn_list_clear_click),
+    CG_BIND("l4_on_tre_dir_select",       on_tre_dir_select),
+    CG_BIND("l4_on_tre_dir_expand",       on_tre_dir_expand),
+    CG_BIND("l4_on_tre_dir_collapse",     on_tre_dir_collapse),
+    CG_BIND("l4_on_btn_tree_add_click",   on_btn_tree_add_click),
+    CG_BIND("l4_on_btn_tree_all_click",   on_btn_tree_all_click),
+    CG_BIND("l4_on_tbl_data_select",      on_tbl_data_select),
+    CG_BIND("l4_on_tbl_data_check",       on_tbl_data_check),
+    CG_BIND("l4_on_btn_row_add_click",    on_btn_row_add_click),
+    CG_BIND("l4_on_btn_row_clear_click",  on_btn_row_clear_click),
+    CG_BIND("l4_on_sp_main_release",      on_sp_main_release),
+    CG_BIND("l4_on_btn_log_clear_click",  on_btn_log_clear_click),
+    CG_BIND("l4_on_btn_log_save_click",   on_btn_log_save_click),
+    CG_BIND("l4_on_btn_export_click",     on_btn_export_click),
+    CG_BIND("l4_on_tmr_beat_tick",        on_tmr_beat_tick),
     CG_BIND_END
 };
 
@@ -593,19 +604,3 @@ static const cg_binding_t k_bindings[] = {
  * @param argv 命令行参数数组：argv[1] 是 .cgui 路径，写 "--selftest" 则跑自检
  * @return int 进程退出码：运行 / 自检的返回值，0 = 正常
  */
-int main(int argc, char **argv)
-{
-    cg_app_desc_t desc;
-
-    memset(&desc, 0, sizeof(desc));
-    desc.bindings = k_bindings;
-    desc.auto_locate_cgui = 1;
-    desc.on_ready = on_ready;
-
-    if (argc > 1 && strcmp(argv[1], "--selftest") == 0) {
-        desc.cgui_path = (argc > 2) ? argv[2] : "lesson04_data.cgui";
-        return cg_app_selftest(&desc);
-    }
-    desc.cgui_path = (argc > 1) ? argv[1] : "lesson04_data.cgui";
-    return cg_app_run(&desc);
-}

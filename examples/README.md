@@ -10,18 +10,20 @@
 
 <!-- ex-index:begin（由 node tools\check-examples.mjs --ex-index 生成，别手改）-->
 
-## 教学六课（`examples\lessons\`）
+## 教学六课（`examples\lessons\lessons\` · 一个多页签套件）
 
-**顺序即内容**（前一课的概念是后一课的地基），每课都是能单独编译运行的小工程：
+**顺序即内容**（前一课的概念是后一课的地基），六课并进一个多页签套件，每课一页签、一个模块：
 
-| 课 | 目录 | 主题 |
+| 页 | 模块 | 主题 |
 | --- | --- | --- |
-| 入门 01 | `examples/lessons/lesson01_basics` | 基础与容器 |
-| 入门 02 | `examples/lessons/lesson02_inputs` | 输入与选择 |
-| 入门 03 | `examples/lessons/lesson03_values` | 数值与指示 |
-| 入门 04 | `examples/lessons/lesson04_data` | 数据与日志 |
-| 入门 05 | `examples/lessons/lesson05_commands` | 命令与图形 |
-| 入门 06 | `examples/lessons/lesson06_window` | 主窗口与窗口事件 |
+| 01 | `examples\lessons\lessons\modules\l1.c` | 基础与容器 |
+| 02 | `examples\lessons\lessons\modules\l2.c` | 输入与选择 |
+| 03 | `examples\lessons\lessons\modules\l3.c` | 数值与指示 |
+| 04 | `examples\lessons\lessons\modules\l4.c` | 数据与日志 |
+| 05 | `examples\lessons\lessons\modules\l5.c` | 命令与图形 |
+| 06 | `examples\lessons\lessons\modules\l6.c` | 主窗口与窗口事件 |
+
+编译 `build-app.bat lessons\lessons`，运行 `examples\lessons\lessons\lessons.exe` —— 六课在六个页签里。
 
 ## 合并套件（`examples\suites\`）
 

@@ -1,4 +1,15 @@
 /**
+ * @file    l6.c
+ * @brief   lesson06_window —— 套件模块（原 examples\lesson06_window 合并而来，函数名未改：static 编译单元隔离）
+ * @note    由 tools\suite-merge.mjs（.cgui 侧）+ build\gen_modules.mjs（C 侧）的变换规则
+ *          产出：CG_BIND 字符串带 l6_ 前缀（与 .cgui 的 events 一一对应）、
+ *          绑定表导出为 l6_bindings、原 on_ready 变成 l6_init、
+ *          窗口事件改成直连转发 l6_app_<event>（套件只有一个窗口，
+ *          按名派发只能接一个，其余工具的窗口职责会被静默吞掉）。
+ *          各工具的回调都是 static，合并进同一次链接不冲突。
+ */
+
+/**
  * @file    main.c
  * @brief   入门 06 · 主窗口与窗口事件 —— 窗口配置（app.*）/ 窗口事件（app.events）/ 程序信息（app.info）
  * @details 前五课都在讲"控件"，这一课讲**窗口本身**。界面在 `lesson06_window.cgui`：
@@ -59,9 +70,9 @@ static void logev(cg_app_t *app, const char *fmt, ...)
     va_end(ap);
 
     s_lines += 1;
-    cg_widget_list_addf(cg_find(app, "lst_evt"), "%02d  %s", s_lines, buf);
-    cg_widget_list_scroll_bottom(cg_find(app, "lst_evt"));
-    cg_status_set(cg_find(app, "sb_main"), 1, buf);
+    cg_widget_list_addf(cg_find(app, "l6_lst_evt"), "%02d  %s", s_lines, buf);
+    cg_widget_list_scroll_bottom(cg_find(app, "l6_lst_evt"));
+    cg_status_set(cg_find(app, "l6_sb_main"), 1, buf);
 }
 
 /* ------------------------------------------------------------ 窗口事件 */
@@ -84,15 +95,15 @@ static void on_app_ready(cg_widget_t *self, cg_event_t ev, void *user)
     (void)user;
 
     snprintf(line, sizeof(line), "程序名称：%s", cg_app_info(app, "product"));
-    cg_widget_set_text(cg_find(app, "lab_info_product"), line);
+    cg_widget_set_text(cg_find(app, "l6_lab_info_product"), line);
     snprintf(line, sizeof(line), "版本：%s（构建 %s）",
              cg_app_info(app, "version"), cg_app_info(app, "build"));
-    cg_widget_set_text(cg_find(app, "lab_info_version"), line);
+    cg_widget_set_text(cg_find(app, "l6_lab_info_version"), line);
     snprintf(line, sizeof(line), "作者：%s", cg_app_info(app, "author"));
-    cg_widget_set_text(cg_find(app, "lab_info_author"), line);
+    cg_widget_set_text(cg_find(app, "l6_lab_info_author"), line);
     snprintf(line, sizeof(line), "单位：%s   %s",
              cg_app_info(app, "company"), cg_app_info(app, "copyright"));
-    cg_widget_set_text(cg_find(app, "lab_info_company"), line);
+    cg_widget_set_text(cg_find(app, "l6_lab_info_company"), line);
 
     logev(app, "ready：窗口与控件都建好了（这里适合做启动初始化）");
     logev(app, "提示：拖窗口边框会发 size，敲键盘会发 keydown / char，点客户区会发 mousedown");
@@ -116,7 +127,7 @@ static void on_app_close(cg_widget_t *self, cg_event_t ev, void *user)
 
     logev(app, "close：用户点了关闭");
 
-    if (!cg_widget_checked(cg_find(app, "chk_ask"))) return;   /* 没勾"演示拦截"就正常退出 */
+    if (!cg_widget_checked(cg_find(app, "l6_chk_ask"))) return;   /* 没勾"演示拦截"就正常退出 */
     if (!cg_app_has_window(app)) return;                       /* 自检模式：绝不弹框 */
 
     cg_message_box(self,
@@ -144,7 +155,7 @@ static void on_win_size(cg_widget_t *self, cg_event_t ev, void *user)
     (void)ev;
     (void)user;
 
-    cg_status_setf(cg_find(app, "sb_main"), 0, "窗口 %d×%d", w, h);
+    cg_status_setf(cg_find(app, "l6_sb_main"), 0, "窗口 %d×%d", w, h);
     logev(app, "size：客户区变成 %d×%d（没有布局引擎，控件不会自己重排）", w, h);
 }
 
@@ -226,7 +237,7 @@ static void on_app_idle(cg_widget_t *self, cg_event_t ev, void *user)
     (void)user;
 
     s_idle += 1;
-    if (s_idle % 50 == 0) cg_status_setf(cg_find(app, "sb_main"), 2, "空闲 %d 次", s_idle);
+    if (s_idle % 50 == 0) cg_status_setf(cg_find(app, "l6_sb_main"), 2, "空闲 %d 次", s_idle);
 }
 
 /**
@@ -359,19 +370,11 @@ static void on_btn_hide_click(cg_widget_t *self, cg_event_t ev, void *user)
 /* ------------------------------------------------------------ 绑定表与入口 */
 
 /** `.cgui` 里出现的函数名 -> C 函数；漏一个 `--selftest` 会报"未登记" */
-static const cg_binding_t k_bindings[] = {
-    CG_BIND("on_app_ready",        on_app_ready),
-    CG_BIND("on_app_close",        on_app_close),
-    CG_BIND("on_win_size",         on_win_size),
-    CG_BIND("on_win_keydown",      on_win_keydown),
-    CG_BIND("on_win_char",         on_win_char),
-    CG_BIND("on_win_mousedown",    on_win_mousedown),
-    CG_BIND("on_app_idle",         on_app_idle),
-    CG_BIND("on_app_tray",         on_app_tray),
-    CG_BIND("on_btn_about_click",  on_btn_about_click),
-    CG_BIND("on_btn_center_click", on_btn_center_click),
-    CG_BIND("on_btn_topmost_click", on_btn_topmost_click),
-    CG_BIND("on_btn_hide_click",   on_btn_hide_click),
+const cg_binding_t l6_bindings[] = {
+    CG_BIND("l6_on_btn_about_click",  on_btn_about_click),
+    CG_BIND("l6_on_btn_center_click", on_btn_center_click),
+    CG_BIND("l6_on_btn_topmost_click", on_btn_topmost_click),
+    CG_BIND("l6_on_btn_hide_click",   on_btn_hide_click),
     CG_BIND_END
 };
 
@@ -381,18 +384,114 @@ static const cg_binding_t k_bindings[] = {
  * @param argv 参数数组（argv[1] = .cgui 路径，或 --selftest）
  * @return int 进程退出码（0 正常）
  */
-int main(int argc, char **argv)
+
+/**
+ * @brief lesson06_window 套件模块初始化（原工程没有 on_ready；初值原在 main() 里，由转换器搬来）
+ * @param app 当前应用
+ * @param user 用户数据（本套件未用，透传自入口）
+ * @return void 无返回值
+ */
+void l6_init(cg_app_t *app, void *user)
 {
-    cg_app_desc_t desc;
+    (void)app;
+    (void)user;
+    /* 原 main() 里的工具级初值（转换器搬来：丢了会与 .cgui 的初始状态不一致） */
 
-    memset(&desc, 0, sizeof(desc));
-    desc.bindings = k_bindings;
-    desc.auto_locate_cgui = 1;
 
-    if (argc > 1 && strcmp(argv[1], "--selftest") == 0) {
-        desc.cgui_path = (argc > 2) ? argv[2] : "lesson06_window.cgui";
-        return cg_app_selftest(&desc);
-    }
-    desc.cgui_path = (argc > 1) ? argv[1] : "lesson06_window.cgui";
-    return cg_app_run(&desc);
+}
+
+/**
+ * @brief 窗口事件 ready 的套件转发入口（main 的分发器调进来；**不进绑定表** —— 直接调用而非按名派发）
+ * @param self 窗口伪控件
+ * @param ev ready
+ * @param user 业务数据（透传给原 handler）
+ * @return void 无返回值
+ */
+void l6_app_ready(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    on_app_ready(self, ev, user);
+}
+
+/**
+ * @brief 窗口事件 close 的套件转发入口（main 的分发器调进来；**不进绑定表** —— 直接调用而非按名派发）
+ * @param self 窗口伪控件
+ * @param ev close
+ * @param user 业务数据（透传给原 handler）
+ * @return void 无返回值
+ */
+void l6_app_close(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    on_app_close(self, ev, user);
+}
+
+/**
+ * @brief 窗口事件 size 的套件转发入口（main 的分发器调进来；**不进绑定表** —— 直接调用而非按名派发）
+ * @param self 窗口伪控件
+ * @param ev size
+ * @param user 业务数据（透传给原 handler）
+ * @return void 无返回值
+ */
+void l6_app_size(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    on_win_size(self, ev, user);
+}
+
+/**
+ * @brief 窗口事件 keydown 的套件转发入口（main 的分发器调进来；**不进绑定表** —— 直接调用而非按名派发）
+ * @param self 窗口伪控件
+ * @param ev keydown
+ * @param user 业务数据（透传给原 handler）
+ * @return void 无返回值
+ */
+void l6_app_keydown(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    on_win_keydown(self, ev, user);
+}
+
+/**
+ * @brief 窗口事件 char 的套件转发入口（main 的分发器调进来；**不进绑定表** —— 直接调用而非按名派发）
+ * @param self 窗口伪控件
+ * @param ev char
+ * @param user 业务数据（透传给原 handler）
+ * @return void 无返回值
+ */
+void l6_app_char(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    on_win_char(self, ev, user);
+}
+
+/**
+ * @brief 窗口事件 mousedown 的套件转发入口（main 的分发器调进来；**不进绑定表** —— 直接调用而非按名派发）
+ * @param self 窗口伪控件
+ * @param ev mousedown
+ * @param user 业务数据（透传给原 handler）
+ * @return void 无返回值
+ */
+void l6_app_mousedown(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    on_win_mousedown(self, ev, user);
+}
+
+/**
+ * @brief 窗口事件 idle 的套件转发入口（main 的分发器调进来；**不进绑定表** —— 直接调用而非按名派发）
+ * @param self 窗口伪控件
+ * @param ev idle
+ * @param user 业务数据（透传给原 handler）
+ * @return void 无返回值
+ */
+void l6_app_idle(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    on_app_idle(self, ev, user);
+}
+
+/**
+ * @brief 窗口事件 tray 的套件转发入口（main 的分发器调进来；**不进绑定表** —— 直接调用而非按名派发）
+ * @param self 窗口伪控件
+ * @param ev tray
+ * @param user 业务数据（透传给原 handler）
+ * @return void 无返回值
+ */
+void l6_app_tray(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    on_app_tray(self, ev, user);
 }

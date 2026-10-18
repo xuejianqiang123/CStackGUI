@@ -58,7 +58,20 @@ const SUITES = {
     { tool: "envsnap", pre: "en" },
     { tool: "settings", pre: "se" },
   ],
+  /* lessons：教学六课并成一个套件（2026-10-18 用户拍板）。六课两套 ready 机制：
+   *   lesson02/04 用 desc.on_ready（本工具 readyName 分支 → <pre>_init）；
+   *   lesson01/03/05/06 用 app.events.ready（窗口事件 → appEvents 分支 → <pre>_app_ready）。
+   *   各课回调全 static、无样式/角色/动作，与工具套件前提一致。 */
+  lessons: [
+    { tool: "lesson01_basics", pre: "l1" },
+    { tool: "lesson02_inputs", pre: "l2" },
+    { tool: "lesson03_values", pre: "l3" },
+    { tool: "lesson04_data", pre: "l4" },
+    { tool: "lesson05_commands", pre: "l5" },
+    { tool: "lesson06_window", pre: "l6" },
+  ],
 };
+const isLessons = process.argv[2] === "lessons";
 
 const suiteName = process.argv[2];
 const SUITE = SUITES[suiteName];
@@ -67,9 +80,13 @@ if (!SUITE) {
   process.exit(2);
 }
 
-/** 两种布局都认（原工程可能平铺 examples\<tool>\\ 或分组 examples\\base\\<tool>\\） */
+/** 三种布局都认（原工程可能平铺 examples\<tool>\\、分组 examples\\base\\<tool>\\、或教学 examples\\lessons\\<tool>\\） */
 function srcOf(tool) {
-  for (const d of [path.join(root, "examples", tool), path.join(root, "examples", "base", tool)]) {
+  for (const d of [
+    path.join(root, "examples", tool),
+    path.join(root, "examples", "base", tool),
+    path.join(root, "examples", "lessons", tool),
+  ]) {
     if (fs.existsSync(path.join(d, "main.c"))) return path.join(d, "main.c");
   }
   throw new Error(`找不到 ${tool}/main.c`);
@@ -232,6 +249,39 @@ ${cliDecls.map((d) => `    ${d}\n`).join("")}${cliChunks.map((s) => `    ${s}`).
       .join("\n");
   }
 
+  /* 4c) **C 代码里按字符串消费控件 id / 菜单项 id** 的地方：cg_find(app, "cv_board")、
+   * cg_str_equal(id, "edt_grp_name")、strcmp(id, "m_new")（菜单 id 由 rename() 改了 .cgui 的
+   * nodes[].id）。合并器把 .cgui 的 id 全量加了前缀，而 C 侧这些字面量若不跟着改，
+   * cg_find 是**精确 strcmp**（cg_widget.c:474）→ 返回 NULL → 回调静默失效（多数回调有
+   * if(x) 守卫所以不崩，只有 cg_canvas_* 会显式报警）。selftest 抓不到：它只验证事件名
+   * 登记，不验证 cg_find 命中 —— 2026-10-18 lessons 合并首跑，自检绿但画板报
+   * "cg_canvas_rect: 需要 canvas 控件，实际给的是 (null)"，据此定位。
+   * 只在 id 消费行（cg_find / cg_str_equal / strcmp / cg_widget_id）上改，
+   * 且只改"整串 == 某个 .cgui id"的字面量，避免误伤同形的普通文本。逐行报出来供复核。 */
+  const cguiAll = fs.existsSync(cguiFile2(tool))
+    ? JSON.parse(fs.readFileSync(cguiFile2(tool), "utf8"))
+    : {};
+  const idSet = new Set();
+  (function collect(ns) {
+    for (const n of ns ?? []) {
+      if (n.id) idSet.add(n.id);
+      collect(n.children);
+      collect(n.nodes);      /* 菜单树：menu 控件的条目 id 也要加前缀（rename 同口径） */
+    }
+  })(cguiAll.widgets);
+  for (const id of idSet) {
+    const lit = `"${id}"`;
+    if (!src.includes(lit)) continue;
+    src = src
+      .split("\n")
+      .map((line) => {
+        if (!line.includes(lit) || !/(cg_find|cg_str_equal|strcmp|cg_widget_id)/.test(line)) return line;
+        console.log(`      [控件id] ${line.trim().slice(0, 76)}`);
+        return line.split(lit).join(`"${pre}_${id}"`);
+      })
+      .join("\n");
+  }
+
   // 5) on_ready -> <pre>_init（保持签名）；原 main() 里的工具级初值注入 init 开头
   if (readyName && readyName !== `${pre}_init`) {
     src = src.replace(
@@ -312,7 +362,10 @@ void ${pre}_app_${ev}(cg_widget_t *self, cg_event_t ev, void *user)
 `;
   src = header + src + wrappers + cliFn;
 
-  const dir = path.join(root, "examples", "suites", suiteName, "modules");
+  /* lessons 套件落在 examples\lessons\lessons\（教学组内），四个工具套件落在 examples\suites\ */
+  const groupDir = isLessons ? path.join(root, "examples", "lessons", "lessons")
+                             : path.join(root, "examples", "suites", suiteName);
+  const dir = path.join(groupDir, "modules");
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, `${pre}.c`), src, "utf8");
 

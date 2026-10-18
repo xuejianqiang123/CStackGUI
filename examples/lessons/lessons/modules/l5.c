@@ -1,4 +1,15 @@
 /**
+ * @file    l5.c
+ * @brief   lesson05_commands —— 套件模块（原 examples\lesson05_commands 合并而来，函数名未改：static 编译单元隔离）
+ * @note    由 tools\suite-merge.mjs（.cgui 侧）+ build\gen_modules.mjs（C 侧）的变换规则
+ *          产出：CG_BIND 字符串带 l5_ 前缀（与 .cgui 的 events 一一对应）、
+ *          绑定表导出为 l5_bindings、原 on_ready 变成 l5_init、
+ *          窗口事件改成直连转发 l5_app_<event>（套件只有一个窗口，
+ *          按名派发只能接一个，其余工具的窗口职责会被静默吞掉）。
+ *          各工具的回调都是 static，合并进同一次链接不冲突。
+ */
+
+/**
  * @file    main.c
  * @brief   入门 05 · 命令与图形 —— 菜单栏 / 工具栏 / 菜单按钮 / 取色 / 画板 / 外形框 / 图片 / 网页浏览
  * @details 这一课讲两件事，界面在 `lesson05_commands.cgui`：
@@ -52,7 +63,7 @@ static void say(cg_app_t *app, const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
-    cg_status_set(cg_find(app, "sb_main"), 0, buf);
+    cg_status_set(cg_find(app, "l5_sb_main"), 0, buf);
 }
 
 /** 本课的业务状态：画笔颜色 + 已经画了几个图形 */
@@ -86,7 +97,7 @@ typedef enum {
  */
 static void board_clear(cg_app_t *app)
 {
-    cg_canvas_clear(cg_find(app, "cv_board"));
+    cg_canvas_clear(cg_find(app, "l5_cv_board"));
     s_shapes = 0;
 }
 
@@ -99,7 +110,7 @@ static void board_clear(cg_app_t *app)
  */
 static void draw_circle(cg_app_t *app, const char *from)
 {
-    cg_widget_t *cv = cg_find(app, "cv_board");
+    cg_widget_t *cv = cg_find(app, "l5_cv_board");
     int          x, y;
 
     s_shapes += 1;
@@ -119,7 +130,7 @@ static void draw_circle(cg_app_t *app, const char *from)
  */
 static void draw_rect(cg_app_t *app, const char *from)
 {
-    cg_widget_t *cv = cg_find(app, "cv_board");
+    cg_widget_t *cv = cg_find(app, "l5_cv_board");
     int          x, y;
 
     s_shapes += 1;
@@ -161,7 +172,7 @@ static void load_demo_page(cg_app_t *app)
         return;
     }
     if (path && cg_file_write(path, k_html) == 0) {
-        cg_browser_navigate(cg_find(app, "br_page"), path);
+        cg_browser_navigate(cg_find(app, "l5_br_page"), path);
         say(app, "已让 browser 打开：%s", path);
     } else {
         say(app, "写示例页失败：检查用户数据目录能不能写");
@@ -201,8 +212,8 @@ static void do_command(cg_app_t *app, cmd_t cmd, const char *from)
         char size[32];
         /* 控件的实际尺寸从控件上问，别把 .cgui 里的数字再抄一遍 */
         snprintf(size, sizeof(size), "%d x %d",
-                 cg_widget_w(cg_find(app, "cv_board")),
-                 cg_widget_h(cg_find(app, "cv_board")));
+                 cg_widget_w(cg_find(app, "l5_cv_board")),
+                 cg_widget_h(cg_find(app, "l5_cv_board")));
         cg_clip_set_text(size);
         say(app, "%s → 画板尺寸 %s 已复制到剪贴板", from, size);
         break;
@@ -228,11 +239,11 @@ static void on_menu_click(cg_widget_t *self, cg_event_t ev, void *user)
     (void)ev;
     (void)user;
     if (!id) return;
-    if      (strcmp(id, "m_new") == 0)    do_command(cg_app_of(self), CMD_NEW,    "菜单");
-    else if (strcmp(id, "m_circle") == 0) do_command(cg_app_of(self), CMD_CIRCLE, "菜单");
-    else if (strcmp(id, "m_rect") == 0)   do_command(cg_app_of(self), CMD_RECT,   "菜单");
-    else if (strcmp(id, "m_clear") == 0)  do_command(cg_app_of(self), CMD_CLEAR,  "菜单");
-    else if (strcmp(id, "m_page") == 0)   do_command(cg_app_of(self), CMD_PAGE,   "菜单");
+    if      (strcmp(id, "l5_m_new") == 0)    do_command(cg_app_of(self), CMD_NEW,    "菜单");
+    else if (strcmp(id, "l5_m_circle") == 0) do_command(cg_app_of(self), CMD_CIRCLE, "菜单");
+    else if (strcmp(id, "l5_m_rect") == 0)   do_command(cg_app_of(self), CMD_RECT,   "菜单");
+    else if (strcmp(id, "l5_m_clear") == 0)  do_command(cg_app_of(self), CMD_CLEAR,  "菜单");
+    else if (strcmp(id, "l5_m_page") == 0)   do_command(cg_app_of(self), CMD_PAGE,   "菜单");
 }
 
 /**
@@ -272,8 +283,8 @@ static void on_mbtn_more_click(cg_widget_t *self, cg_event_t ev, void *user)
     (void)ev;
     (void)user;
     if (!id) return;
-    if (strcmp(id, "m_page") == 0) do_command(cg_app_of(self), CMD_PAGE, "菜单按钮");
-    else if (strcmp(id, "m_size") == 0) do_command(cg_app_of(self), CMD_SIZE, "菜单按钮");
+    if (strcmp(id, "l5_m_page") == 0) do_command(cg_app_of(self), CMD_PAGE, "菜单按钮");
+    else if (strcmp(id, "l5_m_size") == 0) do_command(cg_app_of(self), CMD_SIZE, "菜单按钮");
 }
 
 /* ------------------------------------------------------------ 控件回调 */
@@ -396,17 +407,16 @@ static void on_btn_br_load_click(cg_widget_t *self, cg_event_t ev, void *user)
 /* ------------------------------------------------------------ 绑定表与入口 */
 
 /** `.cgui` 里出现的函数名 -> C 函数；漏一个 `--selftest` 会报"未登记" */
-static const cg_binding_t k_bindings[] = {
-    CG_BIND("on_app_ready",         on_app_ready),
-    CG_BIND("on_menu_click",        on_menu_click),
-    CG_BIND("on_tb_cmd_click",      on_tb_cmd_click),
-    CG_BIND("on_mbtn_more_click",   on_mbtn_more_click),
-    CG_BIND("on_cp_ink_change",     on_cp_ink_change),
-    CG_BIND("on_btn_draw_circle_click", on_btn_draw_circle_click),
-    CG_BIND("on_btn_draw_rect_click",   on_btn_draw_rect_click),
-    CG_BIND("on_btn_draw_clear_click",  on_btn_draw_clear_click),
-    CG_BIND("on_cv_board_click",    on_cv_board_click),
-    CG_BIND("on_btn_br_load_click", on_btn_br_load_click),
+const cg_binding_t l5_bindings[] = {
+    CG_BIND("l5_on_menu_click",        on_menu_click),
+    CG_BIND("l5_on_tb_cmd_click",      on_tb_cmd_click),
+    CG_BIND("l5_on_mbtn_more_click",   on_mbtn_more_click),
+    CG_BIND("l5_on_cp_ink_change",     on_cp_ink_change),
+    CG_BIND("l5_on_btn_draw_circle_click", on_btn_draw_circle_click),
+    CG_BIND("l5_on_btn_draw_rect_click",   on_btn_draw_rect_click),
+    CG_BIND("l5_on_btn_draw_clear_click",  on_btn_draw_clear_click),
+    CG_BIND("l5_on_cv_board_click",    on_cv_board_click),
+    CG_BIND("l5_on_btn_br_load_click", on_btn_br_load_click),
     CG_BIND_END
 };
 
@@ -416,18 +426,30 @@ static const cg_binding_t k_bindings[] = {
  * @param argv 参数数组（argv[1] = .cgui 路径，或 --selftest）
  * @return int 进程退出码（0 正常）
  */
-int main(int argc, char **argv)
+
+/**
+ * @brief lesson05_commands 套件模块初始化（原工程没有 on_ready；初值原在 main() 里，由转换器搬来）
+ * @param app 当前应用
+ * @param user 用户数据（本套件未用，透传自入口）
+ * @return void 无返回值
+ */
+void l5_init(cg_app_t *app, void *user)
 {
-    cg_app_desc_t desc;
+    (void)app;
+    (void)user;
+    /* 原 main() 里的工具级初值（转换器搬来：丢了会与 .cgui 的初始状态不一致） */
 
-    memset(&desc, 0, sizeof(desc));
-    desc.bindings = k_bindings;
-    desc.auto_locate_cgui = 1;
 
-    if (argc > 1 && strcmp(argv[1], "--selftest") == 0) {
-        desc.cgui_path = (argc > 2) ? argv[2] : "lesson05_commands.cgui";
-        return cg_app_selftest(&desc);
-    }
-    desc.cgui_path = (argc > 1) ? argv[1] : "lesson05_commands.cgui";
-    return cg_app_run(&desc);
+}
+
+/**
+ * @brief 窗口事件 ready 的套件转发入口（main 的分发器调进来；**不进绑定表** —— 直接调用而非按名派发）
+ * @param self 窗口伪控件
+ * @param ev ready
+ * @param user 业务数据（透传给原 handler）
+ * @return void 无返回值
+ */
+void l5_app_ready(cg_widget_t *self, cg_event_t ev, void *user)
+{
+    on_app_ready(self, ev, user);
 }

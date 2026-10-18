@@ -59,6 +59,23 @@ const SUITES = {
     { tool: "envsnap", prefix: "en" },
     { tool: "settings", prefix: "se" },
   ],
+  /* lessons：教学六课并成一个套件（2026-10-18 用户拍板）。与 4 个工具套件的三点不同，
+   *   都在下方用 isLessons 分支处理：
+   *   ① 原工程在 examples\lessons\lessonNN_*（不在 examples\<tool>\）；
+   *   ② 六课的 ready 是**两套机制**：lesson02/04 用 desc.on_ready（→ <pre>_init），
+   *      lesson01/03/05/06 用 app.events.ready（窗口事件 → <pre>_app_ready）。
+   *      窗口事件名必须映射成 suite_win_ready（不能是 suite_ready —— 那是 desc.on_ready
+   *      在 main 里的函数名，撞名会编译错或语义错）；
+   *   ③ 六课内容**顶满**原窗口（760 宽、最高 768），合并进页签后要补 tabs 的标签行 +
+   *      边框 + 外边距，否则底部/右侧被裁 —— 下方 maxW/maxH 额外加 chrome。 */
+  lessons: [
+    { tool: "lesson01_basics", prefix: "l1", title: "01 基础与容器" },
+    { tool: "lesson02_inputs", prefix: "l2", title: "02 输入与选择" },
+    { tool: "lesson03_values", prefix: "l3", title: "03 数值与指示" },
+    { tool: "lesson04_data", prefix: "l4", title: "04 数据与日志" },
+    { tool: "lesson05_commands", prefix: "l5", title: "05 命令与图形" },
+    { tool: "lesson06_window", prefix: "l6", title: "06 主窗口与窗口事件" },
+  ],
 };
 
 const args = process.argv.slice(2);
@@ -66,17 +83,20 @@ const suiteName = args[args.indexOf("--suite") + 1];
 const outFile = args[args.indexOf("--out") + 1];
 const dry = args.includes("--dry");
 const suite = SUITES[suiteName];
+const isLessons = suiteName === "lessons";
 if (!suite || !outFile) {
   console.error(`用法: node tools\\suite-merge.mjs --suite <${Object.keys(SUITES).join("|")}> --out <路径> [--dry]`);
   process.exit(2);
 }
 
-/** 原工程路径（两种布局都认：examples\\<t>\\ 与 examples\\base\\<t>\\） */
+/** 原工程路径（三种布局都认：examples\\<t>\\、examples\\base\\<t>\\、examples\\lessons\\<t>\\） */
 function toolDir(tool) {
   const flat = path.join(root, "examples", tool);
   if (fs.existsSync(path.join(flat, `${tool}.cgui`))) return flat;
   const grouped = path.join(root, "examples", "base", tool);
   if (fs.existsSync(path.join(grouped, `${tool}.cgui`))) return grouped;
+  const lesson = path.join(root, "examples", "lessons", tool);
+  if (fs.existsSync(path.join(lesson, `${tool}.cgui`))) return lesson;
   throw new Error(`找不到原工程 ${tool}`);
 }
 
@@ -131,11 +151,18 @@ let maxH = 600;
  *  → selftest exit=4）。合并时**先到先得**（= 页签顺序靠前的工具保留快捷键），
  *  重复的只丢 accel —— 动作本身与菜单入口照旧可用，丢弃逐条报出来。 */
 const usedAccels = new Set();
+/** lessons 里带窗口级配置的那一课（lesson06）：托盘/居中/Esc 关窗/程序信息要透传到套件窗口，
+ *  否则 lesson06 的托盘演示、cg_app_info 读回（product/build/copyright/email）会失效。 */
+let winCfg = {};
 
 suite.forEach(({ tool, prefix }, page) => {
   const dir = toolDir(tool);
   const doc = JSON.parse(fs.readFileSync(path.join(dir, `${tool}.cgui`), "utf8"));
   const app = doc.app || {};
+
+  if (isLessons && (app.tray || app.center || app.info)) {
+    winCfg = { tray: app.tray, center: app.center, escClose: app.escClose, info: app.info };
+  }
 
   /* app.events（窗口级事件）：**不按工具前缀改名，而是统一指向 main 的分发器** `suite_<事件>`。
    * 一个窗口只能接一个回调名（运行时把 app.events.close 存进 root->ev[close] 一个槽），
@@ -143,7 +170,13 @@ suite.forEach(({ tool, prefix }, page) => {
    * 拦截、filecheck 的写窗口尺寸、lf/hr 的收尾记账全没了 —— check-suite 的死绑定会红）。
    * 正解：main 里一个 suite_<事件> 分发器逐个调各模块的 <pre>_app_<event> 直连转发。 */
   const appEvents = {};
-  if (app.events) for (const k of Object.keys(app.events)) appEvents[k] = `suite_${k}`;
+  if (app.events) for (const k of Object.keys(app.events)) {
+    /* ready 撞名：desc.on_ready 的分发函数在 main 里叫 suite_ready（void(cg_app_t*,void*)），
+     * 而 app.events.ready 是窗口事件（void(cg_widget_t*,cg_event_t,void*)），两者签名不同、
+     * 必须分名。lesson02/04 用 desc.on_ready，01/03/05/06 用 app.events.ready —— 合并后
+     * 前者走 suite_ready（调 <pre>_init）、后者走 suite_win_ready（调 <pre>_app_ready）。 */
+    appEvents[k] = k === "ready" ? "suite_win_ready" : `suite_${k}`;
+  }
 
   rename(doc.widgets, prefix);
   for (const w of doc.widgets || []) {
@@ -172,8 +205,12 @@ suite.forEach(({ tool, prefix }, page) => {
     }
   }
 
-  maxW = Math.max(maxW, app.width || 800);
-  maxH = Math.max(maxH, app.height || 600);
+  /* 六课内容顶满原窗口（760 宽、最高 768），工具套件则内容不满窗。合并进页签后，
+   * 页体 = 窗口 - 外边距(12) - 标签行(~28) - 边框，所以 lessons 要额外补这段 chrome，
+   * 否则最高的 lesson02（768）会被裁掉底部。工具套件内容本就有富余，补了也无害。 */
+  const chrome = isLessons ? { w: 40, h: 60 } : { w: 0, h: 0 };
+  maxW = Math.max(maxW, (app.width || 800) + chrome.w);
+  maxH = Math.max(maxH, (app.height || 600) + chrome.h);
   report.push({
     tool, prefix, page,
     widgets: (doc.widgets || []).length,
@@ -210,12 +247,27 @@ const merged = {
       id: "sv_pages",
       type: "tabs",
       rect: { x: 6, y: 6, w: maxW - 12, h: maxH - 12 },
-      items: suite.map((t) => t.tool),
+      items: suite.map((t) => t.title ?? t.tool),
       children: widgets,
     },
   ],
 };
 if (Object.keys(mergedAppEvents).length) merged.app.events = mergedAppEvents;
+/* lessons：把带窗口配置那一课（lesson06）的托盘/居中/Esc 关窗/程序信息透传到套件窗口，
+ * 但标题与程序名改成"教学六课"口径（product 仍被 lesson06 的 cg_app_info 读回显示，得说得通）。 */
+if (isLessons && winCfg.info) {
+  merged.app.title = "教学六课";
+  merged.app.info = {
+    ...winCfg.info,
+    product: "CStackGUI 教学六课套件",
+    desc: `原 ${suite.map((t) => t.tool).join(" / ")} 合并（每课一页签）`,
+  };
+}
+if (isLessons) {
+  if (winCfg.tray !== undefined) merged.app.tray = winCfg.tray;
+  if (winCfg.center !== undefined) merged.app.center = winCfg.center;
+  if (winCfg.escClose !== undefined) merged.app.escClose = winCfg.escClose;
+}
 if (Object.keys(styles).length) merged.styles = styles;
 if (Object.keys(roles).length) merged.roles = roles;
 if (Object.keys(actions).length) merged.actions = actions;
