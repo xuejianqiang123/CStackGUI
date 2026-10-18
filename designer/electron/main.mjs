@@ -1138,6 +1138,12 @@ const SMOKE_PROBE = async () => {
     setter.call(el, String(v));
     el.dispatchEvent(new Event("input", { bubbles: true }));
   };
+  /* textarea 同理，但 value 属性在 HTMLTextAreaElement.prototype 上（另一个坑） */
+  const setText = (el, v) => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+    setter.call(el, String(v));
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  };
 
   /* 1. 启动基线：画布渲染出来、空文档 0 个控件 */
   t("启动后画布渲染（.app-window 在）", !!$(".app-window"));
@@ -1191,6 +1197,40 @@ const SMOKE_PROBE = async () => {
       await sleep(200);
       const kw = $(".sup-search input");
       t("选中按钮后支持库预置了关键词", !!kw && kw.value.length > 0);
+    }
+  }
+
+  /* 6. 点表导入对话框（G4）：粘 2 好 1 坏 -> live 预览报数 -> 导入 -> 一步撤销。
+   *    这是 G4 唯一没有运行时验证的部分（模型层有 44 项 headless 契约，对话框接线没有）。 */
+  {
+    const openBtn = $$(".toolbar button").find((b) => b.textContent.includes("导入点表"));
+    t("工具栏有「导入点表」按钮", !!openBtn);
+    if (openBtn) {
+      const base = widgetCount();   /* 相对基线：不依赖前面几段留下的控件数 */
+      openBtn.click();
+      await sleep(200);
+      t("点它弹出导入对话框", !!$(".modal-card"));
+      const ta = $(".modal-card textarea");
+      t("对话框有粘贴框", !!ta);
+      if (ta) {
+        /* 第 2 行只有一个字段：命中"至少要有两列"那条契约 */
+        setText(ta, ["启动,button", "坏行", "标签,label"].join("\n"));
+        await sleep(200);
+        t("live 预览：将导入 2 个（坏行不计入）", /将导入 2 个控件/.test($(".modal-head")?.textContent ?? ""));
+        t("坏行逐行报错（问题清单出现）", !!$(".modal-card .act-note.warn"));
+        t("坏行原因带行号（第 2 行）", /第 2 行/.test($(".modal-card .act-note.warn")?.textContent ?? ""));
+        const go = $$(".modal-foot button").find((b) => b.textContent.includes("导入"));
+        t("导入按钮就绪且报数（2 个）", !!go && !go.disabled && /导入 2 个/.test(go.textContent));
+        if (go) {
+          go.click();
+          await sleep(250);
+          t("导入后对话框自己关掉", !$(".modal-card"));
+          t("导入后画布多出 2 个控件", widgetCount() === base + 2);
+          window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }));
+          await sleep(200);
+          t("一步撤销回到基线（批量导入是一步）", widgetCount() === base);
+        }
+      }
     }
   }
 
