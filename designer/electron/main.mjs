@@ -10,7 +10,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, Menu, clipboard } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
-import { existsSync, appendFileSync, readFileSync } from "node:fs";
+import { existsSync, appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { build } from "./cgbuild.mjs";
@@ -1425,12 +1425,26 @@ async function runCanvasSmoke() {
     done(1);
     return;
   }
+  /* 文件输出通道：打包产物（win-unpacked / 安装后的 CStackGUI-app.exe）是 GUI 子系统，
+   * console.log 不进任何人的控制台 —— 起它跑探针时退出码拿得到、明细一条都拿不到，
+   * 失败了无从定位。设了 CSTACKGUI_SMOKE_OUT 就把明细写进那个文件（只在冒烟路径，
+   * 生产代码零影响；tools/check-canvas-e2e.mjs 在源码模式下不设它，仍读 stdout）。 */
+  const outFile = process.env.CSTACKGUI_SMOKE_OUT;
+  let lines = [];
   let pass = 0;
   for (const r of rows ?? []) {
-    if (r.ok) { pass += 1; console.log(`[smoke] ok   ${r.name}`); }
-    else console.log(`[smoke] FAIL ${r.name}`);
+    if (r.ok) { pass += 1; lines.push(`[smoke] ok   ${r.name}`); }
+    else lines.push(`[smoke] FAIL ${r.name}`);
   }
-  console.log(`[smoke] ${pass}/${(rows ?? []).length} 通过`);
+  lines.push(`[smoke] ${pass}/${(rows ?? []).length} 通过`);
+  for (const ln of lines) console.log(ln);
+  if (outFile) {
+    try {
+      writeFileSync(outFile, lines.join("\n"), "utf8");
+    } catch (err) {
+      console.log("[smoke] FAIL 写明细文件失败：" + String(err));
+    }
+  }
   done((rows ?? []).length > 0 && pass === (rows ?? []).length ? 0 : 1);
 }
 
@@ -1438,10 +1452,16 @@ app.whenReady().then(async () => {
   log("app.whenReady 触发（Chromium 已就绪）");
   if (buildCliArgs) {
     /* 编译发生在 exe 内部（cgbuild.mjs 在 asar 里），用的是 exe 自带的运行时，
-     * 所以命令行这一条同样不需要客户装 Node，也不需要旁边有内核文件。 */
-    const root = path.dirname(process.execPath);
+     * 所以命令行这一条同样不需要客户装 Node，也不需要旁边有内核文件。
+     *
+     * 根目录**必须交给 findRoot() 找**，别写 path.dirname(process.execPath)：
+     * 打包环境里 execPath 在便携版的临时解包目录（或 win-unpacked\），那里没有
+     * examples\ —— 硬当项目根就是「找不到工程 gallery」，而 gallery 明明就在
+     * build-app.bat 旁边（2026-10-18 真跑 make-release 自检抓到：这条 --build
+     * 自发布包诞生起就没通过过）。findRoot() 已经把各场景都处理对了：
+     * 便携版走 PORTABLE_EXECUTABLE_DIR（bat/exe 所在的用户目录）、
+     * 源码树往上找 runtime\（并排除包内嵌的 resources\runtime）。 */
     const code = await build({
-      root,
       project: buildCliArgs.find((a) => !a.startsWith("--")),
       release: buildCliArgs.includes("--release"),
       runtimeOnly: buildCliArgs.includes("--runtime-only"),

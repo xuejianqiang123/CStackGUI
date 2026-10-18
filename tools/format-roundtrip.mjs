@@ -261,9 +261,20 @@ let roleHostId = "";
  * 真正的展开由运行时在加载期做。丢了 include 的表现是"引用来的界面整块消失"，
  * 而且 C 侧自检发现不了（没有 include 的文档照样能通过）—— 必须在这里盯住。 */
 const probeInclude = { path: "../common/port_dlg.cgui", pick: "dlg_port" };
+/* 探针目标必须真的能从**输出文件所在目录**解析出来：运行时按"相对包含它的 .cgui"
+ * 解析 include，而输出位置因环境而异 —— 源码树里是 build\（../common 正好命中仓库的
+ * common\），发布包里是 release\build\（旁边没有 ..\common\，真实文件在
+ * examples\common\）。目标不在就明确跳过，别把"探针引用了不存在的文件"算成运行时
+ * 拒绝（2026-10-18 make-release 自检抓到：exit=3 绑定出错，真因藏在 include 展开
+ * 失败的日志里）。 */
+const probeIncludeOk = fs.existsSync(path.join(path.dirname(output), "..", "common", "port_dlg.cgui"));
 {
-  doc.include = [...(doc.include ?? []), probeInclude];
-  touched += 1;
+  if (probeIncludeOk) {
+    doc.include = [...(doc.include ?? []), probeInclude];
+    touched += 1;
+  } else {
+    console.log("[note] ../common/port_dlg.cgui 从输出目录解析不到，跳过 include 探针");
+  }
 }
 
 const written = serializeDoc(doc);
@@ -444,7 +455,9 @@ console.log(`[ok] 画布改动 ${touched} 处，写出 ${output}（${written.len
     const want = doc.include?.[doc.include.length - 1];
     const gotList = back.doc?.include;
     const got = gotList?.find((x) => x.path === want?.path);
-    if (!want) {
+    if (!probeIncludeOk) {
+      console.log("[note] include 探针本轮未挂（目标文件不在输出目录旁），跳过核对");
+    } else if (!want) {
       console.error("[fail] 探针没把 include 写进文档（自测脚本问题）");
       lost += 1;
     } else if (!got || got.pick !== want.pick) {

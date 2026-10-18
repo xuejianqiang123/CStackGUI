@@ -114,7 +114,14 @@ const isCxx = (src) => CXX_EXTS.includes(path.extname(src).toLowerCase());
 function findRoot() {
   const env = process.env.CSTACKGUI_HOME;
   if (env && fs.existsSync(path.join(env, "runtime"))) return path.resolve(env);
+  /* 打包环境的坑（2026-10-18 真跑 make-release 自检抓到，此前 --build 在发布包里从来没通过）：
+   * exe 内嵌的 resources\runtime\ 就在"往上找 runtime\"的路径上 —— 不排除它，就会把
+   * **包自己的资源目录**当成项目根，接着去那里找 examples\ 自然找不到工程
+   * （报「找不到工程 gallery」，而 gallery 明明就在 cwd 的 examples\ 里）。
+   * 与 main.mjs 的 isBuiltinRuntimeDir 同一口径：根目录不许是 process.resourcesPath。 */
+  const builtinRes = process.resourcesPath ? path.resolve(process.resourcesPath) : "";
   for (let d = path.resolve(HERE, "..", ".."), i = 0; i < 6; i++, d = path.dirname(d)) {
+    if (builtinRes && d === builtinRes) continue;
     if (fs.existsSync(path.join(d, "runtime"))) return d;
   }
   const portable = process.env.PORTABLE_EXECUTABLE_DIR;

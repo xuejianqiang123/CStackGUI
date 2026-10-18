@@ -178,7 +178,18 @@ if errorlevel 1 (
 )
 
 echo.
-echo == 4/4 自检：在 release\ 里编译并校验一个示例 ==
+echo == 4/4 自检 ==
+rem 第一关先看**画布本体**：打包后的资源布局（asar 里的 dist、内嵌 runtime、GUI 子系统）
+rem 与源码树不同，下面 release\ 目录的那几项自检盖不到它 —— 打包出一个点不开的画布，
+rem 那几项一样全绿（2026-10-18 真跑补的关卡：起打包画布跑它自带的 43 项行为探针）。
+echo   画布本体：打包画布的行为探针
+node tools\canvas-package-smoke.mjs
+if errorlevel 1 (
+    echo [fail] 打包画布的行为自检没过
+    exit /b 1
+)
+
+echo   发布目录：在 release\ 里编译并校验示例
 pushd release
 call build-app.bat gallery
 if errorlevel 1 (
