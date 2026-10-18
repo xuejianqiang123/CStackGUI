@@ -118,7 +118,18 @@
   max 兜底是 1 不是 0（`fallback={1}`）；CheckField 的 label 给 ReactNode 而非 string，
   免得原语替调用方决定观感（StateSection 是裸文字、EditSection 是 muted small）。
   tsc / vite / canvas 契约 / roundtrip / kinds / layers / electron / comments 全绿。
-- **待继续**：TypeSection（8 下拉 + 若干数值）、ContentSection、EditSection 剩余项。
+- **第二批已交付（2026-10-18）**：TypeSection 的数值与勾选改用原语（timer 周期 / LED 状态 /
+  串口波特率-数据位-停止位-校验 / 终端最多行数 / 图表点数与 Y 轴范围 / 串口自动启动 /
+  终端时间戳 / 表格多选与勾选列），NumField 补 step；**四类保留手写并写进注释**
+  （字符串 format 下拉只集中 option 文案、colorpicker hex↔int、dialog 居中反语义、
+  LED 周期 <100→500）。ContentSection 的「所在页」「当前页/初始选中」改用原语，
+  datepicker 格式选项集中为常量；items / nodes / columns / rows 的 Area 序列化
+  **保留手写**（各有一套专用 codec，不是通用字段）。
+- **G5 机械重复部分至此收口**：6 个 Section 已改（State / Geometry / Edit / Type / Content
+  + PanelUi 原语）。剩余 IdentitySection（id 查重改绑）、StyleSection（style 继承语义）、
+  ActionSection、BindSection、HintSection、MediaSection —— 这几个按上面的判据
+  **本来就该手写**（id 改绑、style 继承、动作引用、绑定、文本域、媒体路径都是真语义），
+  不再动。G5 的"新控件加属性不改 React"目标**主动放弃**，理由见上（不造第二张镜像表）。
 - **必须保留手写（不可数据化）**：colorpicker 整数↔hex 往返（TypeSection:139-143）、
   serial 六参数+无界面说明（:54-127）、chart 三值且禁标 ranged（kinds.ts:63、TypeSection:253-277）、
   id 查重改绑（IdentitySection:46-78）、style 继承 setField/clearField/setBold/setAlign

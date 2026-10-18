@@ -21,7 +21,14 @@ import {
   type CgNode,
   type KindInfo,
 } from "../../model";
-import { Area, Row, type Patch } from "./PanelUi";
+import { Area, NumField, Row, SelectField, type Opt, type Patch } from "./PanelUi";
+
+/* 日期格式：字符串 format，走原生 select（SelectField 是数值口径），只把文案集中 */
+const DATE_FORMAT_OPTS: readonly Opt[] = [
+  { value: "date", label: "日期 2026-09-19" },
+  { value: "time", label: "时间 14:30" },
+  { value: "datetime", label: "日期 + 时间（两个控件拼的）" },
+];
 
 /** 一行的「最终显示 & 来自哪里」：菜单项的文字可以完全由动作提供（项自己只写 `| @动作名`），
  *  那种项在编辑框里就是一行空的（形如 ` | @save`），不解释清楚会被当成坏了。 */
@@ -85,20 +92,25 @@ export default function ContentSection({
   patchSoft,
   onBeginHistory,
 }: ContentSectionProps) {
+  /* 「当前页 / 初始选中」的选项来自 items —— 动态的，不能写成常量表 */
+  const selOpts: Opt[] = (node.items ?? []).map((t, i) => ({
+    value: String(i),
+    label: `${i + 1}. ${t || (node.type === "tabs" ? `页面 ${i + 1}` : `第 ${i + 1} 项`)}`,
+  }));
   return (
     <>
       <div className="insp-section">内容</div>
       {inTabs ? (
         <Row label="所在页">
-          <input
-            className="input narrow"
-            type="number"
+          {/* 0 页 = 缺省（写 undefined，与 serialize 的"缺省不写"同口径）→ omitOnZero */}
+          <NumField
+            value={node.page}
             min={0}
-            value={node.page ?? 0}
-            onChange={(e) =>
+            round={false}
+            omitOnZero
+            onChange={(v) =>
               patch((n) => {
-                const v = Number(e.target.value) || 0;
-                n.page = v > 0 ? v : undefined;
+                n.page = v;
               })
             }
           />
@@ -111,21 +123,15 @@ export default function ContentSection({
           label={node.type === "tabs" ? "当前页" : "初始选中"}
           hint={node.type === "tabs" ? undefined : "运行时启动后默认选中第几项（0 起）；选项来自下面的「条目」"}
         >
-          <select
-            className="input"
+          <SelectField
             value={node.value ?? 0}
-            onChange={(e) =>
+            options={selOpts}
+            onChange={(v) =>
               patch((n) => {
-                n.value = Number(e.target.value);
+                n.value = v ?? 0;
               })
             }
-          >
-            {(node.items ?? []).map((t, i) => (
-              <option key={i} value={i}>
-                {i + 1}. {t || (node.type === "tabs" ? `页面 ${i + 1}` : `第 ${i + 1} 项`)}
-              </option>
-            ))}
-          </select>
+          />
         </Row>
       ) : null}
 
@@ -199,9 +205,11 @@ export default function ContentSection({
             value={node.format ?? "date"}
             onChange={(e) => patch((n) => { n.format = e.target.value; })}
           >
-            <option value="date">日期 2026-09-19</option>
-            <option value="time">时间 14:30</option>
-            <option value="datetime">日期 + 时间（两个控件拼的）</option>
+            {DATE_FORMAT_OPTS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
           </select>
         </Row>
       ) : null}
