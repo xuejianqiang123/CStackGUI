@@ -1,0 +1,2412 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "comm 套件",
+    "width": 1000,
+    "height": 860,
+    "bg": "#F3EDF7",
+    "info": {
+      "product": "CStackGUI comm 套件",
+      "desc": "原 serialterm / netterm / darkterm / modbus / framedec 合并（每工具一页签）",
+      "comments": "由 tools\\suite-merge.mjs 合并生成",
+      "version": "1.0.0.0",
+      "author": "CStackGUI"
+    },
+    "events": {
+      "close": "suite_close",
+      "destroy": "suite_destroy"
+    }
+  },
+  "widgets": [
+    {
+      "id": "sv_pages",
+      "type": "tabs",
+      "rect": {
+        "x": 6,
+        "y": 6,
+        "w": 988,
+        "h": 848
+      },
+      "items": [
+        "serialterm",
+        "netterm",
+        "darkterm",
+        "modbus",
+        "framedec"
+      ],
+      "children": [
+        {
+          "id": "st_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 834,
+            "w": 1000,
+            "h": 26
+          },
+          "items": [
+            "未连接",
+            "RX 0 B",
+            "TX 0 B",
+            "0 帧 / 丢 0 B"
+          ],
+          "page": 0
+        },
+        {
+          "id": "st_lab_port",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 14,
+            "w": 36,
+            "h": 24
+          },
+          "text": "端口",
+          "style": "st_label",
+          "page": 0
+        },
+        {
+          "id": "st_cmb_port",
+          "type": "combo",
+          "rect": {
+            "x": 52,
+            "y": 12,
+            "w": 150,
+            "h": 200
+          },
+          "items": [
+            "（启动时枚举）"
+          ],
+          "hint": "本机串口名（COM3 这种）；插拔设备后点「刷新」重新枚举",
+          "page": 0
+        },
+        {
+          "id": "st_lab_baud",
+          "type": "label",
+          "rect": {
+            "x": 210,
+            "y": 14,
+            "w": 52,
+            "h": 24
+          },
+          "text": "波特率",
+          "style": "st_label",
+          "page": 0
+        },
+        {
+          "id": "st_cmb_baud",
+          "type": "combo",
+          "rect": {
+            "x": 266,
+            "y": 12,
+            "w": 96,
+            "h": 200
+          },
+          "items": [
+            "1200",
+            "2400",
+            "4800",
+            "9600",
+            "19200",
+            "38400",
+            "57600",
+            "115200",
+            "230400",
+            "460800",
+            "921600"
+          ],
+          "value": 7,
+          "hint": "链路的波特率（点「打开串口」时写进串口组件）",
+          "page": 0
+        },
+        {
+          "id": "st_btn_connect",
+          "type": "button",
+          "rect": {
+            "x": 372,
+            "y": 10,
+            "w": 96,
+            "h": 32
+          },
+          "text": "打开串口",
+          "hint": "打开 / 关闭当前选中的串口",
+          "events": {
+            "click": "st_on_connect_click"
+          },
+          "page": 0
+        },
+        {
+          "id": "st_btn_refresh",
+          "type": "button",
+          "rect": {
+            "x": 474,
+            "y": 10,
+            "w": 64,
+            "h": 32
+          },
+          "text": "刷新",
+          "hint": "重新枚举本机串口，填进左边的下拉框",
+          "events": {
+            "click": "st_on_refresh_click"
+          },
+          "page": 0
+        },
+        {
+          "id": "st_btn_clear",
+          "type": "button",
+          "rect": {
+            "x": 544,
+            "y": 10,
+            "w": 64,
+            "h": 32
+          },
+          "text": "清空",
+          "hint": "丢掉还没取走的接收数据，并清空日志视图（XCOM 的「清除接收」）",
+          "events": {
+            "click": "st_on_clear_click"
+          },
+          "page": 0
+        },
+        {
+          "id": "st_btn_savelog",
+          "type": "button",
+          "rect": {
+            "x": 614,
+            "y": 10,
+            "w": 88,
+            "h": 32
+          },
+          "text": "保存日志",
+          "hint": "把日志视图存成 UTF-8 文本文件（XCOM 的「保存窗口」）",
+          "events": {
+            "click": "st_on_save_log_click"
+          },
+          "page": 0
+        },
+        {
+          "id": "st_led_link",
+          "type": "led",
+          "rect": {
+            "x": 712,
+            "y": 17,
+            "w": 140,
+            "h": 18
+          },
+          "text": "未连接",
+          "value": 0,
+          "style": {
+            "fg": "#1B6E33"
+          },
+          "page": 0
+        },
+        {
+          "id": "st_lab_bits",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 52,
+            "w": 48,
+            "h": 24
+          },
+          "text": "数据位",
+          "style": "st_label",
+          "page": 0
+        },
+        {
+          "id": "st_cmb_bits",
+          "type": "combo",
+          "rect": {
+            "x": 66,
+            "y": 50,
+            "w": 70,
+            "h": 200
+          },
+          "items": [
+            "8",
+            "7",
+            "6",
+            "5"
+          ],
+          "value": 0,
+          "hint": "8 位为主；老设备偶见 7 位（配偶校验就是 7E1）",
+          "page": 0
+        },
+        {
+          "id": "st_lab_stop",
+          "type": "label",
+          "rect": {
+            "x": 144,
+            "y": 52,
+            "w": 48,
+            "h": 24
+          },
+          "text": "停止位",
+          "style": "st_label",
+          "page": 0
+        },
+        {
+          "id": "st_cmb_stop",
+          "type": "combo",
+          "rect": {
+            "x": 198,
+            "y": 50,
+            "w": 60,
+            "h": 200
+          },
+          "items": [
+            "1",
+            "2"
+          ],
+          "value": 0,
+          "hint": "1 位为主；2 位常见于一些仪表",
+          "page": 0
+        },
+        {
+          "id": "st_lab_parity",
+          "type": "label",
+          "rect": {
+            "x": 266,
+            "y": 52,
+            "w": 36,
+            "h": 24
+          },
+          "text": "校验",
+          "style": "st_label",
+          "page": 0
+        },
+        {
+          "id": "st_cmb_parity",
+          "type": "combo",
+          "rect": {
+            "x": 306,
+            "y": 50,
+            "w": 76,
+            "h": 200
+          },
+          "items": [
+            "无",
+            "奇",
+            "偶"
+          ],
+          "value": 0,
+          "hint": "0 无 / 1 奇 / 2 偶 —— 下标就是 cg_widget_serial_set_format 要的值",
+          "page": 0
+        },
+        {
+          "id": "st_lab_fmt",
+          "type": "label",
+          "rect": {
+            "x": 396,
+            "y": 52,
+            "w": 580,
+            "h": 24
+          },
+          "text": "帧格式是「数据位 + 校验 + 停止位」，比如 8N1 / 7E1 —— 板子怎么配就选成一样（框架支持全参数）",
+          "style": "st_label",
+          "page": 0
+        },
+        {
+          "id": "st_chk_hexview",
+          "type": "checkbox",
+          "rect": {
+            "x": 12,
+            "y": 88,
+            "w": 104,
+            "h": 26
+          },
+          "text": "16 进制显示",
+          "hint": "日志里的收发都按十六进制显示（XCOM 的「16进制显示」）",
+          "events": {
+            "change": "st_on_hexview_change"
+          },
+          "page": 0
+        },
+        {
+          "id": "st_chk_stamp",
+          "type": "checkbox",
+          "rect": {
+            "x": 120,
+            "y": 88,
+            "w": 88,
+            "h": 26
+          },
+          "text": "时间戳",
+          "checked": true,
+          "hint": "每行前面加 [时:分:秒]（XCOM 的「时间戳」）",
+          "events": {
+            "change": "st_on_stamp_change"
+          },
+          "page": 0
+        },
+        {
+          "id": "st_chk_frame",
+          "type": "checkbox",
+          "rect": {
+            "x": 212,
+            "y": 88,
+            "w": 104,
+            "h": 26
+          },
+          "text": "按帧显示",
+          "hint": "把字节流切成整帧，每帧单独一行并报长度与 CRC —— 这一条 XCOM 没有",
+          "events": {
+            "change": "st_on_frame_change"
+          },
+          "page": 0
+        },
+        {
+          "id": "st_cmb_fmode",
+          "type": "combo",
+          "rect": {
+            "x": 320,
+            "y": 88,
+            "w": 96,
+            "h": 200
+          },
+          "items": [
+            "静默",
+            "换行符",
+            "定长",
+            "长度字段"
+          ],
+          "value": 0,
+          "hint": "怎么定界：静默（Modbus/RTU 的 t3.5）/ 换行符（AT 指令、NMEA 那种一行一条）/ 定长 / 头里带长度（MBAP）",
+          "events": {
+            "select": "st_on_frame_mode_change"
+          },
+          "page": 0
+        },
+        {
+          "id": "st_spn_arg",
+          "type": "edit",
+          "rect": {
+            "x": 420,
+            "y": 88,
+            "w": 56,
+            "h": 26
+          },
+          "spin": true,
+          "min": 1,
+          "max": 60000,
+          "value": 20,
+          "hint": "参数含义随左边的模式变：静默=毫秒、换行符=分隔字节（10 = \\n）、定长=每帧字节数、长度字段=长度字段在帧内的偏移",
+          "style": "st_input",
+          "events": {
+            "change": "st_on_frame_arg_change"
+          },
+          "page": 0
+        },
+        {
+          "id": "st_lab_arg",
+          "type": "label",
+          "rect": {
+            "x": 480,
+            "y": 92,
+            "w": 86,
+            "h": 20
+          },
+          "text": "静默ms",
+          "style": "st_label",
+          "page": 0
+        },
+        {
+          "id": "st_chk_autosave",
+          "type": "checkbox",
+          "rect": {
+            "x": 570,
+            "y": 88,
+            "w": 104,
+            "h": 26
+          },
+          "text": "自动保存",
+          "hint": "收到的字节按十六进制文本追加落盘（XCOM 的「自动保存」）",
+          "events": {
+            "change": "st_on_autosave_change"
+          },
+          "page": 0
+        },
+        {
+          "id": "st_lab_savehint",
+          "type": "label",
+          "rect": {
+            "x": 678,
+            "y": 92,
+            "w": 310,
+            "h": 20
+          },
+          "text": "（自动保存落到数据目录的 rx_log.txt：十六进制文本、可 grep）",
+          "style": "st_label",
+          "page": 0
+        },
+        {
+          "id": "st_term_log",
+          "type": "terminal",
+          "rect": {
+            "x": 8,
+            "y": 122,
+            "w": 984,
+            "h": 372
+          },
+          "grow": 1,
+          "checked": true,
+          "value": 800,
+          "items": [
+            "串口助手就绪。选好端口 / 波特率 / 帧格式，点「打开串口」。",
+            "收到的数据落到这里（terminal 控件）：RX 绿 / TX 蓝 / -- 灰。",
+            "显示开关：16 进制、时间戳、按帧显示（带 CRC）、自动保存。"
+          ],
+          "hint": "日志视图：格式（hex / 文本）、时间戳、方向着色、行数上限与存盘全由控件管",
+          "page": 0
+        },
+        {
+          "id": "st_ser_main",
+          "type": "serial",
+          "port": "COM1",
+          "baud": 115200,
+          "bits": 8,
+          "stop": 1,
+          "parity": 0,
+          "hint": "串口组件（无界面）：画布上是图标，运行时不建窗口；数据到达发 arrive。帧格式三个字段画布属性面板也能改，运行期改走 cg_widget_serial_set_format",
+          "events": {
+            "arrive": "st_on_arrive"
+          },
+          "page": 0
+        },
+        {
+          "id": "st_sp_main",
+          "type": "splitter",
+          "rect": {
+            "x": 8,
+            "y": 498,
+            "w": 984,
+            "h": 6
+          },
+          "format": "row",
+          "hint": "上下拖动：日志区变高、下面让位",
+          "events": {
+            "release": "st_on_split_release"
+          },
+          "page": 0
+        },
+        {
+          "id": "st_grp_send",
+          "type": "group",
+          "rect": {
+            "x": 8,
+            "y": 506,
+            "w": 984,
+            "h": 146
+          },
+          "text": "发送",
+          "style": {
+            "use": "st_label",
+            "bg": "#F7F2FA"
+          },
+          "children": [
+            {
+              "id": "st_edt_send",
+              "type": "edit",
+              "rect": {
+                "x": 12,
+                "y": 28,
+                "w": 520,
+                "h": 28
+              },
+              "text": "",
+              "style": "st_input",
+              "hint": "要发送的内容；勾了 HEX 就写 1A 2B 3C 这种",
+              "events": {
+                "submit": "st_on_send_submit"
+              }
+            },
+            {
+              "id": "st_chk_hex",
+              "type": "checkbox",
+              "rect": {
+                "x": 540,
+                "y": 29,
+                "w": 86,
+                "h": 26
+              },
+              "text": "HEX 发送",
+              "hint": "把输入按十六进制解析成字节再发（空格可有可无）",
+              "events": {
+                "change": "st_on_hex_change"
+              }
+            },
+            {
+              "id": "st_chk_newline",
+              "type": "checkbox",
+              "rect": {
+                "x": 628,
+                "y": 29,
+                "w": 86,
+                "h": 26
+              },
+              "text": "发送新行",
+              "hint": "发完追加 \\r\\n（AT 指令和多数文本协议要它）",
+              "events": {
+                "change": "st_on_newline_change"
+              }
+            },
+            {
+              "id": "st_btn_send",
+              "type": "button",
+              "rect": {
+                "x": 716,
+                "y": 26,
+                "w": 90,
+                "h": 32
+              },
+              "text": "发送",
+              "hint": "发送（在输入框里直接回车也一样）",
+              "events": {
+                "click": "st_on_send_click"
+              }
+            },
+            {
+              "id": "st_chk_timed",
+              "type": "checkbox",
+              "rect": {
+                "x": 812,
+                "y": 29,
+                "w": 84,
+                "h": 26
+              },
+              "text": "定时发送",
+              "hint": "按周期反复发上面那一行（XCOM 的「定时发送」）",
+              "events": {
+                "change": "st_on_timed_change"
+              }
+            },
+            {
+              "id": "st_spn_cycle",
+              "type": "edit",
+              "rect": {
+                "x": 900,
+                "y": 28,
+                "w": 64,
+                "h": 26
+              },
+              "spin": true,
+              "min": 50,
+              "max": 60000,
+              "value": 1000,
+              "hint": "定时发送 / 多条发送的周期（毫秒）",
+              "style": "st_input"
+            },
+            {
+              "id": "st_edt_multi",
+              "type": "edit",
+              "rect": {
+                "x": 12,
+                "y": 64,
+                "w": 584,
+                "h": 68
+              },
+              "multiline": true,
+              "scroll": 2,
+              "maxlen": 65535,
+              "style": "st_input",
+              "text": "一行一条；# 开头是注释，空行跳过。\n依次发送：每条按下面的间隔发一条。\n# 例：AT\n# 例：01 03 00 00 00 0A C5 CD",
+              "hint": "多条发送（XCOM 的「多条发送」标签页）：一行一条命令，可循环"
+            },
+            {
+              "id": "st_btn_sendall",
+              "type": "button",
+              "rect": {
+                "x": 604,
+                "y": 62,
+                "w": 92,
+                "h": 28
+              },
+              "text": "依次发送",
+              "hint": "把左边每一行按顺序发一遍（勾了「循环」就一直轮）",
+              "events": {
+                "click": "st_on_sendall_click"
+              }
+            },
+            {
+              "id": "st_btn_stop",
+              "type": "button",
+              "rect": {
+                "x": 702,
+                "y": 62,
+                "w": 92,
+                "h": 28
+              },
+              "text": "停止发送",
+              "hint": "停掉定时发送 / 多条轮发（XCOM 的「停止发送」）",
+              "events": {
+                "click": "st_on_stop_click"
+              }
+            },
+            {
+              "id": "st_btn_openfile",
+              "type": "button",
+              "rect": {
+                "x": 800,
+                "y": 62,
+                "w": 86,
+                "h": 28
+              },
+              "text": "打开文件",
+              "hint": "把一个文本文件读进「多条发送」框（一行一条）",
+              "events": {
+                "click": "st_on_openfile_click"
+              }
+            },
+            {
+              "id": "st_btn_sendfile",
+              "type": "button",
+              "rect": {
+                "x": 892,
+                "y": 62,
+                "w": 80,
+                "h": 28
+              },
+              "text": "发送文件",
+              "hint": "把一个文本文件的内容原样发出去（XCOM 的「发送文件」）",
+              "events": {
+                "click": "st_on_sendfile_click"
+              }
+            },
+            {
+              "id": "st_chk_loop",
+              "type": "checkbox",
+              "rect": {
+                "x": 604,
+                "y": 96,
+                "w": 92,
+                "h": 26
+              },
+              "text": "循环",
+              "hint": "「依次发送」发到最后一条后回到第一条（轮询命令序列）",
+              "events": {
+                "change": "st_on_loop_change"
+              }
+            },
+            {
+              "id": "st_spn_multi",
+              "type": "edit",
+              "rect": {
+                "x": 702,
+                "y": 96,
+                "w": 64,
+                "h": 26
+              },
+              "spin": true,
+              "min": 50,
+              "max": 60000,
+              "value": 500,
+              "hint": "多条发送时每条之间的间隔（毫秒）",
+              "style": "st_input"
+            },
+            {
+              "id": "st_lab_multi",
+              "type": "label",
+              "rect": {
+                "x": 770,
+                "y": 100,
+                "w": 200,
+                "h": 20
+              },
+              "text": "多条之间的间隔(ms)",
+              "style": "st_label"
+            }
+          ],
+          "page": 0
+        },
+        {
+          "id": "st_grp_proto",
+          "type": "group",
+          "rect": {
+            "x": 8,
+            "y": 652,
+            "w": 984,
+            "h": 122
+          },
+          "text": "协议组帧（帧头 / 地址 / 功能码 / 数据 / 校验 / 帧尾 —— 通用骨架，`cg_proto_build`）",
+          "style": {
+            "use": "st_label",
+            "bg": "#F7F2FA"
+          },
+          "children": [
+            {
+              "id": "st_lab_ph",
+              "type": "label",
+              "rect": {
+                "x": 12,
+                "y": 28,
+                "w": 40,
+                "h": 20
+              },
+              "text": "帧头",
+              "style": "st_label"
+            },
+            {
+              "id": "st_edt_ph",
+              "type": "edit",
+              "rect": {
+                "x": 54,
+                "y": 26,
+                "w": 110,
+                "h": 26
+              },
+              "text": "AA 55",
+              "style": "st_input",
+              "hint": "十六进制；留空 = 没有帧头",
+              "events": {
+                "change": "st_on_proto_change"
+              }
+            },
+            {
+              "id": "st_lab_pa",
+              "type": "label",
+              "rect": {
+                "x": 174,
+                "y": 28,
+                "w": 32,
+                "h": 20
+              },
+              "text": "地址",
+              "style": "st_label"
+            },
+            {
+              "id": "st_spn_pa",
+              "type": "edit",
+              "rect": {
+                "x": 208,
+                "y": 26,
+                "w": 52,
+                "h": 26
+              },
+              "spin": true,
+              "min": -1,
+              "max": 255,
+              "value": 1,
+              "hint": "从站地址（十进制 0..255）；**-1 = 这一帧不写地址字段**",
+              "style": "st_input",
+              "events": {
+                "change": "st_on_proto_change"
+              }
+            },
+            {
+              "id": "st_lab_pf",
+              "type": "label",
+              "rect": {
+                "x": 268,
+                "y": 28,
+                "w": 44,
+                "h": 20
+              },
+              "text": "功能码",
+              "style": "st_label"
+            },
+            {
+              "id": "st_spn_pf",
+              "type": "edit",
+              "rect": {
+                "x": 314,
+                "y": 26,
+                "w": 52,
+                "h": 26
+              },
+              "spin": true,
+              "min": -1,
+              "max": 255,
+              "value": 3,
+              "hint": "功能码 / 命令字（十进制 0..255）；**-1 = 这一帧不写功能码**",
+              "style": "st_input",
+              "events": {
+                "change": "st_on_proto_change"
+              }
+            },
+            {
+              "id": "st_lab_ps",
+              "type": "label",
+              "rect": {
+                "x": 374,
+                "y": 28,
+                "w": 32,
+                "h": 20
+              },
+              "text": "校验",
+              "style": "st_label"
+            },
+            {
+              "id": "st_cmb_ps",
+              "type": "combo",
+              "rect": {
+                "x": 408,
+                "y": 26,
+                "w": 120,
+                "h": 200
+              },
+              "items": [
+                "不校验",
+                "累加和(8位)",
+                "异或(8位)",
+                "累加和(16位)",
+                "CRC16-Modbus"
+              ],
+              "value": 0,
+              "hint": "校验覆盖「校验值之前的全部字节」；CRC16-Modbus 是低字节在前（工控最常见）",
+              "events": {
+                "select": "st_on_proto_change"
+              }
+            },
+            {
+              "id": "st_lab_pt",
+              "type": "label",
+              "rect": {
+                "x": 536,
+                "y": 28,
+                "w": 40,
+                "h": 20
+              },
+              "text": "帧尾",
+              "style": "st_label"
+            },
+            {
+              "id": "st_edt_pt",
+              "type": "edit",
+              "rect": {
+                "x": 578,
+                "y": 26,
+                "w": 110,
+                "h": 26
+              },
+              "text": "0D 0A",
+              "style": "st_input",
+              "hint": "十六进制；留空 = 没有帧尾（很多设备用 0D 0A 收尾）",
+              "events": {
+                "change": "st_on_proto_change"
+              }
+            },
+            {
+              "id": "st_chk_plen",
+              "type": "checkbox",
+              "rect": {
+                "x": 700,
+                "y": 26,
+                "w": 150,
+                "h": 26
+              },
+              "text": "带数据长度字节",
+              "hint": "在功能码后插一个「数据长度」字节（很多私有协议这么定）",
+              "events": {
+                "change": "st_on_proto_change"
+              }
+            },
+            {
+              "id": "st_lab_pd",
+              "type": "label",
+              "rect": {
+                "x": 12,
+                "y": 66,
+                "w": 40,
+                "h": 20
+              },
+              "text": "数据",
+              "style": "st_label"
+            },
+            {
+              "id": "st_edt_pd",
+              "type": "edit",
+              "rect": {
+                "x": 54,
+                "y": 62,
+                "w": 500,
+                "h": 26
+              },
+              "text": "01 02 03",
+              "style": "st_input",
+              "hint": "十六进制数据区；留空 = 没有数据段",
+              "events": {
+                "change": "st_on_proto_change"
+              }
+            },
+            {
+              "id": "st_lab_prev",
+              "type": "label",
+              "rect": {
+                "x": 566,
+                "y": 66,
+                "w": 410,
+                "h": 22
+              },
+              "text": "（组出来的帧会显示在这里）",
+              "style": {
+                "fg": "#1B6E33"
+              },
+              "hint": "实时预览：改上面任一格就重新拼一次，拼出来多少字节、长什么样一目了然"
+            },
+            {
+              "id": "st_btn_psend",
+              "type": "button",
+              "rect": {
+                "x": 12,
+                "y": 94,
+                "w": 90,
+                "h": 26
+              },
+              "text": "发送一帧",
+              "hint": "把拼好的帧发出去（十六进制原文，不加任何别的东西）",
+              "events": {
+                "click": "st_on_proto_send"
+              }
+            },
+            {
+              "id": "st_chk_ploop",
+              "type": "checkbox",
+              "rect": {
+                "x": 112,
+                "y": 94,
+                "w": 110,
+                "h": 26
+              },
+              "text": "周期发送",
+              "hint": "按下面的周期反复发这一帧（轮询设备时用；停止按钮也会停它）",
+              "events": {
+                "change": "st_on_proto_loop"
+              }
+            },
+            {
+              "id": "st_spn_pcyc",
+              "type": "edit",
+              "rect": {
+                "x": 228,
+                "y": 94,
+                "w": 64,
+                "h": 26
+              },
+              "spin": true,
+              "min": 50,
+              "max": 60000,
+              "value": 1000,
+              "hint": "协议帧的发送周期（毫秒）",
+              "style": "st_input"
+            },
+            {
+              "id": "st_lab_pcyc",
+              "type": "label",
+              "rect": {
+                "x": 300,
+                "y": 98,
+                "w": 200,
+                "h": 20
+              },
+              "text": "周期ms（周期发送用）",
+              "style": "st_label"
+            }
+          ],
+          "page": 0
+        },
+        {
+          "id": "st_cht_rate",
+          "type": "chart",
+          "rect": {
+            "x": 8,
+            "y": 774,
+            "w": 984,
+            "h": 60
+          },
+          "items": [
+            "B/s"
+          ],
+          "value": 60,
+          "min": 0,
+          "max": 256,
+          "format": "line",
+          "hint": "每秒收到的字节数（同一份数据既进日志也进曲线：落点由 on_arrive 决定）",
+          "page": 0
+        },
+        {
+          "id": "nt_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 674,
+            "w": 980,
+            "h": 26
+          },
+          "items": [
+            "未连接",
+            "对端 —",
+            "RX 0 B",
+            "TX 0 B"
+          ],
+          "page": 1
+        },
+        {
+          "id": "nt_lab_role",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 14,
+            "w": 36,
+            "h": 24
+          },
+          "text": "角色",
+          "style": "nt_label",
+          "page": 1
+        },
+        {
+          "id": "nt_cmb_role",
+          "type": "combo",
+          "rect": {
+            "x": 52,
+            "y": 12,
+            "w": 132,
+            "h": 200
+          },
+          "items": [
+            "客户端（连接）",
+            "服务端（监听）",
+            "UDP（本机端口）"
+          ],
+          "value": 0,
+          "hint": "客户端：去连别人的「地址:端口」；服务端：监听本机端口，等别人连进来；UDP：绑定本机端口收发数据报（无连接，这时「地址:端口」是发给谁，点「打开 UDP」）",
+          "events": {
+            "select": "nt_on_role_select"
+          },
+          "page": 1
+        },
+        {
+          "id": "nt_lab_host",
+          "type": "label",
+          "rect": {
+            "x": 192,
+            "y": 14,
+            "w": 36,
+            "h": 24
+          },
+          "text": "地址",
+          "style": "nt_label",
+          "page": 1
+        },
+        {
+          "id": "nt_edt_host",
+          "type": "edit",
+          "rect": {
+            "x": 232,
+            "y": 10,
+            "w": 128,
+            "h": 32
+          },
+          "text": "127.0.0.1",
+          "style": "nt_input",
+          "hint": "客户端：要连的远端地址；UDP：要发给谁（填 255.255.255.255 = 广播，只在允许广播的网络上有效，本机自测填 127.0.0.1）；留空按 127.0.0.1。服务端不需要填",
+          "page": 1
+        },
+        {
+          "id": "nt_lab_port",
+          "type": "label",
+          "rect": {
+            "x": 368,
+            "y": 14,
+            "w": 36,
+            "h": 24
+          },
+          "text": "端口",
+          "style": "nt_label",
+          "page": 1
+        },
+        {
+          "id": "nt_spn_port",
+          "type": "edit",
+          "rect": {
+            "x": 408,
+            "y": 12,
+            "w": 76,
+            "h": 28
+          },
+          "value": 8080,
+          "min": 1,
+          "max": 65535,
+          "spin": 1,
+          "input": 7,
+          "hint": "客户端=要连的远端端口；服务端=本机要监听的端口；UDP=本机要绑定的端口（同时也是发出去的目的端口，想收广播就填广播端口）",
+          "page": 1
+        },
+        {
+          "id": "nt_btn_conn",
+          "type": "button",
+          "rect": {
+            "x": 492,
+            "y": 10,
+            "w": 92,
+            "h": 32
+          },
+          "text": "连接",
+          "hint": "以客户端身份连到上面的「地址:端口」（UDP 角色下用不到：UDP 无连接，请点「打开 UDP」）",
+          "events": {
+            "click": "nt_on_connect_click"
+          },
+          "page": 1
+        },
+        {
+          "id": "nt_btn_listen",
+          "type": "button",
+          "rect": {
+            "x": 592,
+            "y": 10,
+            "w": 82,
+            "h": 32
+          },
+          "text": "监听",
+          "hint": "服务端：监听上面的端口，等客户端连进来（可同时管多个连接）；UDP 角色下这个按钮会变成「打开 UDP」，作用是绑定本机端口、之后就能收发数据报",
+          "events": {
+            "click": "nt_on_listen_click"
+          },
+          "page": 1
+        },
+        {
+          "id": "nt_btn_stop",
+          "type": "button",
+          "rect": {
+            "x": 682,
+            "y": 10,
+            "w": 76,
+            "h": 32
+          },
+          "text": "断开",
+          "hint": "关掉监听 / UDP 端口与全部连接（幂等，重复点也没事）",
+          "events": {
+            "click": "nt_on_stop_click"
+          },
+          "page": 1
+        },
+        {
+          "id": "nt_btn_clear",
+          "type": "button",
+          "rect": {
+            "x": 762,
+            "y": 10,
+            "w": 76,
+            "h": 32
+          },
+          "text": "清空",
+          "hint": "清空日志视图（累计 RX/TX 计数保留）",
+          "events": {
+            "click": "nt_on_clear_click"
+          },
+          "page": 1
+        },
+        {
+          "id": "nt_led_link",
+          "type": "led",
+          "rect": {
+            "x": 848,
+            "y": 17,
+            "w": 120,
+            "h": 18
+          },
+          "text": "未连接",
+          "value": 0,
+          "style": {
+            "fg": "#1B6E33"
+          },
+          "page": 1
+        },
+        {
+          "id": "nt_term_log",
+          "type": "terminal",
+          "rect": {
+            "x": 8,
+            "y": 48,
+            "w": 964,
+            "h": 472
+          },
+          "grow": 1,
+          "checked": true,
+          "value": 500,
+          "items": [
+            "网口调试助手就绪。",
+            "客户端：选「客户端（连接）」→ 填地址和端口 → 点「连接」。",
+            "服务端：选「服务端（监听）」→ 填本机端口 → 点「监听」，等别人连进来。",
+            "UDP：选「UDP（本机端口）」→ 填本机端口 → 点「打开 UDP」；「地址:端口」是发给谁。",
+            "收发的数据按行落到这里：RX 绿色 / TX 蓝色 / 灰色是程序自己的记录。"
+          ],
+          "page": 1
+        },
+        {
+          "id": "nt_sp_main",
+          "type": "splitter",
+          "rect": {
+            "x": 8,
+            "y": 520,
+            "w": 964,
+            "h": 6
+          },
+          "format": "row",
+          "hint": "上下拖动：日志区变高、下面的发送区让位",
+          "events": {
+            "release": "nt_on_split_release"
+          },
+          "page": 1
+        },
+        {
+          "id": "nt_grp_send",
+          "type": "group",
+          "rect": {
+            "x": 8,
+            "y": 526,
+            "w": 964,
+            "h": 76
+          },
+          "text": "发送",
+          "style": {
+            "use": "nt_label",
+            "bg": "#F7F2FA"
+          },
+          "children": [
+            {
+              "id": "nt_edt_send",
+              "type": "edit",
+              "rect": {
+                "x": 12,
+                "y": 34,
+                "w": 700,
+                "h": 30
+              },
+              "text": "",
+              "style": "nt_input",
+              "hint": "要发送的内容；勾了 HEX 就写 1A 2B 3C 这种。服务端会同时发给所有连上的客户端；UDP 角色下发给「地址:端口」指定的目的地",
+              "events": {
+                "submit": "nt_on_send_submit"
+              }
+            },
+            {
+              "id": "nt_chk_hex",
+              "type": "checkbox",
+              "rect": {
+                "x": 724,
+                "y": 35,
+                "w": 100,
+                "h": 28
+              },
+              "text": "HEX 发送",
+              "hint": "把输入按十六进制解析成字节再发（空格可有可无）",
+              "events": {
+                "change": "nt_on_hex_change"
+              }
+            },
+            {
+              "id": "nt_btn_send",
+              "type": "button",
+              "rect": {
+                "x": 836,
+                "y": 33,
+                "w": 112,
+                "h": 32
+              },
+              "text": "发送",
+              "hint": "发送（在输入框里直接回车也一样）",
+              "events": {
+                "click": "nt_on_send_click"
+              }
+            }
+          ],
+          "page": 1
+        },
+        {
+          "id": "nt_cht_rate",
+          "type": "chart",
+          "rect": {
+            "x": 8,
+            "y": 604,
+            "w": 964,
+            "h": 66
+          },
+          "items": [
+            "B/s"
+          ],
+          "value": 60,
+          "min": 0,
+          "max": 256,
+          "format": "line",
+          "page": 1
+        },
+        {
+          "id": "dt_lab_title",
+          "type": "label",
+          "rect": {
+            "x": 14,
+            "y": 12,
+            "w": 400,
+            "h": 26
+          },
+          "text": "深色终端 · app.dark 示例",
+          "style": "dt_title",
+          "hint": "title 这套命名样式故意不写颜色 —— 文字色跟着主题走（深色下浅字、浅色下深字），这就是「深色只改默认值」",
+          "page": 2
+        },
+        {
+          "id": "dt_lab_mode",
+          "type": "label",
+          "rect": {
+            "x": 14,
+            "y": 40,
+            "w": 600,
+            "h": 20
+          },
+          "text": "当前：深色（app.dark: true）",
+          "style": "dt_sub",
+          "hint": "运行时切换后由 main.c 的 sync_theme_ui() 改这里的文字",
+          "page": 2
+        },
+        {
+          "id": "dt_badge_dark",
+          "type": "badge",
+          "rect": {
+            "x": 636,
+            "y": 22,
+            "w": 80,
+            "h": 26
+          },
+          "text": "app.dark",
+          "style": "dt_chip",
+          "hint": "自绘控件：bg / fg 自己写了就按自己的来（浅底深字），深色主题不会覆盖它",
+          "page": 2
+        },
+        {
+          "id": "dt_btn_theme",
+          "type": "button",
+          "rect": {
+            "x": 728,
+            "y": 16,
+            "w": 198,
+            "h": 36
+          },
+          "text": "切换到浅色主题",
+          "style": "dt_primary",
+          "hint": "运行时切换主题：cg_theme_set_dark(app, !cg_theme_is_dark(app))，立即重画",
+          "events": {
+            "click": "dt_on_theme_click"
+          },
+          "page": 2
+        },
+        {
+          "id": "dt_grp_log",
+          "type": "group",
+          "rect": {
+            "x": 14,
+            "y": 72,
+            "w": 632,
+            "h": 444
+          },
+          "text": "日志视图",
+          "style": "dt_panel",
+          "hint": "「命名样式继承」：直接取 styles.panel。这里**不**写死颜色，所以分组框的底色与文字色都跟着主题走（浅色下自动变浅）—— 这正是「深色只改默认值」那条口径的意思",
+          "children": [
+            {
+              "id": "dt_edt_log",
+              "type": "edit",
+              "rect": {
+                "x": 12,
+                "y": 36,
+                "w": 608,
+                "h": 396
+              },
+              "multiline": true,
+              "scroll": 2,
+              "input": 1,
+              "maxlen": 65535,
+              "style": "dt_log",
+              "text": "-- 日志视图就绪。\n-- 深底浅字来自 styles.log（fg / bg 都写死）。",
+              "hint": "只读多行输入框：fg / bg 都写在 styles.log 里（不写的话深色下会自动变深底浅字，写了就完全由你说了算）"
+            }
+          ],
+          "page": 2
+        },
+        {
+          "id": "dt_grp_stat",
+          "type": "group",
+          "rect": {
+            "x": 660,
+            "y": 72,
+            "w": 266,
+            "h": 214
+          },
+          "text": "运行状态",
+          "style": "dt_panel",
+          "hint": "纯命名引用形态：「style」直接写样式名，整份取用 styles.panel（深底 + 浅字）",
+          "children": [
+            {
+              "id": "dt_led_conn",
+              "type": "led",
+              "rect": {
+                "x": 16,
+                "y": 34,
+                "w": 16,
+                "h": 16
+              },
+              "value": 1,
+              "style": {
+                "fg": "#7BD88F"
+              },
+              "hint": "状态灯：亮的颜色 = style.fg。这里故意不带文字 —— 状态灯的文字色在皮肤里写死为深色，深底上会看不清，要文字就另配一个 label"
+            },
+            {
+              "id": "dt_lab_conn",
+              "type": "label",
+              "rect": {
+                "x": 40,
+                "y": 32,
+                "w": 210,
+                "h": 20
+              },
+              "text": "链路已连接",
+              "style": "dt_oncard"
+            },
+            {
+              "id": "dt_lab_p1",
+              "type": "label",
+              "rect": {
+                "x": 16,
+                "y": 66,
+                "w": 210,
+                "h": 18
+              },
+              "text": "缓冲区占用 62%",
+              "style": "dt_oncard"
+            },
+            {
+              "id": "dt_prg_buf",
+              "type": "progress",
+              "rect": {
+                "x": 16,
+                "y": 86,
+                "w": 234,
+                "h": 14
+              },
+              "min": 0,
+              "max": 100,
+              "value": 62,
+              "style": {
+                "fg": "#8AB4F8"
+              },
+              "hint": "进度条：填充色 = style.fg；槽是皮肤里写死的浅色（不跟随深色，这是已知边界）"
+            },
+            {
+              "id": "dt_lab_p2",
+              "type": "label",
+              "rect": {
+                "x": 16,
+                "y": 112,
+                "w": 210,
+                "h": 18
+              },
+              "text": "重传率 2.3%",
+              "style": "dt_oncard"
+            },
+            {
+              "id": "dt_ring_rt",
+              "type": "progressring",
+              "rect": {
+                "x": 16,
+                "y": 134,
+                "w": 62,
+                "h": 62
+              },
+              "min": 0,
+              "max": 100,
+              "value": 23,
+              "style": {
+                "fg": "#FFB4A2"
+              },
+              "hint": "圆环进度：轨道用的是「背后色」，所以它跟随深色（和 progress 的槽正好相反）"
+            },
+            {
+              "id": "dt_lab_ring",
+              "type": "label",
+              "rect": {
+                "x": 90,
+                "y": 156,
+                "w": 160,
+                "h": 20
+              },
+              "text": "圆环：轨道跟随深色",
+              "style": "dt_oncard"
+            }
+          ],
+          "page": 2
+        },
+        {
+          "id": "dt_grp_opt",
+          "type": "group",
+          "rect": {
+            "x": 660,
+            "y": 298,
+            "w": 266,
+            "h": 218
+          },
+          "text": "选项",
+          "style": "dt_panel",
+          "children": [
+            {
+              "id": "dt_sw_scroll",
+              "type": "switch",
+              "rect": {
+                "x": 16,
+                "y": 34,
+                "w": 234,
+                "h": 30
+              },
+              "text": "自动滚动到底",
+              "checked": true,
+              "hint": "开关：胶囊轨道是 M3 紫（皮肤写死），标签文字跟着主题变浅",
+              "events": {
+                "change": "dt_on_scroll_change"
+              }
+            },
+            {
+              "id": "dt_btn_clear",
+              "type": "button",
+              "rect": {
+                "x": 16,
+                "y": 76,
+                "w": 108,
+                "h": 32
+              },
+              "text": "清空日志",
+              "style": "dt_ghost",
+              "events": {
+                "click": "dt_on_clear_click"
+              }
+            },
+            {
+              "id": "dt_btn_fill",
+              "type": "button",
+              "rect": {
+                "x": 132,
+                "y": 76,
+                "w": 118,
+                "h": 32
+              },
+              "text": "追加几行",
+              "style": "dt_ghost",
+              "events": {
+                "click": "dt_on_fill_click"
+              }
+            },
+            {
+              "id": "dt_badge_self",
+              "type": "badge",
+              "rect": {
+                "x": 16,
+                "y": 122,
+                "w": 104,
+                "h": 24
+              },
+              "text": "自绘徽章",
+              "style": "dt_chip"
+            },
+            {
+              "id": "dt_lab_badge",
+              "type": "label",
+              "rect": {
+                "x": 128,
+                "y": 122,
+                "w": 126,
+                "h": 24
+              },
+              "text": "bg/fg 自己写",
+              "style": "dt_oncard"
+            },
+            {
+              "id": "dt_lab_tip",
+              "type": "label",
+              "rect": {
+                "x": 16,
+                "y": 156,
+                "w": 238,
+                "h": 42
+              },
+              "text": "轨道 M3 紫由皮肤写死",
+              "style": {
+                "use": "dt_oncard",
+                "size": 9
+              },
+              "hint": "第三种引用形态：命名 + 局部覆盖（oncard 的浅字 + 这里改小的字号）"
+            }
+          ],
+          "page": 2
+        },
+        {
+          "id": "dt_edt_cmd",
+          "type": "edit",
+          "rect": {
+            "x": 14,
+            "y": 518,
+            "w": 600,
+            "h": 34
+          },
+          "text": "AT+VERSION",
+          "style": "dt_input",
+          "hint": "输入框：颜色写死了（深底浅字），所以浅色主题下它仍是一条深色输入框；想让它跟着主题就别写 fg/bg",
+          "events": {
+            "submit": "dt_on_cmd_submit"
+          },
+          "page": 2
+        },
+        {
+          "id": "dt_btn_send",
+          "type": "button",
+          "rect": {
+            "x": 622,
+            "y": 517,
+            "w": 96,
+            "h": 36
+          },
+          "text": "发送",
+          "style": "dt_primary",
+          "events": {
+            "click": "dt_on_send_click"
+          },
+          "page": 2
+        },
+        {
+          "id": "dt_btn_save",
+          "type": "button",
+          "rect": {
+            "x": 726,
+            "y": 517,
+            "w": 120,
+            "h": 36
+          },
+          "text": "保存日志",
+          "style": "dt_ghost",
+          "events": {
+            "click": "dt_on_save_log_click"
+          },
+          "page": 2
+        },
+        {
+          "id": "dt_lab_foot1",
+          "type": "label",
+          "rect": {
+            "x": 14,
+            "y": 558,
+            "w": 912,
+            "h": 18
+          },
+          "text": "深色只改默认值：没写颜色的文字与面板底色跟着主题走；本示例的深色面板 / 按钮 / 输入框写死了颜色，浅色下也保持原样。",
+          "style": "dt_sub",
+          "page": 2
+        },
+        {
+          "id": "dt_lab_foot2",
+          "type": "label",
+          "rect": {
+            "x": 14,
+            "y": 578,
+            "w": 912,
+            "h": 18
+          },
+          "text": "terminal 的行色是为浅底写的深绿 / 深蓝 / 灰，深底下看不清，所以日志视图改用自己写了颜色的多行 edit。",
+          "style": "dt_sub",
+          "page": 2
+        },
+        {
+          "id": "mb_lab_host",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 14,
+            "w": 36,
+            "h": 24
+          },
+          "text": "地址",
+          "style": "mb_label",
+          "page": 3
+        },
+        {
+          "id": "mb_edt_host",
+          "type": "edit",
+          "rect": {
+            "x": 52,
+            "y": 12,
+            "w": 130,
+            "h": 26
+          },
+          "text": "127.0.0.1",
+          "hint": "从站的 IP；本机自测就用 127.0.0.1（配 examples/modbus/mock-slave.mjs 那个模拟从站）",
+          "style": "mb_input",
+          "page": 3
+        },
+        {
+          "id": "mb_lab_port",
+          "type": "label",
+          "rect": {
+            "x": 190,
+            "y": 14,
+            "w": 36,
+            "h": 24
+          },
+          "text": "端口",
+          "style": "mb_label",
+          "page": 3
+        },
+        {
+          "id": "mb_spn_port",
+          "type": "edit",
+          "rect": {
+            "x": 230,
+            "y": 12,
+            "w": 84,
+            "h": 26
+          },
+          "spin": true,
+          "min": 1,
+          "max": 65535,
+          "value": 1502,
+          "hint": "Modbus/TCP 标准端口是 502，但它要管理员权限；模拟从站默认用 1502",
+          "style": "mb_input",
+          "page": 3
+        },
+        {
+          "id": "mb_lab_slave",
+          "type": "label",
+          "rect": {
+            "x": 326,
+            "y": 14,
+            "w": 54,
+            "h": 24
+          },
+          "text": "从站号",
+          "style": "mb_label",
+          "page": 3
+        },
+        {
+          "id": "mb_spn_slave",
+          "type": "edit",
+          "rect": {
+            "x": 384,
+            "y": 12,
+            "w": 64,
+            "h": 26
+          },
+          "spin": true,
+          "min": 1,
+          "max": 247,
+          "value": 1,
+          "hint": "Modbus/TCP 里叫「单元标识」，1..247",
+          "style": "mb_input",
+          "page": 3
+        },
+        {
+          "id": "mb_led_link",
+          "type": "led",
+          "rect": {
+            "x": 466,
+            "y": 14,
+            "w": 20,
+            "h": 20
+          },
+          "value": 0,
+          "text": "未连接",
+          "style": {
+            "fg": "#1B6E33"
+          },
+          "page": 3
+        },
+        {
+          "id": "mb_btn_conn",
+          "type": "button",
+          "rect": {
+            "x": 620,
+            "y": 12,
+            "w": 120,
+            "h": 28
+          },
+          "text": "连接",
+          "events": {
+            "click": "mb_on_connect"
+          },
+          "page": 3
+        },
+        {
+          "id": "mb_btn_read",
+          "type": "button",
+          "rect": {
+            "x": 750,
+            "y": 12,
+            "w": 136,
+            "h": 28
+          },
+          "text": "读一次",
+          "events": {
+            "click": "mb_on_read"
+          },
+          "page": 3
+        },
+        {
+          "id": "mb_lab_func",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 50,
+            "w": 54,
+            "h": 24
+          },
+          "text": "功能码",
+          "style": "mb_label",
+          "page": 3
+        },
+        {
+          "id": "mb_cmb_func",
+          "type": "combo",
+          "rect": {
+            "x": 70,
+            "y": 48,
+            "w": 176,
+            "h": 200
+          },
+          "items": [
+            "03 读保持寄存器",
+            "04 读输入寄存器",
+            "01 读线圈"
+          ],
+          "value": 0,
+          "hint": "三种读：保持寄存器（可写，最常用）/ 输入寄存器（只读）/ 线圈（开关量，1 个寄存器位）",
+          "events": {
+            "select": "mb_on_read"
+          },
+          "page": 3
+        },
+        {
+          "id": "mb_lab_addr",
+          "type": "label",
+          "rect": {
+            "x": 262,
+            "y": 50,
+            "w": 54,
+            "h": 24
+          },
+          "text": "起始",
+          "style": "mb_label",
+          "page": 3
+        },
+        {
+          "id": "mb_spn_addr",
+          "type": "edit",
+          "rect": {
+            "x": 320,
+            "y": 48,
+            "w": 74,
+            "h": 26
+          },
+          "spin": true,
+          "min": 0,
+          "max": 65535,
+          "value": 0,
+          "hint": "起始地址按协议从 0 算（有些手册写 40001，那是「1 基」的叫法，要减 1）",
+          "style": "mb_input",
+          "page": 3
+        },
+        {
+          "id": "mb_lab_count",
+          "type": "label",
+          "rect": {
+            "x": 406,
+            "y": 50,
+            "w": 36,
+            "h": 24
+          },
+          "text": "数量",
+          "style": "mb_label",
+          "page": 3
+        },
+        {
+          "id": "mb_spn_count",
+          "type": "edit",
+          "rect": {
+            "x": 446,
+            "y": 48,
+            "w": 64,
+            "h": 26
+          },
+          "spin": true,
+          "min": 1,
+          "max": 125,
+          "value": 8,
+          "hint": "一次最多 125 个寄存器（规范上限，cg_modbus_build_read 会拦）",
+          "style": "mb_input",
+          "page": 3
+        },
+        {
+          "id": "mb_chk_auto",
+          "type": "checkbox",
+          "rect": {
+            "x": 534,
+            "y": 48,
+            "w": 78,
+            "h": 26
+          },
+          "text": "自动轮询",
+          "events": {
+            "change": "mb_on_auto"
+          },
+          "page": 3
+        },
+        {
+          "id": "mb_lab_iv",
+          "type": "label",
+          "rect": {
+            "x": 620,
+            "y": 50,
+            "w": 54,
+            "h": 24
+          },
+          "text": "间隔ms",
+          "style": "mb_label",
+          "page": 3
+        },
+        {
+          "id": "mb_spn_iv",
+          "type": "edit",
+          "rect": {
+            "x": 678,
+            "y": 48,
+            "w": 84,
+            "h": 26
+          },
+          "spin": true,
+          "min": 50,
+          "max": 60000,
+          "value": 1000,
+          "hint": "轮询间隔；上位机轮太快会把从站压垮，工控现场一般 200ms~2s",
+          "style": "mb_input",
+          "page": 3
+        },
+        {
+          "id": "mb_tbl_regs",
+          "type": "table",
+          "rect": {
+            "x": 12,
+            "y": 84,
+            "w": 420,
+            "h": 300
+          },
+          "hint": "最近一次读回来的寄存器；列由 main.c 里的 cg_table_add_column 建",
+          "page": 3
+        },
+        {
+          "id": "mb_term_log",
+          "type": "terminal",
+          "rect": {
+            "x": 444,
+            "y": 84,
+            "w": 444,
+            "h": 300
+          },
+          "checked": true,
+          "value": 500,
+          "grow": 1,
+          "hint": "完整报文（带时间戳、按方向着色）；发送的是 HEX、收到的也是 HEX",
+          "page": 3
+        },
+        {
+          "id": "mb_lab_tip",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 392,
+            "w": 876,
+            "h": 22
+          },
+          "text": "自测：node examples/modbus/mock-slave.mjs 1502（另开一个控制台），再点「连接」→「读一次」",
+          "style": "mb_label",
+          "page": 3
+        },
+        {
+          "id": "mb_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 614,
+            "w": 900,
+            "h": 26
+          },
+          "items": [
+            "未连接",
+            "成功 0",
+            "失败 0",
+            "等待 0ms"
+          ],
+          "page": 3
+        },
+        {
+          "id": "fd_sb_main",
+          "type": "statusbar",
+          "rect": {
+            "x": 0,
+            "y": 634,
+            "w": 980,
+            "h": 26
+          },
+          "items": [
+            "就绪",
+            "收 0 B",
+            "成帧 0",
+            "校验错 0",
+            "残帧 0",
+            "丢 0 B"
+          ],
+          "page": 4
+        },
+        {
+          "id": "fd_lab_title",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 8,
+            "w": 940,
+            "h": 20
+          },
+          "text": "帧 = [AA 55] [L] [cmd] [负载 N] [校验 1] ；L = 校验前的字节数 = 4 + N，整帧 = L + 1 字节",
+          "page": 4
+        },
+        {
+          "id": "fd_lab_proto",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 30,
+            "w": 956,
+            "h": 22
+          },
+          "text": "校验算式：累加和 = Σ(AA..负载) 取低 8 位 ；  XOR = 各字节逐位异或 ；  CRC16-Modbus = 初值 FFFF / 多项式 A001，低字节在前",
+          "page": 4
+        },
+        {
+          "id": "fd_lab_cmd",
+          "type": "label",
+          "rect": {
+            "x": 12,
+            "y": 62,
+            "w": 36,
+            "h": 24
+          },
+          "text": "命令",
+          "page": 4
+        },
+        {
+          "id": "fd_spn_cmd",
+          "type": "edit",
+          "rect": {
+            "x": 52,
+            "y": 60,
+            "w": 72,
+            "h": 26
+          },
+          "spin": true,
+          "min": 0,
+          "max": 255,
+          "value": 1,
+          "hint": "命令字节 cmd：01 读温度(int16) / 02 读量程(uint16) / 03 读电压组(int16[])，其它值只按十六进制显示",
+          "page": 4
+        },
+        {
+          "id": "fd_lab_pay",
+          "type": "label",
+          "rect": {
+            "x": 134,
+            "y": 62,
+            "w": 54,
+            "h": 24
+          },
+          "text": "负载HEX",
+          "page": 4
+        },
+        {
+          "id": "fd_edt_pay",
+          "type": "edit",
+          "rect": {
+            "x": 190,
+            "y": 60,
+            "w": 180,
+            "h": 26
+          },
+          "text": "0A 0B",
+          "hint": "负载字节，像「0A 0B」。是 int16 的地方按下面的「字节序」解；空负载就填 0 字节",
+          "events": {
+            "change": "fd_on_change"
+          },
+          "page": 4
+        },
+        {
+          "id": "fd_cmb_sum",
+          "type": "combo",
+          "rect": {
+            "x": 422,
+            "y": 58,
+            "w": 150,
+            "h": 200
+          },
+          "items": [
+            "累加和(低8位)",
+            "XOR",
+            "CRC16-Modbus"
+          ],
+          "value": 0,
+          "hint": "校验类型（帧里只放 1 字节）：累加和取低 8 位 / 逐字节异或 / CRC16-Modbus 的低字节（低字节在前）",
+          "events": {
+            "select": "fd_on_change"
+          },
+          "page": 4
+        },
+        {
+          "id": "fd_cmb_end",
+          "type": "combo",
+          "rect": {
+            "x": 638,
+            "y": 58,
+            "w": 90,
+            "h": 200
+          },
+          "items": [
+            "小端",
+            "大端"
+          ],
+          "value": 1,
+          "hint": "解码负载时的字节序：小端 = 低字节在前，大端 = 高字节在前",
+          "events": {
+            "select": "fd_on_change"
+          },
+          "page": 4
+        },
+        {
+          "id": "fd_btn_mock",
+          "type": "button",
+          "rect": {
+            "x": 740,
+            "y": 58,
+            "w": 110,
+            "h": 30
+          },
+          "text": "模拟一帧",
+          "hint": "按当前校验 / 命令 / 负载拼一帧，把十六进制填进下面的输入框（只填不发）",
+          "events": {
+            "click": "fd_on_mock"
+          },
+          "page": 4
+        },
+        {
+          "id": "fd_btn_burst",
+          "type": "button",
+          "rect": {
+            "x": 856,
+            "y": 58,
+            "w": 112,
+            "h": 30
+          },
+          "text": "模拟连发",
+          "hint": "每 300ms 造一批字节喂进切帧器：2 字节噪声 + 一帧合法帧 + 一段断帧，演示切帧的健壮性",
+          "events": {
+            "click": "fd_on_burst"
+          },
+          "page": 4
+        },
+        {
+          "id": "fd_btn_feed",
+          "type": "button",
+          "rect": {
+            "x": 12,
+            "y": 94,
+            "w": 152,
+            "h": 30
+          },
+          "text": "喂入输入的十六进制",
+          "hint": "把下面输入框里的十六进制文本解析成字节，喂进切帧器（空格 / 换行 / 逗号都能忍）",
+          "events": {
+            "click": "fd_on_feed"
+          },
+          "page": 4
+        },
+        {
+          "id": "fd_btn_reset",
+          "type": "button",
+          "rect": {
+            "x": 172,
+            "y": 94,
+            "w": 110,
+            "h": 30
+          },
+          "text": "清空 / 重置",
+          "hint": "丢掉还没切出的半帧，清空统计、帧表与日志",
+          "events": {
+            "click": "fd_on_reset"
+          },
+          "page": 4
+        },
+        {
+          "id": "fd_lab_hint",
+          "type": "label",
+          "rect": {
+            "x": 294,
+            "y": 100,
+            "w": 674,
+            "h": 20
+          },
+          "text": "输入框里可粘贴：AA 55 06 01 0A 0B 1B（帧头 + 长度 + 命令 + 负载 + 校验，带空格换行都能忍）",
+          "page": 4
+        },
+        {
+          "id": "fd_grp_left",
+          "type": "group",
+          "rect": {
+            "x": 8,
+            "y": 132,
+            "w": 560,
+            "h": 490
+          },
+          "text": "十六进制输入 / 切出的帧表",
+          "children": [
+            {
+              "id": "fd_edt_hex",
+              "type": "edit",
+              "rect": {
+                "x": 12,
+                "y": 26,
+                "w": 536,
+                "h": 150
+              },
+              "text": "AA 55 06 01 0A 0B 1B",
+              "multiline": true,
+              "scroll": 2,
+              "hint": "粘贴 AA 55 04 01 4B 这样的十六进制；空格 / 换行 / 逗号都当分隔符",
+              "events": {
+                "submit": "fd_on_feed"
+              }
+            },
+            {
+              "id": "fd_tbl_frames",
+              "type": "table",
+              "rect": {
+                "x": 12,
+                "y": 206,
+                "w": 536,
+                "h": 270
+              },
+              "hint": "合法帧进这里（含解码结果）；校验错的帧也进，结论列写清算出多少、帧里多少。列由程序建"
+            }
+          ],
+          "page": 4
+        },
+        {
+          "id": "fd_sp_mid",
+          "type": "splitter",
+          "rect": {
+            "x": 570,
+            "y": 132,
+            "w": 6,
+            "h": 490
+          },
+          "format": "col",
+          "hint": "左右拖动：左边（输入 / 帧表）与右边（日志）分配宽度",
+          "page": 4
+        },
+        {
+          "id": "fd_term_log",
+          "type": "terminal",
+          "rect": {
+            "x": 584,
+            "y": 132,
+            "w": 388,
+            "h": 490
+          },
+          "grow": 1,
+          "checked": true,
+          "value": 800,
+          "items": [
+            "帧协议解析器：AA 55 帧头 + 长度 + 命令 + 负载 + 校验。",
+            "点「模拟一帧」生成一帧，再点「喂入」看它被切出来；或点「模拟连发」看噪声与断帧怎么处理。"
+          ],
+          "page": 4
+        }
+      ]
+    }
+  ],
+  "styles": {
+    "st_label": {
+      "font": "Microsoft YaHei UI",
+      "size": 9,
+      "fg": "#1D1B20"
+    },
+    "st_input": {
+      "font": "Microsoft YaHei UI",
+      "size": 10
+    },
+    "nt_label": {
+      "font": "Microsoft YaHei UI",
+      "size": 9,
+      "fg": "#1D1B20"
+    },
+    "nt_input": {
+      "font": "Microsoft YaHei UI",
+      "size": 10
+    },
+    "dt_title": {
+      "font": "Microsoft YaHei UI",
+      "size": 13,
+      "bold": true
+    },
+    "dt_sub": {
+      "font": "Microsoft YaHei UI",
+      "size": 9
+    },
+    "dt_panel": {
+      "font": "Microsoft YaHei UI",
+      "size": 10
+    },
+    "dt_oncard": {
+      "font": "Microsoft YaHei UI",
+      "size": 10
+    },
+    "dt_log": {
+      "font": "Consolas",
+      "size": 10
+    },
+    "dt_input": {
+      "font": "Microsoft YaHei UI",
+      "size": 10
+    },
+    "dt_primary": {
+      "bg": "#7C5CD6",
+      "radius": 8
+    },
+    "dt_ghost": {
+      "bg": "#2E2B36",
+      "fg": "#E8E2F0",
+      "radius": 8
+    },
+    "dt_chip": {
+      "font": "Microsoft YaHei UI",
+      "size": 9,
+      "fg": "#0E1116",
+      "bg": "#A6E3A1"
+    },
+    "mb_label": {
+      "font": "Microsoft YaHei UI",
+      "size": 9,
+      "fg": "#1D1B20"
+    },
+    "mb_input": {
+      "font": "Microsoft YaHei UI",
+      "size": 10
+    },
+    "fd_label": {
+      "font": "Microsoft YaHei UI",
+      "size": 9,
+      "fg": "#1D1B20"
+    },
+    "fd_input": {
+      "font": "Microsoft YaHei UI",
+      "size": 10
+    }
+  }
+}

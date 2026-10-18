@@ -132,6 +132,22 @@ id 前缀唯一、`.cgui` 的每个事件名在对应模块的 `*_bindings[]` �
      递归 nodes；门禁加"动作引用必须存在于 actions 表"核对。
    roundtrip 门禁自动跟上：30 原工程 + 2 套件 = **32/32**。
 3. **P2：`suites/comm`**（5 工具，含 serialterm 旗舰）
+   **已交付（2026-10-18，套件门禁 + 自检 + check-format 全绿）**：serialterm(1740)/netterm(995)/
+   darkterm(325)/modbus(522)/framedec(659) → `suites/comm`（tabs 五页、窗口 1000x860、
+   控件 150 / 回调 59，各类错误全 0）。close 与 destroy 各一个分发器（4 个工具都要，
+   里面的杀定时器/撤轮询/关端口是真清理）。
+   **P2 抓到的第四个盲区（比前三个更普遍，修在转换器里）：剥 main() 不能一剥了之** ——
+   通用扫描发现 17 个工具的 main() 里有非 desc 语句，分三类：
+   - 启动日志（`cg_log("...启动，界面文件")`，11 处）：随入口丢，无功能损失；
+   - **工具级初值**（darkterm 的 `s_biz.autoscroll = 1`）：丢了就与 .cgui 的初始勾选态
+     不一致 —— 现在**分类搬进 init**（darkterm 没有 on_ready，由转换器生成 init）；
+   - **命令行语句**：`--demo` 这类**自我识别的旗标**（serialterm/modbus）经
+     `<pre>_parse_cli` 搬走并在套件 main 里转发（`comm.exe --demo` 两个模块同时进演示，
+     真窗口实测 18 行 [demo]；`--selftest` 下原版也是 0 行，套件与原版逐行等价）；
+     argv[1] 开文件类（dataview/encconv/htmlreport）**一个 exe 分不清该给谁**，
+     不搬但**明确报丢弃**（静默丢=假绿）—— 这是套件的已知限制。
+   分块器计入**圆括号**深度（只算大括号会把 `for (i=1;i<argc;i++)` 切成三块，首跑抓到）。
+   一致性核验：用新工具重生成 dev/text **逐字节相同**（工具变更零回归）。
 4. **P3：`suites/sys`**（5 工具）
 5. **P4：六课迁 `lessons/` + 22 个原目录删除 + 教学说明 399 行路径同步 + 门禁收口**
 6. **P5：索引与文档**（`examples/README.md` 自动索引：按套件列工具、点即跑命令）

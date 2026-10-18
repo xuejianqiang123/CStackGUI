@@ -40,6 +40,13 @@ const SUITES = {
     { tool: "htmlreport", prefix: "hr" },
     { tool: "datarec", prefix: "dr" },
   ],
+  comm: [
+    { tool: "serialterm", prefix: "st" },
+    { tool: "netterm", prefix: "nt" },
+    { tool: "darkterm", prefix: "dt" },
+    { tool: "modbus", prefix: "mb" },
+    { tool: "framedec", prefix: "fd" },
+  ],
 };
 
 const args = process.argv.slice(2);

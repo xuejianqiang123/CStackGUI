@@ -35,6 +35,18 @@ const SUITES = {
     { tool: "htmlreport", pre: "hr" },
     { tool: "datarec", pre: "dr" },
   ],
+  /* comm：serialterm / modbus 的 --demo 是**自我识别的旗标**（各模块只比较自己的旗标，
+   * 别人的旗标自然忽略），所以套件 main 可以把 argc/argv 原样转发给每个模块的
+   * <pre>_parse_cli —— `comm.exe --demo` 两个模块同时进演示模式，语义正确。
+   * 反例是 argv[1] 开文件类（dataview/encconv/htmlreport）：一个 exe 分不清该给谁，
+   * 那类语句不搬，由转换器明确报"随入口丢弃"。 */
+  comm: [
+    { tool: "serialterm", pre: "st", cli: true },
+    { tool: "netterm", pre: "nt" },
+    { tool: "darkterm", pre: "dt" },
+    { tool: "modbus", pre: "mb", cli: true },
+    { tool: "framedec", pre: "fd" },
+  ],
 };
 
 const suiteName = process.argv[2];
@@ -52,13 +64,122 @@ function srcOf(tool) {
   throw new Error(`找不到 ${tool}/main.c`);
 }
 
-for (const { tool, pre } of SUITE) {
+/* ---------------------------------------------------------------- main() 体分析
+ * 剥 main() 不能一剥了之（P2 首跑前的通用扫描抓到：17 个工具的 main() 里有非 desc 语句）：
+ *   - darkterm 在 main 里做工具级初值（s_biz.autoscroll = 1）——丢了就与 .cgui 的
+ *     初始勾选态不一致（P0/P1 都没暴露：它们的工具 main 里只有启动日志）；
+ *   - serialterm/modbus 在 main 里解析 --demo 旗标 ——丢了就没了"无硬件自测"入口；
+ *   - dataview/encconv/htmlreport 用 argv[1] 开文件 —— 一个套件 exe 分不清该给谁，
+ *     那类语句**不搬**，但必须**报出来**（静默丢 = 假绿）。
+ * 做法：把 main 体按大括号平衡切成顶层语句块，分类后各归各位。 */
+function mainBodyOf(src) {
+  const mi = src.search(/^int main\s*\(/m);
+  if (mi < 0) return "";
+  const tail = src.slice(mi);
+  const open = tail.indexOf("{");
+  let depth = 0;
+  for (let i = open; i < tail.length; i++) {
+    if (tail[i] === "{") depth++;
+    else if (tail[i] === "}" && --depth === 0) return tail.slice(open + 1, i);
+  }
+  return "";
+}
+
+/** 把 main 体切成顶层语句块（大括号 + **圆括号**都平衡才算顶层；
+ *  for (i = 1; i < argc; i++) 的分号在圆括号里，只算大括号会把 for 头切成三块 ——
+ *  2026-10-18 comm 首跑抓到。字符串/字符字面量里的括号与引号不算。 */
+function topChunks(body) {
+  const out = [];
+  let cur = "";
+  let brace = 0;
+  let paren = 0;
+  let quote = "";
+  let esc = false;
+  for (const c of body) {
+    if (quote) {
+      cur += c;
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === quote) quote = "";
+      continue;
+    }
+    if (c === '"' || c === "'") { quote = c; cur += c; continue; }
+    if (c === "{") brace++;
+    else if (c === "}") brace--;
+    else if (c === "(") paren++;
+    else if (c === ")") paren--;
+    cur += c;
+    if (brace === 0 && paren === 0 && (c === ";" || c === "}")) { out.push(cur); cur = ""; }
+  }
+  if (cur.trim()) out.push(cur);
+  return out.map((s) => s.trim()).filter(Boolean);
+}
+
+/** 语句块分类：入口(丢) / 旗标式CLI(可搬) / 启动日志(丢) / 局部声明(按引用搬) / 状态初值(搬) */
+function classify(c) {
+  if (/--selftest|cg_app_run|cg_app_selftest/.test(c)) return "entry";
+  if (/desc\.|memset\s*\(\s*&desc|cg_app_desc_t/.test(c)) return "entry";
+  if (/argc|argv|getenv/.test(c)) return "cli";
+  if (/^\s*(cg_log|printf|puts)\s*\(/.test(c)) return "log";
+  if (/^(?:const\s+)?(?:unsigned\s+)?(?:struct\s+\w+\s+)?[A-Za-z_][\w\s\*]*[\w\]\[]\s*;$/.test(c)) return "decl";
+  return "state";
+}
+
+/** 取局部声明块里的标识符（`int i;` -> i） */
+function declNameOf(c) {
+  const m = c.match(/^(?:const\s+)?(?:unsigned\s+)?[A-Za-z_][\w\s\*]*?([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*;$/);
+  return m ? m[1] : null;
+}
+
+for (const { tool, pre, cli } of SUITE) {
   let src = fs.readFileSync(srcOf(tool), "utf8");
 
   // 1) 找 on_ready 名字（各工具可能不同）：desc.on_ready = NAME;
   const readyName = (src.match(/desc\.on_ready\s*=\s*(\w+)/) || [])[1];
 
-  // 2) 去掉 int main(...)（从 `int main` 到文件尾；main 是最后一个函数）
+  // 2) main() 体分析（见上方说明）：切块 -> 分类 -> 各归各位
+  const mainBody = mainBodyOf(src);
+  const chunks = topChunks(mainBody).map((c) => ({ text: c, kind: classify(c) }));
+  const stateChunks = chunks.filter((c) => c.kind === "state").map((c) => c.text);
+  const cliChunks = chunks.filter((c) => c.kind === "cli").map((c) => c.text);
+  const droppedCli = chunks.filter((c) => c.kind === "cli").map((c) => c.text);
+  const nLogs = chunks.filter((c) => c.kind === "log").length;
+  /* 局部声明按引用搬：只搬被对应用途（状态初值 / 搬走的 CLI）真正用到的声明，
+   * 状态与 CLI 各算各的（状态块用不到 i 就别把 int i 搬进 init）。 */
+  const declsFor = (txt) =>
+    chunks
+      .filter((c) => c.kind === "decl")
+      .map((c) => ({ text: c.text, name: declNameOf(c.text) }))
+      .filter((d) => d.name && new RegExp(`\\b${d.name}\\b`).test(txt))
+      .map((d) => d.text);
+  const stateDecls = declsFor(stateChunks.join("\n"));
+  const cliDecls = declsFor(cliChunks.join("\n"));
+  /* 状态初值搬进 init；没有 on_ready 的工具（darkterm）由转换器生成一个 init */
+  const statePrelude =
+    stateChunks.length || !readyName
+      ? `    /* 原 main() 里的工具级初值（转换器搬来：丢了会与 .cgui 的初始状态不一致） */\n` +
+        stateDecls.map((d) => `    ${d}\n`).join("") +
+        stateChunks.map((s) => `    ${s}`).join("\n") + "\n"
+      : "";
+  /* 旗标式 CLI：只有 cli:true 的工具才搬（套件 main 把 argv 原样转发，各模块只认自己的旗标） */
+  const cliFn =
+    cli && cliChunks.length
+      ? `/**
+ * @brief 命令行旗标的套件转发入口（套件 main 把 argc/argv 原样转发；不认识的旗标被本模块的比较忽略）
+ * @param argc 命令行参数个数
+ * @param argv 命令行参数数组
+ * @return void 无返回值
+ */
+void ${pre}_parse_cli(int argc, char **argv)
+{
+${cliDecls.map((d) => `    ${d}\n`).join("")}${cliChunks.map((s) => `    ${s}`).join("\n")}
+    (void)argc;
+    (void)argv;
+}
+`
+      : "";
+
+  // 去掉 int main(...)（从 `int main` 到文件尾；main 是最后一个函数）
   const mainIdx = src.search(/^int main\s*\(/m);
   if (mainIdx > 0) src = src.slice(0, mainIdx).replace(/\s+$/, "") + "\n";
 
@@ -73,12 +194,35 @@ for (const { tool, pre } of SUITE) {
     name.startsWith(`${pre}_`) ? m : `CG_BIND("${pre}_${name}"`,
   );
 
-  // 5) on_ready -> <pre>_init（保持签名）
+  // 5) on_ready -> <pre>_init（保持签名）；原 main() 里的工具级初值注入 init 开头
   if (readyName && readyName !== `${pre}_init`) {
     src = src.replace(
       new RegExp(`static\\s+void\\s+${readyName}\\s*\\(`, "g"),
       `void ${pre}_init(`,
     );
+  }
+  if (statePrelude) {
+    if (readyName) {
+      const m = src.match(new RegExp(`void\\s+${pre}_init\\s*\\([^)]*\\)\\s*\\{`));
+      if (m) src = src.replace(m[0], `${m[0]}\n${statePrelude}`);
+      else console.error(`  [warn] ${tool}: 找不到 ${pre}_init 的函数体开头，状态初值未注入`);
+    } else {
+      /* 没有 on_ready 的工具（darkterm）：由转换器生成 init，别让 main() 的初值随入口消失 */
+      src += `
+/**
+ * @brief ${tool} 套件模块初始化（原工程没有 on_ready；初值原在 main() 里，由转换器搬来）
+ * @param app 当前应用
+ * @param user 用户数据（本套件未用，透传自入口）
+ * @return void 无返回值
+ */
+void ${pre}_init(cg_app_t *app, void *user)
+{
+    (void)app;
+    (void)user;
+${statePrelude}
+}
+`;
+    }
   }
 
   /* 5b) 窗口事件改直连转发（P1 首次遇到：notepad 的 actions 之后第二个"多工具撞一个槽"）。
@@ -128,7 +272,7 @@ void ${pre}_app_${ev}(cg_widget_t *self, cg_event_t ev, void *user)
  */
 
 `;
-  src = header + src + wrappers;
+  src = header + src + wrappers + cliFn;
 
   const dir = path.join(root, "examples", "suites", suiteName, "modules");
   fs.mkdirSync(dir, { recursive: true });
@@ -167,12 +311,27 @@ ${appEvents
 void ${pre}_app_${ev}(cg_widget_t *self, cg_event_t ev, void *user);
 `,
   )
-  .join("")}
+  .join("")}${cliFn
+  ? `
+/**
+ * @brief 命令行旗标的套件转发入口（套件 main 转发 argc/argv；不认识的旗标被本模块的比较忽略）
+ * @param argc 命令行参数个数
+ * @param argv 命令行参数数组
+ * @return void 无返回值
+ */
+void ${pre}_parse_cli(int argc, char **argv);
+`
+  : ""}
 #endif
 `;
   fs.writeFileSync(path.join(dir, `${pre}.h`), h, "utf8");
   console.log(
-    `  ${tool} -> modules/${pre}.c  (ready=${readyName || "?"} 窗口事件=${appEvents.map(([e]) => e).join("/") || "-"})`,
+    `  ${tool} -> modules/${pre}.c  (ready=${readyName || "?"} 窗口事件=${appEvents.map(([e]) => e).join("/") || "-"} 初值=${stateChunks.length} CLI=${cliFn ? `${cliChunks.length}块` : "不搬"})`,
   );
+  /* 丢弃要报出来（静默丢 = 假绿）：旗标式 CLI 没被选中搬走的、以及启动日志的条数 */
+  for (const t of droppedCli) {
+    if (!cli) console.log(`      [丢弃] 旗标式 CLI 未搬（未选 cli:true）：${t.split("\n")[0].trim().slice(0, 76)}`);
+  }
+  if (nLogs) console.log(`      [丢弃] 启动日志 ${nLogs} 条随入口丢弃（无功能损失）`);
 }
 console.log("[ok] 模块已生成");
