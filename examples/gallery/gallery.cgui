@@ -241,7 +241,7 @@
             "w": 330,
             "h": 24
           },
-          "text": "就绪：界面由 .cgui 描述，逻辑在 main.c",
+          "text": "就绪：界面由 .cgui 描述，逻辑在 modules\\",
           "style": {
             "font": "Microsoft YaHei UI",
             "size": 9
