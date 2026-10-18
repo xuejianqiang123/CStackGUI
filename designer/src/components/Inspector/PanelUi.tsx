@@ -39,6 +39,7 @@ export function NumField({
   onChange,
   min,
   max,
+  step,
   round = true,
   fallback = 0,
   className = "input narrow",
@@ -49,6 +50,8 @@ export function NumField({
   onChange: (v: number | undefined) => void;
   min?: number;
   max?: number;
+  /** 原生 step（周期/点数这类按百、按十跳的字段要它） */
+  step?: number;
   round?: boolean;
   /** 解析不出数字（或就是 0）时的兜底值。默认 0；**各 section 原来的兜底并不一致**
    *  （StateSection 的 max 是 1），保留这个口子才能逐字保住原行为。 */
@@ -64,6 +67,7 @@ export function NumField({
       value={value ?? 0}
       min={min}
       max={max}
+      step={step}
       disabled={disabled}
       onChange={(e) => {
         let v = Number(e.target.value) || fallback;
