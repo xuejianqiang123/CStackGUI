@@ -1138,9 +1138,14 @@ const SMOKE_PROBE = async () => {
     setter.call(el, String(v));
     el.dispatchEvent(new Event("input", { bubbles: true }));
   };
-  /* textarea 同理，但 value 属性在 HTMLTextAreaElement.prototype 上（另一个坑） */
-  const setText = (el, v) => {
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+  /* React 受控输入的统一助手：必须走**该元素自己的原型**上的原生 setter ——
+   * input 的 value 在 HTMLInputElement.prototype、textarea 在 HTMLTextAreaElement.prototype，
+   * 拿错原型的 setter 会抛 Illegal invocation（2026-10-18 实测踩到）。
+   * 直接 el.value = x 也会被 React 的 value tracker 当成"没变"而吞掉 onChange。 */
+  const setVal = (el, v) => {
+    const proto =
+      el instanceof window.HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
     setter.call(el, String(v));
     el.dispatchEvent(new Event("input", { bubbles: true }));
   };
@@ -1214,7 +1219,7 @@ const SMOKE_PROBE = async () => {
       t("对话框有粘贴框", !!ta);
       if (ta) {
         /* 第 2 行只有一个字段：命中"至少要有两列"那条契约 */
-        setText(ta, ["启动,button", "坏行", "标签,label"].join("\n"));
+        setVal(ta, ["启动,button", "坏行", "标签,label"].join("\n"));
         await sleep(200);
         t("live 预览：将导入 2 个（坏行不计入）", /将导入 2 个控件/.test($(".modal-head")?.textContent ?? ""));
         t("坏行逐行报错（问题清单出现）", !!$(".modal-card .act-note.warn"));
@@ -1231,6 +1236,66 @@ const SMOKE_PROBE = async () => {
           t("一步撤销回到基线（批量导入是一步）", widgetCount() === base);
         }
       }
+    }
+  }
+
+  /* 7. 拖拽移动（画布最核心的编辑交互）：pointerdown 设拖拽状态 -> move 过阈值压一次
+     历史 + 直写 DOM 预览 -> pointerup 把整组坐标一次提交。缩放默认 1，屏幕位移 = 文档位移；
+     +40/+20 都是 4 的倍数，吸附不会改动结果。 */
+  {
+    const w = $(".app-window .widget[data-node-id]");
+    t("画布上有一个控件可拖", !!w);
+    if (w) {
+      const before = { x: parseFloat(w.style.left), y: parseFloat(w.style.top) };
+      const r = w.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      const down = {
+        bubbles: true, cancelable: true, composed: true,
+        clientX: cx, clientY: cy, pointerId: 1, isPrimary: true, button: 0, buttons: 1,
+      };
+      w.dispatchEvent(new PointerEvent("pointerdown", down));
+      await sleep(120); /* 等 React setDrag + effect 把 window 监听挂上 */
+      window.dispatchEvent(new PointerEvent("pointermove", { ...down, clientX: cx + 40, clientY: cy + 20 }));
+      await sleep(120);
+      window.dispatchEvent(new PointerEvent("pointerup", { ...down, clientX: cx + 40, clientY: cy + 20, buttons: 0 }));
+      await sleep(200);
+      const after = { x: parseFloat(w.style.left), y: parseFloat(w.style.top) };
+      t("拖拽后控件位移 +40/+20（pointerup 提交进 doc）", after.x === before.x + 40 && after.y === before.y + 20);
+      /* 关键一步：拖动中间是**直写 DOM 的预览**，松手才提交进 doc。切换一次无关状态
+         （网格开关）强制 React 从 doc 重渲 —— 位置还在，才证明真的提交了，而不是只活
+         在预览里。没有这一步，"松手漏提交"的变异能骗过前两条断言（2026-10-18 补）。 */
+      $$(".toolbar button").find((b) => b.textContent.includes("网格"))?.click();
+      await sleep(150);
+      t("重渲后位置不变（提交进了 doc，不是只活在预览里）", parseFloat(w.style.left) === before.x + 40 && parseFloat(w.style.top) === before.y + 20);
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }));
+      await sleep(200);
+      t(
+        "一步撤销回到拖动前位置（历史压在真正开始拖的那一下）",
+        parseFloat(w.style.left) === before.x && parseFloat(w.style.top) === before.y,
+      );
+    }
+  }
+
+  /* 8. 属性编辑链：Inspector 输入框 -> store.edit -> WidgetView 重渲（+ 一步撤销）。
+     第 5 段把页签切到了「支持库」，先切回「属性」。 */
+  {
+    const w = $(".app-window .widget[data-node-id]");
+    const propsTab = $$(".tab").find((b) => b.textContent.includes("属性"));
+    propsTab?.click();
+    await sleep(200);
+    const textRow = $$(".insp-row").find((r) => r.querySelector(".insp-label")?.textContent.trim() === "文字");
+    const input = textRow?.querySelector("input");
+    t("属性面板有「文字」输入框", !!input);
+    if (w && input) {
+      const oldText = input.value;
+      setVal(input, "冒烟测试钮");
+      await sleep(150);
+      t("改文字立刻反映到画布控件上", w.textContent.includes("冒烟测试钮"));
+      t("画布上不再是旧文字", oldText === "" || !w.textContent.includes(oldText));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }));
+      await sleep(200);
+      t("属性编辑一步撤销：文字回到原值", w.textContent.includes(oldText));
     }
   }
 
