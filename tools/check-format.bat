@@ -34,33 +34,20 @@ if errorlevel 1 (
     exit /b 1
 )
 
-rem gallery 是合并后的陈列室：第 0 页基础控件，第 1 页树/表格/页签/图片……，
-rem 第 2 页定时器/画布/对话框/新控件
-echo   roundtrip gallery
-node tools\format-roundtrip.mjs examples\gallery\gallery.exe examples\gallery\gallery.cgui build\roundtrip_gallery.cgui
-if errorlevel 1 exit /b 1
-
-rem 示例工程也要进这条回归：示例的 .cgui 是用户最可能照抄的东西，新控件/新 API 往往先在示例里用上，
-rem 只守 gallery 会让示例里的字段悄悄丢（2026-09-21 就是靠这条发现"回归只覆盖 gallery"这个缺口）。
-rem 注意这里**故意不写成 for (...) do (...) 块**：带中文的括号块在代码页解析下会漂移（见 README 的 bat 约定）。
-echo   roundtrip serialterm
-node tools\format-roundtrip.mjs examples\serialterm\serialterm.exe examples\serialterm\serialterm.cgui build\roundtrip_serialterm.cgui
-if errorlevel 1 exit /b 1
-
-rem lesson01 是输入框全功能例程：multiline/scroll/maxlen/conv/input/border/spin 这些字段
-rem 用户最先从这个文件抄，所以要进这条回归，别让新字段在示例里悄悄丢。
-echo   roundtrip lesson01
-node tools\format-roundtrip.mjs examples\base\lesson01_basics\lesson01_basics.exe examples\base\lesson01_basics\lesson01_basics.cgui build\roundtrip_lesson01.cgui
-if errorlevel 1 exit /b 1
-
-rem 第六课的 .cgui 带一整套 app.* 窗口配置（center/border/topmost/escClose/tray/events/info），
-rem 拿它当"窗口级字段"的回归样本：字段语义一变，这条往返就会红。
-echo   roundtrip lesson06
-node tools\format-roundtrip.mjs examples\base\lesson06_window\lesson06_window.exe examples\base\lesson06_window\lesson06_window.cgui build\roundtrip_lesson06.cgui
-if errorlevel 1 exit /b 1
-
-echo   roundtrip netterm
-node tools\format-roundtrip.mjs examples\netterm\netterm.exe examples\netterm\netterm.cgui build\roundtrip_netterm.cgui
+rem 全部示例的格式契约回归（2026-10-18 从 5 个样本扩到全部）：examples/ 是"用户最可能
+rem 照抄的东西"，而此前只有 gallery / serialterm / lesson01 / lesson06 / netterm 进门禁 ——
+rem 另外二十几个工程的 .cgui 字段理解漂移，没有任何门禁知道。原 5 个样本的入选理由仍然
+rem 有效（gallery=合并后的陈列室 / serialterm=串口字段 / lesson01=输入框全功能字段 /
+rem lesson06=app.* 窗口级字段 / netterm=网口字段），只是不再值得逐个手写。
+rem 现在一个脚本全覆盖：每个样本走完整的 画布读 -> 模拟用户改动 -> 写出 -> C 侧 --selftest
+rem -> 恒等回写核对；4 路并发（各写各的 build\roundtrip_<名>.cgui；--selftest 只写 stdout
+rem 与按 exe 名分的日志文件，互不冲突）。样本收集在 node 里做 —— 不写成 for 块：带中文的
+rem 括号块在代码页解析下会漂移（见 README 的 bat 约定）。
+rem 缺 exe 的样本明确失败（先跑 build-all.bat），不静默跳过：没有 C 侧那一半验证的绿灯
+rem 比没有门禁更糟。首跑就抓到两个探针假故障（无宿主 action / 给动作按钮盲加 click），
+rem 均已修并在 format-roundtrip.mjs 里注明缘由。
+echo   roundtrip: all examples (parse/mutate/serialize/C selftest)
+node tools\check-roundtrip-all.mjs
 if errorlevel 1 exit /b 1
 
 rem 画布「支持库」页签是手写的 C API 索引，没人校验就会和 cstackgui.h 跑偏。

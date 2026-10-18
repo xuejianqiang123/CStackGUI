@@ -59,7 +59,13 @@ walk(doc.widgets, (n) => {
 
 let touched = 0;
 walk(doc.widgets, (n) => {
-  if (n.type === "button" && !n.events?.click && knownCallback) {
+  /* 给没有 click 的按钮补一个已登记的回调。**跳过已引用动作的按钮** ——
+   * 动作会接管 click，两者同时存在运行时判为错配置（cg_action.c 的"既引用动作
+   * 又绑了 click"），而画布自己也禁止这么填（EventPanel 里 click 被动作接管时
+   * 是禁用的）。探针盲加 click 会造出一个用户根本填不出来的状态，那是测试自己
+   * 造的假故障（2026-10-18 全部示例 roundtrip 首跑抓到：shottool 三个动作按钮
+   * 被加 click，自检 exit 5）。 */
+  if (n.type === "button" && !n.events?.click && !n.action && knownCallback) {
     n.events = { ...(n.events ?? {}), click: knownCallback };
     touched += 1;
   }
@@ -187,6 +193,13 @@ if (knownCallback) {
       host.events = ev;
     }
     touched += 1;
+  } else if (!actionProbeHostId) {
+    /* 文档里没有空闲按钮（纯输入框类界面，如 lesson02_inputs）：控件上的 action
+     * 引用无处可挂。与样式 / 角色探针同一口径 —— 明确跳过并说明，别让下面的恒等
+     * 核对把"没挂过"当成"挂了又丢了"报假故障（2026-10-18 全部示例 roundtrip
+     * 首跑抓到：空宿主产出「丢了控件的 action 引用： -> cgui_roundtrip_action」）。
+     * doc.actions 表本身仍会写、仍会核对，覆盖并没丢。 */
+    console.log("[note] 没有空闲按钮可挂 action 引用，跳过该探针（doc.actions 表本身仍校验）");
   }
 } else {
   console.log("[note] 输入文件里没有任何已绑定的回调名，跳过 action 往返探针");
@@ -292,10 +305,14 @@ console.log(`[ok] 画布改动 ${touched} 处，写出 ${output}（${written.len
           }
         }
       }
-      const hostBack = actionProbeHostId && back.doc ? findNode(back.doc, actionProbeHostId) : null;
-      if (!hostBack || hostBack.action !== probeAction) {
-        console.error(`[fail] 恒等回写丢了控件的 action 引用：${actionProbeHostId} -> ${probeAction}`);
-        lost += 1;
+      /* 控件上的 action 引用：只在真挂过的情况下核对（没宿主 = 上面明确跳过过，
+       * 那不是"丢了"—— 见挂探针处的 note）。 */
+      if (actionProbeHostId) {
+        const hostBack = back.doc ? findNode(back.doc, actionProbeHostId) : null;
+        if (!hostBack || hostBack.action !== probeAction) {
+          console.error(`[fail] 恒等回写丢了控件的 action 引用：${actionProbeHostId} -> ${probeAction}`);
+          lost += 1;
+        }
       }
       console.log(`[ok] 恒等回写：action "${probeAction}" 与引用点无损`);
     }
