@@ -534,8 +534,10 @@ void cg_log_open(const char *path);
  */
 void cg_log_close(void);
 /**
- * @brief 取当前日志文件路径
- * @return const char* 内部缓冲，别 free；没打开返回 NULL（弹窗里用它告诉用户日志在哪）
+ * @brief 取日志文件路径（当前打开的，或最近一次打开过的）
+ * @return const char* 内部缓冲，别 free；从未打开、或以 NULL/空串开档（只写 stderr）时返回 NULL
+ * @note **关档后仍返回上一个路径是刻意的**：致命错误对话框与 SEH 崩溃处理器靠它在
+ *       "关档之后才崩"的时刻仍能指出日志在哪 —— 那时用户比任何时候都需要这个路径。
  */
 const char *cg_log_file(void);
 

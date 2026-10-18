@@ -9,6 +9,7 @@
 #include "cg_internal.h"
 
 #include <stdarg.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -16,6 +17,37 @@
 static FILE *s_log = NULL;
 static char  s_path[1400] = { 0 };
 static int   s_level = CG_LOG_INFO;
+/** 本次开档以来写进文件的字节数（运行中轮转的判据；开档时用现有文件大小播种） */
+static long  s_bytes = 0;
+
+/** 写路径自旋锁：轮转要 fclose + 重开 s_log，而 kit 的读线程（串口/网口退避 WARN、
+ *  丢弃上报）也在调 cg_log —— 不锁就是"别的线程拿着已 fclose 的 FILE* 去 fprintf"
+ *  的 use-after-free（2026-10-18 补运行中轮转时识别的竞态）。
+ *  用 C11 atomic 而不是 CRITICAL_SECTION：core 不许碰 Win32（分层契约第一条），
+ *  stdatomic 是平台中立的标准 C。争用几乎不存在（5MB 才转一次，16B/s 的典型速率
+ *  下约 9 天过一次），自旋代价可忽略；轮转期间持锁跨磁盘 I/O 是本设计唯一的代价，
+ *  换的是"不丢证据、不 UAF"。 */
+static atomic_flag s_log_lock = ATOMIC_FLAG_INIT;
+
+/**
+ * @brief 拿写路径锁（自旋等）
+ * @return void 无返回值
+ */
+static void log_lock(void)
+{
+    while (atomic_flag_test_and_set_explicit(&s_log_lock, memory_order_acquire)) {
+        /* 自旋：临界区极短（一次 fprintf + fflush），只有轮转才长，而轮转 5MB 一次 */
+    }
+}
+
+/**
+ * @brief 放写路径锁
+ * @return void 无返回值
+ */
+static void log_unlock(void)
+{
+    atomic_flag_clear_explicit(&s_log_lock, memory_order_release);
+}
 
 /**
  * @brief 等级标签（对齐日志里的列宽，方便 grep）
@@ -91,23 +123,60 @@ static void log_rotate_if_big(const char *path)
 }
 
 /**
- * @brief 打开日志文件（追加）
- * @param path 日志文件路径（UTF-8）；传 NULL 或空串表示只写 stderr
- * @return void 无返回值（打不开就退化成只有 stderr，不打扰用户）
+ * @brief 运行中轮转：关当前档，走开档时那套轮转（拷 .old + 截断），再重开追加
+ * @return void 无返回值
+ * @note **调用方必须已持有 s_log_lock**（它换 s_log 本身）。重开失败就退化成只写
+ *       stderr（与 cg_log_open 打不开时同一口径），且字节计数归零 —— 磁盘满时轮转
+ *       本来就转不动，再等累满一个阈值才重试，比每次写都重试省。
  */
-void cg_log_open(const char *path)
+static void log_rotate_runtime(void)
 {
     if (s_log) {
         fclose(s_log);
         s_log = NULL;
     }
+    log_rotate_if_big(s_path);
+    s_log = fopen(s_path, "a");
+    s_bytes = 0;
+}
+
+/**
+ * @brief 打开日志文件（追加）
+ * @param path 日志文件路径（UTF-8）；传 NULL 或空串表示只写 stderr
+ * @return void 无返回值（打不开就退化成只有 stderr，不打扰用户）
+ * @note 开档前若旧文件超过 LOG_ROTATE_MAX 会先轮转（见 log_rotate_if_big）；
+ *       之后运行中的大小由 cg_log 的写路径盯着（见 log_rotate_runtime）。
+ */
+void cg_log_open(const char *path)
+{
+    log_lock();
+    if (s_log) {
+        fclose(s_log);
+        s_log = NULL;
+    }
     s_path[0] = '\0';
-    if (!path || !*path) return;
+    s_bytes = 0;
+    if (!path || !*path) {
+        log_unlock();
+        return;
+    }
 
     log_rotate_if_big(path);
     s_log = fopen(path, "a");
-    if (!s_log) return;                 /* 打不开就退化成只有 stderr，不打扰用户 */
+    if (!s_log) {                    /* 打不开就退化成只有 stderr，不打扰用户 */
+        log_unlock();
+        return;
+    }
     snprintf(s_path, sizeof(s_path), "%s", path);
+    /* 用现有文件大小播种：开档轮转失败（磁盘满）时文件可能仍超限，播种让紧接着的
+     * 第一次写就重试轮转，而不是再白写满一个阈值。追加流 fseek 不影响写位置
+     * （O_APPEND 语义由系统保证），这里只为量出文件尾。 */
+    if (fseek(s_log, 0, SEEK_END) == 0) {
+        long pos = ftell(s_log);
+
+        if (pos > 0) s_bytes = pos;
+    }
+    log_unlock();
 }
 
 /**
@@ -117,15 +186,19 @@ void cg_log_open(const char *path)
  */
 void cg_log_close(void)
 {
+    log_lock();
     if (s_log) {
         fclose(s_log);
         s_log = NULL;
     }
+    log_unlock();
 }
 
 /**
- * @brief 取当前日志文件路径
- * @return const char * 内部缓冲，别 free；没打开返回 NULL
+ * @brief 取日志文件路径（当前打开的，或最近一次打开过的）
+ * @return const char * 内部缓冲，别 free；从未打开、或以 NULL/空串开档（只写 stderr）时返回 NULL
+ * @note **关档后仍返回上一个路径是刻意的**（契约见 cg_internal.h）：致命错误对话框与
+ *       SEH 崩溃处理器靠它在"关档之后才崩"的时刻仍能指出日志在哪。
  */
 const char *cg_log_file(void)
 {
@@ -147,6 +220,9 @@ void cg_log_set_level(int level)
  * @param level 日志等级，低于当前过滤等级的条目直接丢弃
  * @param fmt printf 风格格式串
  * @return void 无返回值（没打开日志文件时只写 stderr）
+ * @note 整条写在 s_log_lock 保护下：轮转（log_rotate_runtime）会换 s_log，
+ *       而 kit 的读线程也在调本函数 —— 锁是"别的线程不拿已关闭的 FILE* 写字"的保证。
+ *       stderr 那份不进锁（CRT 自己锁它，且它不参与轮转）。
  */
 void cg_log(int level, const char *fmt, ...)
 {
@@ -162,13 +238,22 @@ void cg_log(int level, const char *fmt, ...)
     /* 开发时（有控制台）走这里看得最顺；GUI 版这些字进不了任何地方 */
     fprintf(stderr, "[cstackgui] %s\n", msg);
 
-    if (!s_log) return;
-    {
+    log_lock();
+    if (s_log) {
         time_t    t = time(NULL);
         struct tm *tmv = localtime(&t);
         char      ts[32] = "";
+        int       n;
+
         if (tmv) strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", tmv);
-        fprintf(s_log, "%s [%s] %s\n", ts[0] ? ts : "-", level_tag(level), msg);
+        n = fprintf(s_log, "%s [%s] %s\n", ts[0] ? ts : "-", level_tag(level), msg);
+        if (n > 0) s_bytes += n;
         fflush(s_log);      /* 崩溃/被杀时不至于丢最后几行 */
+
+        /* 运行中轮转（2026-10-18 补，二轮会诊挂账项）：开档时那一轮转管不到
+         * "一个进程跑几周"的无人值守场景，单个文件会无界增长。判据用自己累加的
+         * 字节数（精确，且不用每次 ftell）；过线就在持锁状态下换档。 */
+        if (s_bytes >= LOG_ROTATE_MAX) log_rotate_runtime();
     }
+    log_unlock();
 }
