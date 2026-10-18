@@ -28,7 +28,7 @@
       "text": "", "hint": "按名称或命令过滤；回车启动第一个匹配",
       "events": { "change": "on_edt_search_change", "submit": "on_edt_search_submit" } },
     { "id": "lab_find_hint", "type": "label", "rect": { "x": 396, "y": 16, "w": 452, "h": 24 },
-      "text": "加工具：本文件加按钮 + main.c 的 k_tools 加一行；我的工具改 mytools.ini 即可", "style": "note" },
+      "text": "加工具：本文件加按钮 + modules\\tb_tools.c 的 k_tools 加一行；我的工具改 mytools.ini 即可", "style": "note" },
 
     {
       "id": "tab_main", "type": "tabs", "rect": { "x": 12, "y": 50, "w": 836, "h": 546 },
