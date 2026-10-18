@@ -8,6 +8,7 @@
  *   node tools\check-examples.mjs                扫类型表 + 扫 examples/**\*.cgui，缺落点就报错（退出码 1）
  *   node tools\check-examples.mjs --table        打印 Markdown 类型映射表（生成文档索引表用，别手抄）
  *   node tools\check-examples.mjs --lesson-table 打印"教学示例事实表"（课/目录/主题/规模/控件清单，自动生成）
+ *   node tools\check-examples.mjs --ex-index    打印 examples\README.md 的自动索引（六课 / 四套件 / 独立工程）
  *   node tools\check-examples.mjs --docs         回校文档里的"课数 / 示例范围 / 篇数"声明与那张事实表
  *   node tools\check-examples.mjs --lessons      只认教学示例目录（lessonNN_*）：这是"控件分类课"的验收标准
  *   node tools\check-examples.mjs --gallery      只认 gallery（"一页看全"那句话得是真的）
@@ -30,6 +31,7 @@ const EX_DIR = path.join(root, "examples");
 const args = process.argv.slice(2);
 const wantTable = args.includes("--table");
 const wantLessonTable = args.includes("--lesson-table");
+const wantExIndex = args.includes("--ex-index");
 const wantDocs = args.includes("--docs");
 const onlyGallery = args.includes("--gallery");
 const onlyLessons = args.includes("--lessons");
@@ -209,6 +211,72 @@ function lessonsScaleBlock() {
   return out.join("\n");
 }
 
+/* ================= examples\README.md 的自动索引（2026-10-18 示例合并 P4 之后） =================
+ * 合并后 examples/ 从 30 个平铺工程变成「六课 + 四套件 + 三个独立工程」，新布局的门面
+ * 就是这张索引。它与事实表同一套哲学：**由目录生成，文档只允许贴生成结果，--docs 回校** ——
+ * 手写索引必然在下一次合并/加工具时过期（"目录改了索引没改"就是又一个漂移的事实）。
+ * 页签名直接取自套件 .cgui 的 tabs.items（合并器写进去的就是工具名），不另立一份名单。 */
+function exIndexBlock() {
+  const out = [];
+  out.push("<!-- ex-index:begin（由 node tools\\check-examples.mjs --ex-index 生成，别手改）-->");
+  out.push("");
+  out.push("## 教学六课（`examples\\lessons\\`）");
+  out.push("");
+  out.push("**顺序即内容**（前一课的概念是后一课的地基），每课都是能单独编译运行的小工程：");
+  out.push("");
+  out.push("| 课 | 目录 | 主题 |");
+  out.push("| --- | --- | --- |");
+  for (const r of lessonFacts()) {
+    out.push(`| 入门 ${r.no} | \`${r.rel}\` | ${r.theme} |`);
+  }
+  out.push("");
+  out.push("## 合并套件（`examples\\suites\\`）");
+  out.push("");
+  out.push("21 个工具并成 4 个**多页签工程**：main 只做入口（拼绑定表 / 窗口事件分发器），");
+  out.push("每个工具的完整逻辑在自己的模块里（照抄价值零损失）。编译一个套件 = 编出全部页签。");
+  out.push("");
+  out.push("| 套件 | 页签（工具） | 编译 | 运行 / 自检 | 逐工具文档 |");
+  out.push("| --- | --- | --- | --- | --- |");
+  const suitesDir = path.join(EX_DIR, "suites");
+  if (fs.existsSync(suitesDir)) {
+    for (const e of fs.readdirSync(suitesDir, { withFileTypes: true })) {
+      if (!e.isDirectory()) continue;
+      const cgui = path.join(suitesDir, e.name, `${e.name}.cgui`);
+      let doc = {};
+      try { doc = JSON.parse(fs.readFileSync(cgui, "utf8")); } catch { doc = {}; }
+      const tabs = (doc.widgets ?? []).find((w) => w.type === "tabs");
+      const pages = (tabs?.items ?? []).join(" / ") || "-";
+      const docsDir = path.join(suitesDir, e.name, "docs");
+      const nDocs = fs.existsSync(docsDir) ? fs.readdirSync(docsDir).filter((f) => f.endsWith(".md")).length : 0;
+      out.push(
+        `| \`${e.name}\` | ${pages} | \`build-app.bat suites\\${e.name}\` | ` +
+          `\`examples\\suites\\${e.name}\\${e.name}.exe\` | \`suites\\${e.name}\\docs\\*.md\`（${nDocs} 份） |`,
+      );
+    }
+  }
+  out.push("");
+  out.push("## 独立工程（一个工程就是它自己，不并套件）");
+  out.push("");
+  out.push("| 工程 | 目录 | 演示 |");
+  out.push("| --- | --- | --- |");
+  for (const e of fs.readdirSync(EX_DIR, { withFileTypes: true })) {
+    if (!e.isDirectory() || ["lessons", "suites"].includes(e.name)) continue;
+    const cgui = path.join(EX_DIR, e.name, `${e.name}.cgui`);
+    if (!fs.existsSync(cgui)) continue;
+    let doc = {};
+    try { doc = JSON.parse(fs.readFileSync(cgui, "utf8")); } catch { doc = {}; }
+    const title = (doc.app && doc.app.title) || e.name;
+    out.push(`| \`${e.name}\` | \`examples\\${e.name}\` | ${title} |`);
+  }
+  out.push("<!-- ex-index:end -->");
+  return out.join("\n");
+}
+
+if (wantExIndex) {
+  console.log(exIndexBlock());
+  process.exit(0);
+}
+
 if (wantLessonTable) {
   console.log(lessonsScaleBlock());
   process.exit(0);
@@ -234,6 +302,24 @@ if (wantDocs) {
       claims += 1;
       if (m[0].replace(/\r\n/g, "\n") !== lessonsScaleBlock().replace(/\r\n/g, "\n")) {
         problems.push("examples/教学使用说明.md — 事实表与生成结果不一致（跑 --lesson-table 重贴；若规模列是 ? 先 build-all）");
+      }
+    }
+  }
+
+  // ①.5 examples/README.md 的索引块必须与生成结果逐字一致（合并后新布局的门面，
+  //      页签名 / 文档份数 / 编译命令都由目录生成 —— 手改或过期就红）。
+  {
+    const idxDoc = path.join(EX_DIR, "README.md");
+    if (fs.existsSync(idxDoc)) {
+      const txt = fs.readFileSync(idxDoc, "utf8");
+      const m = txt.match(/<!-- ex-index:begin[\s\S]*?<!-- ex-index:end -->/);
+      if (!m) {
+        problems.push("examples/README.md — 找不到索引标记块（ex-index:begin … end；跑 --ex-index 生成）");
+      } else {
+        claims += 1;
+        if (m[0].replace(/\r\n/g, "\n") !== exIndexBlock().replace(/\r\n/g, "\n")) {
+          problems.push("examples/README.md — 索引与现状不一致（跑 --ex-index 重贴）");
+        }
       }
     }
   }
