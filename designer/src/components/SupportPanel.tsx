@@ -53,11 +53,16 @@ export default function SupportPanel({ onSay, doc, focusKeywords, onFindWidgets 
   /* 反查：当前选中的支持库函数被哪些控件用着（切函数时重算，用 useMemo 而非 effect） */
   const focus = useMemo<FocusHit[]>(() => (doc && selected ? callbacksNamed(doc, selected.fn) : []), [doc, selected]);
 
-  /* 选中控件变了 -> 预置相关搜索词。**不覆盖用户手动输入**（focusKeywords 是"切页签那一下"
-     给的默认视角，用户清空/改写后就该听他的）。空数组（label/box 这类没词可查）不动搜索框。 */
+  /* 选中控件变了 -> 预置相关搜索词。**按关键词内容判等，不按数组 identity**：
+     App 侧的 focusKeywords 是 useMemo(..., [selected]) 的产物，而 doc 任何一次编辑
+     （改属性）都会换新的节点对象 -> 新数组 identity —— 按 identity 判等会把用户手输的
+     搜索词打回默认词（2026-10-18 修：选个表格、搜"串口"、回去改个属性，搜索框被重置）。
+     内容不变（改属性 / 重复选同一个控件）绝不碰用户改过的搜索框；换了控件类型才预置。
+     空数组（label/box 这类没词可查）不动搜索框。 */
+  const focusKey = (focusKeywords ?? []).join(" ");
   useEffect(() => {
-    if (focusKeywords && focusKeywords.length > 0) setKw(focusKeywords.join(" "));
-  }, [focusKeywords]);
+    if (focusKey) setKw(focusKey);
+  }, [focusKey]);
 
   const total = useMemo(() => countCommands(), []);
   const libs = useMemo(() => filterSupportLibs(SUPPORT_LIBS, kw), [kw]);

@@ -45,8 +45,11 @@ try {
 
 const m = await import(`file://${path.join(outDir, "model.js").replace(/\\/g, "/")}`);
 const {
+  CG_EVENTS,
   HISTORY_LIMIT,
+  WINDOW_EVENTS,
   applyCmd,
+  callbacksNamed,
   emptyDoc,
   makeDuplicateCmd,
   makeId,
@@ -58,6 +61,7 @@ const {
   serializeDoc,
   simApply,
   simulateResize,
+  supportKeywordsFor,
   templateDoc,
 } = m;
 
@@ -302,10 +306,72 @@ const ok = (what, cond) => {
   ok("导入：无合法行构造返回 null", makeImportCmd(doc0, []) === null);
 }
 
+/* ------------------------------------------------------------ 支持库双向连接（supportfocus） */
+{
+  /* 正向：控件类型 -> 关键词。**优先序钉死**：数值框（edit+spin）必须先命中 isNumEdit
+     分支，否则会掉进普通 edit 的"输入框/文本"—— 那是给纯文本输入框的词。 */
+  ok("supportfocus：无选中返回空（页签不预置搜索词）", supportKeywordsFor(null).length === 0);
+
+  const doc = templateDoc("blank");
+  const add = (type, mutate) => {
+    const cmd = makeInsertCmd(doc, type, 0, 0);
+    applyCmd(doc, cmd);
+    const n = doc.widgets[doc.widgets.length - 1]; /* applyCmd 深拷贝入树，取树里那份 */
+    if (mutate) mutate(n);
+    return n;
+  };
+  const btn = add("button");
+  const tbl = add("table");
+  const lbl = add("label");
+  const num = add("edit", (n) => { n.spin = 1; });
+  const plain = add("edit");
+
+  ok(
+    "supportfocus：button 给「按钮/启用/禁用」",
+    supportKeywordsFor(btn).join(",") === "按钮,启用,禁用",
+  );
+  ok(
+    "supportfocus：table 给表格三词",
+    supportKeywordsFor(tbl).join(",") === "表格,行,列",
+  );
+  ok("supportfocus：label 无可查词（空数组，页签不动搜索框）", supportKeywordsFor(lbl).length === 0);
+  ok(
+    "supportfocus：数值框优先命中 isNumEdit 分支（不是普通 edit 词）",
+    supportKeywordsFor(num).join(",") === "数值,取值,设值",
+  );
+  ok("supportfocus：普通 edit 给输入框词", supportKeywordsFor(plain).join(",") === "输入框,文本");
+
+  /* 反向：函数名 -> 用到它的控件/事件（含主窗口伪控件） */
+  const evA = CG_EVENTS[0];
+  const evB = CG_EVENTS[1];
+  btn.events = { [evA]: "on_go" };
+  tbl.events = { [evB]: "on_go" };
+  plain.events = { [evA]: "on_other" };
+  doc.app.events = { [WINDOW_EVENTS[0]]: "on_win" };
+
+  const hits = callbacksNamed(doc, "on_go");
+  ok(
+    "supportfocus：反查按函数名收拢多个控件",
+    hits.length === 2 && hits.every((h) => h.name === "on_go"),
+  );
+  ok(
+    "supportfocus：反查带上控件 id 与事件名（可定位画布）",
+    hits.some((h) => h.widgetId === btn.id && h.event === evA) &&
+      hits.some((h) => h.widgetId === tbl.id && h.event === evB),
+  );
+  const win = callbacksNamed(doc, "on_win");
+  ok(
+    "supportfocus：主窗口伪控件反查（__window）",
+    win.length === 1 && win[0].widgetId === "__window" && win[0].widgetType === "window",
+  );
+  ok("supportfocus：没绑的函数返回空", callbacksNamed(doc, "on_nope").length === 0);
+  ok("supportfocus：空函数名返回空（不炸）", callbacksNamed(doc, "").length === 0);
+}
+
 if (process.exitCode) {
-  console.error("[fail] 画布文档层契约被破坏（store/ops/layoutsim/tableimport）");
+  console.error("[fail] 画布文档层契约被破坏（store/ops/layoutsim/tableimport/supportfocus）");
 } else {
   console.log(
-    `[ok] 画布文档层契约成立：${checks} 项（命令 JSON 往返重放 / 幂等 / id 唯一 / 撤销栈语义 / grow 预演镜像 / 点表导入）`,
+    `[ok] 画布文档层契约成立：${checks} 项（命令 JSON 往返重放 / 幂等 / id 唯一 / 撤销栈语义 / grow 预演镜像 / 点表导入 / 支持库双向连接）`,
   );
 }
