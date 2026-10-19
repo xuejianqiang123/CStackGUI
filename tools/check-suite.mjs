@@ -129,12 +129,21 @@ for (const { name: s, dir } of suites) {
     if (seen.has(id)) fail(`${s}: 控件 id "${id}" 在套件内重复（合并后会互相覆盖）`);
     seen.add(id);
   }
-  // ⑥ id 前缀与模块对得上（模块文件名 = 前缀，如 modules/ht.c -> id 以 ht_ 开头；
-  //    套件骨架 sv_ 豁免）。统计行先打，fail 明细后打（先看总账再看哪条破了）。
+  // ⑥ id 前缀与模块对得上（模块前缀 = 文件名首个下划线前的段，如 modules/ht.c -> ht、
+  //    modules/st_main.c -> st；套件骨架 sv_ 豁免）。
+  //    取首段而非全名，是为了支持"一个工具拆成多个子模块 + 共享内部头"（st.c -> st_main.c
+  //    + st_framer.c，照搬运行时 cg_win_*.c + cg_win_internal.h 的模式）：子模块文件名共享
+  //    同一工具前缀 st，id 前缀仍唯一归属该工具 —— "每个 id 归属某个工具"的保证不变。
+  //    统计行先打，fail 明细后打（先看总账再看哪条破了）。
   console.log(
     `[ok]   ${s}: 控件 ${ids.length}、回调 ${used.size}、绑定 ${registered.size}、模块 ${modFiles.length}`,
   );
-  const prefixes = new Set(modFiles.map((f) => path.basename(f, ".c")));
+  const prefixes = new Set(
+    modFiles.map((f) => {
+      const base = path.basename(f, ".c");
+      return base.includes("_") ? base.slice(0, base.indexOf("_")) : base;
+    }),
+  );
   for (const id of [...ids, ...menuIds]) {
     const pre = id.includes("_") ? id.slice(0, id.indexOf("_")) : "";
     if (pre && pre !== SKELETON_PREFIX && !prefixes.has(pre)) {

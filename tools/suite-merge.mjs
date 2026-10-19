@@ -28,7 +28,10 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/** 套件定义：名字 → [ { tool, prefix } ]。tool 是原工程名，prefix 是两位缩写。 */
+/** 套件定义：名字 → [ { tool, prefix } ]。tool 是原工程名，prefix 是两位缩写。
+ *  2026-10-19 studio 合并：comm / dev / text 三套件**再合并**成 examples\suites\studio\（16 工具一页签一个）。
+ *  本表保留它们的定义只是历史记录（合并器对原独立工程已无输入可跑）；sys 套件有意未并入 studio ——
+ *  shottool/traytool 的 close 是"关窗=进托盘"，与 comm/dev/text 的"真关窗+清理"语义冲突。 */
 const SUITES = {
   dev: [
     { tool: "palette", prefix: "pl" },

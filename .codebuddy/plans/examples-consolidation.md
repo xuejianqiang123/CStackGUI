@@ -35,18 +35,18 @@ examples/
 
 | 套件 | 合入的工具（原目录 → 原行数） | 合计行数 |
 | --- | --- | --- |
-| `suites/comm` 通信 | serialterm(1740) netterm(995) darkterm(325) modbus(522) framedec(659) | 4241 |
-| `suites/text` 文本数据 | notepad(425) logfilter(710) filecheck(720) dataview(1106) htmlreport(775) datarec(431) | 4167 |
+| `suites/studio` 通信 | serialterm(1740) netterm(995) darkterm(325) modbus(522) framedec(659) | 4241 |
+| `suites/studio` 文本数据 | notepad(425) logfilter(710) filecheck(720) dataview(1106) htmlreport(775) datarec(431) | 4167 |
 | `suites/sys` 系统实用 | shottool(1265) traytool(367) syspanel(512) envsnap(1430) settings(481) | 4055 |
-| `suites/dev` 开发工具 | hextool(576) encconv(1039) calculator(1203) drawpad(511) palette(281) | 3610 |
+| `suites/studio` 开发工具 | hextool(576) encconv(1039) calculator(1203) drawpad(511) palette(281) | 3610 |
 
 （`base/` 里的 darkterm/datarec/dataview/drawpad/encconv/envsnap 六个工具随之迁出，归入上表。）
 
 ## 四、套件的模块化结构
 
 ```
-suites/dev/
-  dev.cgui               全部界面：一个 tabs，每页 = 原某工具的界面
+suites/studio/
+  studio.cgui               全部界面：一个 tabs，每页 = 原某工具的界面
   main.c                 仅入口：建窗口、页签调度、公共底栏、日志、主题
   modules/
     palette.c  palette.h         原 palette 的界面逻辑与其 k_bindings
@@ -97,12 +97,12 @@ id 前缀唯一、`.cgui` 的每个事件名在对应模块的 `*_bindings[]` �
 
 ## 七、分批实施（每批门禁绿才提交）
 
-1. **P0 试点：`suites/dev`**（hextool encconv calculator drawpad palette，3610 行）
+1. **P0 试点：`suites/studio`**（hextool encconv calculator drawpad palette，3610 行）
    —— 打通完整模式：.cgui 合并 + 模块拆分 + id/事件前缀 + main 入口 + 门禁重建。
    **已交付（2026-10-18，全量门禁绿）**：
    - `tools/suite-merge.mjs`：.cgui 合并的单一真相（读 N 份 → id/事件/样式/角色/动作全量
      加前缀 → 拼成一个 tabs）。dry-run 先报再写。
-   - `examples/suites/dev/`：`dev.cgui`（tabs 五页 47 顶层控件）+ `main.c`（仅入口：拼绑定表
+   - `examples/suites/studio/`：`studio.cgui`（tabs 五页 47 顶层控件）+ `main.c`（仅入口：拼绑定表
      + 逐模块 init）+ `modules/{pl,dp,ht,ec,cl}.{c,h}`（5 个原工程完整逻辑）。
    - `tools/check-suite.mjs`（挂进 check-format）：事件双向一致 / 死绑定 / id 撞名 /
      前缀对得上模块；`sv_` 骨架前缀豁免。
@@ -114,9 +114,9 @@ id 前缀唯一、`.cgui` 的每个事件名在对应模块的 `*_bindings[]` �
      ② 运行时要**单个连续绑定表**，main 用 `append_bindings` 运行时拼装（各模块表以
         CG_BIND_END 结尾，遍历复制）。
    - 自检闭环：122 控件 / 68 次回调触发 / 未登记·不支持·绑定出错·动作出错·样式失效全 0。
-2. **P1：`suites/text`**（6 工具，同模式）
+2. **P1：`suites/studio`**（6 工具，同模式）
    **已交付（2026-10-18，套件门禁 + 双自检 + check-format 全绿）**：notepad(3)/logfilter(4)/
-   filecheck(4)/dataview(16)/htmlreport(7)/datarec(8) → `suites/text`（tabs 六页、窗口 1080x740）。
+   filecheck(4)/dataview(16)/htmlreport(7)/datarec(8) → `suites/studio`（tabs 六页、窗口 1080x740）。
    **P1 首跑抓到 P0 没暴露的三个合并盲区（都已修进转换器/门禁，并回改 dev 统一口径）**：
    - **`actions[].handler` 是回调名**：合并器只改了动作表的键、没改 handler（dev 5 个工具
      0 个 action 所以没暴露）。不修就是"动作出错"（自检 exit 4）。门禁同步把 action.handler
@@ -131,9 +131,9 @@ id 前缀唯一、`.cgui` 的每个事件名在对应模块的 `*_bindings[]` �
      菜单项引用的动作键没改名，运行时报"菜单引用了不存在的动作"（4 项）。rename 现在也
      递归 nodes；门禁加"动作引用必须存在于 actions 表"核对。
    roundtrip 门禁自动跟上：30 原工程 + 2 套件 = **32/32**。
-3. **P2：`suites/comm`**（5 工具，含 serialterm 旗舰）
+3. **P2：`suites/studio`**（5 工具，含 serialterm 旗舰）
    **已交付（2026-10-18，套件门禁 + 自检 + check-format 全绿）**：serialterm(1740)/netterm(995)/
-   darkterm(325)/modbus(522)/framedec(659) → `suites/comm`（tabs 五页、窗口 1000x860、
+   darkterm(325)/modbus(522)/framedec(659) → `suites/studio`（tabs 五页、窗口 1000x860、
    控件 150 / 回调 59，各类错误全 0）。close 与 destroy 各一个分发器（4 个工具都要，
    里面的杀定时器/撤轮询/关端口是真清理）。
    **P2 抓到的第四个盲区（比前三个更普遍，修在转换器里）：剥 main() 不能一剥了之** ——
@@ -142,7 +142,7 @@ id 前缀唯一、`.cgui` 的每个事件名在对应模块的 `*_bindings[]` �
    - **工具级初值**（darkterm 的 `s_biz.autoscroll = 1`）：丢了就与 .cgui 的初始勾选态
      不一致 —— 现在**分类搬进 init**（darkterm 没有 on_ready，由转换器生成 init）；
    - **命令行语句**：`--demo` 这类**自我识别的旗标**（serialterm/modbus）经
-     `<pre>_parse_cli` 搬走并在套件 main 里转发（`comm.exe --demo` 两个模块同时进演示，
+     `<pre>_parse_cli` 搬走并在套件 main 里转发（`studio.exe --demo` 两个模块同时进演示，
      真窗口实测 18 行 [demo]；`--selftest` 下原版也是 0 行，套件与原版逐行等价）；
      argv[1] 开文件类（dataview/encconv/htmlreport）**一个 exe 分不清该给谁**，
      不搬但**明确报丢弃**（静默丢=假绿）—— 这是套件的已知限制。
@@ -178,14 +178,14 @@ id 前缀唯一、`.cgui` 的每个事件名在对应模块的 `*_bindings[]` �
    `lessons/`（六课）· `suites/`（四套件）· `gallery` · `toolbox` · `cppdemo`，`base/` 已消除。
    - **删前先归档**：21 份原 README 附迁移横幅存进 `suites/<suite>/docs/<tool>.md`
      （坑位文档是真金白银调试出来的，横幅注明"文中的命令口径已失效、其余逐条成立"）；
-     `modbus/mock-slave.mjs` 是功能性测试助手，搬进 `suites/comm/`。
+     `modbus/mock-slave.mjs` 是功能性测试助手，搬进 `suites/studio/`。
    - **路径同步**：26 个文件约 180 处（分级替换：先文件级精确——exe/cgui 改名处，再目录级
      通用），通用替换造成的两类破损（文件名错、工具区分丢失 17 处）用专项扫描抓出并精确修复
      —— 同句两工具并成一个套件时，用「serialterm 页（`modules\st.c`）」恢复区分。
      两篇深度文章（07 记事本 / 08 serialterm）补迁移注记（数字取自合并前独立运行）。
    - **门禁**：check-examples 认 `lessons\` 并吐真实路径（事实表重生成回贴）；make-release
-     的自检示例从 notepad 换成 **suites\text**（多模块套件，连随包工具链的 modules\ 子目录
-     编译一起验）；probe-hotreload 改指 comm.cgui；build-all 注释更新（容器目录逻辑本就通用，
+     的自检示例从 notepad 换成 **suites\studio**（多模块套件，连随包工具链的 modules\ 子目录
+     编译一起验）；probe-hotreload 改指 studio.cgui；build-all 注释更新（容器目录逻辑本就通用，
      lessons\ 与 suites\ 直接受益）。
    - **验证**：build-all 新布局 13 工程全编、roundtrip 13/13、**docs 口径 122 条声明全过**
      （约 180 处路径改写后口径仍成立）、冒烟 43/43、套件契约 4 个；发布包内编译 text 套件

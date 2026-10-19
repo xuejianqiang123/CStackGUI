@@ -567,7 +567,7 @@ if (wantDocs) {
 }
 
 /** 六课刻意不教的控件（在别处有落点，不计入 --lessons 的缺失）：
- *  serial → suites/comm 的串口终端；iconlist / dialog → gallery 陈列室。
+ *  serial → suites/studio 的串口终端；iconlist / dialog → gallery 陈列室。
  *  合并前 --lessons 的正则已失效（匹配不到 examples/lessons/ 下任何文件），
  *  这三种"缺落点"从未被真正检查出；2026-10-18 修作用域后才暴露 —— 它们本就不在六课范围内。 */
 const LESSONS_EXEMPT = new Set(["serial", "iconlist", "dialog"]);

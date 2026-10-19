@@ -1,9 +1,9 @@
 # 【案例】串口助手：无界面串口组件 + 编辑框接收视图
 
-> 完整工程在 `examples\suites\comm\`：**一条命令编译、双击就能跑**，本文文案与数字都取自它。
+> 完整工程在 `examples\suites\studio\`：**一条命令编译、双击就能跑**，本文文案与数字都取自它。
 >
 > **2026-10-18 注**：本文对应的工程已并入 [`examples\suites\${suite}\`](../../examples/suites/${suite})
-> （本工具是其中一个页签，完整源码在 `modules\st.c`，整套编译 `build-app.bat suites\comm`）。
+> （本工具是其中一个页签，完整源码在 `modules\st.c`，整套编译 `build-app.bat suites\studio`）。
 > 文中的界面截图与自检数字取自合并前的独立运行；套件自检是整套口径（控件数更多），逐工具走读仍按本文。
 > 它不是「入门系列」的某一课，而是一份**实战样板**：把「串口组件（无界面控件）」
 > 和「编辑框当接收视图」这两种东西拼起来，讲清「数据从哪来、落到哪去由谁决定」。
@@ -38,10 +38,10 @@
 
 ```bat
 build-app.bat serialterm
-examples\suites\comm\comm.exe
+examples\suites\studio\studio.exe
 
 :: 自检（不碰硬件，合成触发每个回调，含 arrive）
-examples\suites\comm\comm.exe --selftest examples\suites\comm\comm.cgui
+examples\suites\studio\studio.exe --selftest examples\suites\studio\studio.cgui
 ```
 
 自检期望：`控件 N 个, 触发回调 M 次, 未登记 0 个, 事件不支持 0 个, 绑定出错 0 个`。
@@ -167,7 +167,7 @@ static void recv_append(cg_app_t *app, const char *data, int n)
 ## 七、验收
 
 ```bat
-examples\suites\comm\comm.exe --selftest examples\suites\comm\comm.cgui
+examples\suites\studio\studio.exe --selftest examples\suites\studio\studio.cgui
 :: 期望：未登记 0 个, 事件不支持 0 个, 绑定出错 0 个
 ```
 
@@ -185,7 +185,7 @@ examples\suites\comm\comm.exe --selftest examples\suites\comm\comm.cgui
 ## 附：本例文件清单
 
 ```
-examples\suites\comm\
+examples\suites\studio\
   serialterm.cgui   界面：状态栏 / 串口组件(serial) / 接收编辑框(multiline) / 分隔条 / 发送组 / 速率曲线
   main.c            行为：on_arrive 定落点、recv_append 环形缓冲 + 滚到底、HEX 发送、配置记忆
 ```

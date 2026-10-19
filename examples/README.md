@@ -32,10 +32,8 @@
 
 | 套件 | 页签（工具） | 编译 | 运行 / 自检 | 逐工具文档 |
 | --- | --- | --- | --- | --- |
-| `comm` | serialterm / netterm / darkterm / modbus / framedec | `build-app.bat suites\comm` | `examples\suites\comm\comm.exe` | `suites\comm\docs\*.md`（5 份） |
-| `dev` | palette / drawpad / hextool / encconv / calculator | `build-app.bat suites\dev` | `examples\suites\dev\dev.exe` | `suites\dev\docs\*.md`（5 份） |
+| `studio` | serialterm / netterm / darkterm / modbus / framedec / palette / drawpad / hextool / encconv / calculator / notepad / logfilter / filecheck / dataview / htmlreport / datarec | `build-app.bat suites\studio` | `examples\suites\studio\studio.exe` | `suites\studio\docs\*.md`（16 份） |
 | `sys` | shottool / traytool / syspanel / envsnap / settings | `build-app.bat suites\sys` | `examples\suites\sys\sys.exe` | `suites\sys\docs\*.md`（5 份） |
-| `text` | notepad / logfilter / filecheck / dataview / htmlreport / datarec | `build-app.bat suites\text` | `examples\suites\text\text.exe` | `suites\text\docs\*.md`（6 份） |
 
 ## 独立工程（一个工程就是它自己，不并套件）
 

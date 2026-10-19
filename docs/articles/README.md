@@ -15,8 +15,8 @@
 | `05-命令与图形.md` | `examples\lessons\lessons\`（页 05 · `modules\l5.c`） | 同上 |
 | `00-导读.md` | `README.md` + `build-app.bat` | 环境要求、第一次编译的三条命令 |
 | `06-主窗口与窗口事件.md` | `examples\lessons\lessons\`（页 06 · `modules\l6.c`） | 窗口配置 `app.*`、26 种窗口事件、`app.info` 程序信息；自检不合成窗口事件这条也在里面 |
-| `07-实战-记事本.md` | `examples\suites\text\` | 菜单分发、脏标记、状态栏刷新、编码识别 |
-| `08-案例-serialterm-无界面串口与编辑框.md` | `examples\suites\comm\` | 无界面串口组件的 `arrive` 事件、数据落点、HEX 发送 |
+| `07-实战-记事本.md` | `examples\suites\studio\` | 菜单分发、脏标记、状态栏刷新、编码识别 |
+| `08-案例-serialterm-无界面串口与编辑框.md` | `examples\suites\studio\` | 无界面串口组件的 `arrive` 事件、数据落点、HEX 发送 |
 | `09-校验与摘要.md` | —（纯能力篇，不绑示例） | `runtime\include\cstackgui.h` 里 CRC / 哈希 / 进制与补码的签名与语义 |
 
 ## 每篇的固定结构（各篇保持一致，读者才不用重新适应）

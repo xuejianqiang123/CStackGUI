@@ -34,7 +34,7 @@ public class Win32Shot2 {
 $root = Split-Path -Parent $PSScriptRoot
 $exe  = Join-Path $root "designer\node_modules\electron\dist\electron.exe"
 $app  = Join-Path $root "designer"
-$src  = Join-Path $root "examples\suites\comm\comm.cgui"
+$src  = Join-Path $root "examples\suites\studio\studio.cgui"
 $dst  = Join-Path $root "$OutDir\hotreload.cgui"
 $log  = Join-Path $root "$OutDir\hotreload.log"
 if (-not (Test-Path $exe)) { Write-Output "[fail] no electron at $exe"; exit 1 }

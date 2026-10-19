@@ -1,6 +1,6 @@
 > **本文档是合并前独立工程 `examples\notepad\` 的原文**（2026-10-18 该工程已并入
-> [`examples\suites\text\`](../text)：本工具的完整逻辑在 `modules\np.c`，
-> 编译 `build-app.bat suites\text`，五个工具各占一个页签）。
+> [`examples\suites\studio\`](../)：本工具的完整逻辑在 `modules\np.c`，
+> 编译 `build-app.bat suites\studio`，16 个工具各占一个页签）。
 >
 > 文中「目录 / 编译 / 运行 / 自检」那几行命令是**合并前的口径，现已失效**（原工程目录已删）；
 > 其余内容 —— 它演示什么、关键接口、容易踩的坑 —— 仍然逐条成立，对应 `modules\np.c`。
