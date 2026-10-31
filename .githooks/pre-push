@@ -1,0 +1,48 @@
+#!/bin/sh
+# pre-push gate -- fast checks only.
+#
+# Why this exists: every quality conclusion in this repo used to depend on
+# "somebody remembers to run tools\check-format.bat". Forgetting once is silent
+# rot. This hook moves the cheap, deterministic part to the one moment nobody
+# can forget: pushing.
+#
+# Scope is deliberately SMALL -- the full gate (check-format.bat) builds the
+# runtime, all examples and runs the canvas e2e; that is minutes, not seconds,
+# and a slow hook gets disabled by the first person who is in a hurry.
+# Set CG_FULL_GATE=1 to run the whole thing anyway.
+#
+# Bypass (when you know what you are doing): git push --no-verify
+#
+# Install once per clone: tools\install-hooks.bat
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+if [ "$CG_FULL_GATE" = "1" ]; then
+  echo "[gate] CG_FULL_GATE=1 -> tools\\check-format.bat (slow)"
+  cmd //c "tools\\check-format.bat"
+  exit $?
+fi
+
+echo "[gate] skills: dirs vs INDEX vs frontmatter vs scopes"
+node tools/check-skills.mjs
+
+echo "[gate] routing: trigger words vs descriptions"
+node tools/check-routing.mjs
+
+echo "[gate] guard rules: deny cases + false-positive regressions"
+node tools/hooks/test-guard.cjs
+
+if command -v python >/dev/null 2>&1; then
+  echo "[gate] roster: teams.toml vs dirs vs INDEX ROSTER"
+  python tools/check_roster.py
+else
+  echo "[gate] [skip] python not found - roster check skipped"
+fi
+
+if [ -f designer/package.json ]; then
+  echo "[gate] designer typecheck"
+  (cd designer && npm run typecheck --silent)
+fi
+
+echo "[gate] ok -- full gate (C runtime + examples + canvas e2e): tools\\check-format.bat"
+exit 0
