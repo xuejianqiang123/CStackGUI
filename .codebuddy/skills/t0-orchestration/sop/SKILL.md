@@ -14,6 +14,9 @@ argument-hint: [request]
 > 具体规则一律到对应 `SKILL.md` 里读；技能全清单见 `.codebuddy/skills/INDEX.md`，
 > 强制规则见 `.codebuddy/global-rule.md`。
 >
+> **与 `expert-teams` 分工**：**选人**（这轮该叫哪个团、最小加载集、交接物）看 `expert-teams`；
+> 本技能管**选完之后按什么步骤走、门禁怎么跑**。不确定用哪个技能时，先 `expert-teams`。
+>
 > 本工程是 **Win32/GDI+ 桌面工具包 + Electron 画布（`.cgui`）**，没有 MCU、没有固件、没有 `idf.py`。
 
 ---
@@ -43,12 +46,13 @@ argument-hint: [request]
 |---|---|---|---|
 | 提问 / "这块怎么工作的" / "有没有这个能力" | 只读 | 直接查代码回答；陌生子模块加 `analyzing-projects` | 全流程、计划、提交 |
 | "这个想法值不值得做" / "要不要上 XX" | 评估 | **§2B 想法评估**（intake → research → decide） | 直接开工 |
-| "XX 崩了 / 不对 / 报错" | 修 bug | **§2A 修 bug 三段式**（诊断 / 修复 / 验证分离） | 走完整 SDD 流程 |
+| "XX 崩了 / 不对 / 报错 / 偶发" | 修 bug | **§2A 修 bug 三段式**（诊断 / 修复 / 验证分离），诊断段走 `systematic-debugging` | 走完整 SDD 流程 |
 | 改 1~2 个文件的小修（typo、注释、单处判空） | 微改 | 直接改 → §3 最小门禁 → 提交 | 计划文件（不必落 `plans/`） |
 | 明确的小功能（"给 XX 加 YY"） | 标准 | §2 主流水线（C→P0→P7） | 外层循环（PRD/SDD/切片） |
 | 验收标准含糊 / 跨模块 / 涉及协议 | 大需求 | 外层：`plan-create-prd` → `plan-architecture` → `piv-slice-epic`，切片再进 §2 | — |
 | 改 `designer/`（画布） | 专属 | `designer-modify` + `design-taste`，门禁叠画布两条 | — |
 | 改 `.codebuddy/skills/` | 元 | `skills-create` + §3 的 `node tools\check-skills.mjs` | 编译门禁（不影响产物） |
+| 不知道这轮该叫哪个技能 / 要并行组队 | 选人 | `expert-teams`（八团编制 + 最小加载集） | 凭印象乱加载 |
 | 请求是一句话且缺路径 / 文件 / 判据 | 规格化 | `request-spec` 补七元规格，再转交领域技能 | 直接开工猜需求 |
 | 需求落在多个不重叠目录 | 并行 | `team-parallel-delivery` | 我一人全揽 |
 | "审查一下" / 提交前 | 单点 | `piv-review-changes`（按 §4 路由审查技能） | — |
@@ -122,8 +126,11 @@ argument-hint: [request]
 **三段不许混在一次改动里**（学自 Spec Kit）：
 
 1. **诊断（assess）**：先复现 → 定位 → **只输出"评估出的原因 + 证据"**，不动代码。
+   方法走 `systematic-debugging`（四阶段：根因调查 → 模式分析 → 假设验证 → 实施修复；
+   **没有根因调查不许提修复**，一次只改一个变量，3 次修不好 = 质疑架构而不是试第 4 次）。
    最小复现三件套：**预期 vs 实际 + 最小复现步骤**（学自 vibe-coding-cn）。
 2. **修复（fix）**：**只改评估出的那个原因**，不顺手扩大、不顺手重构。
+   动手前先按 `test-driven-development` 写一条**会红的复现测试** —— 它既证明修复有效，也防回归。
 3. **验证（test）**：**必须验证最初那个症状消失**，不是"我改的地方没报错了"。
    判定三选一：`verified` / `partial` / `failed`。
    **没有验证的修复不算修复**（missing verification is not a successful fix）。
@@ -174,7 +181,11 @@ examples\gallery\gallery.exe --selftest examples\gallery\gallery.cgui
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-utf8.ps1 -Mode fix
 
 :: —— 7 改了 .codebuddy/skills\ 之后（必做）——
+python tools\check_roster.py           :: 八团编制：teams.toml ↔ 磁盘目录 ↔ INDEX 的 ROSTER 三处一致
+                                       :: 加/移动技能、换团长后必跑；--fix 可重渲染 ROSTER
 node tools\check-skills.mjs            :: 目录 / INDEX 总数 / 导读目录树 / frontmatter / scopes 五处一致
+node tools\check-routing.mjs           :: 路由用例：触发词在 description 里 / 无歧义 / 每技能被点名
+                                       :: 改 description 或新增技能后必跑（否则技能可能永远选不中）
 
 :: —— 8 目视取证（观感 / 像素类改动）——
 tools\shot.ps1                         :: 截业务 exe 整窗（PrintWindow，不怕被遮）

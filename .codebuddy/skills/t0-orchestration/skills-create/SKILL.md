@@ -13,7 +13,8 @@ argument-hint: [skill-name-and-purpose]
 
 ## 规范总览
 
-- **位置**：每个 skill 一个目录：`.codebuddy/skills/<skill-name>/SKILL.md`
+- **位置**：`skills/<团队目录>/<skill-name>/SKILL.md`
+  —— 八团目录见 `_registry/teams.toml`；**新技能必须先登记进某个团**，不许再往 `skills/` 顶层加
 - **命名**：小写 + 连字符（如 `buffer_overflow_check`、`piv-validate`）
 - **格式**：YAML frontmatter + Markdown 正文（中文正文）
 - **frontmatter 字段**：
@@ -63,9 +64,11 @@ argument-hint: [<参数>]
 
 ## 创建流程
 
-1. 确认需求：新技能解决什么问题？属于审查类还是流程类？
+1. 确认需求：新技能解决什么问题？**归哪个团**（T0~T7，见 `expert-teams`）？
 2. 检查是否已有类似技能（避免重复）
-3. 用上述模板编写 SKILL.md
-4. 审查：description 是否含使用时机？检查清单是否可执行？
-5. 保存到 `.codebuddy/skills/<name>/SKILL.md`
-6. 如涉及工作流变化，更新 `.codebuddy/README.md`
+3. **先改编制**：在 `_registry/teams.toml` 对应团的 `skills` 列表里加名字
+4. 用上述模板编写 SKILL.md，存到 `skills/<团队目录>/<name>/`
+5. **补路由用例**：在 `_registry/routing_cases.json` 加一条（`node tools\check-routing.mjs` 会逼你补）
+6. 运行 `python tools\check_roster.py --fix` 重渲染 INDEX 的 ROSTER；再跑
+   `node tools\check-skills.mjs` + `node tools\check-routing.mjs`
+7. 如涉及工作流变化，更新 `.codebuddy/README.md`

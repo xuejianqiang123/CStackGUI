@@ -164,6 +164,22 @@ echo   skills: dirs vs INDEX.md vs README tree vs frontmatter vs scopes
 node tools\check-skills.mjs
 if errorlevel 1 exit /b 1
 
+rem  路由用例（学自上游 teams.toml 的"单一事实源"）：
+rem  触发词必须在 description 里（否则模型永远选不中）、不许第二个技能同时命中、每个技能必须被点名。
+echo   routing: trigger words vs descriptions, no ambiguity
+node tools\check-routing.mjs
+if errorlevel 1 exit /b 1
+
+rem  八团编制：teams.toml ↔ 磁盘目录 ↔ INDEX 的 ROSTER。没装 Python 时跳过（不阻断构建）。
+where python >nul 2>nul
+if not errorlevel 1 (
+  echo   roster: teams.toml vs skill dirs vs INDEX ROSTER
+  python tools\check_roster.py
+  if errorlevel 1 exit /b 1
+) else (
+  echo   [skip] python not found - roster check skipped
+)
+
 echo.
 echo [ok] format contract check passed
 exit /b 0

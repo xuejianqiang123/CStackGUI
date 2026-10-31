@@ -15,16 +15,19 @@
 
 ## 1. 这套配置是什么
 
-六类能力，共 **35 个技能**：
+八团编制，共 **39 个技能**（38 成员 + 1 入口）：
 
-| 类 | 数量 | 作用 | 何时用到 |
+| 团 | 成员数 | 使命 | 何时用到 |
 |---|---|---|---|
-| **总控** | 1 | ★ `sop`：三入口路由 + 八段流水线 + **对抗性闸门** + 唯一权威门禁命令表 + 收敛与中断恢复 | **任何开发类请求，先过它** |
-| 审查类 | 7 | 代码与界面质量门禁（由 `piv-review-changes` 按领域调用） | 写码后 / 提交前 |
-| 流程类（PIV 双循环） | 14 | 需求 → 提交的工作流 + 3 道门禁（审查门禁执行协议 = `adversarial-review`） | 每次开发 |
-| 规程与纪律 | 4 | `designer-modify`（画布规程）+ `evidence-discipline` / `doc-truth-sync` / `request-spec` 三条工程纪律 | 改画布 / 下结论 / 写文档 / 开工前 |
-| 约束与工具 | 8 | 压缩（caveman / ponytail）、思维准则（本质 + **对抗** + 多视角）、文件安全、真机实测、陌生库分析 | 始终生效 / 按需 |
-| 社区引入 | 1 | `wavedrom-gen`：时序描述 → 波形图 | 按需 |
+| **T0 总控台** | 5 | ★ `sop`：拆阶段、排并行、控熔断与交付边界 | 跨 ≥2 阶段 / 一条龙 / 并行 / 改技能 / 排障 |
+| **T1 需求与方案** | 5 | 把模糊请求变成可执行规格与方案 | 新功能 / 需求不清 / 架构选型 / PRD·SDD·切片 |
+| **T2 架构与实现** | 6 | 代码落在正确的层，按计划实现，有测试兜底 | 写改代码 / 加控件 / 改画布 / 陌生模块 |
+| **T3 质量审判** | 9 | 用"指控→辩护→裁定"把缺陷挡在提交前 | 写码后 / 提交前 / 界面观感 / 挑刺复核 |
+| **T4 验证与实测** | 2 | 把"编译过"推进到"判据绿 + 真窗口跑过" | 编译 / 单测 / 门禁 / 串口回环 |
+| **T5 交付** | 2 | 按规范分批提交，需要时开 PR | 审查通过后 / 提交 / 建 PR |
+| **T6 事实与文档** | 4 | 文档与代码同源，结论有证据 | 下结论 / 文档冲突 / 正式文档 / 时序图 |
+| **T7 常驻底座** | 5 | 所有团队的默认工作方式（不选而入） | 始终生效 |
+| **入口** | 1 | ★ `expert-teams`：选团 + 最小加载集 + 交接物 | **任何开发类请求，先选团** |
 
 **硬门禁**（不过不提交，业务/文档改动也一样）：
 
@@ -35,6 +38,8 @@ tools\check-format.bat                 :: 跨端契约（分层 / 支持库表 /
 node tools\check-examples.mjs --docs   :: 文档口径与代码一致
 npx tsc --noEmit && npx vite build     :: 改了画布（designer/）时叠这两条（记得先 cd designer）
 node tools\check-skills.mjs            :: 改了 .codebuddy/skills\ 之后（check-format.bat 已含，可单独跑）
+node tools\check-routing.mjs           :: 路由用例（触发词 / 歧义 / 覆盖），改 description 或加技能必跑
+python tools\check_roster.py           :: 八团编制（teams.toml ↔ 磁盘目录 ↔ INDEX 的 ROSTER），加/移动技能必跑
 ```
 
 > **命令写法以 `sop` §3「门禁命令表」为唯一出处** —— 别处出现不同形态（缺 `cd designer`、
@@ -55,21 +60,18 @@ node tools\check-skills.mjs            :: 改了 .codebuddy/skills\ 之后（che
 ├── plans/               PIV 实现计划（入库）
 ├── code-reviews/        提交前审查报告（入库；2026-10-07 补建，此前只在文档里被引用）
 ├── schemas/             产出物的 JSON Schema（现状见 §8）
-├── skills/              35 个技能
-│   ├── INDEX.md         ★ 技能索引（分类 / 触发条件 / 维护清单）
-│   ├── sop/             ★ 总控：三入口路由 + 八段流水线 + 对抗性闸门 + 门禁命令表（先看它）
-│   ├── [审查类] 6 个 C 代码检查：buffer_overflow / communication_protocol / error_handling /
-│   │                firmware_code_style（本工程 C 规范）/ memory_leak / struct_best_practice
-│   ├── [流程类] 14 个：plan-create-prd / plan-architecture / piv-slice-epic / prime-codebase /
-│   │                piv-plan-implementation / piv-implement / piv-validate / piv-review-changes /
-│   │                piv-create-pr / piv-run-full-loop / git-commit-style / skills-create /
-│   │                team-parallel-delivery / adversarial-review
-│   ├── [规程与纪律] 3 个：evidence-discipline / doc-truth-sync / request-spec
-│   ├── [约束与工具] 8 个：caveman / ponytail / safe-file-ops / serial_verify /
-│   │                first-principles-thinking / adversarial-thinking / analyzing-projects /
-│   │                multi-perspective-review
-│   ├── [本工程专属] design-taste（界面观感，属审查类）/ designer-modify
-│   └── [社区] wavedrom-gen
+├── skills/              39 个技能（38 成员 + 1 入口），按 8 个专家团物理分层
+│   ├── INDEX.md         ★ 技能索引（八团编制 / ROSTER / 触发条件 / 维护清单）
+│   ├── expert-teams/    ★ 团队入口：选团 / 最小加载集 / 交接物（先看它）
+│   ├── _registry/       编制真值（teams.toml / routing_cases.json），不是技能
+│   ├── t0-orchestration/  5：sop · piv-run-full-loop · team-parallel-delivery · skills-create · systematic-debugging
+│   ├── t1-requirements/   5：request-spec · plan-create-prd · plan-architecture · piv-slice-epic · multi-perspective-review
+│   ├── t2-architecture/   6：piv-implement · prime-codebase · analyzing-projects · piv-plan-implementation · test-driven-development · designer-modify
+│   ├── t3-quality/        9：piv-review-changes · adversarial-review · buffer_overflow_check · memory_leak_check · communication_protocol_check · error_handling_check · struct_best_practice_check · firmware_code_style · design-taste
+│   ├── t4-verification/   2：piv-validate · serial_verify
+│   ├── t5-delivery/       2：git-commit-style · piv-create-pr
+│   ├── t6-documentation/  4：evidence-discipline · doc-truth-sync · humanizer · wavedrom-gen
+│   └── t7-foundation/     5：first-principles-thinking · adversarial-thinking · caveman · ponytail · safe-file-ops
 ├── memory/              项目记忆（.gitignore，不入库）
 └── teams/               并行交付的运行态（.gitignore，不入库）
 ```

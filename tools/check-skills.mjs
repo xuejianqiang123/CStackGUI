@@ -43,12 +43,23 @@ const bad = [];
 const fail = (where, msg) => bad.push(`[fail] ${where}：${msg}`);
 const lines = (p) => fs.readFileSync(p, "utf8").split(/\r?\n/);
 
-/* ① 目录 */
-const dirs = fs
-  .readdirSync(SKILLS, { withFileTypes: true })
-  .filter((e) => e.isDirectory())
-  .map((e) => e.name)
-  .sort();
+/* ① 目录：物理分层后，`skills/` 顶层是「入口 + 8 个团队目录」，成员在 `skills/<team>/<skill>/` */
+const skillPath = new Map();   /* 技能名 -> SKILL.md 绝对路径 */
+for (const e of fs.readdirSync(SKILLS, { withFileTypes: true })) {
+  if (!e.isDirectory() || e.name.startsWith("_")) continue;   /* `_registry` 是元数据，不是技能 */
+  const top = path.join(SKILLS, e.name);
+  const own = path.join(top, "SKILL.md");
+  if (fs.existsSync(own)) {
+    skillPath.set(e.name, own);                                /* 顶层技能（expert-teams 入口） */
+  } else {
+    for (const sub of fs.readdirSync(top, { withFileTypes: true })) {
+      if (!sub.isDirectory()) continue;
+      const p = path.join(top, sub.name, "SKILL.md");
+      if (fs.existsSync(p)) skillPath.set(sub.name, p);        /* 团队目录下的成员 */
+    }
+  }
+}
+const dirs = [...skillPath.keys()].sort();
 
 /* ② INDEX 的总数 */
 const indexLines = lines(INDEX);
@@ -103,8 +114,8 @@ for (const [f, text] of [["INDEX.md", indexLines], [".codebuddy/README.md", aido
 
 /* ⑤ frontmatter */
 for (const d of dirs) {
-  const p = path.join(SKILLS, d, "SKILL.md");
-  if (!fs.existsSync(p)) {
+  const p = skillPath.get(d);
+  if (!p || !fs.existsSync(p)) {
     fail(`skills/${d}/`, "没有 SKILL.md（技能目录必须是 <name>/SKILL.md）");
     continue;
   }

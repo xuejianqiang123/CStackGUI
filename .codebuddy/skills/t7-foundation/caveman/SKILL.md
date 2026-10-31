@@ -70,6 +70,8 @@ argument-hint: [lite|full|ultra|wenyan-lite|wenyan|wenyan-ultra|off | review | c
 - 只减**输出** Token；无法压缩输入 Token 与推理 Token。
 - 短对话可能看不出明显节省；长文/代码解释场景实测可省 50%+ 输出 Token。
 - 与本项目其他 skill 关系：caveman 是"表达层"开关，正交于 PIV 流程与审查 skill——它只改文字风格，不改任何流程与技术判断。
+- **与 `humanizer` 分工**：caveman 管**长度**（对话，常驻）；`humanizer` 管**语感**（README / docs / 教学说明等正式产出物正文，按需）。
+  正式产出物正文已由本 skill 声明"不压缩"，那块地归 `humanizer` —— **同一段文字只用一把尺，不叠两层**。
 
 ## 输出
 

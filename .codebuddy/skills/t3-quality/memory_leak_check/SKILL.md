@@ -1,6 +1,6 @@
 ---
 name: memory_leak_check
-description: 检测动态内存分配泄漏、堆碎片、内存越界、野指针，以及句柄/GDI 对象未配对释放等问题。触发条件：改动涉及 malloc/free、句柄、GDI 对象、窗口生命周期，或 piv-review-changes 按领域路由到本技能时自动执行。
+description: 检测内存泄漏（动态分配未释放）、堆碎片、内存越界、野指针，以及句柄/GDI 对象未配对释放等问题。触发条件：改动涉及 malloc/free、句柄、GDI 对象、窗口生命周期，或 piv-review-changes 按领域路由到本技能时自动执行。
 auto_invoke: true
 allowed-tools: [ReadFile, GrepSearch]
 ---

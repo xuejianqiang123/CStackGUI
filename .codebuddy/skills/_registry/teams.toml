@@ -1,0 +1,85 @@
+# 专家团编制 —— 单一事实源（Single Source of Truth）
+#
+# 为什么用 TOML：本文件由 `tools/check_roster.py` 读取，Python 3.11+ 的 `tomllib`
+# 是标准库 ⇒ 零依赖。换 YAML 就得装 PyYAML，换 JSON 又会丢掉注释 ——
+# 而这里每一行的"为什么这么分"比数据本身更值钱。
+#
+# 改编制只改本文件；`skills/` 下的物理目录、INDEX.md 的 ROSTER 块、
+# `expert-teams` 的总表都由 `python tools/check_roster.py` 校验（`--fix` 可渲染 ROSTER）。
+#
+# 铁律：团队目录内**不得**放 SKILL.md —— 技能扫描遇到 SKILL.md 就停止下钻，
+# 放了会把整团误当成一个技能、成员全部消失。团队说明一律用 README.md。
+
+version = 1
+
+[[teams]]
+code = "T0"
+dir = "t0-orchestration"
+name = "总控台"
+mission = "拆阶段、排并行、控熔断与交付边界"
+when = "跨 ≥2 阶段、一条龙、多任务并行、要增删技能、故障要定位根因"
+lead = "sop"
+skills = ["sop", "piv-run-full-loop", "team-parallel-delivery", "skills-create", "systematic-debugging"]
+
+[[teams]]
+code = "T1"
+dir = "t1-requirements"
+name = "需求与方案团"
+mission = "把模糊请求变成可执行规格与方案"
+when = "新功能、大需求、需求不清、架构选型、PRD/SDD/切片、方案会诊"
+lead = "request-spec"
+skills = ["request-spec", "plan-create-prd", "plan-architecture", "piv-slice-epic", "multi-perspective-review"]
+
+[[teams]]
+code = "T2"
+dir = "t2-architecture"
+name = "架构与实现团"
+mission = "代码落在正确的层，按计划实现，有测试兜底"
+when = "写改代码、加控件/字段、改画布、接手陌生模块、重构"
+lead = "piv-implement"
+skills = ["piv-implement", "prime-codebase", "analyzing-projects", "piv-plan-implementation", "test-driven-development", "designer-modify"]
+
+[[teams]]
+code = "T3"
+dir = "t3-quality"
+name = "质量审判团"
+mission = "用「指控→辩护→裁定」把缺陷挡在提交前"
+when = "代码写完、提交前、界面观感评审、挑刺/复核/对抗式"
+lead = "piv-review-changes"
+skills = ["piv-review-changes", "adversarial-review", "buffer_overflow_check", "memory_leak_check", "communication_protocol_check", "error_handling_check", "struct_best_practice_check", "firmware_code_style", "design-taste"]
+
+[[teams]]
+code = "T4"
+dir = "t4-verification"
+name = "验证与实测团"
+mission = "把「编译过」推进到「判据绿 + 真窗口跑过」"
+when = "编译、单测、门禁、起真窗口、串口回环、日志视图"
+lead = "piv-validate"
+skills = ["piv-validate", "serial_verify"]
+
+[[teams]]
+code = "T5"
+dir = "t5-delivery"
+name = "交付团"
+mission = "按规范分批提交，需要时开 PR"
+when = "审查通过后、提交、保存改动、创建 PR"
+lead = "git-commit-style"
+skills = ["git-commit-style", "piv-create-pr"]
+
+[[teams]]
+code = "T6"
+dir = "t6-documentation"
+name = "事实与文档团"
+mission = "文档与代码同源，结论有证据，文字不像机器写的"
+when = "下「已实现/未实现」结论、文档冲突、写正式文档、画时序图"
+lead = "evidence-discipline"
+skills = ["evidence-discipline", "doc-truth-sync", "humanizer", "wavedrom-gen"]
+
+[[teams]]
+code = "T7"
+dir = "t7-foundation"
+name = "常驻底座"
+mission = "所有团队的默认工作方式（不选而入）"
+when = "始终生效"
+lead = "first-principles-thinking"
+skills = ["first-principles-thinking", "adversarial-thinking", "caveman", "ponytail", "safe-file-ops"]
