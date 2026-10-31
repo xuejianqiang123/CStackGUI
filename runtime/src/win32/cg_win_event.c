@@ -179,6 +179,15 @@ LRESULT CALLBACK cgw_FocusProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
                 FillRect(mem, &rc, (lw->style.bg != CG_COLOR_NONE)
                                       ? cgw_brush_for(lw->style.bg)
                                       : cgw_brush_for(cg_win_behind_rgb(g_win_app, hwnd)));
+                /* 文字色在这里备好，不赌 PRINTCLIENT：STATIC 收到 WM_PRINTCLIENT 时
+                 * 不一定走「向父发 WM_CTLCOLORSTATIC」的老路（页控件下的标签实测收不到
+                 * 主窗口的着色应答），DC 里留着默认黑就把标签画成黑的 —— 同屏出现
+                 * 「同一note样式一行黑一行灰」。样式里写了 fg 用样式值；没写按主题字色。 */
+                {
+                    unsigned lfg = (lw->style.fg != CG_COLOR_NONE) ? lw->style.fg
+                                                                   : cgw_theme_text(g_win_app);
+                    if (lfg != CG_COLOR_NONE) SetTextColor(mem, cgw_to_colorref(lfg));
+                }
                 SendMessageW(hwnd, WM_PRINTCLIENT, (WPARAM)mem, PRF_CLIENT);
                 BitBlt(wdc, 0, 0, wpx, hpx, mem, 0, 0, SRCCOPY);
                 SelectObject(mem, ob);
