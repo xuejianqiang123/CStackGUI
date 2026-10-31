@@ -50,6 +50,14 @@ echo   roundtrip: all examples (parse/mutate/serialize/C selftest)
 node tools\check-roundtrip-all.mjs
 if errorlevel 1 exit /b 1
 
+rem 公共 API 集合快照：cstackgui.h 有 328 个函数 / 19 个 typedef / 33 个 CG_ 宏，
+rem 但此前没有任何判据知道"集合本来长什么样" —— 删掉一个没人调用的公共 API，全仓照样绿。
+rem 快照把"集合"本身变成判据：少一个红（破坏性），多一个也红（要求显式更新基线）。
+rem 顺带修掉一个长期的口径错误：旧统计正则漏掉所有返回指针的函数，报 271，真实 328。
+echo   public API set vs baseline (functions / typedefs / macros)
+node tools\check-header.mjs
+if errorlevel 1 exit /b 1
+
 rem 画布「支持库」页签是手写的 C API 索引，没人校验就会和 cstackgui.h 跑偏。
 echo   support library vs cstackgui.h
 node tools\check-support.mjs
