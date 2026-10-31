@@ -215,8 +215,8 @@ static void recent_reload(cg_app_t *app)
         if (lst) cg_iconlist_add(lst, "assets/recent.png",
                                  tb_tool_name(s_recent[i]), tb_tool_cmd(s_recent[i]), NULL);
     }
-    if (lst && s_recent_n == 0)
-        cg_iconlist_add(lst, NULL, "（还没有记录）", NULL, NULL);
+    /* 空列表不再塞占位行：iconlist 的 text 字段就是空态文案，0 行时居中显示。
+     * （占位行会被当成真实项：默认选中、画选中底色、还能点击/双击） */
 }
 
 /**
