@@ -1,15 +1,18 @@
 #!/bin/sh
-# pre-push gate -- fast checks only.
+# pre-push gate.
 #
 # Why this exists: every quality conclusion in this repo used to depend on
 # "somebody remembers to run tools\check-format.bat". Forgetting once is silent
-# rot. This hook moves the cheap, deterministic part to the one moment nobody
-# can forget: pushing.
+# rot. This hook moves the deterministic checks to the one moment nobody can
+# forget: pushing.
 #
-# Scope is deliberately SMALL -- the full gate (check-format.bat) builds the
-# runtime, all examples and runs the canvas e2e; that is minutes, not seconds,
-# and a slow hook gets disabled by the first person who is in a hurry.
-# Set CG_FULL_GATE=1 to run the whole thing anyway.
+# Scope: the cheap ones plus the C unit tests. The full gate (check-format.bat)
+# additionally builds every example and runs the canvas e2e -- minutes, not
+# seconds -- and a slow hook gets disabled by the first person in a hurry, so
+# that stays opt-in.
+#
+#   CG_FULL_GATE=1   run the whole check-format.bat
+#   CG_FAST=1        skip the C unit tests (compile ~40-60s)
 #
 # Bypass (when you know what you are doing): git push --no-verify
 #
@@ -32,6 +35,9 @@ node tools/check-routing.mjs
 echo "[gate] guard rules: deny cases + false-positive regressions"
 node tools/hooks/test-guard.cjs
 
+echo "[gate] public API set vs baseline"
+node tools/check-header.mjs
+
 if command -v python >/dev/null 2>&1; then
   echo "[gate] roster: teams.toml vs dirs vs INDEX ROSTER"
   python tools/check_roster.py
@@ -44,5 +50,12 @@ if [ -f designer/package.json ]; then
   (cd designer && npm run typecheck --silent)
 fi
 
-echo "[gate] ok -- full gate (C runtime + examples + canvas e2e): tools\\check-format.bat"
+if [ "$CG_FAST" = "1" ]; then
+  echo "[gate] [skip] CG_FAST=1 - C unit tests skipped"
+else
+  echo "[gate] C runtime unit tests"
+  cmd //c "tools\\run-tests.bat"
+fi
+
+echo "[gate] ok -- full gate (examples + canvas e2e): tools\\check-format.bat"
 exit 0
