@@ -29,7 +29,6 @@
     "primary": {
       "font": "Microsoft YaHei UI",
       "size": 9.5,
-      "bold": true,
       "fg": "@accentInk",
       "bg": "@accent",
       "radius": 8
