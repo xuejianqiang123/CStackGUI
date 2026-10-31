@@ -25,6 +25,33 @@
  *
  * 回调名字写在 .cgui 里（events.click / events.dblclick ...），
  * 运行时按名字在 bindings 表里查函数指针 —— 这样画布和 C 代码彻底解耦。
+ *
+ * ============================ 章节索引 ============================
+ *
+ * 本文件是整个运行时的公共契约，三千多行、两百多个函数 —— 一次读完不现实，
+ * 也没必要。**按函数名前缀 grep 出那一族再读**，比从头翻快得多：
+ *
+ *   应用与窗口    cg_app_*        启动、主循环、退出、查询
+ *                 cg_win_*        窗口本体、布局、DPI、标题栏
+ *   事件与动作    cg_event_*      事件分发与命中测试
+ *                 cg_action_*     键盘/命令动作
+ *   内置控件      cg_widget_*     文本/按钮/表格/树/图表…（最大的一族）
+ *   外观          cg_skin_*       配色、圆角、暗色主题
+ *   通信          cg_serial_*     串口
+ *                 cg_net_*        TCP / UDP
+ *                 cg_ble_*        BLE
+ *                 cg_wifi_*       Wi-Fi
+ *   协议          cg_frame_*      帧定界与校验
+ *                 cg_modbus_*     Modbus
+ *                 cg_proto_*      自定义协议描述
+ *   工具件        cg_term_*       终端视图
+ *                 cg_log_*        日志视图
+ *                 cg_reg_*        寄存器 / 表格视图
+ *   数据与文件    cg_file_* / cg_str_* / cg_bytes_* / cg_set_* / cg_hex_*
+ *   杂项          cg_menu_* / cg_dialog_* / cg_drop_* / cg_gif_* / cg_iconlist_* / cg_canvas_*
+ *
+ * 上表是导航，不是权威清单 —— 新增一族时顺手在这里补一行即可；漏了也不影响使用，
+ * 因为 grep 的对象始终是代码里的真前缀。这里刻意不写行号：行号必然漂移。
  */
 #ifndef CSTACKGUI_H
 #define CSTACKGUI_H
