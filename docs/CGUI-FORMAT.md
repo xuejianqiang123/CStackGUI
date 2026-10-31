@@ -886,7 +886,7 @@ cg_meter_set_range(cg_find(app, "mtr_cpu"), 0, 100);   /* 改量程 */
 | `tabs` | 标签页 | **是** | 320×220 | — | `select`、`gotfocus`、`lostfocus` | `SysTabControl32`；子控件按 `page` 显隐 |
 | `tree` | 树 | 否 | 220×180 | — | `select`、`dblclick`、`expand`、`collapse`、`gotfocus`、`lostfocus` | `SysTreeView32` |
 | `table` | 表格 | 否 | 360×180 | — | `select`、`dblclick`、`check`、`gotfocus`、`lostfocus` | `SysListView32` 报表模式（`check`/`multi` 开勾选列与多选）|
-| `iconlist` | 图标列表 | 否 | 240×180 | — | `click`、`dblclick`（由 `click` 按系统双击间隔合成）、`select`、`check`、`gotfocus`、`lostfocus` | 自绘窗口类 `CStackGUIIconList`：行 = 〔复选框（`check` 开关，与 `table` 同名字段同义）〕+ 图标 + 主/副标题两行 + 右侧状态，可滚动（`WS_VSCROLL` 自己滚内容）；数据走 `cg_iconlist_*`，`items` 每项 = 一行主标题 |
+| `iconlist` | 图标列表 | 否 | 240×180 | — | `click`、`dblclick`（由 `click` 按系统双击间隔合成）、`select`、`check`、`gotfocus`、`lostfocus` | 自绘窗口类 `CStackGUIIconList`：行 = 〔复选框（`check` 开关，与 `table` 同名字段同义）〕+ 图标 + 主/副标题两行 + 右侧状态，可滚动（`WS_VSCROLL` 自己滚内容）；数据走 `cg_iconlist_*`，`items` 每项 = 一行主标题。`text` 是本控件的**空态文案**：0 行时居中显示（不再用「塞一行假数据」当占位——那行会被当成真实项，默认选中、可点击） |
 | `statusbar` | 状态栏 | 否 | 400×24 | — | **无** | `msctls_statusbar32` |
 | `terminal` | 终端 | 否 | 360×200 | — | **无** | 只读 RichEdit：按行着色（RX 绿 / TX 蓝 / 自己记的灰）、可选中复制，见 2.9 |
 | `chart` | 图表 | 否 | 320×160 | — | **无** | 自绘折线 / 柱状图：滑动窗口 + 超像素密度时按列画 min/max，见 2.10 |

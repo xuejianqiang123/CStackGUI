@@ -267,12 +267,14 @@ static void il_draw_icon(cg_widget_t *w, HDC dc, int row, const RECT *box)
         SelectObject(mem, old);
         DeleteDC(mem);
     } else {
-        /* 占位框：虚线圆角小方块，与 image 控件的缺图口径一致（不崩、看得出"这儿该有图"） */
-        RECT  inset = *box;
-        HBRUSH br   = CreateSolidBrush(cgw_to_colorref(cg_skin_neutral(w->app, 0xE3E3E8u, 0x2A2A2Eu)));
-        HPEN   pen  = CreatePen(PS_DASH, 1, RGB(150, 150, 156));
-        HGDIOBJ oldb = SelectObject(dc, br);
-        HGDIOBJ oldp = SelectObject(dc, pen);
+        /* 占位框：浅色圆角**实线**小方块。原来用 PS_DASH 画虚线 —— GDI 虚线在
+         * 圆角处明显锯齿，一行里出现一条"毛边"，与设计语言不搭；实线 + 更浅的
+         * 描边同样能说明"这儿该有图"，还不会抢注意力（2026-11-01 用户反馈） */
+        RECT    inset = *box;
+        HBRUSH  br    = CreateSolidBrush(cgw_to_colorref(cg_skin_neutral(w->app, 0xF6F6F8u, 0x2C2C30u)));
+        HPEN    pen   = CreatePen(PS_SOLID, 1, cgw_to_colorref(cg_skin_neutral(w->app, 0xDCDCE2u, 0x3C3C42u)));
+        HGDIOBJ oldb  = SelectObject(dc, br);
+        HGDIOBJ oldp  = SelectObject(dc, pen);
         inset.left++; inset.top++; inset.right--; inset.bottom--;
         RoundRect(dc, inset.left, inset.top, inset.right, inset.bottom,
                   inset.left + il_px(w, 4), inset.top + il_px(w, 4));
@@ -319,10 +321,13 @@ static void il_draw_row(cg_widget_t *w, HDC dc, const RECT *rc, int i, int y, in
         cg_skin_fill_round_rect(dc, &bg, il_px(w, IL_RADIUS), fill, CG_COLOR_NONE, 0);
     }
 
-    /* 焦点框：选中行 + 键盘焦点才画（与 listbox 的焦点虚线同一语义） */
+    /* 键盘焦点：选中行外侧描 1px 强调色圆角边。原来用 DrawFocusRect 画系统
+     * 虚线焦点框 —— 那是 1995 年的视觉语言，跟圆角容器底叠在一起像坏掉的
+     * 选区；描边同样能告诉键盘用户"焦点在这行"，还能吃到圆角（M3 无焦点矩形，
+     * 选中底色本身已表达选中）。 */
     if (selected && focused) {
-        RECT fb = { x0, y + 2, x1, y + rh - 2 };
-        DrawFocusRect(dc, &fb);
+        RECT fb = { x0, y + 1, x1, y + rh - 1 };
+        cg_skin_fill_round_rect(dc, &fb, il_px(w, IL_RADIUS), CG_COLOR_NONE, IL_BRAND, 1.0f);
     }
 
     iconx = x0 + (w->check ? il_px(w, IL_CHK_W) : 0);
@@ -475,6 +480,27 @@ static void iconlist_body(HDC mem, const RECT *rc, void *vctx)
     for (i = w->il_scroll; i < w->il_n && i < w->il_scroll + vis; i++) {
         y = (i - w->il_scroll) * rh;
         il_draw_row(w, mem, rc, i, y, focused);
+    }
+
+    /* 空态：0 行且声明了 text 时居中显示这条文案（text 只用于空态，行数据走
+     * cg_iconlist_*）。以前空列表只能"塞一行假数据"当占位 —— 那行会被当成
+     * 真实项：默认选中、画出选中底色、还能被点击/双击（2026-11-01 用户反馈
+     * 占位行"很丑"，根因是它根本不是空态，是一个画成选中态的空行）。 */
+    if (w->il_n == 0 && w->text && *w->text) {
+        RECT    tr = *rc;
+        HFONT   f  = cgw_font_for(w->app, w->style.font, w->style.size, 0, 0);
+        HGDIOBJ oldf = SelectObject(mem, f ? f : GetStockObject(DEFAULT_GUI_FONT));
+        int     oldmode = SetBkMode(mem, TRANSPARENT);
+        wchar_t *ws = cgw_wc_from_utf8(w->text);
+
+        SetTextColor(mem, cgw_to_colorref(cg_skin_neutral(w->app, IL_TEXT_LIGHT, IL_TEXT_DARK)));
+        if (ws) {
+            DrawTextW(mem, ws, -1, &tr,
+                      DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
+            free(ws);
+        }
+        SetBkMode(mem, oldmode);
+        SelectObject(mem, oldf);
     }
 
     il_scroll_sync(c->hwnd, w, rc);
