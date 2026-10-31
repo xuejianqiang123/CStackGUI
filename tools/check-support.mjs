@@ -20,7 +20,10 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, "..");
 const headerPath = path.join(root, "runtime", "include", "cstackgui.h");
-const srcPath = path.join(root, "designer", "src", "supportlib.ts");
+/* 2026-10-31：数据表从单文件 131KB 拆成 supportlib/ 目录（types / core / widget / kit）。
+ * 编译入口随之指向 index.ts —— tsc 会顺着相对 import 把四个数据文件一起编出来，
+ * 输出根目录因公共父目录变成 supportlib/，所以 import 路径是 supportjs/index.js。 */
+const srcPath = path.join(root, "designer", "src", "supportlib", "index.ts");
 
 if (!fs.existsSync(srcPath) || !fs.existsSync(headerPath)) {
   console.log("[skip] support-lib check (no designer sources / runtime header)");
@@ -29,21 +32,24 @@ if (!fs.existsSync(srcPath) || !fs.existsSync(headerPath)) {
 
 /* 1. 把 TS 数据表编译成可 import 的 js（和 check-format 编译 model.ts 同一套路） */
 const outDir = path.join(root, "build", "supportjs");
+/* 先清空：拆分成目录后输出从 supportlib.js 变成 index.js + 四个数据文件，
+ * 留着上一版产物会让下面的 import 拿到旧数据（绿得很像真的）。 */
+fs.rmSync(outDir, { recursive: true, force: true });
 try {
   /* 走 shell：Windows 上 npx 是 .cmd，node 不允许无 shell 直接 spawn */
   execSync(
-    "npx --prefix designer tsc designer/src/supportlib.ts --outDir build/supportjs " +
+    "npx --prefix designer tsc designer/src/supportlib/index.ts --outDir build/supportjs " +
       "--target es2022 --module es2022 --moduleResolution node --skipLibCheck --strict",
     { cwd: root, stdio: "pipe", shell: true },
   );
 } catch (e) {
-  console.error("[fail] 编译 designer/src/supportlib.ts 失败");
+  console.error("[fail] 编译 designer/src/supportlib/index.ts 失败");
   console.error(String(e.stdout ?? "") + String(e.stderr ?? ""));
   process.exit(1);
 }
 
-const { SUPPORT_LIBS, allCommands } = await import(
-  `file://${path.join(outDir, "supportlib.js").replace(/\\/g, "/")}`
+const { SUPPORT_LIBS, allCommands, countCommands, filterSupportLibs, firstCommand } = await import(
+  `file://${path.join(outDir, "index.js").replace(/\\/g, "/")}`
 );
 
 /* 2. 从公共头文件里抠出真实存在的函数名与宏名 */
@@ -95,16 +101,16 @@ const UNLISTED_OK_FNS = new Map([
 ]);
 const UNLISTED_OK_MACROS = new Map([
   ["CG_BIND_END", "讲解在别处：CG_BIND 系列条目的示例即用（2026-10-17 核对）"],
-  ["CG_BLE_ATTR_INDICATE", "讲解在别处：BLE 特征条目描述（supportlib.ts:1048）"],
-  ["CG_BLE_ATTR_NOTIFY", "讲解在别处：BLE 特征条目描述（supportlib.ts:1048）"],
-  ["CG_BLE_ATTR_READ", "讲解在别处：BLE 特征条目描述（supportlib.ts:1048）"],
-  ["CG_BLE_ATTR_WRITE", "讲解在别处：BLE 特征条目描述（supportlib.ts:1048）"],
-  ["CG_BLE_ATTR_WRITE_NR", "讲解在别处：BLE 特征条目描述（supportlib.ts:1048）"],
-  ["CG_FRAME_DELIM", "讲解在别处：帧定界条目描述（supportlib.ts:1081）"],
-  ["CG_FRAME_FIXED", "讲解在别处：帧定界条目描述（supportlib.ts:1081）"],
-  ["CG_FRAME_LENFIELD", "讲解在别处：帧定界条目描述（supportlib.ts:1081）"],
-  ["CG_FRAME_QUEUE", "讲解在别处：帧定界条目描述（supportlib.ts:1081）"],
-  ["CG_FRAME_SILENCE", "讲解在别处：帧定界条目描述（supportlib.ts:1081）"],
+  ["CG_BLE_ATTR_INDICATE", "讲解在别处：BLE 特征条目描述（supportlib/kit.ts（BLE 段））"],
+  ["CG_BLE_ATTR_NOTIFY", "讲解在别处：BLE 特征条目描述（supportlib/kit.ts（BLE 段））"],
+  ["CG_BLE_ATTR_READ", "讲解在别处：BLE 特征条目描述（supportlib/kit.ts（BLE 段））"],
+  ["CG_BLE_ATTR_WRITE", "讲解在别处：BLE 特征条目描述（supportlib/kit.ts（BLE 段））"],
+  ["CG_BLE_ATTR_WRITE_NR", "讲解在别处：BLE 特征条目描述（supportlib/kit.ts（BLE 段））"],
+  ["CG_FRAME_DELIM", "讲解在别处：帧定界条目描述（supportlib/kit.ts（帧段））"],
+  ["CG_FRAME_FIXED", "讲解在别处：帧定界条目描述（supportlib/kit.ts（帧段））"],
+  ["CG_FRAME_LENFIELD", "讲解在别处：帧定界条目描述（supportlib/kit.ts（帧段））"],
+  ["CG_FRAME_QUEUE", "讲解在别处：帧定界条目描述（supportlib/kit.ts（帧段））"],
+  ["CG_FRAME_SILENCE", "讲解在别处：帧定界条目描述（supportlib/kit.ts（帧段））"],
   ["CG_LOG_ERROR", "讲解在别处：日志条目示例即用"],
   ["CG_LOG_INFO", "讲解在别处：日志条目示例即用"],
   ["CG_LOG_WARN", "讲解在别处：日志条目示例即用"],
@@ -116,7 +122,7 @@ const UNLISTED_OK_MACROS = new Map([
   ["CG_SUM_CRC16_MODBUS", "存量未收录：校验和常量族（2026-10-17 盘点）"],
   ["CG_SUM_NONE", "存量未收录：校验和常量族（2026-10-17 盘点）"],
   ["CG_SUM_XOR8", "存量未收录：校验和常量族（2026-10-17 盘点）"],
-  ["CG_TERM_RX", "讲解在别处：terminal 条目示例即用（supportlib.ts:518 等 6 处）"],
+  ["CG_TERM_RX", "讲解在别处：terminal 条目示例即用（supportlib/kit.ts（terminal 段））"],
   ["CG_TERM_SYS", "讲解在别处：terminal 条目示例即用"],
   ["CG_TERM_TX", "讲解在别处：terminal 条目示例即用"],
   ["CG_WIFI_SSID_MAX", "存量未收录：WiFi 常量（2026-10-17 盘点）"],
@@ -189,4 +195,69 @@ if (docBad) {
   console.error(`[fail] 文档里的支持库条数与数据表不一致（${docBad} 处）`);
   process.exit(1);
 }
-console.log("[ok] 支持库表与 cstackgui.h 一致、文档条数一致");
+
+/* 6. 查询语义契约（2026-10-31 拆分数据表时补）。
+ *
+ * 为什么在这里：数据从单文件 131KB 拆成 types / core / widget / kit 四个文件，
+ * 是最容易"搬错一格还全绿"的改动 —— 编译器只保证类型对，不保证条数、顺序、
+ * 唯一性、搜索语义没变。下面四条都是**使用者能看见**的性质，且此前没有一条被锁：
+ *   ① fn 全局唯一：它是画布的树 key，重复会让选中态串到别的条目；
+ *   ② 搜索命中分类名时整棵子树保留（新手按「信息框」找，不按 cg_message_box 找）；
+ *   ③ 每个库都有 firstCommand（搜索后自动展开/定位要用）；
+ *   ④ countCommands 与 allCommands().length 同源（两处数不一致 = 有一份漏遍历）。 */
+/** 递归数一棵分类子树里的命令条数（含子分类） */
+function countIn(group) {
+  return (group.cmds?.length ?? 0) + (group.children ?? []).reduce((n, x) => n + countIn(x), 0);
+}
+
+let semBad = 0;
+{
+  const seen = new Map();
+  for (const cmd of cmds) {
+    if (seen.has(cmd.fn)) {
+      console.error(`[fail] 同一条函数被收录两次：${cmd.fn}（${seen.get(cmd.fn)} / ${cmd.name}）`);
+      semBad += 1;
+    } else {
+      seen.set(cmd.fn, cmd.name);
+    }
+  }
+
+  if (countCommands() !== cmds.length) {
+    console.error(`[fail] countCommands()=${countCommands()} 与 allCommands()=${cmds.length} 不一致`);
+    semBad += 1;
+  }
+
+  for (const lib of SUPPORT_LIBS) {
+    if (!firstCommand(lib)) {
+      console.error(`[fail] 支持库「${lib.label}」没有任何命令，firstCommand 返回 null`);
+      semBad += 1;
+    }
+    /* 用该库自己的第一个分类名当关键字：命中分类名必须整棵保留 */
+    const groupLabel = lib.groups[0]?.label;
+    if (groupLabel) {
+      const hit = filterSupportLibs(SUPPORT_LIBS, groupLabel);
+      const kept = hit.find((x) => x.key === lib.key);
+      const srcCount = countIn(lib.groups[0]);
+      const keptCount = kept ? countIn(kept.groups[0] ?? { cmds: [] }) : 0;
+      if (!kept || keptCount !== srcCount) {
+        console.error(
+          `[fail] 按分类名「${groupLabel}」搜索应整棵保留该分类（${srcCount} 条），实际 ${kept ? keptCount : "整库不见了"} 条`,
+        );
+        semBad += 1;
+      }
+    }
+  }
+
+  /* 空关键字必须原样返回（搜索框清空时不能把树清掉） */
+  if (filterSupportLibs(SUPPORT_LIBS, "   ") !== SUPPORT_LIBS) {
+    console.error("[fail] 空关键字过滤应原样返回传入的数组");
+    semBad += 1;
+  }
+}
+
+if (semBad) {
+  console.error(`[fail] 支持库查询语义不符合契约（${semBad} 处）`);
+  process.exit(1);
+}
+
+console.log("[ok] 支持库表与 cstackgui.h 一致、文档条数一致、查询语义成立");

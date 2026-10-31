@@ -1,7 +1,7 @@
 /* SupportPanel.tsx -- 「支持库」页签
  *
  * 面向新手：不用背函数名，按用途一层层点下去，选中看说明/示例，双击把调用代码复制走。
- * 数据在 ../supportlib.ts（唯一真相是 runtime/include/cstackgui.h）。
+ * 数据在 ../supportlib/（唯一真相是 runtime/include/cstackgui.h）。
  */
 import { useEffect, useMemo, useState } from "react";
 import {
