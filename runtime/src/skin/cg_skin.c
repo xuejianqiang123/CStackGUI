@@ -541,8 +541,18 @@ void cg_skin_draw_button(cg_app_t *app, const DRAWITEMSTRUCT *dis)
             InflateRect(&tr, -m, -m);
             SetBkMode(dis->hDC, TRANSPARENT);
             SetTextColor(dis->hDC, sk_colorref(textcol));
-            DrawTextW(dis->hDC, wt, -1, &tr,
-                      DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+            /* 字体必须自己选进去：WM_DRAWITEM 的 DC 不带控件字体（实测 WM_GETFONT
+             * 是 400 常规、DC 里却是 700 粗体——DC 遗留状态），画出来整排按钮全是
+             * 粗体，与页面常规字混排"字体不统一"（2026-11-01 toolbox 实测）。
+             * 字体在 sync 阶段已按样式 WM_SETFONT 过，这里直接取控件当前字体。 */
+            {
+                HFONT cf = (HFONT)SendMessageW(dis->hwndItem, WM_GETFONT, 0, 0);
+                HFONT oldf = (HFONT)SelectObject(dis->hDC, cf ? cf
+                                              : (HFONT)GetStockObject(DEFAULT_GUI_FONT));
+                DrawTextW(dis->hDC, wt, -1, &tr,
+                          DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+                SelectObject(dis->hDC, oldf);
+            }
             free(wt);
         }
     }
