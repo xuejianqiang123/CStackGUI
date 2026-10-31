@@ -44,6 +44,9 @@ build/_wv2fv*
 # 团队协作的运行态（不是工程内容）
 .codebuddy/teams/
 
+# hook 的运行态基线（每轮收工写一次，机器本地，不入库）
+tools/hooks/.last-gate.json
+
 # 临时产物一律放 tmp/（2026-10-17 立的规矩）：整个目录不入库、不跟踪
 tmp/
 

@@ -2,14 +2,62 @@
     "autoInvokeSkill": true,
     "strictMode": true,
     "codeLanguage": "C",
-    "scopes": ["desktop", "win32", "c", "cgui"],
+    "scopes": [
+        "desktop",
+        "win32",
+        "c",
+        "cgui"
+    ],
     "maxContextFileNum": 10,
     "enableCodeReviewAutoScan": true,
     "disableUnreasonableRefactor": true,
     "preferChineseReply": true,
-    "excludePaths": ["build/", "output/", "release/", "designer/dist/", "node_modules/", "*.log"],
+    "excludePaths": [
+        "build/",
+        "output/",
+        "release/",
+        "designer/dist/",
+        "node_modules/",
+        "*.log"
+    ],
     "enableSmartContextFilter": true,
     "autoCompressConversation": true,
     "enforceSkillOnCodeGen": true,
-    "autoReviewAfterEdit": true
+    "autoReviewAfterEdit": true,
+    "hooks": {
+        "SessionStart": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "timeout": 15,
+                        "command": "node tools/hooks/inject-context.cjs"
+                    }
+                ]
+            }
+        ],
+        "PreToolUse": [
+            {
+                "matcher": "Bash|execute_command",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "timeout": 10,
+                        "command": "node tools/hooks/guard-command.cjs"
+                    }
+                ]
+            }
+        ],
+        "Stop": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "timeout": 60,
+                        "command": "node tools/hooks/verify-on-stop.cjs"
+                    }
+                ]
+            }
+        ]
+    }
 }
