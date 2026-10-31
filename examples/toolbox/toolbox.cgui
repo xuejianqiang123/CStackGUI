@@ -37,7 +37,6 @@
     "install": {
       "font": "Microsoft YaHei UI",
       "size": 9.5,
-      "bold": true,
       "fg": "@ok",
       "bg": "@okSoft",
       "radius": 8
@@ -45,7 +44,6 @@
     "remove": {
       "font": "Microsoft YaHei UI",
       "size": 9.5,
-      "bold": true,
       "fg": "@danger",
       "bg": "@dangerSoft",
       "radius": 8
