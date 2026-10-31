@@ -26,7 +26,14 @@ const RULES = [
   { id: "git-clean", re: /^git\s+clean\b(?=.*-[a-z]*f)/i, why: "删掉未跟踪文件，删了就找不回" },
   { id: "git-reset-hard", re: /^git\s+reset\s+--hard/i, why: "丢弃全部未提交改动" },
   { id: "git-push-force", re: /^git\s+push\b(?=.*(\s-f\b|\s--force|\s\+\S+))/i, why: "强推覆盖远端历史" },
-  { id: "disk-format", re: /^(format|diskpart|mkfs)\b/i, why: "格式化磁盘" },
+  /* 注意：`format` 后面必须紧跟盘符才算磁盘格式化。
+   * 曾经的写法 `/^(format|diskpart|mkfs)\b/i` 把 `| Format-Table` 这类管道尾段误判成格式化
+   * ——`\b` 在 `format` 与 `-` 之间成立，结果 PowerShell 的 Format-Table / Format-List /
+   * Format-Hex 全被拦（2026-10-31 评审实测误伤）。破坏性的是"格式化某个卷"，不是这个动词。
+   * 真正危险的两个 PowerShell 变体单列：Format-Volume / Clear-Disk。 */
+  { id: "disk-format", re: /^format(\.com)?\s+[a-z]:(\s|$)/i, why: "格式化磁盘" },
+  { id: "ps-format-volume", re: /^(format-volume|clear-disk)\b/i, why: "格式化/清除卷（PowerShell）" },
+  { id: "diskpart-mkfs", re: /^(diskpart|mkfs)\b/i, why: "分区/格式化磁盘" },
   { id: "reg-delete", re: /^reg\s+delete\b/i, why: "删除注册表项" },
 ];
 

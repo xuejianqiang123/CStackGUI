@@ -170,6 +170,13 @@ echo   routing: trigger words vs descriptions, no ambiguity
 node tools\check-routing.mjs
 if errorlevel 1 exit /b 1
 
+rem  hook 守卫的回归用例：guard-command.cjs 判错的两种方式都很贵 —— 漏判（危险命令直接执行）
+rem  与误伤（正常命令被拦，使用者只能关掉整条规则）。2026-10-31 实测的误伤是 `| Format-Table`
+rem  被 `/^(format|...)\b/` 判成"格式化磁盘"；这里把那类写法固定成放行用例。
+echo   hook guard rules (deny cases + false-positive regressions)
+node tools\hooks\test-guard.cjs
+if errorlevel 1 exit /b 1
+
 rem  八团编制：teams.toml ↔ 磁盘目录 ↔ INDEX 的 ROSTER。没装 Python 时跳过（不阻断构建）。
 where python >nul 2>nul
 if not errorlevel 1 (
