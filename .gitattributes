@@ -1,0 +1,6 @@
+# git 钩子必须是 LF。
+#
+# 本仓库 core.autocrlf=true，不钉住的话 .githooks/* 会在下次检出时被转成 CRLF，
+# sh 脚本的每行结尾会多出一个 `\r`（`set -e\r`、`exit 0\r` 都不再是它们看起来的意思），
+# 钩子可能静默失效 —— 而"静默失效的钩子"比没有钩子更糟。
+.githooks/* text eol=lf
