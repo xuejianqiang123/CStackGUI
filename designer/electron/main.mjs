@@ -27,6 +27,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEV_URL = process.env.CSTACKGUI_DEV_URL || "";
 const VERSION = "0.1.0";
 
+/* 关掉 HTTP/3（QUIC）：Chromium 默认会先试 QUIC，它走 UDP 443，
+ * 遇到公司网络/代理/杀软拦 UDP 就报 net::ERR_QUIC_PROTOCOL_ERROR。
+ * 画布只加载本地 dist，用不上 HTTP/3，直接关掉省掉这类噪音。
+ * 必须在 app ready 之前设置。 */
+app.commandLine.appendSwitch("disable-quic");
+
 /* 启动排查探针：设了 CSTACKGUI_LOG=<文件路径> 才写，平时零开销。
  * 打包后的 GUI exe 抓不到 stdout/stderr，白屏、找不到项目根这类问题全靠它。 */
 const LOG_FILE = process.env.CSTACKGUI_LOG || "";
