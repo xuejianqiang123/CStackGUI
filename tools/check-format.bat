@@ -185,6 +185,12 @@ echo   hook guard rules (deny cases + false-positive regressions)
 node tools\hooks\test-guard.cjs
 if errorlevel 1 exit /b 1
 
+rem  收工验证的判据回归：三态结果（绿/红/判不出来）与"只报回归"。
+rem  这条判据写错的后果是**什么都不发生**（hook 静默放行），只能靠用例发现。
+echo   stop-hook gate judging (tri-state / regression-only)
+node tools\hooks\test-verify.cjs
+if errorlevel 1 exit /b 1
+
 rem  八团编制：teams.toml ↔ 磁盘目录 ↔ INDEX 的 ROSTER。没装 Python 时跳过（不阻断构建）。
 where python >nul 2>nul
 if not errorlevel 1 (
