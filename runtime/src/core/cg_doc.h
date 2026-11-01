@@ -176,7 +176,7 @@ typedef struct {
     int       radius;  /* 圆角，原生控件不支持时忽略（自绘后端用） */
     cg_align_t align;
     /** 非空 = fg/bg 写的是「@角色名」引用（值槽留给主题钩子求值写回，引用串保留）。
-     *  求值与容错口径见 .codebuddy/plans/roles-dark-sdd.md §3。 */
+     *  求值与容错口径见 docs/SDD_roles-dark.md §3。 */
     char     *fg_role;
     char     *bg_role;
 } cg_style_t;

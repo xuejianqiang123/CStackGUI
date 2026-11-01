@@ -2,7 +2,7 @@
  * @file    cg_win_modal.c
  * @brief   模态对话框：独立顶层窗口 + 子树原生懒建 + 内层消息泵
  * @details 契约见 docs/CGUI-FORMAT.md 第 4 节的 dialog 行；设计见
- *          .codebuddy/plans/f2-multi-window-sdd.md（决策 W：app->widgets 保持一棵树
+ *          docs/SDD_multi-window.md（决策 W：app->widgets 保持一棵树
  *          不分区 —— 对话框子树的 widget 对象启动时就建好了，这里只负责"原生"的生死：
  *          open 时建、close 时收。事件表一张照用（全局按名查），id 天然全局唯一）。
  */

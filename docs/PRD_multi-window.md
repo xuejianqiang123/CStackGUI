@@ -122,7 +122,7 @@ void cg_dialog_close(cg_widget_t *self, int result);
 
 - [x] P0 地基调研（运行时窗口模型 / 消息泵 / 契约 / 画布模型四路，结论见 §0）
 - [x] P1 PRD：本文件（§7 三条决策按推荐定案）
-- [x] P2 SDD：`.codebuddy/plans/f2-multi-window-sdd.md`（核心决策 W：`app->widgets` 保持一棵树不分区，
+- [x] P2 SDD：`docs/SDD_multi-window.md`（核心决策 W：`app->widgets` 保持一棵树不分区，
       窗口 = window 伪控件、子树懒建；**本轮零新字段**——`center` 与 Inspector 开关同轮（T2-full）再加）
 - [x] P2.5 T1.0 前置加固：画布对未知控件类型**静默降级成 label**（会连子树一起丢）→ 改成与运行时
       同口径"拒绝整份文件"。红绿证据：`tools/probe-dialog.mjs`（反例 2 条红，打印出
@@ -176,6 +176,6 @@ tabs（T4 可选项）都已真机验证（tools\probe-modal.c 51 项 ALL PASS�
 `cg_dialog_open_nonmodal`，对话框里装了**两页 tabs**；自检 74 控件 / 49 回调 / **未登记 0**，
 往返探针守着这棵子树（含 tabs）无损，README 与格式文档的口径同步（含"对话框里可以放 tabs"）。
 剩余只有 T4 后半（"引用另一个 .cgui"多文件组装）——那仍是另一个契约 epic，
-**2026-10-10 已立为 F3 并出了 PRD**：`.codebuddy/plans/f3-window-ref-prd.md`
+**2026-10-10 已立为 F3 并出了 PRD**：`docs/PRD_window-ref.md`
 （顶层 `include` 数组 + 加载期按目录展开 + 发布态由编译编进 PE 资源；切片 P1~P6）。
 F2 到此全部销账。

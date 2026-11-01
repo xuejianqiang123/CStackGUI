@@ -101,7 +101,7 @@ T1 完成后"深色不完整"的 README/契约口径要按事实改。
 
 - [x] P0 地基调研（本文件 §0，证据行齐全）
 - [x] P1 PRD：本文件（三条决策按推荐定案，说"继续"进 SDD）
-- [x] P2 SDD：`.codebuddy/plans/roles-dark-sdd.md`（T1 对照表 + edit 双拦截 + T2 结构/求值 + T3 接线点）
+- [x] P2 SDD：`docs/SDD_roles-dark.md`（T1 对照表 + edit 双拦截 + T2 结构/求值 + T3 接线点）
 - [x] P3a **T1 内置皮肤深色化（2026-10-07，`6f8c67d`）**：按钮禁用态 / meter / 无底色 edit 跟随主题；
       审计工程深浅截图验收（A2/A3）；契约与 README 深色口径按事实改写
 - [x] P3b **T2 角色运行时（2026-10-07，`d52428e`）**：roles{} + @引用 + 主题钩子求值 + test_roles.c
