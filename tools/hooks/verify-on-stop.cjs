@@ -60,6 +60,14 @@ function changedFiles() {
   }
 }
 
+/**
+ * 三态结果：true = 确证绿 ｜ false = 确证红 ｜ null = **判不出来**（超时 / 命令缺失 / python 没装）
+ *
+ * 为什么必须有第三种：旧实现把「跑不起来」也记成 false。于是某次 40s 超时会给该门禁写下
+ * 一个假红灯，而回归判据是 `prev === true && now === false` —— 下次真回归时 prev 是 false，
+ * **一次超时吃掉一次真回归**（2026-11-01 修）。判据不看 e.status 是区分不出来的：
+ * 进程真跑完并返回非 0 时 status 是数字；超时是 null、命令不存在是 undefined。
+ */
 function runGate(g) {
   try {
     const out = execFileSync(g.bin, g.args, {
@@ -76,40 +84,54 @@ function runGate(g) {
       .filter(Boolean)
       .slice(-4)
       .join("\n");
-    return { ok: false, tail };
+    if (typeof e.status === "number") return { ok: false, tail }; /* 真跑完了，确证红 */
+    return { ok: null, tail: `跑不起来（${e.code || e.signal || "unknown"}）：${tail}` };
   }
 }
 
-(async () => {
-  try {
-    const ev = await readStdin();
-    if (ev.stop_hook_active) return pass(); /* 已经在纠正循环里，放行 */
+/** 判不出来时**不覆盖**上次基线：一次超时不该抹掉「这条本来是绿的」这个已知事实 */
+function mergeGateState(prevGates, name, result) {
+  const out = Object.assign({}, prevGates || {});
+  if (result.ok !== null) out[name] = result.ok;
+  return out;
+}
 
-    const changed = changedFiles();
-    if (changed.length === 0) return pass(); /* 这轮没改东西 */
+/** 只有「上次确证绿 → 这次确证红」才是本次引入的回归；判不出来不算回归 */
+function isRegression(prevGates, name, result) {
+  return !!(prevGates && prevGates[name] === true && result.ok === false);
+}
 
-    const prev = readState();
-    const now = { at: new Date().toISOString(), gates: {} };
-    const regressions = [];
+async function main() {
+  const ev = await readStdin();
+  if (ev.stop_hook_active) return pass(); /* 已经在纠正循环里，放行 */
 
-    for (const g of GATES) {
-      const r = runGate(g);
-      now.gates[g.name] = r.ok;
-      if (prev && prev.gates && prev.gates[g.name] === true && r.ok === false) {
-        regressions.push(`${g.name}：\n${r.tail}`);
-      }
-    }
+  const changed = changedFiles();
+  if (changed.length === 0) return pass(); /* 这轮没改东西 */
 
-    writeState(now);
+  const prev = readState();
+  const prevGates = (prev && prev.gates) || {};
+  const now = { at: new Date().toISOString(), scope: "meta", gates: Object.assign({}, prevGates) };
+  const regressions = [];
 
-    if (regressions.length === 0) return pass();
-
-    return feedback(
-      `收工验证发现**本次新引入**的门禁红灯（上次是绿的，这次红了）：\n\n` +
-        regressions.join("\n\n") +
-        `\n\n请先修好再收工；若确认与本轮改动无关，说明情况即可（基线已更新，不会反复打断）。`
-    );
-  } catch (e) {
-    pass(); /* hook 自身出错必须静默放行 */
+  for (const g of GATES) {
+    const r = runGate(g);
+    now.gates = mergeGateState(now.gates, g.name, r);
+    if (isRegression(prevGates, g.name, r)) regressions.push(`${g.name}：\n${r.tail}`);
   }
-})();
+
+  writeState(now);
+
+  if (regressions.length === 0) return pass();
+
+  return feedback(
+    `收工验证发现**本次新引入**的门禁红灯（上次是绿的，这次红了）：\n\n` +
+      regressions.join("\n\n") +
+      `\n\n请先修好再收工；若确认与本轮改动无关，说明情况即可（基线已更新，不会反复打断）。`
+  );
+}
+
+module.exports = { runGate, mergeGateState, isRegression, GATES };
+
+if (require.main === module) {
+  main().catch(() => pass()); /* hook 自身出错必须静默放行 */
+}

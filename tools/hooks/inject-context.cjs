@@ -27,15 +27,24 @@ function sh(bin, args, ms = 6000) {
   }
 }
 
+/**
+ * 简报里的门禁结果必须写清**是谁的绿**。
+ *
+ * 历史缺陷（2026-11-01 修）：这里曾把三个元门禁（技能 / 路由 / 编制）的结果直接输出成
+ * 「上次收工门禁：全绿」。而编译、单测、跨端契约一次都没有被 Stop hook 跑过 ——
+ * 那句「全绿」是伪绿灯，与 `evidence-discipline` 伪证据清单里的
+ * 「退出码 0 ≠ 跑过」同型。业务门禁的真实位置是 pre-push 与 `tools\gate.bat`。
+ */
 function readLastGate() {
   try {
     const fs = require("fs");
     const p = path.join(ROOT, "tools", "hooks", ".last-gate.json");
     const s = JSON.parse(fs.readFileSync(p, "utf8"));
     const bad = Object.entries(s.gates || {})
-      .filter(([, ok]) => !ok)
+      .filter(([, ok]) => ok !== true)
       .map(([k]) => k);
-    return bad.length ? `红 ${bad.join(" / ")}` : "全绿";
+    const meta = bad.length ? `元门禁: 红 ${bad.join(" / ")}` : "元门禁: 全绿";
+    return `${meta} ｜ 业务门禁(编译/单测/契约): 未自动跑`;
   } catch (e) {
     return "";
   }
@@ -57,7 +66,7 @@ function readLastGate() {
     const lines = [
       "【环境简报】CStackGUI（Win32/GDI+ 桌面工具包 + Electron 画布）",
       `分支 ${branch}${head ? " · 最近 " + head : ""} ｜ 未提交改动 ${dirty} 个文件`,
-      `技能编制 ${teamCount} 个团${gate ? ` ｜ 上次收工门禁：${gate}` : ""}`,
+      `技能编制 ${teamCount} 个团${gate ? ` ｜ 门禁 ${gate}` : ""}`,
       "开工顺序：`expert-teams` 选团 → `sop` 定流程；改技能后跑 check-skills / check-routing / check-roster。",
     ];
 
