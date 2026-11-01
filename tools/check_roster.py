@@ -14,12 +14,14 @@
   C. 团队目录内**不得**有 SKILL.md（技能扫描遇到它就停止下钻，会吞掉整团）
   D. 顶层只允许 INDEX.md / _registry / expert-teams / 各团队目录
   E. INDEX 的 ROSTER 块与 TOML 一致（`--fix` 可重新渲染）
+  F. `expert-teams` §1 八团总表里手抄的成员列表 == TOML（2026-11-01 加）
 
 用法：
   python tools\\check_roster.py         校验
   python tools\\check_roster.py --fix   用 TOML 重写 INDEX 的 ROSTER 块
 退出码：0 = 一致；1 = 有漂移
 """
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -129,6 +131,38 @@ def main():
         if len(got) != len(want.splitlines()):
             fail("INDEX.md", f"ROSTER 有 {len(got)} 行，teams.toml 有 {len(want.splitlines())} 个团")
 
+    # F. expert-teams §1 总表：手抄的成员列表必须与 TOML 一致。
+    #    为什么加这条：总表是"选团"那一刻唯一会被读的表，但它手抄自 teams.toml ——
+    #    加 / 删 / 换团时漏改不会让编译或任何别的门禁变红，只会让点将点不到、或点到已走的技能。
+    #    为什么不直接渲染这张表：渲染会覆盖手写措辞（使命 / 何时点将都是人写的），
+    #    而校验同样能消灭"静默腐化"，代价小一个量级。
+    et = SKILLS / ENTRY / "SKILL.md"
+    if not et.exists():
+        fail("expert-teams", "缺 SKILL.md")
+    else:
+        et_rows = {}
+        for line in et.read_text(encoding="utf-8").splitlines():
+            if not line.startswith("|"):
+                continue
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) < 4:
+                continue
+            for t in teams:
+                if f"**{t['code']}" in cells[0]:
+                    et_rows[t["code"]] = set(re.findall(r"`([^`]+)`", cells[3]))
+        for t in teams:
+            code = t["code"]
+            want_s = set(t.get("skills", []))
+            if code not in et_rows:
+                fail("expert-teams/SKILL.md", f"§1 总表里找不到 {code} 那一行（表结构变了？）")
+            elif et_rows[code] != want_s:
+                miss = sorted(want_s - et_rows[code])
+                extra = sorted(et_rows[code] - want_s)
+                fail(
+                    "expert-teams/SKILL.md",
+                    f"§1 的 {code} 成员与 teams.toml 不一致：少 {miss} 多 {extra}",
+                )
+
     # 总数口径（INDEX 顶部那句）
     total = len(owner) + 1
     for line in text.splitlines():
@@ -138,7 +172,7 @@ def main():
                 fail("INDEX.md", f"技能总数写 **{num}**，实际 {total}（{len(owner)} 成员 + 1 入口）")
 
     if not bad:
-        print(f"[ok] 编制成立：{len(dirs_of)} 个团 / {len(owner)} 个成员技能 + 1 入口；TOML ↔ 磁盘 ↔ INDEX ROSTER 三处一致")
+        print(f"[ok] 编制成立：{len(dirs_of)} 个团 / {len(owner)} 个成员技能 + 1 入口；TOML ↔ 磁盘 ↔ INDEX ROSTER ↔ expert-teams 总表 四处一致")
 
 
 main()
