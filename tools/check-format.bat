@@ -191,6 +191,13 @@ echo   stop-hook gate judging (tri-state / regression-only)
 node tools\hooks\test-verify.cjs
 if errorlevel 1 exit /b 1
 
+rem  计划生命周期：新计划必须自报 active/done/superseded（历史 42 份走基线豁免）。
+rem  为什么要它：sop §6 让新会话"先读 plans 续跑"，读到做完的历史计划会把已完成的工作当待办重做，
+rem  而没有任何东西会因此变红。判据只查"有没有自报"，不猜内容 —— 内容要靠人读。
+echo   plans: new plans must declare lifecycle status
+node tools\check-plans.mjs
+if errorlevel 1 exit /b 1
+
 rem  八团编制：teams.toml ↔ 磁盘目录 ↔ INDEX 的 ROSTER。没装 Python 时跳过（不阻断构建）。
 where python >nul 2>nul
 if not errorlevel 1 (
