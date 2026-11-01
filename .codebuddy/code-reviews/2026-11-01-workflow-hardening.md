@@ -57,6 +57,17 @@
 
 **注意**：J2 / J3 否掉的是**第一轮自己提的建议**，取证后判定为负收益。理由已写进计划 §9，防止后人重提。
 
+## 3.6 第三轮：产出物目录归一（按用户决定）
+
+| 项 | 结论 | 证据 |
+|---|---|---|
+| 迁移 | **实际 5 份，不是 4 份**：除 `f2-multi-window` / `roles-dark` 两组外，`plans/f3-window-ref-prd.md` 也是 PRD（状态「PRD 待确认」） | `git mv` 输出 5 条 `R`，历史保留 |
+| 新命名 | `docs/PRD_multi-window.md` / `SDD_multi-window.md` / `PRD_roles-dark.md` / `SDD_roles-dark.md` / `PRD_window-ref.md` | 全部匹配 `^(PRD\|SDD)_[a-z0-9-]+\.md$` |
+| 引用同步 | 9 处：4 份文档内部互相引用 + `plans/py880-absorption.md` + 3 处运行时/测试注释 | 全仓复扫 `plans/(f2-multi-window\|roles-dark\|f3-window-ref)`：仅剩 1 条历史审查报告（`code-reviews/2026-10-07-*`，故意不改，那是当时的记录） |
+| 基线更新 | `plans-baseline.json` 42 → **37**（迁走的 5 份出册） | `[ok] 计划生命周期：新增 1 份均自报 status，历史 37 份走基线豁免` |
+| 路径判据 | 新增 `tools\check-docs.mjs`，双向三条规则 + 接入 `check-format.bat` | 正例 `[ok] 产出物路径合规：docs/ 与 plans/ 共 47 份`；反例两个探针分别触发规则 B / C，报错精确到文件名与改法；探针已删、复跑回绿 |
+| 全量门禁 | `tools\gate.bat`（含重编 58 个运行时文件，因改了 `cg_doc.h` 注释） | `[ok] gate passed (full)` |
+
 ## 4. 遗留
 
 | 项 | 状态 | 理由 |

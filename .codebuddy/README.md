@@ -240,6 +240,12 @@ AI 自动执行：
 | 技能 | `.codebuddy/skills/` | `<name>/SKILL.md` | ✅ | `skills-create` |
 | 项目记忆 / 并行运行态 | `.codebuddy/memory/`、`teams/` | — | ❌（已 .gitignore） | 工具运行时 |
 
+> **位置是硬判据**（2026-11-01 加 `tools\check-docs.mjs`）：PRD / SDD / 切片清单**只认** `docs/` 下的
+> `PRD_<feature>.md` / `SDD_<feature>.md` / `SLICES_<feature>.md`（feature 用短横线小写）；
+> `.codebuddy/plans/` **只放实现计划**（`<feature>.md` + 开头一行 `> 状态：active|done|superseded`）。
+> 这条判据是被现实逼出来的：规范写了几个月，而 `docs/` 下**一份 PRD 都没有**——5 份全躺在
+> `plans/` 里带 `-prd.md` / `-sdd.md` 后缀，没有任何命令会发现。同日已迁回 `docs/`。
+
 ---
 
 ## 8. 扩展与维护

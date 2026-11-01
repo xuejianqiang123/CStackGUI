@@ -230,3 +230,28 @@ H4 用「故意改错 INDEX 总数」的方式验证（见报告 §2）。
 **改为**：`README.md` §8 写清这个错配（JSON 结构 vs Markdown 产出物），
 并指出真正机器化的顺序是"先定 Markdown 章节约定，再写 md 校验器"。
 结构约束暂时仍由 `sop` §2 各段 DoD + `check-plans.mjs` 的 status 判据承担。
+
+### J4 产出物目录归一 —— 按用户决定执行（"迁 docs/ 并加路径判据，按规范来"）
+
+**实际是 5 份，不是 4 份**：`plans/f3-window-ref-prd.md`（状态「PRD 待确认」）也是 PRD，
+原分析漏数了。一并迁。
+
+| 原位置 | 新位置 |
+|---|---|
+| `plans/f2-multi-window-prd.md` | `docs/PRD_multi-window.md` |
+| `plans/f2-multi-window-sdd.md` | `docs/SDD_multi-window.md` |
+| `plans/roles-dark-prd.md` | `docs/PRD_roles-dark.md` |
+| `plans/roles-dark-sdd.md` | `docs/SDD_roles-dark.md` |
+| `plans/f3-window-ref-prd.md` | `docs/PRD_window-ref.md` |
+
+- 用 `git mv`（`git status` 显示 `R`，历史保留）。
+- 同步 9 处引用：4 份文档内部互引 + `plans/py880-absorption.md` + 3 处运行时/测试注释
+  （`cg_doc.c` / `cg_doc.h` / `cg_win_modal.c` / `test_roles.c`）。
+- **故意不改**：`.codebuddy/code-reviews/2026-10-07-多窗体T1.1-T2最小集.md` 里的旧路径 ——
+  那是当时的审查记录，改它等于篡改历史；判据也不检查历史目录内部引用。
+- `plans-baseline.json` 42 → 37（迁走的出册）。
+- **新增判据** `tools\check-docs.mjs`（接入 `check-format.bat`），三条规则：
+  A. `docs/` 不许旧命名（`*-prd.md` / `*-sdd.md` / `*-slices.md`）；
+  B. `plans/` 不许出现 PRD / SDD / 切片（不管新旧命名）；
+  C. `docs/` 下带前缀的文件必须 `<PRD|SDD|SLICES>_<小写短横线>.md`。
+- 验证：正例 47 份合规；反例两个探针分别触发 B / C，报错精确到文件名与改法；探针已删。

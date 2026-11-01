@@ -191,11 +191,18 @@ echo   stop-hook gate judging (tri-state / regression-only)
 node tools\hooks\test-verify.cjs
 if errorlevel 1 exit /b 1
 
-rem  计划生命周期：新计划必须自报 active/done/superseded（历史 42 份走基线豁免）。
+rem  计划生命周期：新计划必须自报 active/done/superseded（历史 37 份走基线豁免）。
 rem  为什么要它：sop §6 让新会话"先读 plans 续跑"，读到做完的历史计划会把已完成的工作当待办重做，
 rem  而没有任何东西会因此变红。判据只查"有没有自报"，不猜内容 —— 内容要靠人读。
 echo   plans: new plans must declare lifecycle status
 node tools\check-plans.mjs
+if errorlevel 1 exit /b 1
+
+rem  产出物路径：PRD / SDD / 切片只认 docs/ 的标准命名，plans/ 只放实现计划。
+rem  为什么要它：规范写了 docs/PRD_<feature>.md，但 2026-11-01 实测 docs/ 下一份 PRD 都没有 ——
+rem  5 份全躺在 plans/ 里带 -prd.md 后缀，而没有任何命令会发现。
+echo   output paths: PRD/SDD/slices in docs/, plans/ only implementation plans
+node tools\check-docs.mjs
 if errorlevel 1 exit /b 1
 
 rem  八团编制：teams.toml ↔ 磁盘目录 ↔ INDEX 的 ROSTER。没装 Python 时跳过（不阻断构建）。
