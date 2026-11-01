@@ -184,3 +184,49 @@ H4 用「故意改错 INDEX 总数」的方式验证（见报告 §2）。
    这类坑正是本仓 `sop` §3 铁律 1 说的「cmd 解析整行时展开」的同一族。
 
 **遗留**：见 §7 与审查报告 §4。
+
+---
+
+## 9. 第二轮（同日续做 §7 遗留）
+
+### J1 计划生命周期判据 —— 做了
+
+**新增** `tools/check-plans.mjs` + `tools/fixtures/plans-baseline.json`，接入 `check-format.bat`。
+
+- 判据只有一条：**不在基线里的新计划**，开头 12 行内必须有 `> 状态：active|done|superseded`。
+- 历史 42 份走**基线豁免**（与 `check-header.mjs` 的公共 API 基线同款），不要求回填 ——
+  "这份到底做完了没"只能靠人读，机械回填等于造假。
+- 验证：正例 `[ok] 新增 1 份均自报 status，历史 42 份走基线豁免`；
+  反例（临时建一份无状态的 md）→ `[fail] plans/_probe-no-status.md：新计划没自报生命周期`。
+
+### J2 命令形态一致性判据 —— **否掉，改为一次性修正 4 处**
+
+**取证结论**：扫 `.codebuddy` 下全部 md，`tools/` 正斜杠与 `build-all` 缺 `.bat` 的命中 18 条，
+其中**只有 4 条是真该改的**：
+
+| 真违规 | 修法 |
+|---|---|
+| `global-rule.md:149` 的 `npx tsc` 缺 `cd designer` | 改成 `cd designer && npx tsc --noEmit && npx vite build` |
+| `firmware_code_style/SKILL.md:117` 的 `tools/run-tests.bat` | 反斜杠 |
+| `plan-architecture/SKILL.md:18` 的 `tools/check-format.bat` | 反斜杠 |
+| `INDEX.md` 的 F 节表格里第二处 `tools/check-format.bat` | 反斜杠 |
+
+其余 14 条全是**合法用法**：反面样例（"`build-all` 不带 `.bat` … 一律以该表纠正"）、
+流程叙述（"`build-all` → `run-tests` → `check-format`"）、版本历史记录（v0.10 描述当年做了什么）、
+计划里的历史引用。
+
+**否掉理由**：判据要区分这四类用法，等于往规则里塞一张越来越长的例外表；
+而真违规只有 4 处，一次性修完成本更低、且不会误伤。
+**这条与第一轮的建议相反——第一轮把"加判据"估成 3 小时 P2，取证后判定为负收益。**
+
+### J3 schemas 接 validator —— **否掉，改为把真相写清**
+
+**取证结论**：两个 `*.schema.json` 描述的是 **JSON 对象结构**（`type: object` + `required` + `properties`），
+而产出物是 **Markdown**。两者之间**没有映射规范**。
+
+所以"接个 validator"不是写个 JSON Schema 校验器，而是要先定义 md 章节 ↔ 字段的对应关系
+—— 那又会变成一份新的手工事实，且判据上线当天会红掉全部历史产出物。
+
+**改为**：`README.md` §8 写清这个错配（JSON 结构 vs Markdown 产出物），
+并指出真正机器化的顺序是"先定 Markdown 章节约定，再写 md 校验器"。
+结构约束暂时仍由 `sop` §2 各段 DoD + `check-plans.mjs` 的 status 判据承担。

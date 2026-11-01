@@ -114,7 +114,7 @@ char *cg_read_file(const char *path);
 - **定性来源看颜色**：扫到实心线后把该行平均颜色打出来（如 `RGB=B8B2BD`），和皮肤调色板比对——`SK_EDGE_GREY=B8B2BD` 一对上就知道是皮肤画的，能省掉大量瞎猜。
 - **测试框架 stdout 设无缓冲**（`cg_test_main.c` 里 `setvbuf(stdout, NULL, _IONBF, 0)`）：否则重定向到文件是 4KB 块缓冲，卡死/被杀时缓冲丢失，永远看不到真实进度。
 - **排查坑**：进程被命令超时杀掉会给出伪退出码 `0xCFFFFFFF`（看着像崩溃，其实不是 AV，是被杀了）；`run-tests.bat` 会 `cd` 到 `build/tests` 再跑 exe，测试里写相对路径会偏移，要落盘诊断文件就用绝对路径。
-- **跑全量单测**用 `tools/run-tests.bat --no-kit`；中文 `--grep` 参数会因控制台编码被搅，改在测试里打 ASCII tag（如 `"round 25"`）再筛。
+- **跑全量单测**用 `tools\run-tests.bat --no-kit`；中文 `--grep` 参数会因控制台编码被搅，改在测试里打 ASCII tag（如 `"round 25"`）再筛。
 
 ## 输出格式
 

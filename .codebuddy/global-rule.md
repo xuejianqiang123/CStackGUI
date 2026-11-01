@@ -146,7 +146,7 @@ AI 最常见的失败不是"不知道"，而是**自信地说错**；攻击的�
 以下环节为**质量门禁**，必须通过才能进入下一阶段：
 
 1. **验证门禁**（`piv-validate`）：
-   - 编译无新增错误/警告（`build-all.bat`；改了画布叠 `npx tsc --noEmit` + `npx vite build`）
+   - 编译无新增错误/警告（`build-all.bat`；改了画布叠 `cd designer && npx tsc --noEmit && npx vite build`）
    - 行为验证通过（按计划的验证方法；GUI / 通信类改动走 `serial_verify` 真机实测）
    - 边界/异常路径覆盖
    - **每条验收命令都必须"能失败"**：判定要读日志，不信 `%errorlevel%` 回显

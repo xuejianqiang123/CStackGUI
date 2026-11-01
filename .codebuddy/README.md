@@ -246,12 +246,16 @@ AI 自动执行：
 
 - **加技能** → 用 `skills-create`（位置 / 命名 / frontmatter / 模板 / 质量要求都在它的 `SKILL.md` 里，本文件不重复）。
 - **改 / 删 / 改名技能** → 按 `skills/INDEX.md` 的**维护检查清单**逐条过：同步 INDEX（含顶部计数与日期）+ `global-rule.md`（§6 流程 / §7 映射）+ 本文件；跨技能引用不许留断链。
-- **产出物 Schema**（诚实说明）：`.codebuddy/schemas/` 下有 `implementation-plan.schema.json` 与
-  `review-report.schema.json`，但**没有任何工具自动校验**（`tools/` 里没有 validator）。
-  2026-10-07 的处置：不删、也不假装它生效 —— `sop` §2 把两个 schema 要求的字段**内联成每段的 DoD**
-  （计划要"验证方法 + 边界清单 + 回滚方式"、报告要"等级 + 位置 + 原理 + 修复示例"），
-  由人和 AI 按 DoD 写；schema 文件保留为**结构出处**。要真正机器化，就写一个 validator 接进
-  `tools\check-format.bat` —— 在那之前别把它算进门禁。
+- **产出物 Schema**（诚实说明，2026-11-01 重新核过）：`.codebuddy/schemas/` 下有两个
+  `*.schema.json`，但它们描述的是 **JSON 对象结构**（`type: object` + `required` + `properties`），
+  而本工程的计划与报告实际是 **Markdown**。两者之间**没有映射规范** —— 所以"接一个 validator"
+  不是写个 JSON Schema 校验器就能完事，得先定义 md 章节 ↔ 字段的对应关系。
+  处置（沿用 2026-10-07 的"不删、不假装生效"，2026-11-01 补上理由）：
+  结构约束由 `sop` §2 每段的 DoD 承担（计划要"验证方法 + 边界清单 + 回滚方式"、
+  报告要"等级 + 位置 + 原理 + 修复示例"）；另加一条**真门禁**——`tools\check-plans.mjs`
+  只硬性要求新计划自报 `active / done / superseded`，其余字段仍靠人读。
+  将来要彻底机器化，顺序是**先定 Markdown 章节约定，再写 md 校验器**；
+  直接拿这两个 JSON schema 当判据，会红掉全部历史产出物，而判的也不是真正关心的东西。
 
 ---
 

@@ -15,7 +15,7 @@ argument-hint: [prd-path-or-feature-description]
 
 - **先画模块边界，再写代码**：数据流、职责划分必须先清晰。
 - **继承项目现有模式**：优先复用 `runtime/src`（core / win32 / skin / kit）与 `designer/src` 已有的能力，不重复造轮子。
-- **跨端契约先行**：`.cgui` 字段语义、控件类型表、事件绑定表都是"同一事实两份"的地方，动了必须两端同步（`tools/check-format.bat` 兜底）。
+- **跨端契约先行**：`.cgui` 字段语义、控件类型表、事件绑定表都是"同一事实两份"的地方，动了必须两端同步（`tools\check-format.bat` 兜底）。
 - **接口先行**：定义好模块间 API 契约，实现可并行。
 
 ## 架构设计检查清单

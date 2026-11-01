@@ -47,6 +47,16 @@
 
 **健康度**：4 条指控，1 条成立（且降级）→ 成立率 25%，驳回率 75%。辩护方给出了反证出处，不是橡皮图章。
 
+## 3.5 第二轮（同日续做 §4 遗留）
+
+| 项 | 结论 | 证据 |
+|---|---|---|
+| J1 计划生命周期判据 | **做了**：新增 `tools/check-plans.mjs` + `tools/fixtures/plans-baseline.json`，接入 `check-format.bat` | 正例 `[ok] 新增 1 份均自报 status，历史 42 份走基线豁免`；反例（临时建无状态 md）→ `[fail] plans/_probe-no-status.md：新计划没自报生命周期`；探针已删除，复跑回绿 |
+| J2 命令形态判据 | **否掉，改一次性修正 4 处** | 扫全部 md 命中 18 条，只有 4 条真该改（`global-rule:149` 缺 `cd designer`、`firmware_code_style:117`、`plan-architecture:18`、`INDEX.md` F 节表格）；其余 14 条是反面样例 / 流程叙述 / 版本记录。改后复扫技能正文：**0 残留** |
+| J3 schemas validator | **否掉，改把真相写清** | 两个 schema 是 JSON 对象结构，产出物是 Markdown，二者无映射规范；见 `README.md` §8 新说明 |
+
+**注意**：J2 / J3 否掉的是**第一轮自己提的建议**，取证后判定为负收益。理由已写进计划 §9，防止后人重提。
+
 ## 4. 遗留
 
 | 项 | 状态 | 理由 |

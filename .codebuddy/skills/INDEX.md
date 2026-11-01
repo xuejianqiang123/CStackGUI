@@ -274,7 +274,7 @@ ROSTER:END -->
 |---|---|
 | **验收命令必须"能失败"**：判定读日志，不信 `%errorlevel%` 回显（cmd 在解析整行时就展开了它）；`\| findstr` 后的退出码是 findstr 的；GBK 管道里的中文 grep 恒空 | `piv-validate`「验证完整性」 |
 | 用于决策的度量先人工抽验样本；"仅注释/格式"改动要给骨架等价证明；批量编辑后查副作用 | `piv-validate`「验证完整性」 |
-| **"同一事实有两份"的地方必须机器同步**：控件类型表（`k_kinds` ↔ `KINDS`）、事件表、`.cgui` 字段语义、动作表 —— 靠 `tools\check-format.bat` 兜 | 项目根 `README.md` §3.4 + `tools/check-format.bat` |
+| **"同一事实有两份"的地方必须机器同步**：控件类型表（`k_kinds` ↔ `KINDS`）、事件表、`.cgui` 字段语义、动作表 —— 靠 `tools\check-format.bat` 兜 | 项目根 `README.md` §3.4 + `tools\check-format.bat` → 已并入 `tools\gate.bat` |
 | **文档与代码不一致时按代码改文档**，并把该补的测试补上 | 项目根 `README.md` |
 | **技能文本会随上游模板腐坏**：2026-09-27 实测 8 个必经技能里残留 `idf.py build` / `ai_code_review.py` / 错误的"本项目"模型（含 `prime-codebase`、`piv-validate`） | 本文件 + `skills-create` 的维护清单 |
 | 并行成员的"可失败验收 / 报告丢了什么 / 文件所有权互斥 / 逐条回执" | `team-parallel-delivery` |
