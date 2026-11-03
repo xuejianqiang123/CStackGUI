@@ -1,0 +1,60 @@
+CStackGUI 专有软件许可协议
+Proprietary License for CStackGUI
+
+Copyright (c) 2026 xuejianqiang <712418195@qq.com>. 保留所有权利 / All rights reserved.
+
+本协议适用于本仓库中的全部内容：C 运行时库（runtime\）、画布（designer\）、
+门禁与打包脚本（tools\、packaging\、根目录 *.bat）、示例（examples\）、
+文档（docs\、README.md）以及 `.codebuddy\` 下的 AI 工作流配置。
+下文统称"本软件"。
+
+--------------------------------------------------------------------------
+一、授予你的权利
+
+1. 使用与修改：你可以为本项目或你自己的产品使用、复制、修改本软件，无需付费。
+2. 分发你的应用：你可以将用本软件构建的应用程序（含由 runtime 静态链接而成的
+   可执行文件）以任意方式分发，包括商业分发，无需另行授权、无需支付费用、
+   无需在成品中标注来源。
+3. 内部协作：你可以在你的团队或组织内部共享本软件的修改版，用于开发你自己的产品。
+
+--------------------------------------------------------------------------
+二、限制
+
+1. 不得再分发本软件本身或其修改版：包括上传到公开仓库、镜像站、包管理器，
+   或以源码、二进制、教程附件等形式提供给第三方。
+2. 不得用本软件提供与本软件实质相同或竞争的产品或服务（包括但不限于把 runtime
+   或画布改名后作为自己的 GUI 框架、控件库、低代码工具发布）。
+3. 不得移除或遮蔽本软件任何文件中的版权声明与本协议文本。
+4. 第 1 条允许的"分发你的应用"不包括把本软件作为 SDK 交付给你的客户：
+   你的客户需要本软件才能编译他们自己的界面时，须单独取得书面授权。
+
+--------------------------------------------------------------------------
+三、无担保
+
+本软件按"现状"提供，不附带任何明示或默示的担保，包括但不限于适销性、
+特定用途适用性与不侵权的担保。因使用本软件产生的任何直接或间接损失
+（含数据丢失、业务中断、利润损失），作者不承担责任。
+
+--------------------------------------------------------------------------
+四、终止
+
+你违反本协议任一条款时，本协议授予的权利自动终止，你须立即停止使用并删除
+本软件的全部副本。终止不影响你在此前已构建并分发的应用的合法性。
+
+--------------------------------------------------------------------------
+五、其他
+
+本协议适用中华人民共和国法律。本协议条款如与你有另行签署的书面协议冲突，
+以书面协议为准。
+
+如需商业授权（再分发、OEM、作为 SDK 交付等），联系 712418195@qq.com。
+
+--------------------------------------------------------------------------
+English summary (for reference only; the Chinese text above prevails)
+
+You may use, modify and build applications with this software for free, and
+distribute your own applications (including commercially) without attribution.
+You may NOT redistribute this software itself or a modified version of it, nor
+use it to build a competing framework, control library or low-code tool, nor
+deliver it as an SDK to your customers without a separate written license.
+Provided "as is", without warranty of any kind.
