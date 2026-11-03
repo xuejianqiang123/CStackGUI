@@ -262,20 +262,24 @@ let roleHostId = "";
  * 而且 C 侧自检发现不了（没有 include 的文档照样能通过）—— 必须在这里盯住。 */
 const probeInclude = { path: "../common/port_dlg.cgui", pick: "dlg_port" };
 /* 探针目标必须真的能从**输出文件所在目录**解析出来：运行时按"相对包含它的 .cgui"
- * 解析 include，而输出位置因环境而异 —— 源码树里是 build\（../common 正好命中仓库的
- * common\），发布包里是 release\build\（旁边没有 ..\common\，真实文件在
- * examples\common\）。目标不在就明确跳过，别把"探针引用了不存在的文件"算成运行时
- * 拒绝（2026-10-18 make-release 自检抓到：exit=3 绑定出错，真因藏在 include 展开
- * 失败的日志里）。 */
-const probeIncludeOk = fs.existsSync(path.join(path.dirname(output), "..", "common", "port_dlg.cgui"));
-{
-  if (probeIncludeOk) {
-    doc.include = [...(doc.include ?? []), probeInclude];
-    touched += 1;
-  } else {
-    console.log("[note] ../common/port_dlg.cgui 从输出目录解析不到，跳过 include 探针");
-  }
+ * 解析 include，输出位置因环境而异 —— 源码树里是 build\（../common 命中仓库 common\），
+ * 发布包里是 release\build\（靠 make-release.bat 把 common\ 一并装进包）。
+ *
+ * 2026-11-03 改判据：这里原本是"解析不到就打 [note] 跳过"。跳过 = 这条守卫在最需要它的
+ * 时候把自己关了，门禁照样绿，而 include 字段丢了没人知道（同批治的 README 死链接是
+ * 一个病：检查不覆盖的地方，腐化不会被发现）。真实约束是"夹具必须跟着输出目录走"，
+ * 所以改成硬失败 —— 解析不到就退出，逼人修夹具位置或用默认输出目录。
+ * 2026-10-18 make-release 那次 exit=3（真因藏在 include 展开失败里）由发布包装 common\
+ * 解决，不再靠跳过回避。 */
+const includeTarget = path.join(path.dirname(output), "..", "common", "port_dlg.cgui");
+if (!fs.existsSync(includeTarget)) {
+  console.error(`[fail] include 探针目标不在：${includeTarget}`);
+  console.error("    运行时按输出文件所在目录解析 include，夹具必须在 ../common/port_dlg.cgui");
+  console.error("    源码树：输出到 build\\ 即命中仓库 common\\；发布包：make-release.bat 会装 common\\");
+  process.exit(1);
 }
+doc.include = [...(doc.include ?? []), probeInclude];
+touched += 1;
 
 const written = serializeDoc(doc);
 fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -450,14 +454,14 @@ console.log(`[ok] 画布改动 ${touched} 处，写出 ${output}（${written.len
   }
 
   /* include[]（F3）逐字核对：path 与 pick 一个都不能丢 —— 丢了 = 引用来的界面整块消失，
-   * C 侧自检对此无感（它只校验能解析的部分）。 */
+   * C 侧自检对此无感（它只校验能解析的部分）。
+   * 2026-11-03：探针现在无条件挂上（目标不可解析时上游已硬失败），所以这里不再有
+   * "本轮未挂就跳过核对"的分支 —— 少一条能静默通过的路，就少一次假绿。 */
   {
     const want = doc.include?.[doc.include.length - 1];
     const gotList = back.doc?.include;
     const got = gotList?.find((x) => x.path === want?.path);
-    if (!probeIncludeOk) {
-      console.log("[note] include 探针本轮未挂（目标文件不在输出目录旁），跳过核对");
-    } else if (!want) {
+    if (!want) {
       console.error("[fail] 探针没把 include 写进文档（自测脚本问题）");
       lost += 1;
     } else if (!got || got.pick !== want.pick) {
