@@ -102,6 +102,13 @@ if errorlevel 1 (
     echo [fail] 复制 examples 失败
     exit /b 1
 )
+rem common\ 是门禁夹具（tools\format-roundtrip.mjs 的 ../common 上级引用靶子），必须跟着走：
+rem 发布包自检在 release\build\ 下跑往返，缺了它探针就解析不到目标 —— 以前是"跳过"，现在是失败。
+xcopy /e /i /q /y common release\common >nul
+if errorlevel 1 (
+    echo [fail] 复制 common 失败（format-roundtrip 的 ../common 夹具，发布包自检要用）
+    exit /b 1
+)
 rem 示例目录里那份 lib 是用系统路径链接的，发布包里统一用 runtime\lib，删掉避免混淆
 for /d %%a in (release\examples\*) do rmdir /s /q "%%a\lib" 2>nul
 copy /y packaging\build-app.bat release\build-app.bat >nul
@@ -203,17 +210,19 @@ if errorlevel 1 (
     echo [fail] 发布包里编译出来的示例自检没过
     exit /b 1
 )
-rem 记事本示例用到 cg_kit（文件/配置/编码），顺带验证发布包的运行时库
-call build-app.bat suites\text
+rem 记事本示例（studio 套件的 nt 模块）用到 cg_kit（文件/配置/编码），顺带验证发布包的运行时库。
+rem 2026-11-03 修：原来指向 suites\text，那个套件早并进 studio\sys 了 —— 这一行会让发布包构建
+rem 在 [fail] 里直接退出，而没人跑到这一步就发现不了。
+call build-app.bat suites\studio
 if errorlevel 1 (
     popd
-    echo [fail] 发布包里编译 cg_kit 示例失败
+    echo [fail] 发布包里编译 cg_kit 示例（studio 套件）失败
     exit /b 1
 )
-examples\suites\text\text.exe --selftest examples\suites\text\text.cgui
+examples\suites\studio\studio.exe --selftest examples\suites\studio\studio.cgui
 if errorlevel 1 (
     popd
-    echo [fail] 发布包里记事本示例自检没过
+    echo [fail] 发布包里 studio 套件自检没过
     exit /b 1
 )
 call tools\check-format.bat
