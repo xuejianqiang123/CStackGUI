@@ -222,7 +222,7 @@ function lessonsScaleBlock() {
 }
 
 /* ================= examples\README.md 的自动索引（2026-10-18 示例合并 P4 之后） =================
- * 合并后 examples/ 从 30 个平铺工程变成「六课 + 四套件 + 三个独立工程」，新布局的门面
+ * 合并后 examples/ 从 30 个平铺工程变成「六课 + 若干套件 + 独立工程」三类，新布局的门面
  * 就是这张索引。它与事实表同一套哲学：**由目录生成，文档只允许贴生成结果，--docs 回校** ——
  * 手写索引必然在下一次合并/加工具时过期（"目录改了索引没改"就是又一个漂移的事实）。
  * 页签名直接取自套件 .cgui 的 tabs.items（合并器写进去的就是工具名），不另立一份名单。 */
@@ -244,12 +244,12 @@ function exIndexBlock() {
   out.push("");
   out.push("## 合并套件（`examples\\suites\\`）");
   out.push("");
-  out.push("21 个工具并成 4 个**多页签工程**：main 只做入口（拼绑定表 / 窗口事件分发器），");
-  out.push("每个工具的完整逻辑在自己的模块里（照抄价值零损失）。编译一个套件 = 编出全部页签。");
-  out.push("");
-  out.push("| 套件 | 页签（工具） | 编译 | 运行 / 自检 | 逐工具文档 |");
-  out.push("| --- | --- | --- | --- | --- |");
+  /* 数字不写死：套件数 = examples\suites\ 的目录数，工具数 = 各套件 .cgui 的 tabs.items 之和。
+   * 2026-11-03 之前这里是硬编码的「21 个工具并成 4 个」，合并成 studio/sys 之后那句话就再没
+   * 人改过 —— 文档里最像真话的一句假话。数字从目录生成，才不会在下次合并时又漂。 */
   const suitesDir = path.join(EX_DIR, "suites");
+  const suiteRows = [];
+  let toolCount = 0;
   if (fs.existsSync(suitesDir)) {
     for (const e of fs.readdirSync(suitesDir, { withFileTypes: true })) {
       if (!e.isDirectory()) continue;
@@ -257,15 +257,23 @@ function exIndexBlock() {
       let doc = {};
       try { doc = JSON.parse(fs.readFileSync(cgui, "utf8")); } catch { doc = {}; }
       const tabs = (doc.widgets ?? []).find((w) => w.type === "tabs");
-      const pages = (tabs?.items ?? []).join(" / ") || "-";
+      const items = tabs?.items ?? [];
+      toolCount += items.length;
+      const pages = items.join(" / ") || "-";
       const docsDir = path.join(suitesDir, e.name, "docs");
       const nDocs = fs.existsSync(docsDir) ? fs.readdirSync(docsDir).filter((f) => f.endsWith(".md")).length : 0;
-      out.push(
+      suiteRows.push(
         `| \`${e.name}\` | ${pages} | \`build-app.bat suites\\${e.name}\` | ` +
           `\`examples\\suites\\${e.name}\\${e.name}.exe\` | \`suites\\${e.name}\\docs\\*.md\`（${nDocs} 份） |`,
       );
     }
   }
+  out.push(`${toolCount} 个工具并成 ${suiteRows.length} 个**多页签工程**：main 只做入口（拼绑定表 / 窗口事件分发器），`);
+  out.push("每个工具的完整逻辑在自己的模块里（照抄价值零损失）。编译一个套件 = 编出全部页签。");
+  out.push("");
+  out.push("| 套件 | 页签（工具） | 编译 | 运行 / 自检 | 逐工具文档 |");
+  out.push("| --- | --- | --- | --- | --- |");
+  out.push(...suiteRows);
   out.push("");
   out.push("## 独立工程（一个工程就是它自己，不并套件）");
   out.push("");
