@@ -198,10 +198,16 @@ echo   plans: new plans must declare lifecycle status
 node tools\check-plans.mjs
 if errorlevel 1 exit /b 1
 
-rem  产出物路径：PRD / SDD / 切片只认 docs/ 的标准命名，plans/ 只放实现计划。
-rem  为什么要它：规范写了 docs/PRD_<feature>.md，但 2026-11-01 实测 docs/ 下一份 PRD 都没有 ——
-rem  5 份全躺在 plans/ 里带 -prd.md 后缀，而没有任何命令会发现。
-echo   output paths: PRD/SDD/slices in docs/, plans/ only implementation plans
+rem  路径判据，两件事：
+rem    1. 产出物去向 —— PRD / SDD / 切片只认 docs/ 的标准命名，plans/ 只放实现计划。
+rem       规范写了 docs/PRD_feature.md，但 2026-11-01 实测 docs/ 下一份 PRD 都没有 ——
+rem       5 份全躺在 plans/ 里带 -prd.md 后缀，而没有任何命令会发现。
+rem    2. README 4.1 的目录地图 —— 写进去的每个路径必须真实存在。
+rem       2026-11-03 实测那棵树里 19 条指向不存在的目录：suites\comm\dev\text 早并成
+rem       studio/sys，16 个 examples\tool 早并成套件的 modules，外加重复的 toolbox
+rem       和不存在的 tools\gen-launcher.bat。树已砍成骨架，这条判据防止它重新长成
+rem       一份会腐化的磁盘副本。
+echo   paths: docs/ naming + README directory map must resolve
 node tools\check-docs.mjs
 if errorlevel 1 exit /b 1
 
