@@ -280,9 +280,16 @@ tools\check-kit.bat                                              :: cg_kit 基�
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\bat-utf8.ps1 -Mode fix
                                                                  :: 动过 .bat 之后跑：UTF-8 无 BOM + ASCII 前导，否则双击时注释被当命令跑
 
-:: 画布（designer 目录里执行）
-npm install / npm run dev / npm run build / npm run dist
+:: 画布
+designer-dev.bat                                                 :: 开发模式：首次自动 npm install，然后 vite 热更新 + electron
+build-cstackgui.bat                                              :: 打包画布 -> designer\release\CStackGUI.exe，并同步到 release\
+
+:: 打包发布
+make-release.bat                                                 :: 运行时 + 示例 + 画布 + 安装包 -> release\（内含自检，跑完才算成）
 ```
+
+画布也可以进 `designer\` 手动跑 `npm install` / `npm run dev` / `npm run build` / `npm run dist`，
+上面两个 bat 只是把这两条常用路径固定下来，免得每次记目录。
 
 ---
 
@@ -380,103 +387,32 @@ cd designer && npx tsc --noEmit && npx vite build   :: 改了画布时
 
 ```
 CStackGUI\
-  README.md                    本文件（开发者视角）
-  docs\ARCHITECTURE.md         架构设计与取舍
-  docs\CGUI-FORMAT.md          .cgui 字段规范 + C API 速查
-  designer\                    画布源码（Electron + React + TS）
-    src\model.ts               .cgui 数据模型 + KIND_EVENTS 事件表（与 cg_doc.c 对应）
-    src\supportlib.ts          「支持库」页签的数据：C API 中文索引（与 cstackgui.h 对齐）
-    src\codegen.ts             导出骨架（C / C++ 两套模板）
-    electron\main.mjs          文件读写、导出、菜单、项目根记忆（便携版自动识别）
-  runtime\                     C 运行时库
-    include\cstackgui.h        业务代码唯一需要 include 的头
-    src\core\                  后端无关层（JSON / 文档 / 控件模型 / 事件 / 生命周期）
-      cg_json.c                只读 JSON 解析
-      cg_doc.c                 .cgui -> 控件文档树（解析 / 释放 / 打印）
-      cg_doc_kind.c            控件类型表 k_kinds（含每种控件支持的事件）
-      cg_event.c               事件名表、回调绑定解析、事件派发
-      cg_widget.c              运行时控件模型：构建、查找、属性 API
-      cg_widget_data.c         路标：七个文件各管什么（原 1149 行按控件族拆开）
-      cg_widget_list.c         列表 / 状态栏 / 菜单 / 提示 / 时钟 / 图片
-      cg_widget_tree.c         树（含跨文件共用的 want_type）
-      cg_widget_table.c        表格
-      cg_widget_tabs.c         标签页
-      cg_widget_split.c        分隔条
-      cg_widget_term.c         终端（日志视图）
-      cg_widget_gauge.c        图表 / 状态灯 / 仪表盘
-      cg_bind.c                控件绑定：值/文字/勾选自动同步到另一个控件（.cgui 的 bind）
-      cg_action.c              动作层：命名命令（文字/快捷键/回调名）+ 加速键表 + 启用与勾选同步
-      cg_app.c                 应用生命周期（定位 .cgui / 打开 / 消息循环）与 --selftest
-      cg_log.c                 日志：stderr 镜像 + 日志文件（GUI 版没有控制台时唯一的线索）
-      cg_timer.c               一次性定时器
-    src\win32\                 Win32 原生后端（窗口、控件、消息映射、对话框、托盘、诊断弹窗）
-      cg_win_*.c               14 个子模块，共用 cg_win_internal.h
-    src\skin\                  自绘外观层（GDI+，M3 风格）
-      cg_skin.c                按钮/开关/勾选/滑块/进度/圆环
-      cg_skin_edit.c           输入框圆角裁切与单行文字垂直居中
-    src\kit\                   平台服务层：跟界面无关的那一半（文件/路径/INI/编码/剪贴板/注册表）
-      cg_kit.c                 基础能力 API（cg_kit）：业务代码不必 include windows.h
-    res\                       清单（v6 通用控件 + 高 DPI）与版本信息
-  examples\                    仓库自带的示例
-    lessons\lessons\           教学六课套件（六课并成一个多页签工程：基础与容器 → 输入与选择 →
-                                数值与指示 → 数据与日志 → 命令与图形 → 主窗口与窗口事件；
-                                每课一页签、一个模块 modules\l1.c..l6.c）
-    suites\                    工具套件（每个多页签工程 = 一组同类工具，main 只做入口、逻辑在 modules\）
-      comm\                    通信：串口 / TCP / 深色终端 / Modbus / 帧解码
-      dev\                     开发：HEX / 编码转换 / 计算器 / 画板 / 取色
-      sys\                     系统：截图 / 托盘 / 系统面板 / 环境快照 / 设置
-      text\                    文本数据：记事本 / 日志过滤 / 文件校验 / 数据查看 / 报告 / 采集
-    教学使用说明.md             六课路线图 + 每课详解 + 通用知识（学这套示例先读它）
-    cppdemo\                   C++ 例程（main.cpp：STL 管数据 + 类管状态，构建自动走 g++）
-    gallery\                   控件陈列室·三合一（gallery.cgui / main.c / assets\ / 产物）
-    toolbox\                   工具箱启动器（60+ Windows 工具：按钮墙 / 右键菜单管理 / 成对开关）
-    modbus\                    Modbus/TCP 上位机（cg_modbus_* 拼帧解帧 + cg_frame_* 切帧 + mock-slave.mjs 模拟从站）
-    hextool\                   进制与校验工具箱（HEX/文本互转 + 大小端 + CRC16/CRC32/MD5/SHA + Base64/URL + 报文组装）
-    filecheck\                 文件核对工具（两个文件的大小与五种摘要比对 + 逐字节差异定位 + 报告导出）
-    traytool\                  托盘常驻小工具（托盘图标 + 关窗即最小化 + 5 条全局快捷键 + 剪贴板 + 截图 + 切深色）
-    shottool\                  截图工具（托盘 + 全局热键 Ctrl+Alt+A + 屏幕框选 + 矩形/椭圆/箭头/画笔/文字标注 + 存图/复制/贴图 + Ctrl+Alt+G 的 GIF 录屏）
-    syspanel\                  系统与配置面板（系统位数/版本/磁盘占用/环境变量/进程存在性/串口枚举 + INI 读写）
-    datarec\                   采集记录器（模拟数据源 + 实时双曲线 + CSV 分块落盘 + 回放 + 内存上限保护）
-    logfilter\                 日志过滤器（大日志关键字过滤 + 行号表 + 导出，说清"整读 + 32 MB 上限"的能力边界）
-    dataview\                  数据浏览器（大 CSV 分页浏览：只索引不复制、界面只渲染当前页、排序 / 统计 / 导出）
-    envsnap\                   环境快照（懒加载的树：展开才采集 + 环境变量清单放 INI 可增删改查 + 导出 / 复制）
-    htmlreport\                HTML 报告器（CSV → 离线可看的 HTML：内嵌 CSS / 无 JavaScript / 单元格转义；网页控件预览 + 系统浏览器兜底）
-    framedec\                  帧协议解析器（自定义帧：切帧 / 三种校验 / 解码，噪声与残帧都给明确结论）
-    settings\                  设置持久化（INI / 注册表 HKCU / 用户数据目录 三个后端并排对比，含注册表往返自测）
-    encconv\                   编码与换行转换器（GBK ↔ UTF-8 + 换行统一：先按严格 UTF-8 校验判定，超限只跳过不截断）
-    drawpad\                   画板（拖拽作图 / 撤销重做 / 导出 PNG；讲清"图形是被录制的绘制命令"）
-    palette\                   调色板（取色 + HEX/rgb/hsl/相对亮度/对比度换算 + 8 格调色板 + 导出 CSS）
-    toolbox\                   工具箱启动器（8 页签按钮墙 + 分组条 + 成对装/撤开关 + 搜索 + 最近使用 + 我的工具 INI 槽位 + 右键菜单扫描/装撤 + 深浅主题，对标 mxx1-toolbox）
-  apps\                        你自己的工程（画布导出的默认位置）
-    README.md                  这个目录是干嘛的
-  build-runtime.bat            编译运行时库
-  build-app.bat                编译某个工程 -> 落在它自己的目录里
-  build-all.bat                运行时 + 所有示例，一条命令
-  make-release.bat             一键打发布包 -> release\（内含自检）
-  packaging\                   发布包里的物料模板（编译脚本、使用者说明）
-  tests\                       C 层单元测试（套件自动注册，不用维护清单；入口 tools\run-tests.bat）
-    cg_test.h                  极简框架：断言 + CG_TEST_SUITE 自注册
-    cg_test_main.c             运行器：收集套件、--list / --grep / 汇总退出码
-    cg_test_memcheck.c         --memcheck 的 malloc/free 记账（ld --wrap）
-    unit\test_json.c           JSON 解析：取值兜底 / 转义 / 颜色 / 错误路径
-    unit\test_doc.c            .cgui 解析：窗口属性 / 控件树 / 事件名 / 结构化内容 / 越界修正
-    unit\test_kind.c           类型表与事件掩码、事件名表的双向契约
-  tools\                       开发期检查工具
-    run-tests.bat              C 层单测入口（编译 tests\ 并运行；可 --memcheck / --grep）
-    check-format.bat           格式契约回归（画布写的 .cgui 必须被 C 侧读懂）
-    bat-utf8.ps1               检查/修复仓库 bat 的编码与 ASCII 前导（UTF-8 + CRLF，无 BOM）
-    gen-launcher.bat           生成工程级启动脚本（不含 goto/标签，UTF-8 前导 + 版本标记幂等）
-    check-support.mjs          画布「支持库」表 vs cstackgui.h 的一致性检查
-    check-comments.mjs         C 函数注释规范门禁（runtime/ tests/ examples/ 的 @brief/@param/@return）
-   apply-comments.mjs         按"补丁块"批量落盘注释改动（并行起草后一次写入，含"只改注释"复核）
-    check-kit.bat              cg_kit 基础能力冒烟测试（编译并运行 kit-test.c）
-    kit-test.c                 上面那个测试的源码（文件/配置/编码/剪贴板/注册表）
-    format-roundtrip.mjs       .cgui 往返：画布改 -> C 读 -> 再写回
-    gen-cc.mjs                 给业务代码生成 clangd 配置（编辑器补全）
-    shot.ps1 / shot-canvas.ps1 截 C 程序窗口 / 截画布窗口（肉眼看外观用）
-  .codebuddy\                  CodeBuddy AI 配置（技能、工作流，见第三章）
-  build\                       纯构建目录：各 .o 和运行时库源头（可随时删）
-  release\                     发布包（make-release.bat 的产物，gitignore）
+  README.md                     本文件（开发者视角：怎么跑、怎么改、哪有坑）
+  docs\                         事实源：架构 / .cgui 格式规范 / 皮肤 / 通信 / PRD 与 SDD（文件名即主题）
+  runtime\                      C 运行时库
+    include\cstackgui.h         业务代码唯一需要 include 的头
+    src\core\                   后端无关层：JSON / 文档 / 控件模型 / 事件 / 生命周期
+    src\win32\                  Win32 原生后端：窗口 / 控件 / 消息映射 / 对话框 / 托盘
+    src\skin\                   自绘外观层（GDI+，M3 风格）：按钮 / 开关 / 滑块 / 输入框
+    src\kit\                    平台服务层：文件 / 路径 / INI / 编码 / 剪贴板 / 注册表
+    res\                        清单（v6 通用控件 + 高 DPI）与版本信息
+  designer\                     画布源码（Electron + React + TS）：.cgui 的编辑器与导出器
+  examples\                     仓库自带的示例 —— 清单见 examples\README.md（生成 + 门禁回校）
+  tests\                        C 层单元测试（套件自注册，不维护清单；入口 tools\run-tests.bat）
+  tools\                        开发期检查与门禁（前缀即分类：check-* / probe-* / gen-* / shot-*）
+  packaging\                    发布包物料模板（编译脚本、使用者说明、启动图）
+  apps\                         你自己的工程（画布「导出 C 骨架」的默认去处；不入库）
+  common\                       门禁夹具，不是公共代码（format-roundtrip 的 ../ 上级引用靶子）
+  .codebuddy\                   AI 工作流配置（技能、计划、审查记录，见第三章）
+  build\                        纯构建目录：.o 与运行时库（可随时删）
+  release\                      发布包（make-release.bat 的产物，gitignore）
+
+  build-runtime.bat             编译运行时库
+  build-app.bat                 编译某个工程 -> 落在它自己的目录里
+  build-all.bat                 运行时 + 所有示例，一条命令（每个都跑 --selftest）
+  build-cstackgui.bat           编译画布（TypeScript 检查 + Vite 构建）
+  designer-dev.bat              画布开发模式（首次自动 npm install，然后 npm run dev）
+  make-release.bat              一键打发布包 -> release\（内含自检）
 ```
 
 ### 4.2 流程图
@@ -562,3 +498,15 @@ cg_dispatch(w, ev) ──> 按 .cgui 里绑的函数名查表 ──> 你的回�
 **Q：打包出来的 CStackGUI.exe 说找不到 C 项目根？**
 便携版会自动认（`PORTABLE_EXECUTABLE_DIR`）；兜底点工具条「定位项目根」选一次（会记住），
 或 `set CSTACKGUI_HOME=D:\你的\CStackGUI`。
+
+---
+
+## 五、许可
+
+专有软件，[LICENSE](LICENSE) 是唯一权威文本。三句话版本：
+
+- **可以用**：拿 runtime 构建你自己的桌面程序，自用、商用、分发都行，不必标注来源、不必付费；
+- **不可以**：再分发本软件本身（源码、二进制、改过的版本），或用它做同类的 GUI 框架 / 控件库 / 低代码工具；
+- **要单独授权**：把本软件当 SDK 交付给你的客户 —— 你的客户要拿它编译自己的界面，就属于这一类。
+
+商业授权（再分发、OEM、SDK）联系 712418195@qq.com。
