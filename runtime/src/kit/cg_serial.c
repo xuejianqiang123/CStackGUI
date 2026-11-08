@@ -88,14 +88,16 @@ static int ser_u8(const wchar_t *ws, char *out, int cap)
  * @brief 把几个最常见的 Win32 错误码翻成人话
  * @param e GetLastError() 取到的 Win32 错误码
  * @return const char * 静态字符串，**调用方不要 free**；认不出来的码返回"系统错误"
- * @note 不引 FormatMessage：那要再转一次编码，而这几个码覆盖了实际会遇到的大多数
+ * @note 不引 FormatMessage：那要再转一次编码，而这几个码覆盖了实际会遇到的大多数。
+ *       Windows 对不存在的 \\.\ 设备名也可能回 ERROR_ACCESS_DENIED(5)，所以这条
+ *       把「找不到 / 没权限 / 被占用」一起说清，别一口咬定是端口被占。
  */
 static const char *ser_why(DWORD e)
 {
     switch (e) {
     case ERROR_FILE_NOT_FOUND:    return "找不到这个端口";
     case ERROR_PATH_NOT_FOUND:    return "找不到这个端口";
-    case ERROR_ACCESS_DENIED:     return "端口被占用（可能别的程序已经打开了它）";
+    case ERROR_ACCESS_DENIED:     return "找不到这个端口，或没有权限打开（也可能已被占用）";
     case ERROR_INVALID_NAME:      return "端口名不合法";
     case ERROR_BAD_COMMAND:       return "设备不响应（线被拔了？）";
     case ERROR_OPERATION_ABORTED: return "操作被中止";

@@ -536,9 +536,13 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
         LRESULT r = DefSubclassProc(hwnd, msg, wp, lp);
         sk_edit_retint_selection(hwnd, s);
         /* EDIT 内部直接拿 GetDC 重绘客户区（选中 / 取消选中 / 拖选）不发 WM_PAINT，
-         * 圆角弧伸进客户区的那截会被刷成底色。这些消息处理完必须补画一次边框，
-         * 且不能只在"染色改了像素"时才补：取消选中后选区为空也要补。 */
-        sk_edit_box(hwnd, s, GetFocus() == hwnd);
+         * 圆角弧伸进客户区的那截会被刷成底色，所以补画一次边框，且不能只在
+         * "染色改了像素"时才补：取消选中后选区为空也要补。
+         * **多行框例外**：灌日志 / 滚到底时 EDIT 会用 ScrollDC 搬整窗表面，
+         * 在 EM_SETSEL（滚动之前）画的这圈灰环会被一起滚进客户区中间，
+         * 变成一条横贯的实心线（test_skin_edit.c 的流式用例就是这么复现的）。
+         * 多行框的边框由 WM_PAINT / 焦点 / NCPAINT 分支在滚动之后补，不受影响。 */
+        if (s->single) sk_edit_box(hwnd, s, GetFocus() == hwnd);
         return r;
     }
     if (msg == WM_NCCALCSIZE && wp) {
@@ -575,7 +579,9 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     }
     if (msg == WM_PAINT) {
         /* 客户区刚重绘完：补一次边框。EDIT 的选中 / 光标刷新不一定带 WM_NCPAINT，
-         * 不补的话个别时序下非客户区会短暂留白。环全在非客户区，补画不碰文字。 */
+         * 不补的话个别时序下非客户区会短暂留白。环全在非客户区，补画不碰文字。
+         * 多行框只在下面「焦点 / NCPAINT」分支补画：灌日志时每轮 WM_PAINT 后紧接着
+         * 滚动，刚画好的灰环会被 ScrollDC 一起搬进客户区中间，留下横贯实心线。 */
         LRESULT r = DefSubclassProc(hwnd, msg, wp, lp);
         /* 系统画完（含选中高亮）之后，把深色底上那块 #0078D7 重映射成
          * 「底色不变 + 文字提亮」：可编辑框照样能选中复制，但不会再被蓝块盖住。
@@ -584,7 +590,7 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
         /* 只读框（input:1 → ES_READONLY）不给插入符：聚焦时 Win32 照样画 caret，
          * 闪烁重绘又会把 HideCaret 抵消，所以每次客户区重绘后都压住一次。 */
         if (GetWindowLongW(hwnd, GWL_STYLE) & ES_READONLY) HideCaret(hwnd);
-        sk_edit_box(hwnd, s, GetFocus() == hwnd);
+        if (s->single) sk_edit_box(hwnd, s, GetFocus() == hwnd);
         return r;
     }
     if (msg == WM_SETFONT) {
