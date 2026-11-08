@@ -1403,6 +1403,63 @@ const SMOKE_PROBE = async () => {
     }
   }
 
+  /* 12. 拖进容器（分组框）：松手后控件要**原地**成为容器的子控件。
+     回归 2026-11-08「拖动按钮后按钮消失，层级还显示」—— 归属重判把控件丢回
+     顶层，却把 rect 写成了容器内的相对坐标：视觉位置整个错位（在窗口外就被裁掉，
+     看起来就是控件没了，而层级树遍历整棵树仍能看到它）。 */
+  {
+    const cgui = JSON.stringify({
+      cgui: 1,
+      app: { title: "冒烟容器", width: 700, height: 500, bg: "#FFFFFF" },
+      widgets: [
+        { id: "smk_grp", type: "group", rect: { x: 400, y: 300, w: 260, h: 180 }, text: "分组" },
+        { id: "smk_btn2", type: "button", rect: { x: 60, y: 60, w: 120, h: 40 }, text: "待拖按钮" },
+      ],
+    });
+    const dt2 = new DataTransfer();
+    dt2.items.add(new File([cgui], "smoke-container.cgui", { type: "application/json" }));
+    window.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: dt2 }));
+    await sleep(300);
+
+    const btnEl = $(".app-window .widget[data-node-id='smk_btn2']");
+    const grpEl = $(".app-window .widget[data-node-id='smk_grp']");
+    t("容器场景：按钮与分组框都渲染出来", !!btnEl && !!grpEl);
+    if (btnEl && grpEl) {
+      const br = btnEl.getBoundingClientRect();
+      const gr = grpEl.getBoundingClientRect();
+      const dx = gr.left + gr.width / 2 - (br.left + br.width / 2);
+      const dy = gr.top + gr.height / 2 - (br.top + br.height / 2);
+      const down = {
+        bubbles: true, cancelable: true, composed: true,
+        clientX: br.left + br.width / 2, clientY: br.top + br.height / 2,
+        pointerId: 4, isPrimary: true, button: 0, buttons: 1,
+      };
+      btnEl.dispatchEvent(new PointerEvent("pointerdown", down));
+      await sleep(120);
+      window.dispatchEvent(new PointerEvent("pointermove", { ...down, clientX: down.clientX + dx, clientY: down.clientY + dy }));
+      await sleep(120);
+      window.dispatchEvent(new PointerEvent("pointerup", { ...down, clientX: down.clientX + dx, clientY: down.clientY + dy, buttons: 0 }));
+      await sleep(250);
+
+      const moved = $(".app-window .widget[data-node-id='smk_btn2']");
+      t("拖进分组框后按钮还在画布上", !!moved);
+      t("拖进分组框后按钮成为分组框的子控件", !!moved && !!moved.closest(".widget[data-node-id='smk_grp']"));
+      if (moved) {
+        const mr = moved.getBoundingClientRect();
+        t(
+          "拖进分组框后按钮停在松手处（位移不被重算）",
+          Math.abs(mr.left - (br.left + dx)) <= 3 && Math.abs(mr.top - (br.top + dy)) <= 3,
+        );
+      }
+      t("拖进分组框后层级里仍能看到按钮", document.body.textContent.includes("smk_btn2"));
+      /* 一步撤销：拖动只压一次历史，且回到拖动前的父级与位置 */
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true, cancelable: true }));
+      await sleep(200);
+      const back = $(".app-window .widget[data-node-id='smk_btn2']");
+      t("撤销一次回到拖动前（不在分组框里）", !!back && !back.closest(".widget[data-node-id='smk_grp']"));
+    }
+  }
+
   return out;
 };
 

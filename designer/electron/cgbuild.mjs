@@ -23,6 +23,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -240,6 +241,35 @@ function upToDate(obj, dep) {
   return true;
 }
 
+/** 算一份运行时源码的内容指纹（SHA-1）
+ *  @param src .c 源文件路径
+ *  @return string 十六进制摘要
+ */
+const srcSig = (src) => createHash("sha1").update(fs.readFileSync(src)).digest("hex");
+
+/** 判断这份源码自上次成功编译后有没有改过
+ *  @param sig 与 .o 同目录的 .sig 指纹文件
+ *  @param src .c 源文件路径
+ *  @return boolean true = 内容一致、可跳过编译
+ */
+function sigMatch(sig, src) {
+  if (!fs.existsSync(sig)) return false;
+  try {
+    return fs.readFileSync(sig, "utf8").trim() === srcSig(src);
+  } catch {
+    return false;
+  }
+}
+
+/** 编译成功后记下这次的源码指纹
+ *  @param sig 与 .o 同目录的 .sig 指纹文件
+ *  @param src .c 源文件路径
+ *  @return void 无返回值
+ */
+function sigWrite(sig, src) {
+  fs.writeFileSync(sig, srcSig(src));
+}
+
 /**
  * 并发跑一组编译任务（限流），全部完成后返回首个失败码（0 = 全部成功）
  * @param tasks 每项是返回退出码的 async 函数
@@ -277,9 +307,13 @@ async function buildRuntime(ctx, root, tk) {
       const base = path.basename(src, ".c");
       const obj = path.join(objDir, `${base}.o`);
       const dep = path.join(objDir, `${base}.d`);
+      const sig = path.join(objDir, `${base}.sig`);
       objs.push(obj);
-      /* -MMD 精确增量（见 upToDate）：内部头改动只波及真正引用它的文件 */
-      if (upToDate(obj, dep)) continue;
+      /* -MMD 精确增量（见 upToDate）：内部头改动只波及真正引用它的文件。
+       * 再加一层源码内容指纹：mtime 会被 git / 打包工具还原成比 .o 更早的时间，
+       * 只比时间戳就判"已是最新"，源码里的修复永远进不了 .a / exe
+       * （2026-11-08 输入框边框修复在已编译产物里没生效就是这个）。 */
+      if (upToDate(obj, dep) && sigMatch(sig, src)) continue;
       tasks.push(async () => {
         ctx.log(`  CC runtime/src/${layer}/${path.basename(src)}`);
         const rc = await ctx.run(["gcc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Wno-unused-parameter",
@@ -287,6 +321,7 @@ async function buildRuntime(ctx, root, tk) {
           ...layers.map((l) => `-I${path.join(tk.src, l)}`),
           "-MMD", "-MF", dep,
           "-c", src, "-o", obj]);
+        if (!rc) sigWrite(sig, src);
         return rc;
       });
     }
@@ -405,12 +440,28 @@ async function buildApp(ctx, root, tk, appDir, release) {
     }
 
     fs.mkdirSync(objDir, { recursive: true });
-    /* 资源内容只取决于嵌入文件的字节，增量判据拿 obj 比嵌入文件就够 */
+    /* 资源内容只取决于 .rc 与被嵌入文件的字节。光比 mtime 会漏：git / 打包工具把
+       .cgui 还原成旧时间戳时 obj 反而比它新，判「已是最新」后改过的界面永远进不了 exe
+       （与运行时 .c 用 SHA-1 指纹防漏是同一个成因）。指纹把 .rc 路径和界面字节一起算。 */
     fs.writeFileSync(rcFile, `CGUI RCDATA "${embedPath.replace(/\\/g, "/")}"\r\n`, "utf8");
-    if (!(mtime(objFile) > mtime(embedPath))) {
+    const cguiSigFile = path.join(objDir, `${name}_cgui_res.sig`);
+    const cguiSig = createHash("sha1")
+      .update(fs.readFileSync(rcFile))
+      .update(fs.readFileSync(embedPath))
+      .digest("hex");
+    let cguiSigOK = false;
+    if (fs.existsSync(cguiSigFile)) {
+      try {
+        cguiSigOK = fs.readFileSync(cguiSigFile, "utf8").trim() === cguiSig;
+      } catch {
+        cguiSigOK = false;
+      }
+    }
+    if (!(mtime(objFile) > mtime(embedPath)) || !cguiSigOK) {
       ctx.log("  RC 把界面编进 exe（单文件发布）");
       const rc = await ctx.run(["windres", "--codepage=65001", "-O", "coff", rcFile, "-o", objFile]);
       if (rc) return rc;
+      fs.writeFileSync(cguiSigFile, cguiSig);
     }
     cguiRes = objFile;
   }

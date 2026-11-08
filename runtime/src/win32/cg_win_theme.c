@@ -119,12 +119,19 @@ int cgw_theme_system_dark(void)
  * @brief 窗口底色：深色是深面，否则用文档里设的底色（没设就用系统面色）
  * @param app 应用对象，可为 NULL
  * @return unsigned 0xRRGGBB 窗口底色
+ * @note 返回值一律是 0xRRGGBB（和 style.bg 同一种写法）。**调用方要自己转成
+ *       COLORREF** 再交给 CreateSolidBrush —— 两者红蓝相反，直接把返回值当
+ *       COLORREF 用，窗口底色会红蓝对调（#F3EDF7 画成 #F7EDF3，肉眼看只是
+ *       "紫一点/粉一点"，所以这个错能活很久）。
  */
 unsigned cgw_theme_window_bg(const cg_app_t *app)
 {
     if (app && app->dark) return CG_DARK_SURFACE;
     if (app && app->doc.bg != CG_COLOR_NONE) return app->doc.bg;
-    return GetSysColor(COLOR_BTNFACE) & 0x00FFFFFFu;
+    /* 系统面色本来就是 COLORREF，这里要按本函数的返回值口径转成 0xRRGGBB */
+    return ((unsigned)GetRValue(GetSysColor(COLOR_BTNFACE)) << 16) |
+           ((unsigned)GetGValue(GetSysColor(COLOR_BTNFACE)) << 8) |
+           (unsigned)GetBValue(GetSysColor(COLOR_BTNFACE));
 }
 
 /**
@@ -256,7 +263,9 @@ void cgw_theme_apply(cg_app_t *app)
         DeleteObject(st->bg_brush);
         st->bg_brush = NULL;
     }
-    st->bg_color = cgw_theme_window_bg(app);
+    /* bg_color 是 COLORREF（见 cg_win_internal.h），cgw_theme_window_bg() 给的是
+     * 0xRRGGBB —— 少了这层转换，窗口底色会红蓝对调。 */
+    st->bg_color = cgw_to_colorref(cgw_theme_window_bg(app));
     st->bg_brush = CreateSolidBrush(st->bg_color);
     cgw_clear_behind_cache();   /* 标签页页体的"背后色"按窗口缓存，换主题必须清，否则停在旧色 */
 

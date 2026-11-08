@@ -1,0 +1,223 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "计算器",
+    "width": 700,
+    "height": 500,
+    "bg": "#070B14",
+    "center": true,
+    "border": "fixed",
+    "maximizeBox": false,
+    "escClose": false,
+    "dark": true,
+    "info": {
+      "product": "CStackGUI 计算器示例",
+      "desc": "深色科技感计算器：上面输入公式、下面得到结果；另一块统计文本长度。界面全在 .cgui 里，逻辑全在 main.c 里",
+      "version": "2.0.0.0",
+      "author": "CStackGUI",
+      "company": "CStackGUI",
+      "copyright": "© 2026 CStackGUI（示例）"
+    }
+  },
+  "roles": {
+    "accent": {
+      "light": "#0891B2",
+      "dark": "#22D3EE"
+    }
+  },
+  "styles": {
+    "title": {
+      "font": "Microsoft YaHei UI",
+      "size": 16,
+      "bold": true,
+      "fg": "#E8F7FF"
+    },
+    "sub": {
+      "font": "Microsoft YaHei UI",
+      "size": 9,
+      "fg": "#5F7C9E"
+    },
+    "tip": {
+      "font": "Microsoft YaHei UI",
+      "size": 9,
+      "fg": "#45607D"
+    },
+    "cap": {
+      "font": "Microsoft YaHei UI",
+      "size": 9,
+      "fg": "#5F7C9E"
+    },
+    "group": {
+      "font": "Microsoft YaHei UI",
+      "size": 10,
+      "bold": true,
+      "fg": "#38BDF8",
+      "bg": "#0A1220"
+    },
+    "input": {
+      "font": "Microsoft YaHei UI",
+      "size": 12,
+      "fg": "#E8F7FF",
+      "bg": "#16263F",
+      "radius": 10
+    },
+    "result": {
+      "font": "Microsoft YaHei UI",
+      "size": 16,
+      "bold": true,
+      "fg": "@accent",
+      "bg": "#16263F",
+      "radius": 10
+    },
+    "btn": {
+      "font": "Microsoft YaHei UI",
+      "size": 13,
+      "bold": true,
+      "bg": "@accent",
+      "radius": 12
+    },
+    "foot": {
+      "font": "Microsoft YaHei UI",
+      "size": 8,
+      "fg": "#3D5B78"
+    }
+  },
+  "widgets": [
+    {
+      "id": "lab_title",
+      "type": "label",
+      "rect": { "x": 22, "y": 12, "w": 280, "h": 30 },
+      "text": "计算器",
+      "style": "title"
+    },
+    {
+      "id": "lab_sub",
+      "type": "label",
+      "rect": { "x": 22, "y": 42, "w": 400, "h": 18 },
+      "text": "上面输入公式，下面得到结果",
+      "style": "sub"
+    },
+    {
+      "id": "lab_hint",
+      "type": "label",
+      "rect": { "x": 420, "y": 20, "w": 258, "h": 20 },
+      "text": "输入即出结果 · 支持 ( ) 括号",
+      "style": { "use": "tip", "align": "right" }
+    },
+    {
+      "id": "group_mw7qseb6bc0abm1j",
+      "type": "group",
+      "rect": { "x": 20, "y": 76, "w": 660, "h": 166 },
+      "text": "计算",
+      "style": "group",
+      "children": [
+        {
+          "id": "lab_formula_cap",
+          "type": "label",
+          "rect": { "x": 22, "y": 20, "w": 480, "h": 18 },
+          "text": "输入公式  ·  +  −  ×  ÷  括号  ·  边输入边出结果",
+          "style": "cap"
+        },
+        {
+          "id": "edit_mw7qrgnwau2i4b8p",
+          "type": "edit",
+          "rect": { "x": 22, "y": 42, "w": 616, "h": 36 },
+          "text": "12 + 7 × 3",
+          "border": 6,
+          "hint": "在这里写公式，例如 (12 + 7) × 3 ÷ 2；支持 + - × ÷ * / 与括号。输入时下方实时刷新，点「计算」可看完整错误原因",
+          "style": "input",
+          "events": {
+            "change": "on_formula_change",
+            "submit": "on_calc"
+          }
+        },
+        {
+          "id": "lab_result_cap",
+          "type": "label",
+          "rect": { "x": 22, "y": 90, "w": 200, "h": 18 },
+          "text": "结果",
+          "style": "cap"
+        },
+        {
+          "id": "edit_mw7qrgzzqmtmpo8j",
+          "type": "edit",
+          "rect": { "x": 22, "y": 112, "w": 478, "h": 40 },
+          "text": "33",
+          "input": 1,
+          "border": 6,
+          "style": { "use": "result", "align": "right" },
+          "hint": "只读：这里显示公式的计算结果或中文错误原因"
+        },
+        {
+          "id": "button_mw7qr84ue3530bpx",
+          "type": "button",
+          "rect": { "x": 516, "y": 110, "w": 122, "h": 42 },
+          "text": "计算",
+          "hint": "重新求值：式子还没敲完时，点这里能看到具体原因",
+          "style": "btn",
+          "events": {
+            "click": "on_calc"
+          }
+        }
+      ]
+    },
+    {
+      "id": "group_mw7qtqrmr5rjdv7i",
+      "type": "group",
+      "rect": { "x": 20, "y": 254, "w": 660, "h": 204 },
+      "text": "长度计算",
+      "style": "group",
+      "children": [
+        {
+          "id": "lab_text_cap",
+          "type": "label",
+          "rect": { "x": 22, "y": 20, "w": 480, "h": 18 },
+          "text": "输入文本  ·  可多行  ·  中文按 1 个字符 / 3 字节计",
+          "style": "cap"
+        },
+        {
+          "id": "edit_mw7qtjrbcstjxrno",
+          "type": "edit",
+          "rect": { "x": 22, "y": 42, "w": 616, "h": 94 },
+          "text": "CStackGUI 界面 .cgui / 逻辑 main.c",
+          "multiline": true,
+          "border": 6,
+          "style": { "use": "input", "size": 10 },
+          "hint": "粘一段文字进来，下面实时显示字符数、UTF-8 字节数和行数",
+          "events": {
+            "change": "on_len_change",
+            "submit": "on_len"
+          }
+        },
+        {
+          "id": "edit_mw7qvdmu16aknfaq",
+          "type": "edit",
+          "rect": { "x": 22, "y": 146, "w": 478, "h": 38 },
+          "text": "字符 0 · UTF-8 字节 0 · 行数 0",
+          "input": 1,
+          "border": 6,
+          "style": { "use": "result", "size": 12, "align": "left" },
+          "hint": "只读：字符数按 Unicode 码点算，字节数按 UTF-8 编码算，行数按换行分段"
+        },
+        {
+          "id": "button_mw7qvgfjqdzqt4hk",
+          "type": "button",
+          "rect": { "x": 516, "y": 144, "w": 122, "h": 42 },
+          "text": "计算",
+          "hint": "重新统计一次（文本改动时本来就会自动刷新）",
+          "style": "btn",
+          "events": {
+            "click": "on_len"
+          }
+        }
+      ]
+    },
+    {
+      "id": "lab_foot",
+      "type": "label",
+      "rect": { "x": 20, "y": 468, "w": 660, "h": 18 },
+      "text": "CStackGUI · 界面 .cgui / 逻辑 main.c",
+      "style": { "use": "foot", "align": "center" }
+    }
+  ]
+}

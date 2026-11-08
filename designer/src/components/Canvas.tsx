@@ -391,9 +391,18 @@ export default function Canvas(props: Props) {
               node.rect.x = abs.x - base.x;
               node.rect.y = abs.y - base.y;
 
+              /* 落点分三种：tabs（子控件要带页号）/ 其它容器（普通子控件）/ 顶层。
+                 **非 tabs 容器不能和「顶层」共用分支**：那样控件会被 push 回 d.widgets，
+                 而 rect 上面刚写成「相对容器」的坐标 —— 画面上控件整块错位，落到窗口外
+                 就被 .client-area 裁掉，看着就是"拖一下控件没了"，层级树遍历整棵树却还在
+                 （2026-11-08 用户复现；第 12 段冒烟探针钉住）。 */
               if (targetParent && targetParent.type === "tabs") {
                 targetParent.children = targetParent.children ?? [];
                 node.page = targetParent.value ?? 0;
+                targetParent.children.push(node);
+              } else if (targetParent) {
+                targetParent.children = targetParent.children ?? [];
+                delete node.page;
                 targetParent.children.push(node);
               } else {
                 /* 从 tabs 拖出时清掉残留的分页号，否则脏 page 会一直写进 .cgui */

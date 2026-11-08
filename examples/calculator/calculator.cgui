@@ -1,0 +1,75 @@
+{
+  "cgui": 1,
+  "app": {
+    "title": "计算器 · CStackGUI",
+    "width": 356,
+    "height": 512,
+    "bg": "#F3EDF7",
+    "border": "fixed",
+    "center": true,
+    "maximizeBox": false,
+    "escClose": false,
+    "events": { "ready": "on_app_ready", "keydown": "on_win_keydown" }
+  },
+
+  "styles": {
+    "expr":   { "font": "Consolas", "size": 11, "fg": "#49454F", "align": "right" },
+    "value":  { "font": "Consolas", "size": 34, "fg": "#1D1B20", "align": "right" },
+
+    "key":    { "font": "Microsoft YaHei UI", "size": 15, "bg": "#FFFFFF", "radius": 16 },
+    "key_op": { "font": "Microsoft YaHei UI", "size": 15, "radius": 16 },
+    "key_eq": { "font": "Microsoft YaHei UI", "size": 15, "bold": true, "bg": "#6750A4", "radius": 16 }
+  },
+
+  "widgets": [
+    { "id": "lab_expr", "type": "label", "rect": { "x": 16, "y": 26, "w": 324, "h": 20 },
+      "text": "", "style": "expr" },
+    { "id": "lab_value", "type": "label", "rect": { "x": 16, "y": 50, "w": 324, "h": 58 },
+      "text": "0", "style": "value" },
+
+    { "id": "btn_ac", "type": "button", "rect": { "x": 16, "y": 128, "w": 72, "h": 64 },
+      "text": "AC", "style": "key_op", "hint": "全部清除（Esc）", "events": { "click": "on_pad_click" } },
+    { "id": "btn_back", "type": "button", "rect": { "x": 100, "y": 128, "w": 72, "h": 64 },
+      "text": "←", "style": "key_op", "hint": "退格：删掉刚输入的最后一位（Backspace）", "events": { "click": "on_pad_click" } },
+    { "id": "btn_pct", "type": "button", "rect": { "x": 184, "y": 128, "w": 72, "h": 64 },
+      "text": "%", "style": "key_op", "hint": "百分比：当前数除以 100（%）", "events": { "click": "on_pad_click" } },
+    { "id": "btn_div", "type": "button", "rect": { "x": 268, "y": 128, "w": 72, "h": 64 },
+      "text": "÷", "style": "key_op", "hint": "除（/）", "events": { "click": "on_pad_click" } },
+
+    { "id": "btn_7", "type": "button", "rect": { "x": 16, "y": 204, "w": 72, "h": 64 },
+      "text": "7", "style": "key", "events": { "click": "on_pad_click" } },
+    { "id": "btn_8", "type": "button", "rect": { "x": 100, "y": 204, "w": 72, "h": 64 },
+      "text": "8", "style": "key", "events": { "click": "on_pad_click" } },
+    { "id": "btn_9", "type": "button", "rect": { "x": 184, "y": 204, "w": 72, "h": 64 },
+      "text": "9", "style": "key", "events": { "click": "on_pad_click" } },
+    { "id": "btn_mul", "type": "button", "rect": { "x": 268, "y": 204, "w": 72, "h": 64 },
+      "text": "×", "style": "key_op", "hint": "乘（*）", "events": { "click": "on_pad_click" } },
+
+    { "id": "btn_4", "type": "button", "rect": { "x": 16, "y": 280, "w": 72, "h": 64 },
+      "text": "4", "style": "key", "events": { "click": "on_pad_click" } },
+    { "id": "btn_5", "type": "button", "rect": { "x": 100, "y": 280, "w": 72, "h": 64 },
+      "text": "5", "style": "key", "events": { "click": "on_pad_click" } },
+    { "id": "btn_6", "type": "button", "rect": { "x": 184, "y": 280, "w": 72, "h": 64 },
+      "text": "6", "style": "key", "events": { "click": "on_pad_click" } },
+    { "id": "btn_sub", "type": "button", "rect": { "x": 268, "y": 280, "w": 72, "h": 64 },
+      "text": "−", "style": "key_op", "hint": "减（-）", "events": { "click": "on_pad_click" } },
+
+    { "id": "btn_1", "type": "button", "rect": { "x": 16, "y": 356, "w": 72, "h": 64 },
+      "text": "1", "style": "key", "events": { "click": "on_pad_click" } },
+    { "id": "btn_2", "type": "button", "rect": { "x": 100, "y": 356, "w": 72, "h": 64 },
+      "text": "2", "style": "key", "events": { "click": "on_pad_click" } },
+    { "id": "btn_3", "type": "button", "rect": { "x": 184, "y": 356, "w": 72, "h": 64 },
+      "text": "3", "style": "key", "events": { "click": "on_pad_click" } },
+    { "id": "btn_add", "type": "button", "rect": { "x": 268, "y": 356, "w": 72, "h": 64 },
+      "text": "+", "style": "key_op", "hint": "加（+）", "events": { "click": "on_pad_click" } },
+
+    { "id": "btn_sign", "type": "button", "rect": { "x": 16, "y": 432, "w": 72, "h": 64 },
+      "text": "±", "style": "key_op", "hint": "正负号：翻转当前数", "events": { "click": "on_pad_click" } },
+    { "id": "btn_0", "type": "button", "rect": { "x": 100, "y": 432, "w": 72, "h": 64 },
+      "text": "0", "style": "key", "events": { "click": "on_pad_click" } },
+    { "id": "btn_dot", "type": "button", "rect": { "x": 184, "y": 432, "w": 72, "h": 64 },
+      "text": ".", "style": "key", "hint": "小数点（.）", "events": { "click": "on_pad_click" } },
+    { "id": "btn_eq", "type": "button", "rect": { "x": 268, "y": 432, "w": 72, "h": 64 },
+      "text": "=", "style": "key_eq", "hint": "等于（Enter）；连按 = 重复上一次运算", "events": { "click": "on_pad_click" } }
+  ]
+}

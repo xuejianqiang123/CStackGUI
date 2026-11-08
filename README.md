@@ -92,6 +92,9 @@ select / release / expand / collapse / tick / check / spin / gotfocus / lostfocu
 - `examples\cppdemo\` —— **C++ 例程**：同一个工程也能用 C++ 写（把源文件叫 `.cpp`，构建脚本自动换
   `g++ -std=c++17` 并用 g++ 链接，`libstdc++` 静态收进 exe）。演示"数据放 `std::vector`、状态放对象、
   回调 `extern "C"` 转发到单例"，`.cgui` / 绑定表 / `--selftest` 与 C 工程一字不差。
+- `examples\calc\` —— **深色科技感计算器**：按草图落地的两块分组（上面输公式、下面出结果；
+  多行文本统计字符 / 字节 / 行数），输入即出结果；递归下降求值支持括号、全角 × ÷ 与百分号，
+  配色（深海军蓝 + 青蓝强调色）全写在 `.cgui` 里。`build-app.bat calc`。
 - `examples\gallery\` —— **控件陈列室（三合一）**：顶层标签页分「基础闭环 / 控件陈列 / 新特性」
   三页，67 个控件、47 个回调，**讲"控件怎么用"**（当"控件字典"翻）。
 - `examples\suites\studio\` —— **真实小工具范例（记事本）**：菜单分发、脏标记、状态栏刷新、

@@ -7,6 +7,9 @@ publish
 # 2026-10-08 起不再跟踪 examples 下的 exe：编译产物本地生成即可，避免每次构建都改动入库（曾有意跟踪以保持同步，现已改为忽略）。
 examples/*/*.exe
 examples/*/*/*.exe
+# 例外：计算器 demo 的 exe 要能在目录里直接看到、随工程交付（用户要双击就能跑）。
+# 2026-11-08 起单独放行；其余示例仍按上面的约定不入库。
+!examples/calc/calc.exe
 # examples/*/lib/ 仍按原意跟踪（与源码同步）
 # apps\ 是用户自己的工程目录，只保留说明文件
 apps/*
@@ -64,3 +67,5 @@ term_test.txt
 examples/envsnap/envsnap.ini
 # 套件同理：envsnap 合并进 suites\sys 后，运行时仍往 exe 旁边写它自己的 ini
 examples/suites/*/*.ini
+
+.workbuddy

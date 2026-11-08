@@ -495,7 +495,7 @@ int cgw_win_init(cg_app_t *app)
     /* 窗口背景。深色在**这里**定下（app.dark 的 "auto" 也在这一步解析成实际值），
      * 之后所有"背后是什么颜色"的询问都会跟着变 —— 见 cg_win_theme.c 文件头。 */
     cgw_theme_init(app);
-    st->bg_color = cgw_theme_window_bg(app);
+    st->bg_color = cgw_to_colorref(cgw_theme_window_bg(app));   /* 0xRRGGBB -> COLORREF */
     st->bg_brush = CreateSolidBrush(st->bg_color);
 
     /* 整窗一个 tooltip：各控件按需把自己注册成 tool */

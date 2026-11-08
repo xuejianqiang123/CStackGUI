@@ -6,7 +6,8 @@
 - **教学六课**：按顺序读，控件分类与用法的地基；
 - **合并套件**：实用工具并成几个多页签工程（数量见下表）—— 一个套件编出全部工具，
   每个工具的完整逻辑仍在自己的模块里（`modules\<缩写>.c`），照抄价值零损失；
-- **独立工程**：gallery（控件陈列室）、toolbox（系统工具箱启动器）、cppdemo（C++ 示例）。
+- **独立工程**：gallery（控件陈列室）、toolbox（系统工具箱启动器）、cppdemo（C++ 示例）、
+  calc（深色科技感计算器：上输公式下出结果 + 文本长度统计）。
 
 <!-- ex-index:begin（由 node tools\check-examples.mjs --ex-index 生成，别手改）-->
 
@@ -39,6 +40,8 @@
 
 | 工程 | 目录 | 演示 |
 | --- | --- | --- |
+| `calc` | `examples\calc` | 计算器 |
+| `calculator` | `examples\calculator` | 计算器 · CStackGUI |
 | `cppdemo` | `examples\cppdemo` | C++ 例程 · 数据与界面分开 |
 | `gallery` | `examples\gallery` | CStackGUI 控件陈列室 |
 | `toolbox` | `examples\toolbox` | 工具箱启动器 1.1.0 |

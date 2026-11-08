@@ -7,6 +7,10 @@
  *          时按实际字号重算一次。
  *          边框画在客户区之外（客户区四边由 WM_NCCALCSIZE 内缩 bw），
  *          所以控件自身重绘（选中 / 滚动 / 光标闪烁）永远盖不掉它。
+ *          **整圈环都必须落在非客户区带里**：窗口最右列 / 最下行被圆角区域裁掉，
+ *          客户区又是从 bw 到 w-bw；环的右 / 下带一旦越进客户区，就会被 EDIT
+ *          自己的重绘刷掉，只剩上 / 左半圈（2026-11-08 用户连报的"输入框不完整"）。
+ *          现在带宽 CG_EDIT_BORDER(3)、环宽 2，四边都留在非客户区。
  */
 /* 明确走 W 系列 API：必须在 windows.h 之前定义 */
 #define UNICODE
@@ -29,6 +33,10 @@
 #define SK_EDGE_FRAME   5
 #define SK_EDGE_LINE    6
 
+/** 边框环宽：带宽 CG_EDIT_BORDER 里留 1px 给被圆角窗口区域裁掉的最外列 / 行，
+ *  剩下这 2px 才拿来画环 —— 这样环的四条边都完整落在非客户区内。 */
+#define SK_EDGE_RING_W  (CG_EDIT_BORDER - 1)
+
 /* 边框配色（和 styles.css / 画布观感一致）：缺省灰、聚焦紫、3D 明暗、浅灰、硬灰。
  * **一律用 RGB() 宏写**：COLORREF 的内存布局是 0x00BBGGRR，直接写 0x6750A4 这种
  * 「看着像 #RRGGBB」的字面量会把红蓝弄反 —— 聚焦环会变成暗红（#A45067）而不是主题紫。 */
@@ -47,11 +55,140 @@ typedef struct {
     int      w, h;     /* 控件整块尺寸（比客户区大，含边框与让出来的上边距） */
     int      bw;       /* 边框宽度：客户区四边各内缩这么多 */
     int      left;     /* 左边距（EM_SETMARGINS）；箭头/换字体后会被清，要按它重设 */
+    int      right;    /* 右边距：右对齐文字的额外留白，重设左边距时必须一起带回 */
     int      border;   /* 边框样式（.cgui 的 border 字段） */
+    int      display;  /* 只读单行展示框（input:1 的结果 / 状态框）：不进焦点链、不产生选中高亮 */
     int      arrow;    /* 调节器占的宽度（物理像素）；0 = 没有调节器 */
     HWND     spin;     /* 调节器（上下箭头）的窗口；没有就是 NULL */
     COLORREF bg;       /* 补上边距用的底色（白或 style.bg） */
 } sk_edit_sub_t;
+
+/**
+ * @brief 深色底输入框：把系统选中高亮重映射成「底色不变 + 文字提亮」，不让蓝块盖住输入框
+ * @param hwnd 输入框原生窗口
+ * @param s 输入框子类数据；s->bg 是客户区底色
+ * @return void 无返回值
+ * @note 标准 EDIT 用 COLOR_HIGHLIGHT / COLOR_HIGHLIGHTTEXT 画选中态，没有按控件改色的
+ *       消息。长文本全选时那块 #0078D7 会铺满整个客户区、一直顶到圆角边框，深色主题下
+ *       看着像「输入框被一块东西遮住了」（用户连报的"选中时遮挡输入框"）。这里在
+ *       WM_PAINT 之后把客户区读进 32bpp DIB，凡是落在「高亮底色 → 高亮文字色」这条
+ *       抗锯齿色带上的像素，按同一混合系数重映射到「输入框底色 → 近白文字」：
+ *       蓝底消失、白字保留，边框与底色分毫不动，选中反馈靠文字变白来体现。
+ *       投影 + 距离阈值保证普通底色 / 普通文字（含抗锯齿）不会被误改；处理是幂等的，
+ *       局部重绘时上一轮已改过的像素不在这条色带上，会原样留下。
+ *       浅色底（亮度 > 128）保持系统默认选中色，不改变浅色主题的原有观感。
+ *       **只改颜色、不改交互**：可编辑框依旧能聚焦、拖选、Ctrl+A、Ctrl+C。
+ *       写回时只 BitBlt 改动像素的包围盒，绝不整块覆盖客户区：圆角半径通常大于
+ *       边框带宽（rad=10 / bw=3），圆弧有 7px 落在客户区里，整块写回会把它们
+ *       抹成底色，聚焦框右上 / 右下角就断开、右边只剩一条孤立竖线。调用点还要在
+ *       染色之后补一次 sk_edit_box()：EDIT 内部重绘客户区不发 WM_PAINT，空选区时
+ *       本函数会提前返回，只有调用点补画才能覆盖「取消选中」这类情况。
+ */
+static void sk_edit_retint_selection(HWND hwnd, const sk_edit_sub_t *s)
+{
+    DWORD   sel;
+    RECT    rc;
+    HDC     dc, mem;
+    HBITMAP bmp, old = NULL;
+    BITMAPINFO bi;
+    unsigned char *bits = NULL;
+    COLORREF hi, ht;
+    int ar, ag, ab, br, bgc, bb;     /* 输入色带 A=高亮底、B=高亮文字 */
+    int nr, ng, nb, mr, mg, mb;     /* 输出色带 A'=输入框底色、B'=近白文字 */
+    int abr, abg, abb, denom, lum;
+    int w, h, x, y, stride;
+    int changed = 0, bx0 = 0, by0 = 0, bx1 = -1, by1 = -1;
+
+    /* 浅色底不处理：系统蓝高亮本来就是浅色主题的正常观感 */
+    nr = GetRValue(s->bg); ng = GetGValue(s->bg); nb = GetBValue(s->bg);
+    lum = (nr * 299 + ng * 587 + nb * 114) / 1000;
+    if (lum > 128) return;
+    if (GetFocus() != hwnd) return;                 /* 高亮只在聚焦时显示 */
+    sel = (DWORD)SendMessageW(hwnd, EM_GETSEL, 0, 0);
+    if (LOWORD(sel) >= HIWORD(sel)) return;         /* 空选区：没有高亮块 */
+
+    GetClientRect(hwnd, &rc);
+    w = rc.right - rc.left;
+    h = rc.bottom - rc.top;
+    if (w <= 0 || h <= 0) return;
+
+    hi = GetSysColor(COLOR_HIGHLIGHT);
+    ht = GetSysColor(COLOR_HIGHLIGHTTEXT);
+    ar = GetRValue(hi); ag = GetGValue(hi); ab = GetBValue(hi);
+    br = GetRValue(ht); bgc = GetGValue(ht); bb = GetBValue(ht);
+    abr = br - ar; abg = bgc - ag; abb = bb - ab;
+    denom = abr * abr + abg * abg + abb * abb;
+    if (denom <= 0) return;
+    mr = 0xF2; mg = 0xF8; mb = 0xFF;               /* 选中文字：近白，比纯白柔和 */
+    /* 选中底色只比输入框底色亮 16：能看出选区范围，又不会再变成"盖住输入框"的贴片。
+     * 想彻底无底色（选中只靠文字提亮）把这三条去掉即可。 */
+    nr += 16; if (nr > 255) nr = 255;
+    ng += 16; if (ng > 255) ng = 255;
+    nb += 16; if (nb > 255) nb = 255;
+
+    memset(&bi, 0, sizeof(bi));
+    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bi.bmiHeader.biWidth = w;
+    bi.bmiHeader.biHeight = -h;                    /* top-down：row 0 就是客户区顶行 */
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+
+    dc = GetDC(hwnd);
+    if (!dc) return;
+    mem = CreateCompatibleDC(dc);
+    bmp = mem ? CreateDIBSection(dc, &bi, DIB_RGB_COLORS, (void **)&bits, NULL, 0) : NULL;
+    if (!mem || !bmp || !bits) goto cleanup;
+    old = (HBITMAP)SelectObject(mem, bmp);
+    if (!BitBlt(mem, 0, 0, w, h, dc, 0, 0, SRCCOPY)) {
+        SelectObject(mem, old);
+        goto cleanup;
+    }
+
+    stride = w * 4;
+    bx0 = w; by0 = h; bx1 = -1; by1 = -1;
+    for (y = 0; y < h; ++y) {
+        unsigned char *row = bits + y * stride;
+        for (x = 0; x < w; ++x, row += 4) {
+            int pr = row[2], pg = row[1], pb = row[0];   /* DIB 是 BGRA */
+            int acr = pr - ar, acg = pg - ag, acb = pb - ab;
+            int num = acr * abr + acg * abg + acb * abb;
+            int tq = (num * 256) / denom;                 /* 色带混合系数 0..256 */
+            int pjr, pjg, pjb, dr, dg, db2;
+
+            if (tq < -20 || tq > 276) continue;           /* 不属于这条色带 */
+            if (tq < 0) tq = 0;
+            if (tq > 256) tq = 256;
+            pjr = ar + tq * abr / 256;
+            pjg = ag + tq * abg / 256;
+            pjb = ab + tq * abb / 256;
+            dr = pr - pjr; dg = pg - pjg; db2 = pb - pjb;
+            if (dr * dr + dg * dg + db2 * db2 > 45 * 45) continue;  /* 离色带太远：普通底色/文字 */
+            row[2] = (unsigned char)(nr + tq * (mr - nr) / 256);
+            row[1] = (unsigned char)(ng + tq * (mg - ng) / 256);
+            row[0] = (unsigned char)(nb + tq * (mb - nb) / 256);
+            changed++;
+            if (x < bx0) bx0 = x;
+            if (y < by0) by0 = y;
+            if (x > bx1) bx1 = x;
+            if (y > by1) by1 = y;
+        }
+    }
+    /* **只写回真正改过的那块**：整块客户区 BitBlt 会把圆角弧伸进客户区的那截抹成
+     * 底色。圆角半径通常大于边框带宽度（rad=10 / bw=3），圆弧有 7px 落在客户区里，
+     * 全量写回后右上 / 右下角就断开，右边只剩一条孤立竖线 —— 只有聚焦框会跑到这里
+     * （无焦点时函数提前返回），所以表现为"只有当前聚焦的那个输入框右边不完整"。 */
+    if (changed > 0)
+        BitBlt(dc, bx0, by0, bx1 - bx0 + 1, by1 - by0 + 1, mem, bx0, by0, SRCCOPY);
+    SelectObject(mem, old);
+cleanup:
+    if (bmp) DeleteObject(bmp);
+    if (mem) DeleteDC(mem);
+    ReleaseDC(hwnd, dc);
+    /* 边框由各调用点在染色之后统一补画：EDIT 内部重绘客户区（选中、取消选中、
+     * 光标闪烁）不一定发 WM_PAINT，伸进客户区的圆角弧随时可能被刷掉，
+     * 只在染色里补是不够的。 */
+}
 
 /**
  * @brief 输入框的"边框带补底"色：写了 style.bg 听用户的，否则浅色交系统、深色跟主题
@@ -69,32 +206,95 @@ static COLORREF sk_edit_bg_color(const cg_widget_t *w)
 }
 
 /**
- * @brief 沿边框带画一圈圆角线
- * @param dc 目标设备上下文；线画在它上面
- * @param s 输入框子类数据；提供整块尺寸与圆角半径
- * @param col 线的颜色
- * @param penw 笔宽（像素）
- * @param half 路径离窗口边缘的距离（像素）：2px 笔给 1，1px 笔给 0
+ * @brief 深色底上把 M3 的浅灰边框换成看得清的冷蓝线
+ * @param base 浅色主题下原本的边框色
+ * @param bg 输入框底色（sk_edit_bg_color 的结果）
+ * @return COLORREF 实际要用的边框色
+ * @note 缺省灰环 RGB(0xB8,0xB2,0xBD) 在深海军蓝底上是刺眼白边，但**不能反过来压得太暗**：
+ *       曾经统一给 RGB(0x3D,0x5B,0x78)，1px 线压在 #16263F 上亮度只差 49，
+ *       肉眼几乎看不见，截图再缩放一次就断成「左边一小截 + 底边一条线」，
+ *       看上去和"边框只画了半圈"一模一样。现在按底色自适应抬亮：
+ *       深色一律抬到与底色有约 3:1 以上对比的冷蓝，浅色仍保持 M3 原值。
+ *       子类过程手里只有 hwnd 和子类数据，拿不到 app->dark，用 s->bg 的亮度判断即可。
+ */
+static COLORREF sk_edit_edge_tone(COLORREF base, COLORREF bg)
+{
+    int r = GetRValue(bg);
+    int g = GetGValue(bg);
+    int b = GetBValue(bg);
+    int lum = (r * 299 + g * 587 + b * 114) / 1000;
+    int tr, tg, tb;
+
+    if (lum >= 128) return base;
+    tr = r + 70;
+    tg = g + 95;
+    tb = b + 125;
+    if (tr > 235) tr = 235;
+    if (tg > 235) tg = 235;
+    if (tb > 245) tb = 245;
+    return RGB(tr, tg, tb);
+}
+
+/**
+ * @brief 沿非客户区边框带填充一圈圆角环（四边闭合，且不会被客户区重绘盖掉）
+ * @param dc 目标设备上下文；环填在它上面
+ * @param s 输入框子类数据；提供整块尺寸、边框带宽与圆角半径
+ * @param col 环的颜色
+ * @param penw 环宽（像素）：细线 / 缺省 / 焦点环给 SK_EDGE_RING_W，镜框双圈给 1
+ * @param half 环离可见区边缘的距离（像素）：外圈 0，镜框内圈 1
  * @return void 无返回值
- * @note half 要按笔宽给：2px 笔给 1（正好压住 [0,2)）、1px 笔给 0（正好压住最外那一个像素）
+ * @note **不可以用 RoundRect + 画笔描边**：GDI 的笔沿路径往右下铺，右 / 下两条路径
+ *       正好压在被圆角窗口区域裁掉的最右列 / 最下行上，画完就没了。
+ *       也不可以只按「可见区外框」画 1px 环：WM_NCCALCSIZE 让出的客户区是
+ *       [bw, w-bw) × [pad, h-bw)，而可见区是 [0, w-1) × [0, h-1)。带宽只有 1px 时，
+ *       环的右带落在 x=w-2、下带落在 y=h-2，**两处都在客户区里**，EDIT 一重绘
+ *       客户区就把它们刷成底色 —— 这才是「只有上边和左边有框」的真正原因；
+ *       之前把边框颜色提亮只是让留下来的半圈更显眼，并没有补上缺的两条边。
+ *       现在带宽 3、环宽 2：外圆角区域 [0,w-1) 减内圆角区域 [2,w-3)，
+ *       右带 x∈{w-3,w-2}、下带 y∈{h-3,h-2} 全在非客户区 [w-3,w) 内，
+ *       控件怎么重绘客户区都碰不到；最外那 1px 被裁掉也还有 2px 完整闭合。
+ *       圆角半径按矩形尺寸夹取，rad 过大时 GDI 区域仍然完整。
  */
 static void sk_edit_ring(HDC dc, const sk_edit_sub_t *s, COLORREF col, int penw, int half)
 {
-    HPEN pn, op;
-    HBRUSH ob;
-    /* GDI 的线是"从路径坐标往右下铺"的：1px 笔在坐标 c 上占的是 [c, c+1) 那个像素。
-     * 所以路径写成 x=w / y=h 时，右/下两条边正好落在窗口外 —— 整个控件只剩上/左两条边，
-     * 看着就是"边框少了一半"（多行输入框带滚动条时最明显：右/下那两条本来就被滚动条压着，
-     * 剩下能看见的上/左两条线就更像画错了）。右/下各减 1 才落进最后一个像素。 */
-    int rr = (penw <= 1) ? 1 : 0;
-    if (s->w <= 2 * half + rr || s->h <= 2 * half + rr) return;
-    pn = CreatePen(PS_SOLID, penw, col);
-    op = (HPEN)SelectObject(dc, pn);
-    ob = (HBRUSH)SelectObject(dc, GetStockObject(NULL_BRUSH));
-    RoundRect(dc, half, half, s->w - half - rr, s->h - half - rr, s->rad * 2, s->rad * 2);
-    SelectObject(dc, ob);
-    SelectObject(dc, op);
-    DeleteObject(pn);
+    HRGN   outer, inner, band;
+    HBRUSH br;
+    int    w = s->w - 1;   /* 可见区 exclusive 右界（最右一列被圆角区域裁掉） */
+    int    h = s->h - 1;   /* 可见区 exclusive 下界（最下一行同理） */
+    int    rw, rh;
+    int    d, di;
+    int    rc;
+
+    if (penw < 1) penw = 1;
+    if (half < 0) half = 0;
+    /* 越过这条线，环的右 / 下带就会伸进客户区被刷掉；宁可不画也不留半圈 */
+    if (half + penw > s->bw - 1) return;
+    rw = w - 2 * half;
+    rh = h - 2 * half;
+    if (rw <= 2 * penw || rh <= 2 * penw) return;
+    d = s->rad * 2;
+    if (d > rw) d = rw;
+    if (d > rh) d = rh;
+    if (d < 2) d = 2;
+    di = d - 2 * penw;
+    if (di < 2) di = 2;
+
+    outer = CreateRoundRectRgn(half, half, w - half, h - half, d, d);
+    inner = CreateRoundRectRgn(half + penw, half + penw,
+                               w - half - penw, h - half - penw, di, di);
+    band  = CreateRectRgn(0, 0, 0, 0);
+    if (!outer || !inner || !band) goto cleanup;
+    rc = CombineRgn(band, outer, inner, RGN_DIFF);
+    if (rc == ERROR || rc == NULLREGION) goto cleanup;
+    br = CreateSolidBrush(col);
+    if (br) {
+        FillRgn(dc, band, br);
+        DeleteObject(br);
+    }
+cleanup:
+    if (band)  DeleteObject(band);
+    if (inner) DeleteObject(inner);
+    if (outer) DeleteObject(outer);
 }
 
 /**
@@ -126,29 +326,30 @@ static void sk_edit_fill_edge(HDC dc, const sk_edit_sub_t *s)
 }
 
 /**
- * @brief 立体边框：整圈先按「下 / 右」的颜色画圆角线，再用「上 / 左」的颜色覆盖那两条边
- * @param dc 目标设备上下文；线画在它上面
- * @param s 输入框子类数据；提供边框宽与圆角半径
+ * @brief 立体边框：整圈先按「下 / 右」的颜色画圆角环，再把「上 / 左」两条边换成另一种色
+ * @param dc 目标设备上下文；环与两条边都画在它上面
+ * @param s 输入框子类数据；提供边框带宽与圆角半径
  * @param outset 立体方向：0 = 凹入式（上 / 左暗、下 / 右亮），非 0 = 凸出式
  * @return void 无返回值
+ * @note 覆盖上 / 左用 FillRect 而不是画笔：画笔沿路径往右下铺，压在客户区边界上
+ *       的那部分会被 EDIT 重绘刷掉；填充只碰非客户区带里的 2px，四边都留得住。
  */
 static void sk_edit_bevel(HDC dc, const sk_edit_sub_t *s, int outset)
 {
-    HPEN pn, op;
-    int half = s->bw / 2;
-    int lo = outset ? SK_EDGE_LIGHT : SK_EDGE_DARK;   /* 上/左 */
-    int hi = outset ? SK_EDGE_DARK  : SK_EDGE_LIGHT;  /* 下/右 */
+    HBRUSH   br;
+    RECT     r;
+    COLORREF lo = outset ? SK_EDGE_LIGHT : SK_EDGE_DARK;   /* 上/左 */
+    COLORREF hi = outset ? SK_EDGE_DARK  : SK_EDGE_LIGHT;  /* 下/右 */
 
-    sk_edit_ring(dc, s, hi, s->bw, s->bw / 2);
-    pn = CreatePen(PS_SOLID, s->bw, lo);
-    op = (HPEN)SelectObject(dc, pn);
-    /* 两端各留出圆角半径，剩下的由圆角线接起来 */
-    MoveToEx(dc, half + s->rad, half, NULL);
-    LineTo(dc, s->w - half - s->rad, half);
-    MoveToEx(dc, half, half + s->rad, NULL);
-    LineTo(dc, half, s->h - half - s->rad);
-    SelectObject(dc, op);
-    DeleteObject(pn);
+    sk_edit_ring(dc, s, hi, SK_EDGE_RING_W, 0);
+    br = CreateSolidBrush(lo);
+    if (!br) return;
+    /* 两端各留出圆角半径，剩下的直线段覆色；圆角仍由环负责 */
+    r.left = s->rad; r.top = 0; r.right = s->w - 1 - s->rad; r.bottom = SK_EDGE_RING_W;
+    if (r.right > r.left) FillRect(dc, &r, br);
+    r.left = 0; r.top = s->rad; r.right = SK_EDGE_RING_W; r.bottom = s->h - 1 - s->rad;
+    if (r.bottom > r.top) FillRect(dc, &r, br);
+    DeleteObject(br);
 }
 
 /**
@@ -163,7 +364,10 @@ static void sk_edit_bevel(HDC dc, const sk_edit_sub_t *s, int outset)
  */
 static void sk_edit_box(HWND hwnd, const sk_edit_sub_t *s, int focus)
 {
-    HDC dc;
+    HDC      dc;
+    COLORREF c_grey = sk_edit_edge_tone(SK_EDGE_GREY,    s->bg);
+    COLORREF c_soft = sk_edit_edge_tone(SK_EDGE_SOFT_C,  s->bg);
+    COLORREF c_line = sk_edit_edge_tone(SK_EDGE_LINE_C,  s->bg);
 
     if (s->w <= 2 * s->bw || s->h <= 2 * s->bw) return;
     dc = GetWindowDC(hwnd);
@@ -174,24 +378,24 @@ static void sk_edit_box(HWND hwnd, const sk_edit_sub_t *s, int focus)
     sk_edit_fill_edge(dc, s);
 
     if (focus) {                                  /* 聚焦：统一紫环（优先级高于边框样式） */
-        sk_edit_ring(dc, s, SK_EDGE_FOCUS, s->bw, s->bw / 2);
+        sk_edit_ring(dc, s, SK_EDGE_FOCUS, SK_EDGE_RING_W, 0);
         ReleaseDC(hwnd, dc);
         return;
     }
 
-    /* 细线样式的边框带只有 1px（见 cg_skin_apply_edit），路径给 0 —— 笔宽 1、坐标整数，
-     * 这样线正好落在带内。给 1 或 0.5 都会画成"半像素线"：一半在带内一半在带外，看着就是断线。 */
+    /* 所有环都从可见区外沿 (half=0) 起画、宽 SK_EDGE_RING_W：右 / 下带整段落在
+     * 非客户区里，客户区怎么重绘都刷不到。镜框改用两圈 1px 双色线代替 2px 单环。 */
     switch (s->border) {
     case SK_EDGE_NONE:   break;                          /* 无边框：底色已经填好，不画线 */
     case SK_EDGE_INSET:  sk_edit_bevel(dc, s, 0); break;
     case SK_EDGE_OUTSET: sk_edit_bevel(dc, s, 1); break;
-    case SK_EDGE_SOFT:   sk_edit_ring(dc, s, SK_EDGE_SOFT_C, 1, 0); break;
-    case SK_EDGE_FRAME:                                  /* 镜框：外圈 [0,1)、内圈 [2,3)，中间留 1px 底色缝 */
-        sk_edit_ring(dc, s, SK_EDGE_LINE_C, 1, 0);
-        sk_edit_ring(dc, s, SK_EDGE_LINE_C, 1, 2);
+    case SK_EDGE_SOFT:   sk_edit_ring(dc, s, c_soft, SK_EDGE_RING_W, 0); break;
+    case SK_EDGE_FRAME:                                  /* 镜框：外圈 + 紧邻内圈，双色双线 */
+        sk_edit_ring(dc, s, c_line, 1, 0);
+        sk_edit_ring(dc, s, c_soft, 1, 1);
         break;
-    case SK_EDGE_LINE:   sk_edit_ring(dc, s, SK_EDGE_LINE_C, 1, 0); break;
-    default:             sk_edit_ring(dc, s, SK_EDGE_GREY, s->bw, s->bw / 2); break;   /* SK_EDGE_DEFAULT */
+    case SK_EDGE_LINE:   sk_edit_ring(dc, s, c_line, SK_EDGE_RING_W, 0); break;
+    default:             sk_edit_ring(dc, s, c_grey, SK_EDGE_RING_W, 0); break;   /* SK_EDGE_DEFAULT */
     }
     ReleaseDC(hwnd, dc);
 }
@@ -299,6 +503,44 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
         free(s);
         return DefSubclassProc(hwnd, msg, wp, lp);
     }
+    /* 只读单行展示框（计算器的结果框 / 统计框这类 input:1）：纯展示，不参与编辑交互。
+     * 标准 EDIT 只在有焦点时画选中高亮，用的还是系统亮蓝 COLOR_HIGHLIGHT —— 深色主题下
+     * 双击 / 拖选 / Ctrl+A 就会留下一块 #0078D7 底 + 白字的"贴片"，看着像有东西把输入框
+     * 右端遮住了（2026-11-08 用户连报三次的"文本被遮挡"）。只读单行框本来也不该被编辑，
+     * 干脆从源头不让它拿到焦点：鼠标按下 / 双击 / 右键一律吞掉，Tab 链也在 apply 时去掉。
+     * **多行只读输出区不受影响**：日志 / 终端需要能选中复制，它们仍走默认行为。 */
+    if (s->display) {
+        switch (msg) {
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONDBLCLK:
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP:
+            return 0;                       /* 不聚焦、不定位插入点、不开始拖选、不弹编辑菜单 */
+        case WM_SETCURSOR:
+            SetCursor(LoadCursorW(NULL, (LPCWSTR)IDC_ARROW));   /* 别暗示"可以点进去输入" */
+            return TRUE;
+        case WM_KEYDOWN:
+        case WM_CHAR:
+            return 0;                       /* 兜底：程序化聚焦也拦住 Ctrl+A / Shift+扩选 */
+        default:
+            break;
+        }
+    }
+    /* 选中高亮是 EDIT **内部拿 GetDC 直接画**的：Ctrl+A / 拖选 / 双击选词 / EM_SETSEL
+     * 全都不发 WM_PAINT（实测诊断日志：全选之后一条 WM_PAINT 都没有，选区仍是空的
+     * 那种记录）。所以只把染色挂在 WM_PAINT 上永远抓不到这块蓝底。对这些"会改选区"
+     * 的消息，先让默认处理把高亮画完，随后立刻在窗口 DC 上重映射一次。 */
+    if (msg == WM_KEYDOWN || msg == WM_CHAR || msg == WM_SYSCHAR ||
+        msg == WM_LBUTTONDOWN || msg == WM_LBUTTONUP || msg == WM_LBUTTONDBLCLK ||
+        msg == WM_MOUSEMOVE || msg == EM_SETSEL) {
+        LRESULT r = DefSubclassProc(hwnd, msg, wp, lp);
+        sk_edit_retint_selection(hwnd, s);
+        /* EDIT 内部直接拿 GetDC 重绘客户区（选中 / 取消选中 / 拖选）不发 WM_PAINT，
+         * 圆角弧伸进客户区的那截会被刷成底色。这些消息处理完必须补画一次边框，
+         * 且不能只在"染色改了像素"时才补：取消选中后选区为空也要补。 */
+        sk_edit_box(hwnd, s, GetFocus() == hwnd);
+        return r;
+    }
     if (msg == WM_NCCALCSIZE && wp) {
         /* 进来时 rgrc[0] 是通过的建议窗口矩形，处理完变成客户区 */
         NCCALCSIZE_PARAMS *p = (NCCALCSIZE_PARAMS *)lp;
@@ -331,12 +573,26 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
         p->rgrc[0].top += s->pad;              /* 让出上边距 -> 文字垂直居中 */
         return r;
     }
+    if (msg == WM_PAINT) {
+        /* 客户区刚重绘完：补一次边框。EDIT 的选中 / 光标刷新不一定带 WM_NCPAINT，
+         * 不补的话个别时序下非客户区会短暂留白。环全在非客户区，补画不碰文字。 */
+        LRESULT r = DefSubclassProc(hwnd, msg, wp, lp);
+        /* 系统画完（含选中高亮）之后，把深色底上那块 #0078D7 重映射成
+         * 「底色不变 + 文字提亮」：可编辑框照样能选中复制，但不会再被蓝块盖住。
+         * 必须在补画边框之前做，补画会顺手把被蓝块顶到的右 / 下边框修回来。 */
+        sk_edit_retint_selection(hwnd, s);
+        /* 只读框（input:1 → ES_READONLY）不给插入符：聚焦时 Win32 照样画 caret，
+         * 闪烁重绘又会把 HideCaret 抵消，所以每次客户区重绘后都压住一次。 */
+        if (GetWindowLongW(hwnd, GWL_STYLE) & ES_READONLY) HideCaret(hwnd);
+        sk_edit_box(hwnd, s, GetFocus() == hwnd);
+        return r;
+    }
     if (msg == WM_SETFONT) {
         LRESULT r = DefSubclassProc(hwnd, msg, wp, lp);
         /* 带调节器时：换字体会让箭头重新按 buddy 摆位，补摆一次 */
         sk_edit_spin_fit(hwnd, s);
         /* 数值框的上下箭头换字体时会重设 buddy 边距、把左边距清成 0：补一次 */
-        SendMessageW(hwnd, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(s->left, 0));
+        SendMessageW(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(s->left, s->arrow > 0 ? 2 : s->right));
         if (s->single && sk_edit_text_height(hwnd) != s->text_h) {
             /* 字号变了 -> 重排一次（SWP_FRAMECHANGED 会再发 WM_NCCALCSIZE） */
             SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
@@ -347,7 +603,7 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     if (msg == WM_SIZE) {
         sk_edit_resize(hwnd, s);
         sk_edit_spin_fit(hwnd, s);   /* 尺寸变了：箭头跟着摆到新的右边内侧 */
-        SendMessageW(hwnd, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(s->left, 0));
+        SendMessageW(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(s->left, s->arrow > 0 ? 2 : s->right));
         /* resize 时系统按默认非客户区重算客户区，会把让出来的上边距抹掉（数值框的
          * 上下箭头改 buddy 尺寸就会触发）。补一次 FRAMECHANGED 让 WM_NCCALCSIZE 重新生效；
          * 尺寸没变不会递归发 WM_SIZE。 */
@@ -359,9 +615,25 @@ static LRESULT CALLBACK sk_edit_sub(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
          * 只等 WM_PAINT 的话，"只重画非客户区"的场合（改尺寸、系统重算边框）会留白 */
         LRESULT r;
         if (msg == WM_SETFOCUS)
-            SendMessageW(hwnd, EM_SETMARGINS, EC_LEFTMARGIN, MAKELPARAM(s->left, 0));
+            SendMessageW(hwnd, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(s->left, s->arrow > 0 ? 2 : s->right));
         r = DefSubclassProc(hwnd, msg, wp, lp);
-        sk_edit_box(hwnd, s, GetFocus() == hwnd);
+        /* 只读单行展示框即使被程序化 / Tab 聚焦也立刻把焦点还回去：没有焦点就不会画
+         * 系统选中高亮，也不会画紫色焦点环，界面永远保持"纯展示"的样子。lp 是刚失去
+         * 焦点的窗口，还给它不会形成循环。 */
+        /* 防递归：万一前后两个都是展示框，A→B→A 会无限互还焦点 */
+        static int refocusing;
+        if (msg == WM_SETFOCUS && s->display && !refocusing && lp && IsWindow((HWND)lp)) {
+            refocusing = 1;
+            SetFocus((HWND)lp);
+            refocusing = 0;
+        }
+        /* 只读框聚焦时系统会把插入符显示在文本开头；右对齐的结果文字在另一端，
+         * 那条竖线就孤零零压在数字左边，看着像"文字被遮挡"。隐藏它，
+         * 闪烁重绘由 WM_PAINT 分支继续压住。 */
+        if (msg == WM_SETFOCUS && (GetWindowLongW(hwnd, GWL_STYLE) & ES_READONLY))
+            HideCaret(hwnd);
+        sk_edit_retint_selection(hwnd, s);   /* 焦点回来时旧选区会重新画出蓝底 */
+        sk_edit_box(hwnd, s, GetFocus() == hwnd);   /* 同上：焦点变化也会重绘客户区 */
         return r;
     }
     return DefSubclassProc(hwnd, msg, wp, lp);
@@ -416,12 +688,8 @@ void cg_skin_edit_rescale(cg_widget_t *w)
 
     s->rad  = r;
     s->spin = (HWND)w->native2;
-    switch (w->border) {
-    case SK_EDGE_SOFT:
-    case SK_EDGE_LINE:  s->bw = 1; break;
-    case SK_EDGE_FRAME: s->bw = 3; break;
-    default:            s->bw = CG_EDIT_BORDER; break;
-    }
+    /* 与 cg_skin_apply_edit 同口径：带宽一律 CG_EDIT_BORDER，环才不会伸进客户区 */
+    s->bw = CG_EDIT_BORDER;
     s->arrow = (s->spin && !multiline) ? (CG_EDIT_SPIN_W * scale / 100) : 0;
     if (s->arrow > 0 && s->arrow < 12) s->arrow = 12;
 
@@ -464,26 +732,30 @@ void cg_skin_apply_edit(cg_widget_t *w)
 {
     HWND hw = (HWND)w->native;
     int scale, r, multiline;
+    LONG sty;
     sk_edit_sub_t *s;
     if (!hw) return;
     scale = (w->app && w->app->scale > 0) ? w->app->scale : 100;
     r = (w->style.radius > 0 ? w->style.radius : 2) * scale / 100;   /* 画布输入框默认 2px */
     if (r < 1) r = 1;
-    multiline = (GetWindowLongW(hw, GWL_STYLE) & ES_MULTILINE) != 0;
+    sty = GetWindowLongW(hw, GWL_STYLE);
+    multiline = (sty & ES_MULTILINE) != 0;
 
     s = (sk_edit_sub_t *)malloc(sizeof(sk_edit_sub_t));
     if (!s) return;
     memset(s, 0, sizeof(*s));
     s->rad = r;
     s->single = multiline ? 0 : 1;
-    /* 边框带宽度按样式定：细线样式 1px（笔宽 1、坐标才不会落在半像素上），
-     * 镜框式 3px（两圈线 + 中间 1px 缝），其余 2px */
-    switch (w->border) {
-    case SK_EDGE_SOFT:
-    case SK_EDGE_LINE:  s->bw = 1; break;
-    case SK_EDGE_FRAME: s->bw = 3; break;
-    default:            s->bw = CG_EDIT_BORDER; break;
-    }
+    /* 只读 + 单行 = 纯展示框（input:1 的结果 / 状态框）。多行只读是日志 / 输出区，
+     * 用户要能选中复制，保持原行为。展示框连 Tab 链都不进：对话框管理器切焦点时会
+     * 顺手给 edit 发全选，深色主题下就留下刺眼的系统蓝高亮块。 */
+    s->display = (!multiline && (sty & ES_READONLY)) ? 1 : 0;
+    if (s->display)
+        SetWindowLongW(hw, GWL_STYLE, sty & ~WS_TABSTOP);
+    /* 边框带一律让出 CG_EDIT_BORDER(3px)：2px 环 + 1px 给被圆角区域裁掉的最外列 / 行。
+     * 以前按样式分档（细线只让 1px），环的右 / 下两条边正好落在客户区里被 EDIT
+     * 自己的重绘刷掉，于是输入框只剩上 / 左半圈 —— 这是"边框不完整"的根因。 */
+    s->bw = CG_EDIT_BORDER;
     s->left = CG_EDIT_TEXT_MARGIN;
     s->border = w->border;
     s->spin = (HWND)w->native2;   /* 调节器可能还没建；建好后 create 会再调 fit 补上 */
@@ -495,9 +767,15 @@ void cg_skin_apply_edit(cg_widget_t *w)
 
     sk_edit_resize(hw, s);   /* 初始尺寸 + 圆角区域 */
     /* 左右留边距：文字别怼到圆角边框上（边框在客户区外，垂直居中见 WM_NCCALCSIZE）。
-     * 数值框的箭头稍后会重设边距，WM_SETFONT/WM_SIZE 里会按 s->left 再补。 */
+     * 数值框的箭头稍后会重设边距，WM_SETFONT / WM_SIZE / SETFOCUS 会按 s->left/right 再补。
+     * 右对齐（如只读结果框）额外多留 10px：ES_RIGHT 会把文字贴到客户区右边界，
+     * 再叠 2px 焦点环，最后一个字符看着就像被右边框压住 / 遮住。
+     * **必须存进 s->right**：建控件后 cgw_sync_widget 换字体、WM_SIZE 重排都会重发
+     * EM_SETMARGINS，只在 apply_edit 设一次会被冲掉（实测 EM_GETMARGINS 只剩 right=2）。 */
+    s->right = (w->style.align == CG_ALIGN_RIGHT)
+               ? CG_EDIT_TEXT_MARGIN + 10 : CG_EDIT_TEXT_MARGIN;
     SendMessageW(hw, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN,
-                 MAKELPARAM(CG_EDIT_TEXT_MARGIN, CG_EDIT_TEXT_MARGIN));
+                 MAKELPARAM(s->left, s->right));
     SetWindowSubclass(hw, sk_edit_sub, 1, (DWORD_PTR)s);
     /* 挂上子类后强制一次布局：立刻按当前字体算好垂直居中量 */
     SetWindowPos(hw, NULL, 0, 0, 0, 0,
